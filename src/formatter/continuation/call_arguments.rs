@@ -6,18 +6,21 @@ use crate::formatter::braces::classification::{
 use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::constructs::headers::{line_is_control_body_header, starts_header_word};
 use crate::formatter::engine::FormatEngine;
+use crate::formatter::lexer::Token;
 use crate::formatter::preprocessor::output_has_active_preprocessor_branch;
 use crate::formatter::state::frame::CommaRole;
 use crate::formatter::state::indentation::LineKind;
+use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::language;
 use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::text::columns::column_after;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
-    code_holds_word, is_comment_line, is_comment_only_line, line_brace_imbalance, line_has_brace,
-    line_paren_imbalance, reverse_scan_skips_block_comment, trailing_comment_split_limit,
-    unmatched_open_paren_column, unmatched_open_paren_columns,
+    code_holds_word, has_member_after_paren, holds_code_after_leading_comments, is_comment_line,
+    is_comment_only_line, line_brace_imbalance, line_has_brace, line_paren_imbalance,
+    reverse_scan_skips_block_comment, trailing_comment_split_limit, unmatched_open_paren_column,
+    unmatched_open_paren_columns,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -637,12 +640,16 @@ impl FormatEngine<'_> {
         if starts_string_literal_token(current)
             && (is_comment_line(previous_trimmed) || is_comment_only_line(previous_trimmed))
             && !previous_trimmed.starts_with('*')
+            && !holds_code_after_leading_comments(previous_trimmed)
             || starts_string_literal_token(current)
                 && starts_string_literal_token(previous_code.trimmed_start())
                 && self.paren_closes_of(previous_code) == 0
+                // A brace list's next element stands at its elements.
+                && !(previous_code.ends_with(',') && self.pending_row_in_initializer_brace())
         {
+            // The row published lost the case unindent the line is yet to.
             return Some(SplitElseCallLineLayout {
-                indent_spaces: previous_spaces,
+                indent_spaces: previous_spaces + self.case_unindent_spaces(),
                 clear_continuation_after_line: None,
             });
         }
@@ -1007,7 +1014,23 @@ impl FormatEngine<'_> {
         if !self.call_arguments_contain_brace_block() {
             return None;
         }
-        Some(leading_visual_width(previous, self.options.tab_width))
+        // After a block's closer the arguments stand at the line of the
+        // call's paren, wherever the style puts the block's braces.
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let call_line = self
+            .output
+            .last_non_empty_index()
+            .and_then(|index| self.output.line_tokens(index))
+            .filter(|span| matches!(tokens[span.first], Token::Symbol('}')))
+            .and_then(|span| groups.closed_at(span.first))
+            .and_then(|block| groups.enclosing(groups.get(block).open))
+            .filter(|&call| groups.get(call).delimiter == Delimiter::Paren)
+            .and_then(|call| self.output.line_with_token(groups.get(call).open));
+        Some(match call_line {
+            Some(line) => self.output.lead_width(line, self.options.tab_width),
+            None => leading_visual_width(previous, self.options.tab_width),
+        })
     }
 
     fn call_arguments_contain_brace_block(&self) -> bool {
@@ -1060,9 +1083,27 @@ impl FormatEngine<'_> {
         let previous_indent = leading_visual_width(previous, self.options.tab_width);
         // The tail of a continued condition closes parens it never opened.
         let closes_outer_paren = || code.matches(')').count() > code.matches('(').count();
+        // A statement the line ends before its `{` leaves the brace to
+        // what follows it.
+        let ends_statement = || {
+            let mut depth = 0usize;
+            code.bytes().any(|byte| match byte {
+                b'(' => {
+                    depth += 1;
+                    false
+                }
+                b')' => {
+                    depth = depth.saturating_sub(1);
+                    false
+                }
+                b';' => depth == 0,
+                _ => false,
+            })
+        };
         (code.ends_with('{')
             && line_starts_call_expression(code.trimmed_start())
             && !closes_outer_paren()
+            && !ends_statement()
             && previous_indent < normal_indent * self.options.indent_width)
             .then_some(previous_indent + self.options.indent_width)
     }
@@ -1950,6 +1991,13 @@ impl FormatEngine<'_> {
         if self.token_input.token_source_line_indent != anchor {
             return None;
         }
+        // The arguments after a lambda's body stand at the statement.
+        if let Some(first) = self.output.pending_tokens().map(|span| span.first)
+            && let Some(group) = self.tree.groups.enclosing(first)
+            && self.lambda_body_opens_in_group_before(group, first)
+        {
+            return None;
+        }
         let code = self.output.code_trimmed_of(line);
         if code.ends_with('{')
             && (line_opens_lambda_block(line)
@@ -2121,8 +2169,9 @@ impl FormatEngine<'_> {
         {
             return Some(spaces);
         }
-        (previous_code.contains(").") && self.open_paren_column_of(previous_code).is_none())
-            .then(|| leading_visual_width(previous, self.options.tab_width))
+        (has_member_after_paren(previous_code)
+            && self.open_paren_column_of(previous_code).is_none())
+        .then(|| leading_visual_width(previous, self.options.tab_width))
     }
 
     pub(crate) fn nested_call_argument_over_max_output_indent_spaces(
@@ -2321,7 +2370,7 @@ impl FormatEngine<'_> {
         if opens.len() < 2 {
             return None;
         }
-        if previous_code.contains(").") {
+        if has_member_after_paren(previous_code) {
             return Some(opens[opens.len() - 2] + 1 + self.options.indent_width);
         }
         let inner = *opens.last()?;
@@ -2367,58 +2416,15 @@ impl FormatEngine<'_> {
         }
         None
     }
-
-    pub(crate) fn argument_after_lambda_call_argument_indent_spaces(
-        &self,
-        line: &LineView<'_>,
-    ) -> Option<usize> {
-        let trimmed = line.trimmed_start();
-        if trimmed.is_empty() || trimmed.starts_with_any(b"#(){}") {
-            return None;
-        }
-        let previous = self.output.last_non_empty_scoped()?;
-        let previous_code = self.output.code_trimmed_of(previous);
-        if previous_code.ends_with(',') && self.previous_output_line_closes_lambda_body() {
-            return Some(leading_visual_width(previous, self.options.tab_width));
-        }
-        None
-    }
-
-    fn previous_output_line_closes_lambda_body(&self) -> bool {
-        let mut depth = 0usize;
-        for raw in self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .filter(|line| !line.trimmed().is_empty())
-        {
-            let code = self.output.code_trimmed_of(raw);
-            if depth == 0 && !code.trimmed_start().starts_with('}') {
-                return false;
-            }
-            for (index, ch) in code.char_indices().rev() {
-                match ch {
-                    '}' => depth += 1,
-                    '{' if depth > 0 => {
-                        depth -= 1;
-                        if depth == 0 {
-                            let head = code[..=index].trimmed_end();
-                            return line_opens_lambda_block(head)
-                                || head.trimmed().strip_suffix('{').is_some_and(|head| {
-                                    is_lambda_capture_header(head.trimmed_end())
-                                });
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-        false
-    }
 }
 
 pub(crate) fn line_opens_attachable_lambda_block(options: &FormatOptions, line: &str) -> bool {
+    // A lambda's head holds its capture list, a block literal's its caret.
+    if !line.contains_any_byte(b"]^") {
+        return false;
+    }
+    // A comment after the code takes no part in the head.
+    let line = &line[..trailing_comment_split_limit(line)];
     let trimmed = line.trimmed_end();
     if trimmed.ends_with('{') {
         return line_opens_lambda_block(line)

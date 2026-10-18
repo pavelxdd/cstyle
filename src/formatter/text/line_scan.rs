@@ -117,6 +117,47 @@ pub(crate) fn is_comment_line(line: &str) -> bool {
             .is_some_and(|rest| rest.is_empty() || rest.starts_with_any(b" \t*/"))
 }
 
+/// `line` past the block comments that lead it and close on it.
+pub(crate) fn after_leading_comments(line: &str) -> &str {
+    let mut rest = line.trimmed_start();
+    while let Some(after_open) = rest.strip_prefix("/*") {
+        let Some(close) = after_open.find("*/") else {
+            return rest;
+        };
+        rest = after_open[close + 2..].trimmed_start();
+    }
+    rest
+}
+
+/// Whether `text` leads with one of `operators` past the block comments
+/// that lead it: a comment's `/` is no operator.
+pub(crate) fn leads_with_operator(text: &str, operators: &[u8]) -> bool {
+    let rest = after_leading_comments(text);
+    !rest.starts_with("//") && !rest.starts_with("/*") && rest.starts_with_any(operators)
+}
+
+/// Whether `line` holds code after the block comments that lead it.
+pub(crate) fn holds_code_after_leading_comments(line: &str) -> bool {
+    let rest = after_leading_comments(line);
+    !rest.is_empty() && !rest.starts_with("/*") && !rest.starts_with("//")
+}
+
+/// Whether `line`, trimmed, holds comments and no code: the rows of a block
+/// comment over lines hold none either.
+pub(crate) fn is_bare_comment_line(line: &str) -> bool {
+    if line.starts_with("//") {
+        return true;
+    }
+    if line.starts_with("/*") {
+        return !holds_code_after_leading_comments(line);
+    }
+    // A row of a block comment over lines may close it before code.
+    is_comment_only_line(line)
+        && line
+            .split_once("*/")
+            .is_none_or(|(_, after)| !holds_code_after_leading_comments(after))
+}
+
 pub(crate) fn is_comment_only_line(line: &str) -> bool {
     line.starts_with("//")
         || line.starts_with("/*")
@@ -173,6 +214,11 @@ pub(crate) fn trailing_matching_parens(line: &str) -> Option<(usize, usize)> {
 }
 
 pub(crate) fn has_top_level_comma_in_text(text: &str) -> bool {
+    has_top_level_char(text, ',')
+}
+
+/// Whether `text` holds `target` outside quotes and parentheses.
+pub(crate) fn has_top_level_char(text: &str, target: char) -> bool {
     let mut depth = 0usize;
     let mut in_quote = false;
     let mut quote = '\0';
@@ -197,7 +243,7 @@ pub(crate) fn has_top_level_comma_in_text(text: &str) -> bool {
         match ch {
             '(' => depth += 1,
             ')' => depth = depth.saturating_sub(1),
-            ',' if depth == 0 => return true,
+            _ if ch == target && depth == 0 => return true,
             _ => {}
         }
     }
@@ -576,6 +622,23 @@ impl DelimiterScan {
 /// Byte offset of the first element after the last unmatched `{` when the
 /// line continues past it.
 pub(crate) fn unmatched_open_brace_content_offset(line: &str) -> Option<usize> {
+    let mut after = unmatched_open_braces(line).pop()? + 1;
+    loop {
+        after += line[after..].len() - line[after..].trimmed_start().len();
+        let Some(comment) = line[after..].strip_prefix("/*") else {
+            break;
+        };
+        after += 2 + comment.find("*/")? + 2;
+    }
+    (after < line.trimmed_end().len()).then_some(after)
+}
+
+/// Byte offset of the first `{` the line leaves open.
+pub(crate) fn first_unmatched_open_brace(line: &str) -> Option<usize> {
+    unmatched_open_braces(line).first().copied()
+}
+
+fn unmatched_open_braces(line: &str) -> Vec<usize> {
     let mut stack: Vec<usize> = Vec::new();
     let mut chars = line.char_indices().peekable();
     let mut quote = None;
@@ -601,22 +664,14 @@ pub(crate) fn unmatched_open_brace_content_offset(line: &str) -> Option<usize> {
                 chars.next();
             }
             '"' | '\'' => quote = Some(ch),
-            '{' => stack.push(offset + 1),
+            '{' => stack.push(offset),
             '}' => {
                 stack.pop();
             }
             _ => {}
         }
     }
-    let mut after = stack.pop()?;
-    loop {
-        after += line[after..].len() - line[after..].trimmed_start().len();
-        let Some(comment) = line[after..].strip_prefix("/*") else {
-            break;
-        };
-        after += 2 + comment.find("*/")? + 2;
-    }
-    (after < line.trimmed_end().len()).then_some(after)
+    stack
 }
 
 pub(crate) fn has_unmatched_open_brace(line: &str) -> bool {
@@ -826,6 +881,31 @@ pub(crate) fn has_hash_outside_literals(line: &str) -> bool {
         && tokenize(line).iter().any(|token| match token {
             Token::StringLiteral(_) | Token::CharLiteral(_) | Token::Comment(..) => false,
             other => token_text(other).contains('#'),
+        })
+}
+
+/// Whether `line` holds `text` as code, outside literals and comments.
+pub(crate) fn code_contains(line: &str, text: &str) -> bool {
+    line.contains(text)
+        && tokenize(line)
+            .iter()
+            .filter(|token| {
+                !matches!(
+                    token,
+                    Token::StringLiteral(_) | Token::CharLiteral(_) | Token::Comment(..)
+                )
+            })
+            .map(token_text)
+            .collect::<String>()
+            .contains(text)
+}
+
+/// Whether `line` reads a member right after a `)` as code, outside
+/// literals and comments.
+pub(crate) fn has_member_after_paren(line: &str) -> bool {
+    line.contains(").")
+        && tokenize(line).windows(2).any(|pair| {
+            matches!(pair[0], Token::Symbol(')')) && token_text(&pair[1]).starts_with('.')
         })
 }
 

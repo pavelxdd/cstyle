@@ -18,15 +18,17 @@ use crate::formatter::syntax::{
     TemplateAngle, function_name_start, known_template_angle_role, scoped_name_is_constructor,
     template_openers,
 };
-use crate::formatter::text::columns::leading_visual_width;
+use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
-    advance_quoted_literal, last_unmatched_open_delimiter, trailing_comment_split_limit,
-    unmatched_open_bracket_column, unmatched_open_paren_column, unmatched_open_paren_columns,
+    advance_quoted_literal, last_unmatched_open_delimiter, line_paren_imbalance,
+    trailing_comment_split_limit, unmatched_open_bracket_column, unmatched_open_paren_column,
+    unmatched_open_paren_columns,
 };
 use crate::formatter::text::trim::Trimmed;
+use crate::formatter::tokens::operators::find_assignment_operator;
 use crate::formatter::tokens::operators::{
-    array_bound_operator_column, head_ends_assignment_operator,
+    array_bound_operator_column, head_ends_assignment_operator, leads_keyword_colon,
 };
 use crate::formatter::tokens::pointers::is_pointer_declaration_segment;
 use crate::source::lex::{is_identifier_continue, is_identifier_start, trailing_word};
@@ -301,6 +303,18 @@ impl FormatEngine<'_> {
                 next_indent,
                 following_indent,
             );
+            // A split past the closer of every paren the line opened
+            // continues the statement itself.
+            if !constructor_replay.has_constructor_initializer()
+                && line_paren_imbalance(split.head.as_str()).0 > 0
+                && unmatched_open_paren_columns(&line[..line.len() - split.tail.len()]).is_empty()
+            {
+                following_indent = ContinuationIndent::Spaces(
+                    return_value_indent(line, base_indent_width)
+                        .or_else(|| assignment_value_indent(line, base_indent_width))
+                        .unwrap_or(base_indent_width),
+                );
+            }
             if let Some(spaces) = self.max_length_line.objc_message_indent_spaces() {
                 following_indent = ContinuationIndent::Spaces(spaces);
             }
@@ -468,16 +482,37 @@ impl FormatEngine<'_> {
         }
         let split = split_result(code, width, SplitRules::new(self.options))?;
         let lead_width = leading_visual_width(line, self.options.tab_width);
-        let tail_spaces = if ends_statement_before_comment(&split.head) {
+        let head = format!("{lead}{}", split.head);
+        // Rows split off inside parens align after the paren they continue.
+        let paren_column = (!self.options.indent_after_parens)
+            .then(|| unmatched_open_paren_column(&head))
+            .flatten()
+            .map(|open| visual_width_from(&head[..=open], 0, self.options.tab_width));
+        // Past an assignment they align at its value.
+        let value_column = (!self.options.indent_after_parens)
+            .then(|| find_assignment_operator(&head))
+            .flatten()
+            .map(|(start, operator)| start + operator.len())
+            .filter(|&value| !head[value..].trim().is_empty())
+            .map(|value| {
+                let value = value + (head[value..].len() - head[value..].trim_start().len());
+                visual_width_from(&head[..value], 0, self.options.tab_width)
+            });
+        // Indenting after parens, an assignment before the paren stacks a
+        // level of its own.
+        let step = self.options.continuation_indent * self.options.indent_width;
+        let stacked_assignment = self.options.indent_after_parens
+            && unmatched_open_paren_column(&head).is_some_and(|open| {
+                find_assignment_operator(&head).is_some_and(|(start, _)| start < open)
+            });
+        let tail_spaces = if let Some(column) = paren_column.or(value_column) {
+            column
+        } else if ends_statement_before_comment(&split.head) {
             lead_width
         } else {
-            lead_width + self.options.continuation_indent * self.options.indent_width
+            lead_width + step * (1 + usize::from(stacked_assignment))
         };
-        Some((
-            format!("{lead}{}", split.head),
-            split.tail.to_string(),
-            tail_spaces,
-        ))
+        Some((head, split.tail.to_string(), tail_spaces))
     }
 }
 
@@ -720,18 +755,20 @@ fn continuation_indent_for_split(
     if splits_before_label(split) {
         return Some(ContinuationIndent::Spaces(base_indent_width));
     }
-    // An array bound continues under its trailing operator.
+    // An array bound continues under its trailing operator; past the
+    // maximum at the value an assignment gives, else two levels in.
     if last_unmatched_open_delimiter(head)
         .is_some_and(|(open, at)| open == '[' && !head[..at].contains(']'))
         && let Some(column) = array_bound_operator_column(head)
     {
         return Some(ContinuationIndent::Spaces(
-            base_indent_width
-                + if column > max_continuation_indent {
-                    indent_width * 2
-                } else {
-                    column
-                },
+            if column > max_continuation_indent {
+                assignment_value_indent(head, base_indent_width)
+                    .filter(|&value| value - base_indent_width <= max_continuation_indent)
+                    .unwrap_or(base_indent_width + indent_width * 2)
+            } else {
+                base_indent_width + column
+            },
         ));
     }
     let has_open_paren = !unmatched_open_paren_columns(head).is_empty();
@@ -1005,11 +1042,22 @@ fn paren_continuation_indent(
     if columns.is_empty() {
         return None;
     }
+    // The rows align with the first character after the paren, past any
+    // padding inside it.
     columns
         .into_iter()
         .rev()
         .find(|column| *column < max_continuation_indent)
-        .map(|column| ContinuationIndent::Spaces(base_indent_width + column + 1))
+        .map(|column| {
+            let after = &head[column + 1..];
+            let rest = after.trim_start();
+            let padding = if rest.is_empty() {
+                0
+            } else {
+                after.len() - rest.len()
+            };
+            ContinuationIndent::Spaces(base_indent_width + column + 1 + padding)
+        })
         .or(Some(ContinuationIndent::Spaces(
             base_indent_width + indent_width * 2,
         )))
@@ -1183,7 +1231,10 @@ fn logical_word_split_point(
     let end = index + word.len();
     let before = line[..index].chars().next_back();
     let after = line[end..].chars().next();
-    if before.is_some_and(is_identifier_continue) || after.is_some_and(is_identifier_continue) {
+    if before.is_some_and(is_identifier_continue)
+        || after.is_some_and(is_identifier_continue)
+        || leads_keyword_colon(&line[end..])
+    {
         return None;
     }
     Some((if prefer_after_logical { end } else { index }, 80))
@@ -1782,6 +1833,7 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
                 && !bytes
                     .get(index + word.len())
                     .is_some_and(|after| name_char(*after))
+                && !leads_keyword_colon(&line[index + word.len()..])
         }) {
             end = index + word.len();
             let at = if break_after_logical {

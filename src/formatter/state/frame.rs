@@ -204,6 +204,11 @@ pub(crate) struct BraceFrame {
     pub(crate) body_indent_column: usize,
     pub(crate) sibling_indent_column: usize,
     pub(crate) split_header: bool,
+    pub(crate) open_output_line: usize,
+    /// The `{` begins its output line.
+    pub(crate) opens_output_line: bool,
+    /// The source token of the `{`.
+    pub(crate) open_token: Option<usize>,
     pub(crate) close_output_line: Option<usize>,
     pub(crate) close_ends_output_line: bool,
 }
@@ -313,6 +318,16 @@ pub(crate) struct FrameStack {
     line_closed_lambda_parameter_list: bool,
     line_closed_brackets: Vec<BracketFrame>,
     closed_brace_frames: Vec<BraceFrame>,
+    last_lambda_body: Option<LambdaBodySpan>,
+}
+
+/// The output lines of the last lambda body closed, and whether its `{`
+/// began its line.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) struct LambdaBodySpan {
+    pub(crate) open_output_line: usize,
+    pub(crate) close_output_line: usize,
+    pub(crate) opens_output_line: bool,
 }
 
 fn shift_column_for_indent(column: usize, old_indent: usize, new_indent: usize) -> usize {
@@ -491,16 +506,6 @@ impl FrameStack {
         self.delimiter_output_columns_on(line)
             .filter(|&frame_column| frame_column > column)
             .max()
-    }
-
-    pub(crate) fn first_delimiter_column_after_output_column(
-        &self,
-        line: usize,
-        column: usize,
-    ) -> Option<usize> {
-        self.delimiter_output_columns_on(line)
-            .filter(|&frame_column| frame_column > column)
-            .min()
     }
 
     pub(crate) fn last_argument(&self) -> Option<&ArgumentFrame> {
@@ -955,6 +960,57 @@ impl FrameStack {
         }
     }
 
+    /// Moves every frame on output line `line` or after down a line, for a
+    /// line published before the line those frames were opened on.
+    pub(crate) fn shift_output_lines_from(&mut self, line: usize) {
+        let shift = |value: &mut usize| {
+            if *value >= line {
+                *value += 1;
+            }
+        };
+        for entry in &mut self.delimiters {
+            shift(&mut entry.frame.opener_output_line);
+        }
+        for frame in self
+            .brackets
+            .iter_mut()
+            .chain(&mut self.line_closed_brackets)
+        {
+            shift(&mut frame.opener_output_line);
+        }
+        for frame in &mut self.closed_delimiter_frames {
+            shift(&mut frame.opener_output_line);
+        }
+        self.ternary_colon_output_lines.iter_mut().for_each(shift);
+        self.open_ternary_line_ends.iter_mut().for_each(shift);
+        for frame in &mut self.logical_frames {
+            shift(&mut frame.operator_output_line);
+        }
+        for frame in &mut self.stream_frames {
+            shift(&mut frame.operator_output_line);
+        }
+        for frame in &mut self.string_continuation_frames {
+            shift(&mut frame.output_line);
+        }
+        for frame in self
+            .brace_frames
+            .iter_mut()
+            .chain(&mut self.closed_brace_frames)
+        {
+            shift(&mut frame.open_output_line);
+            if let Some(close) = frame.close_output_line.as_mut() {
+                shift(close);
+            }
+        }
+        if let Some(span) = self.last_lambda_body.as_mut() {
+            shift(&mut span.open_output_line);
+            shift(&mut span.close_output_line);
+        }
+        if let Some((call_line, _)) = self.line_closed_call_logical_operand_indent.as_mut() {
+            shift(call_line);
+        }
+    }
+
     /// Moves the frames opened on output line `line` to `new_line`, joined
     /// after text that ends at `start_column` on a line indented
     /// `new_indent`.
@@ -965,18 +1021,54 @@ impl FrameStack {
         start_column: usize,
         new_indent: usize,
     ) {
+        self.move_line_frames(
+            line,
+            new_line,
+            0,
+            |column, line_indent| shift_column_for_indent(column, line_indent, start_column),
+            new_indent,
+        );
+    }
+
+    /// Moves the frames opened at or past `from_column` of output line
+    /// `line` to `new_line`, split off at that column to stand `shift`
+    /// columns away on a line indented `new_indent`.
+    pub(crate) fn move_split_line_frames(
+        &mut self,
+        line: usize,
+        new_line: usize,
+        from_column: usize,
+        shift: isize,
+        new_indent: usize,
+    ) {
+        self.move_line_frames(
+            line,
+            new_line,
+            from_column,
+            |column, _| column.saturating_add_signed(shift),
+            new_indent,
+        );
+    }
+
+    fn move_line_frames(
+        &mut self,
+        line: usize,
+        new_line: usize,
+        from_column: usize,
+        shift: impl Fn(usize, usize) -> usize,
+        new_indent: usize,
+    ) {
         let mut moved = Vec::new();
-        let mut anchor_shift = None;
+        let mut anchor_indent = None;
         for entry in &mut self.delimiters {
             let frame = &mut entry.frame;
-            if frame.opener_output_line != line {
+            if frame.opener_output_line != line || frame.opener_output_column < from_column {
                 continue;
             }
-            let shift = |column: usize| {
-                shift_column_for_indent(column, frame.line_indent_spaces, start_column)
-            };
+            let line_indent = frame.line_indent_spaces;
+            let shift = |column: usize| shift(column, line_indent);
             moved.push(entry.id);
-            anchor_shift.get_or_insert((frame.line_indent_spaces, start_column));
+            anchor_indent.get_or_insert(line_indent);
             frame.opener_output_line = new_line;
             frame.opener_output_column = shift(frame.opener_output_column);
             if let Some(column) = frame.continuation_indent_column.as_mut() {
@@ -993,22 +1085,19 @@ impl FrameStack {
             frame.line_indent_spaces = new_indent;
         }
         for frame in &mut self.brackets {
-            if frame.opener_output_line == line {
+            if frame.opener_output_line == line && frame.opener_output_column >= from_column {
                 frame.opener_output_line = new_line;
-                frame.opener_output_column = shift_column_for_indent(
-                    frame.opener_output_column,
-                    frame.line_indent_spaces,
-                    start_column,
-                );
+                frame.opener_output_column =
+                    shift(frame.opener_output_column, frame.line_indent_spaces);
                 frame.line_indent_spaces = new_indent;
             }
         }
-        if let Some((old, new)) = anchor_shift
+        if let Some(line_indent) = anchor_indent
             && let Some(argument) = self.last_argument.as_mut()
             && argument.owner.is_some_and(|owner| moved.contains(&owner))
             && let Some(column) = argument.sibling_anchor_column.as_mut()
         {
-            *column = shift_column_for_indent(*column, old, new);
+            *column = shift(*column, line_indent);
         }
     }
 
@@ -1101,6 +1190,20 @@ impl FrameStack {
         self.brace_frames.last()
     }
 
+    /// The frame of the brace opened at `depth`, counting the outermost as
+    /// one; a header line may already hold the frame of the brace after it.
+    pub(crate) fn brace_at_depth(&self, depth: usize) -> Option<&BraceFrame> {
+        self.brace_frames.get(depth.checked_sub(1)?)
+    }
+
+    /// The case blocks open around the innermost brace.
+    pub(crate) fn open_case_blocks(&self) -> usize {
+        self.brace_frames
+            .iter()
+            .filter(|frame| frame.case_block)
+            .count()
+    }
+
     pub(crate) fn active_brace_mut(&mut self) -> Option<&mut BraceFrame> {
         self.brace_frames.last_mut()
     }
@@ -1132,7 +1235,23 @@ impl FrameStack {
         if let Some(frame) = self.last_closed_brace_mut() {
             frame.close_output_line = Some(line);
             frame.close_ends_output_line = false;
+            if frame.semantic_kind == BraceSemanticKind::Lambda {
+                let span = LambdaBodySpan {
+                    open_output_line: frame.open_output_line,
+                    close_output_line: line,
+                    opens_output_line: frame.opens_output_line,
+                };
+                self.last_lambda_body = Some(span);
+            }
         }
+    }
+
+    pub(crate) fn record_lambda_body(&mut self, span: LambdaBodySpan) {
+        self.last_lambda_body = Some(span);
+    }
+
+    pub(crate) fn last_lambda_body(&self) -> Option<LambdaBodySpan> {
+        self.last_lambda_body
     }
 
     pub(crate) fn mark_last_closed_brace_line_end(&mut self, line: usize, ends_with_brace: bool) {
@@ -1141,6 +1260,13 @@ impl FrameStack {
         {
             frame.close_ends_output_line = ends_with_brace;
         }
+    }
+
+    /// Whether a control header's condition holds the open delimiters.
+    pub(crate) fn in_header_condition(&self) -> bool {
+        self.delimiters
+            .iter()
+            .any(|entry| entry.frame.role == ParenRole::Header)
     }
 
     pub(crate) fn enclosing_delimiter(&self) -> Option<&DelimiterFrame> {
@@ -1242,10 +1368,6 @@ mod tests {
         });
         stack.pop_delimiter(3);
 
-        assert_eq!(
-            stack.first_delimiter_column_after_output_column(2, 0),
-            Some(5)
-        );
         assert_eq!(
             stack.last_delimiter_column_after_output_column(2, 0),
             Some(15)
@@ -1455,6 +1577,9 @@ mod tests {
             body_indent_column: 11,
             sibling_indent_column: 7,
             split_header: false,
+            open_output_line: 0,
+            open_token: None,
+            opens_output_line: false,
             close_output_line: None,
             close_ends_output_line: false,
         });

@@ -1374,7 +1374,7 @@ fn gnu_places_the_labels_of_an_else_switch_at_its_broken_brace() {
 }
 
 #[test]
-fn mozilla_breaks_an_enum_brace_with_its_trailing_comment() {
+fn mozilla_breaks_an_enum_brace_from_its_trailing_comment_as_a_structs() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=mozilla".to_owned()])
         .expect("valid style options");
@@ -1385,8 +1385,8 @@ fn mozilla_breaks_an_enum_brace_with_its_trailing_comment() {
             &options,
         ),
         fixture!(
-            "enum t",
-            "{   // c4",
+            "enum t     // c4",
+            "{",
             "    B,",
             "};",
             "struct s     // c3",

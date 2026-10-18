@@ -4,8 +4,9 @@ use crate::formatter::constructs::switch_cases::{
 };
 use crate::formatter::continuation::operator_chains;
 use crate::formatter::ends_inside_block_comment;
-use crate::formatter::engine::FormatEngine;
+use crate::formatter::engine::{FormatEngine, SplitLineShift};
 use crate::formatter::lexer::Token;
+use crate::formatter::state::BraceType;
 use crate::formatter::state::PreviousToken;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
@@ -45,6 +46,13 @@ impl FormatEngine<'_> {
         if std::mem::take(&mut self.current_is_verbatim) && self.output.len() > published {
             self.output.mark_last_verbatim();
         }
+        self.shift_inline_arrays_to_published_line(published);
+        self.inline_array.line_start = (
+            self.output.len(),
+            self.inline_array.frames.len(),
+            self.current_inline_array_column()
+                .filter(|_| self.layout.nesting.brace_type_stack.last() == Some(&BraceType::Array)),
+        );
         // The code length may have split the line over several.
         if first.is_some()
             && let Some(line) = (published..self.output.len())
@@ -58,6 +66,10 @@ impl FormatEngine<'_> {
         if std::mem::take(&mut self.layout.unwind_else_if_after_line) {
             self.unwind_else_if_break_depths();
         }
+        if std::mem::take(&mut self.layout.exit_braceless_block_after_line) {
+            self.layout.indentation.exit_braceless_block();
+        }
+        self.layout.joined_added_closer_spaces = None;
     }
 
     fn publish_finished_line(&mut self) {
@@ -133,6 +145,7 @@ impl FormatEngine<'_> {
     fn finish_ordinary_line(&mut self, line: &str) {
         if !line.is_empty() {
             let output_line_index = self.output.len();
+            self.layout.blank_lines_before_pending = 0;
             let code = line[..trailing_comment_split_limit(line)].trimmed_end();
             let code_ends_with_brace = code.ends_with('}');
             self.layout
@@ -148,9 +161,13 @@ impl FormatEngine<'_> {
                 && !(self.options.indent_preproc_block
                     && self.preprocessor.indented_block_stack.last() == Some(&true))
             {
-                if self.take_block_spacing_blank(line) {
-                    self.push_empty_line();
-                }
+                let output_line_index = if self.take_block_spacing_blank(line) {
+                    self.push_empty_line_before_pending();
+                    output_line_index + 1
+                } else {
+                    output_line_index
+                };
+                self.layout.blank_lines_before_pending = 0;
                 self.publish_unadjusted_line(line.to_string());
                 if let Some(output_indent) =
                     self.observe_operator_chain_output_line(output_line_index)
@@ -170,6 +187,7 @@ impl FormatEngine<'_> {
 
             let case_label_with_comment = case_label_with_trailing_comment(line);
             if self.options.break_one_line_statements
+                && !self.line_continues_operands()
                 && let Some((label, mut statement)) = split_switch_label_statement(line)
             {
                 let line_indent = if leading_visual_width(line, self.options.tab_width) == 0 {
@@ -214,17 +232,20 @@ impl FormatEngine<'_> {
                             self.options.tab_width,
                         );
                     self.finish_line_text(&statement);
-                    self.label_split_shift = self.output.last().map(|published| {
-                        (
-                            self.output.len() - 1,
-                            leading_visual_width(published, self.options.tab_width) as isize
-                                - source_column as isize,
-                        )
+                    self.split_line_shift = self.output.last().map(|published| SplitLineShift {
+                        line: self.output.len() - 1,
+                        from_column: 0,
+                        shift: leading_visual_width(published, self.options.tab_width) as isize
+                            - source_column as isize,
+                        declaration_columns: None,
+                        moved_stack: false,
                     });
                 }
             } else {
                 self.finish_line_text(line);
             }
+            let output_line_index =
+                output_line_index + std::mem::take(&mut self.layout.blank_lines_before_pending);
             self.reset_continuation_after_output_line(line, output_line_index);
             self.reset_continuation_after_directive_rows(output_line_index);
             // A closing brace line that ends its declaration, as `} name;`,
@@ -588,12 +609,50 @@ impl FormatEngine<'_> {
         })
     }
 
+    /// Joins each closer of a body empty in the source to its brace's line,
+    /// past the comments the brace moved before, as the empty body joins
+    /// with no comment there.
+    fn join_empty_body_closers(&mut self) {
+        let lines = std::mem::take(&mut self.empty_body_closer_lines);
+        for line in lines.into_iter().rev() {
+            let Some(brace_line) = line.checked_sub(1) else {
+                continue;
+            };
+            if !self
+                .output
+                .get(line)
+                .is_some_and(|closer| closer.trimmed_start().starts_with('}'))
+            {
+                continue;
+            }
+            let joined = format!(
+                "{}{}",
+                self.output[brace_line].trimmed_end(),
+                self.output[line].trimmed()
+            );
+            self.output.set(brace_line, joined);
+            self.output.remove(line);
+            for list in [
+                &mut self.joined_closer_padding_lines,
+                &mut self.source_run_in_brace_lines,
+            ] {
+                for index in list.iter_mut() {
+                    if *index > line {
+                        *index -= 1;
+                    }
+                }
+            }
+        }
+    }
+
     /// The finished text, and where the fill of each of its whitespace-only
     /// lines came from.
     pub(crate) fn finish(mut self) -> (String, Vec<EmptyFillSource>) {
         // Whole-output passes look at every construct.
         self.output.clear_scope();
         self.flush_backslash_body_parts();
+        self.join_empty_body_closers();
+        self.lift_joined_closer_padding();
         self.merge_source_run_in_braces();
         self.merge_run_in_comment_braces();
         self.fuse_adjacent_braces();

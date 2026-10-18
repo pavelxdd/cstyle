@@ -1755,7 +1755,7 @@ fn allman_keeps_adjacent_nested_malformed_open_braces_idempotent() {
 fn unpad_bare_block_after_operator_breaks_idempotently() {
     let mut options = FormatOptions::default();
     options.unpad_parens = true;
-    let expected = "xdefault%{#endif#if A;\n+=&&continue]returncasecase}                      // line...for42returnif42~zelseconstexpr\n";
+    let expected = "xdefault%{#endif#if A;\n+=&&continue]returncasecase}// line...for42returnif42~zelseconstexpr\n";
 
     assert_eq!(
         format_exact(
@@ -2571,4 +2571,17 @@ fn gnu_brace_after_a_macro_condition_in_a_block_indents_as_a_header_brace() {
 
     assert_eq!(format_exact(input, &options), expected);
     assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn a_one_line_bare_block_after_a_directive_breaks_as_anywhere() {
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Allman;
+    assert_eq!(
+        format_exact(
+            "void f()\n{\n#ifdef FEATURE\n    { value=0; }\n#endif\n    run();\n}\n",
+            &options
+        ),
+        "void f()\n{\n#ifdef FEATURE\n    {\n        value=0;\n    }\n#endif\n    run();\n}\n",
+    );
 }

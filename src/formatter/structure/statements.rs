@@ -426,7 +426,7 @@ impl Parser<'_> {
         match self.word(at) {
             Some("if") => return self.if_statement(at, end),
             Some("for" | "while" | "switch" | "foreach") => {
-                return match self.after_parens(at + 1, end) {
+                return match self.after_condition(at + 1, end) {
                     Some(after) => self.body(at, after, end),
                     None => self.simple(at, end),
                 };

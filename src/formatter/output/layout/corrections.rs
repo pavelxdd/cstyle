@@ -269,12 +269,14 @@ impl FormatEngine<'_> {
         ) {
             exact_indent_spaces = Some(case_layout.exact_indent_spaces);
         }
-        // A broken `{` stands at the header that opened its frame.
+        // A broken `{` stands at the header that opened its frame; one in
+        // the header's parens opens no block of it.
         if matches!(
             self.options.brace_style,
             BraceStyle::Allman | BraceStyle::Horstmann | BraceStyle::Pico
         ) && !self.options.indent_braces
             && line.trimmed() == "{"
+            && self.layout.nesting.paren_depth == 0
             && let Some(header) = self
                 .layout
                 .frame_stack
@@ -362,9 +364,7 @@ impl FormatEngine<'_> {
             && line_kind == LineKind::Normal
             && let Some(spaces) = replay.closed_delimiter_continuation_indent
             && !line_start.starts_with_any(b"#(){}")
-            && self
-                .argument_after_lambda_call_argument_indent_spaces(line)
-                .is_none()
+            && !replay.follows_lambda_body
             && !self.has_over_max_new_call_context()
             && self
                 .output
@@ -448,7 +448,8 @@ impl FormatEngine<'_> {
             }
         }
         // A label after a pico closer, which runs into the row before, takes
-        // no level: the row after it stands in the closed block.
+        // no level: the row after it stands in the closed block, less the
+        // level indented case blocks take.
         if self.options.brace_style == BraceStyle::Pico
             && line_kind == LineKind::Normal
             && !line_start.starts_with_any(b"{}#")
@@ -466,9 +467,12 @@ impl FormatEngine<'_> {
             && let Some(frame) = self.layout.frame_stack.last_closed_brace()
         {
             exact_indent_spaces = Some(
-                frame.body_indent_column
+                (frame.body_indent_column
                     + self.layout.line_adjuster.next_line_case_unindent_depth()
-                        * self.options.indent_width,
+                        * self.options.indent_width)
+                    .saturating_sub(
+                        usize::from(self.options.indent_cases) * self.options.indent_width,
+                    ),
             );
         }
         if let Some(spaces) = self.restored_preprocessor_branch_body_indent_spaces(line) {

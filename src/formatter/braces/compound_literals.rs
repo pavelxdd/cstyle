@@ -1,7 +1,7 @@
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::structure::blocks::BlockKind;
-use crate::formatter::structure::groups::Delimiter;
+use crate::formatter::structure::groups::{Delimiter, GroupId};
 use crate::formatter::syntax::language;
 use crate::formatter::text::line_scan::{has_top_level_comma_in_text, trailing_matching_parens};
 use crate::formatter::text::trim::Trimmed;
@@ -22,11 +22,22 @@ impl FormatEngine<'_> {
     /// own on a line after the `(`, a compound literal whose braces span
     /// lines.
     pub(crate) fn parens_hold_multiline_compound_literal(&self, open: usize) -> bool {
-        let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
         let Some(parens) = groups.opened_at(open) else {
             return false;
         };
+        self.multiline_literal_parens.get_or_init(|| {
+            groups
+                .ids()
+                .map(|id| self.group_holds_multiline_compound_literal(id))
+                .collect()
+        })[parens.index()]
+    }
+
+    fn group_holds_multiline_compound_literal(&self, parens: GroupId) -> bool {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let open = groups.get(parens).open;
         // Only a call's closed argument list counts: parens left open or
         // holding statements are no call's arguments.
         groups.get(parens).delimiter == Delimiter::Paren
@@ -109,9 +120,36 @@ pub(crate) fn line_ends_compound_literal_cast(line: &str) -> bool {
     match before_open.chars().next_back() {
         Some(ch) if is_word_char(ch) => trailing_word(before_open) == language::RETURN,
         Some(')') => ends_with_value_cast(before_open),
-        Some(']') => false,
+        // A block literal's parameters head its body.
+        Some(']' | '^') => false,
+        // So do a template's arguments, as in `Base<T>(value)`.
+        Some('>') => !ends_with_template_arguments(before_open),
         _ => true,
     }
+}
+
+/// Whether `text` ends with the arguments of a named template, the `<` that
+/// opens them right after the name.
+fn ends_with_template_arguments(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    let mut depth = 0usize;
+    for (index, &byte) in bytes.iter().enumerate().rev() {
+        match byte {
+            b'>' => depth += 1,
+            b'<' => {
+                depth -= 1;
+                if depth == 0 {
+                    return text[..index].chars().next_back().is_some_and(is_word_char);
+                }
+            }
+            b';' | b'{' | b'}' => return false,
+            _ => {}
+        }
+        if depth == 0 {
+            return false;
+        }
+    }
+    false
 }
 
 /// Whether `text` ends with a cast that starts a value, which the cast of a

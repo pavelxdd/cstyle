@@ -8,16 +8,18 @@ use crate::formatter::constructs::constructor_initializers::has_inline_construct
 use crate::formatter::constructs::headers::{
     line_is_control_body_header, same_line_nested_header_extra, starts_header_word,
 };
-use crate::formatter::constructs::objc::objc_message_following_keyword_column;
 use crate::formatter::constructs::typedefs::immediate_typedef_template_indent_spaces;
 use crate::formatter::constructs::{labels, switch_cases};
 use crate::formatter::continuation::call_arguments::callee_name_start_before_open;
-use crate::formatter::continuation::operator_chains::inline_stream_opener_argument_indent_spaces;
+use crate::formatter::continuation::operator_chains::{
+    assignment_value_column, inline_stream_opener_argument_indent_spaces,
+};
 use crate::formatter::continuation::split_declaration_assignment_indent_spaces;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{self, CommentKind, Token};
 use crate::formatter::output::buffer::{LineFilter, LookBack};
 use crate::formatter::output::line_adjust::macro_call_starts_with;
+use crate::formatter::preprocessor::is_conditional_preprocessor;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::language;
 use crate::formatter::syntax::language::is_macro_like_word;
@@ -25,8 +27,8 @@ use crate::formatter::text::columns::column_after;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
-    has_unmatched_open_brace, is_comment_only_line, reverse_scan_skips_block_comment,
-    trailing_comment_split_limit, unmatched_open_paren_columns,
+    after_leading_comments, has_unmatched_open_brace, is_comment_only_line, preprocessor_directive,
+    reverse_scan_skips_block_comment, trailing_comment_split_limit, unmatched_open_paren_columns,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -35,8 +37,8 @@ use crate::formatter::tokens::literals::{
     starts_string_literal_token, string_literal_has_opening_context,
 };
 use crate::formatter::tokens::operators::{
-    array_bound_operator_column, find_assignment_operator, head_ends_binary_operator,
-    starts_with_chain_operator,
+    array_bound_operator_column, find_assignment_operator, head_ends_assignment_operator,
+    head_ends_binary_operator, starts_with_chain_operator,
 };
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
 
@@ -137,7 +139,11 @@ impl FormatEngine<'_> {
             let code = self.output.code_trimmed_of(raw);
             let trimmed_code = code.trimmed_start();
             if trimmed_code.ends_with(',') {
-                if single_string_literal_comma_line(code) {
+                // A brace list's next element stands at its elements, not
+                // at the row that continued the one before.
+                if single_string_literal_comma_line(code)
+                    && !self.pending_row_in_initializer_brace()
+                {
                     return Some(
                         leading_visual_width(raw, self.options.tab_width)
                             + self.layout.line_adjuster.total_case_unindent_depth()
@@ -186,10 +192,14 @@ impl FormatEngine<'_> {
                     if let Some(spaces) = skipped_comment_indent {
                         return Some(spaces + case_unindent);
                     }
+                    // A designator's value continues under the value.
+                    let designator_value = before_string.trimmed_start().starts_with_any(b".[")
+                        && head_ends_assignment_operator(before_string);
                     if before_string.trimmed().is_empty()
                         || (before_string.contains(',')
                             && self.open_paren_column_of(before_string).is_none())
                         || (self.pending_row_in_initializer_brace()
+                            && !designator_value
                             && self.open_paren_column_of(before_string).is_none())
                     {
                         return Some(leading + case_unindent);
@@ -320,12 +330,16 @@ impl FormatEngine<'_> {
         }
         let column = array_bound_operator_column(trimmed)?;
         let lead = leading_visual_width(previous, self.options.tab_width);
+        if column.saturating_sub(lead) <= self.options.max_continuation_indent {
+            return Some(column);
+        }
+        // Past the maximum it continues at the value an assignment gives,
+        // else two levels in, as a paren does.
+        let code = self.output.code_trimmed_of(previous);
         Some(
-            if column.saturating_sub(lead) > self.options.max_continuation_indent {
-                lead + 2 * self.options.indent_width
-            } else {
-                column
-            },
+            assignment_value_column(code, self.options.tab_width)
+                .filter(|&value| value.saturating_sub(lead) <= self.options.max_continuation_indent)
+                .unwrap_or(lead + 2 * self.options.indent_width),
         )
     }
 
@@ -654,7 +668,10 @@ impl FormatEngine<'_> {
             .take(256)
             .take_while(|line| !line.trimmed_end().ends_with_any(b";{}"))
         {
-            if colon_spaces.is_none() && previous.trimmed_start().starts_with(':') {
+            // Comments leading an operand row take its column.
+            if colon_spaces.is_none()
+                && after_leading_comments(previous.trimmed_start()).starts_with(':')
+            {
                 colon_spaces = Some(leading_visual_width(previous, self.options.tab_width));
             }
             if previous.contains("asm") || previous.contains("__asm__") {
@@ -677,9 +694,15 @@ impl FormatEngine<'_> {
         }
         let width = self.options.indent_width;
         let natural = exact_indent_spaces.unwrap_or(indent * width);
-        let previous_index = self.output.last_non_empty_index();
-        let previous_is_preprocessor =
-            previous_index.is_some_and(|index| self.output.trimmed(index).starts_with('#'));
+        let previous_index = self.output.last_non_empty_index().map(|index| {
+            self.statement_line_before_conditionals(index)
+                .unwrap_or(index)
+        });
+        // A macro's body continues no statement after it.
+        let previous_is_macro_body = previous_index
+            .is_some_and(|index| self.output.directive_of_continuation(index).is_some());
+        let previous_is_preprocessor = previous_is_macro_body
+            || previous_index.is_some_and(|index| self.output.trimmed(index).starts_with('#'));
         if let Some(spaces) =
             self.nonconditional_directive_sibling_indent_spaces(line, normal_indent)
         {
@@ -697,6 +720,7 @@ impl FormatEngine<'_> {
             return None;
         }
         if let Some(previous_index) = previous_index
+            && !previous_is_macro_body
             && let Some(spaces) = self.previous_line_indent_spaces(
                 line,
                 current,
@@ -727,6 +751,28 @@ impl FormatEngine<'_> {
             return Some(spaces);
         }
         None
+    }
+
+    /// The line, within an open paren or bracket, that the conditional
+    /// directives ending at output line `index` interrupt.
+    fn statement_line_before_conditionals(&self, index: usize) -> Option<usize> {
+        let is_conditional = |index: usize| {
+            preprocessor_directive(self.output.trimmed(index))
+                .is_some_and(is_conditional_preprocessor)
+                || self.output.directive_of_continuation(index).is_some()
+        };
+        if !is_conditional(index) {
+            return None;
+        }
+        let start = self.output.scoped_range().start;
+        let code = (start..index).rev().find(|&candidate| {
+            !self.output.trimmed(candidate).is_empty() && !is_conditional(candidate)
+        })?;
+        let head = self.output.code_trimmed_of(&self.output[code]);
+        let opens = head.matches(['(', '[']).count();
+        let closes = head.matches([')', ']']).count();
+        (!self.output.trimmed(code).starts_with('#') && (opens > closes || head.ends_with(',')))
+            .then_some(code)
     }
 
     /// Whether output line `index` starts the braceless body of a control
@@ -925,7 +971,7 @@ impl FormatEngine<'_> {
             if previous_code.ends_with(',')
                 && previous_code.contains('[')
                 && !current.starts_with_any(b"#(){}")
-                && let Some(spaces) = objc_message_following_keyword_column(previous_code)
+                && let Some(spaces) = self.open_message_keyword_column(previous_code)
             {
                 return Some(spaces);
             }
@@ -1161,11 +1207,6 @@ impl FormatEngine<'_> {
             || previous_opens_paren
             || current.starts_with_any(b"<>/.&")
         {
-            if previous_comment_code.ends_with(',')
-                && let Some(spaces) = self.argument_after_lambda_call_argument_indent_spaces(line)
-            {
-                return Some(spaces);
-            }
             if last_code_ends_with_comma
                 && let Some(spaces) = self.closed_call_sibling_indent_spaces(line)
             {

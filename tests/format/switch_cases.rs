@@ -1126,7 +1126,7 @@ fn horstmann_nested_case_label_keeps_label_and_body_at_distinct_columns() {
             "void run(int value){\nswitch(value){\ncase 3:{\ncase 4:\ncall();\nbreak;\n}\n}\n}\n",
             &options,
         ),
-        "void run(int value)\n{   switch(value)\n    {   case 3:\n        {   case 4:\n                call();\n                break;\n            }\n    }\n}\n",
+        "void run(int value)\n{   switch(value)\n    {   case 3:\n        {   case 4:\n                call();\n                break;\n        }\n    }\n}\n",
     );
 }
 

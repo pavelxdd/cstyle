@@ -326,13 +326,13 @@ fn lambda_in_braced_initializer_preserves_source_brace_gap() {
 }
 
 #[test]
-fn parameterized_lambda_in_braced_initializer_uses_lambda_block_indent() {
+fn parameterized_lambda_in_braced_initializer_opens_its_body_from_the_list() {
     let source = fixture!(
         "void f()",
         "{",
         "    Handler observer {[&]() {",
-        "        ++count;",
-        "    }};",
+        "            ++count;",
+        "        }};",
         "}",
     );
 
@@ -355,8 +355,8 @@ fn one_line_parameterized_lambda_in_braced_initializer_breaks_body() {
             "void f()",
             "{",
             "    Handler observer {[&]() {",
-            "        ++count;",
-            "    }};",
+            "            ++count;",
+            "        }};",
             "}",
         )
     );
@@ -745,7 +745,7 @@ fn whitesmith_split_lambda_uses_semantic_body_column() {
 }
 
 #[test]
-fn immediately_invoked_multiline_lambda_call_breaks_after_body() {
+fn immediately_invoked_multiline_lambda_keeps_its_call_on_the_closer_line() {
     assert_eq!(
         format_exact(
             fixture!(
@@ -763,21 +763,20 @@ fn immediately_invoked_multiline_lambda_call_breaks_after_body() {
             "{",
             "    call([](int x) {",
             "        return x;",
-            "    }",
-            "    (value));",
+            "    }(value));",
             "}",
         )
     );
 }
 
 #[test]
-fn multiline_return_lambda_invocation_splits_after_body() {
+fn multiline_return_lambda_invocation_stays_on_the_closer_line() {
     assert_eq!(
         format_exact(
             "int f(unsigned n) {\n  return [](unsigned m) {\n    int value = 0;\n    do {\n      ++value;\n    } while ((m >>= 4) != 0);\n    return value;\n  }(n);\n}\n",
             &FormatOptions::default(),
         ),
-        "int f(unsigned n) {\n    return [](unsigned m) {\n        int value = 0;\n        do {\n            ++value;\n        } while ((m >>= 4) != 0);\n        return value;\n    }\n    (n);\n}\n",
+        "int f(unsigned n) {\n    return [](unsigned m) {\n        int value = 0;\n        do {\n            ++value;\n        } while ((m >>= 4) != 0);\n        return value;\n    }(n);\n}\n",
     );
 }
 
@@ -856,7 +855,7 @@ fn empty_param_lambda_call_argument_body_stays_one_line() {
 }
 
 #[test]
-fn no_param_multiline_lambda_empty_invocation_breaks_after_body() {
+fn no_param_multiline_lambda_empty_invocation_stays_on_the_closer_line() {
     assert_eq!(
         format_exact(
             fixture!(
@@ -874,8 +873,7 @@ fn no_param_multiline_lambda_empty_invocation_breaks_after_body() {
             "{",
             "    call([]() {",
             "        return 1;",
-            "    }",
-            "    ());",
+            "    }());",
             "}",
         )
     );
@@ -1320,4 +1318,18 @@ fn pico_inline_trailing_return_lambda_preserves_brace_spacing() {
         ),
         "int main() { auto f=[x=1](int y)->int{ return x+y; }; }\n",
     );
+}
+
+#[test]
+fn one_line_lambda_body_after_its_parameters_breaks_whatever_their_count() {
+    for parameters in ["()", "(int value)", "(int first, int second)"] {
+        let source = format!("void f()\n{{\n    call([]{parameters} {{ return 1; }});\n}}\n");
+        let expected =
+            format!("void f()\n{{\n    call([]{parameters} {{\n        return 1;\n    }});\n}}\n");
+        assert_eq!(
+            format_exact(&source, &FormatOptions::default()),
+            expected,
+            "{parameters}"
+        );
+    }
 }

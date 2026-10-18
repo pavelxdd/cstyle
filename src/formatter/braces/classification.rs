@@ -2,22 +2,29 @@ use crate::config::{BraceStyle, FormatOptions};
 use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::braces::rewrite::is_defer_header;
 use crate::formatter::constructs::headers::is_conditional_header_line;
+use crate::formatter::constructs::labels;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::preprocessor::is_cplusplus_conditional;
 use crate::formatter::state::BraceType;
+use crate::formatter::state::indentation::LineKind;
 use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::syntax::language;
 use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, is_comment_only_line, trailing_comment_split_limit, trailing_matching_parens,
-    unmatched_open_paren_column,
+    ContainsAnyByte, after_leading_comments, is_bare_comment_line, trailing_comment_split_limit,
+    trailing_matching_parens, unmatched_open_paren_column,
 };
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{is_word_char, trailing_word};
 
 pub(crate) fn line_opens_lambda_block(line: &str) -> bool {
-    let trimmed = line.trimmed();
+    // A lambda's head holds its capture list, a block literal's its caret.
+    if !line.contains_any_byte(b"]^") {
+        return false;
+    }
+    // A comment after the brace takes no part in the head.
+    let trimmed = line[..trailing_comment_split_limit(line)].trimmed();
     let Some(head) = trimmed.strip_suffix('{') else {
         return false;
     };
@@ -26,6 +33,7 @@ pub(crate) fn line_opens_lambda_block(line: &str) -> bool {
         || head
             .rfind('[')
             .is_some_and(|index| is_lambda_body_header(head[index..].trimmed_start()))
+        || current_ends_block_literal_header(head)
 }
 
 pub(crate) fn is_lambda_body_header(head: &str) -> bool {
@@ -36,15 +44,42 @@ pub(crate) fn is_lambda_body_header(head: &str) -> bool {
     is_lambda_body_header_with_arrow(head, head.rfind("->"))
 }
 
+/// `head` without the specifiers a lambda's declarator may end with.
+pub(crate) fn without_lambda_specifiers(head: &str) -> &str {
+    let mut head = head.trimmed_end();
+    loop {
+        let (rest, word) = match matching_open_index(head, '(', ')') {
+            Some(open) => {
+                let before = head[..open].trimmed_end();
+                (before, trailing_word(before))
+            }
+            None => (head, trailing_word(head)),
+        };
+        let specifier = if rest.len() == head.len() {
+            matches!(
+                word,
+                "mutable" | "constexpr" | "consteval" | "static" | "noexcept"
+            )
+        } else {
+            matches!(word, "noexcept" | "throw")
+        };
+        if !specifier {
+            return head;
+        }
+        head = rest[..rest.len() - word.len()].trimmed_end();
+    }
+}
+
 /// `is_lambda_body_header` of `head`, whose last `->` is at `arrow`.
 fn is_lambda_body_header_with_arrow(head: &str, arrow: Option<usize>) -> bool {
     let mut head = head.trimmed_end();
     if let Some(arrow) = arrow {
-        let before = head[..arrow].trimmed_end();
+        let before = without_lambda_specifiers(&head[..arrow]);
         if before.ends_with(')') {
             head = before;
         }
     }
+    let head = without_lambda_specifiers(head);
     if !head.ends_with(')') {
         return false;
     }
@@ -58,24 +93,36 @@ fn is_lambda_body_header_with_arrow(head: &str, arrow: Option<usize>) -> bool {
     let Some(lb) = matching_open_index(capture, '[', ']') else {
         return false;
     };
-    match capture[..lb].trimmed_end().chars().next_back() {
+    opens_capture_list_after(&capture[..lb])
+}
+
+/// Whether a `[` after `before` opens a lambda's capture list rather than
+/// a subscript: no operand ends `before`, though a keyword taking a value
+/// may.
+fn opens_capture_list_after(before: &str) -> bool {
+    let before = before.trimmed_end();
+    match before.chars().next_back() {
         None => true,
-        Some(ch) => !(is_word_char(ch) || ch == ')' || ch == ']'),
+        Some(ch) if is_word_char(ch) => matches!(
+            trailing_word(before),
+            "return" | "co_return" | "co_yield" | "throw" | "else" | "do"
+        ),
+        Some(ch) => !(ch == ')' || ch == ']'),
     }
 }
 
 pub(crate) fn is_lambda_capture_header(head: &str) -> bool {
-    let head = head.trimmed_end();
+    if !head.as_bytes().contains(&b']') {
+        return false;
+    }
+    let head = without_lambda_specifiers(head);
     if !head.ends_with(']') {
         return false;
     }
     let Some(lb) = matching_open_index(head, '[', ']') else {
         return false;
     };
-    match head[..lb].trimmed_end().chars().next_back() {
-        None => true,
-        Some(ch) => !(is_word_char(ch) || ch == ')' || ch == ']'),
-    }
+    opens_capture_list_after(&head[..lb])
 }
 
 pub(super) fn line_opens_parameterized_lambda_block(line: &str) -> bool {
@@ -108,10 +155,7 @@ pub(crate) fn line_opens_lambda_or_capture_only_block(line: &str) -> bool {
     if !capture.ends_with(']') {
         return false;
     }
-    match head[..capture_start].trimmed_end().chars().next_back() {
-        None => true,
-        Some(ch) => !(is_word_char(ch) || ch == ')' || ch == ']'),
-    }
+    opens_capture_list_after(&head[..capture_start])
 }
 
 fn is_namespace_block_header(line: &str) -> bool {
@@ -121,19 +165,25 @@ fn is_namespace_block_header(line: &str) -> bool {
         || trimmed.starts_with("inline namespace ")
 }
 
-fn current_ends_block_literal_header(head: &str) -> bool {
-    if !head.ends_with(')') {
+pub(crate) fn current_ends_block_literal_header(head: &str) -> bool {
+    if !head.as_bytes().contains(&b'^') {
         return false;
     }
-    let Some(open) = matching_open_index(head, '(', ')') else {
-        return false;
+    let before = if head.ends_with('^') {
+        head
+    } else {
+        let Some(open) = matching_open_index(head, '(', ')') else {
+            return false;
+        };
+        head[..open].trimmed_end().trim_end_matches(|ch: char| {
+            is_word_char(ch) || matches!(ch, '*' | '&' | ' ' | '\t' | ':')
+        })
     };
-    let before = head[..open].trimmed_end().trim_end_matches(|ch: char| {
-        is_word_char(ch) || matches!(ch, '*' | '&' | ' ' | '\t' | ':')
-    });
     let Some(rest) = before.strip_suffix('^') else {
         return false;
     };
+    // Comments before the caret take no part in the head.
+    let rest = &rest[..trailing_comment_split_limit(rest)];
     match rest.trimmed_end().chars().next_back() {
         None => true,
         Some(ch) => matches!(ch, '=' | '(' | ',' | '[' | ':' | '{'),
@@ -159,7 +209,9 @@ fn matching_open_index(text: &str, open: char, close: char) -> Option<usize> {
 }
 
 pub(super) fn is_namespace_or_module_block_header(line: &str) -> bool {
-    is_namespace_block_header(line) || line.trimmed_start().starts_with("module ")
+    // A comment leading the header leaves it the header.
+    let code = after_leading_comments(line.trimmed_start());
+    is_namespace_block_header(code) || code.starts_with("module ")
 }
 
 impl FormatEngine<'_> {
@@ -180,10 +232,17 @@ impl FormatEngine<'_> {
         };
         let lambda_header = self.current_is_lambda_body_header()
             || is_lambda_capture_header(self.current.trimmed_end());
+        // A lambda in a block or a brace list is an expression's.
         let lambda_in_block_scope = lambda_header
             && matches!(
                 self.layout.nesting.brace_type_stack.last(),
-                Some(BraceType::Command | BraceType::Definition)
+                Some(
+                    BraceType::Command
+                        | BraceType::Definition
+                        | BraceType::Array
+                        | BraceType::Initializer
+                        | BraceType::CompoundLiteral
+                )
             );
         let active_delimiter = self
             .layout
@@ -236,7 +295,10 @@ impl FormatEngine<'_> {
         } else if lambda_header {
             BraceType::Definition
         } else if (header_condition_closed
-            || header.is_none() && is_conditional_header_line(self.current.trimmed_start()))
+            || header.is_none()
+                && is_conditional_header_line(self.current.trimmed_start())
+                // A statement the header's line went on with ended it.
+                && self.layout.command_state.previous_command_char == Some(')'))
             && matches!(
                 self.layout.nesting.brace_type_stack.last(),
                 Some(
@@ -254,6 +316,11 @@ impl FormatEngine<'_> {
             BraceType::Namespace
         } else if self.layout.command_state.previous_command_char == Some('=')
             || trailing_word(self.current.trimmed_end()) == language::RETURN
+            // A brace below a line its `return` ends lists the value too.
+            || self.current_is_blank()
+                && self.output.last_non_empty_scoped().is_some_and(|previous| {
+                    trailing_word(self.output.code_trimmed_of(previous)) == language::RETURN
+                })
             || self
                 .layout
                 .nesting
@@ -266,11 +333,11 @@ impl FormatEngine<'_> {
                 && !self.token_input.token_begins_source_line
                 && matches!(
                     self.layout.nesting.brace_type_stack.last(),
-                    Some(BraceType::NonStatement)
+                    Some(BraceType::NonStatement | BraceType::Initializer)
                 ))
         {
             BraceType::Array
-        } else if pending_extern
+        } else if pending_extern && !self.brace_opens_function_body()
             || (block_word.as_deref() == Some("extern") && !self.current_ends_definition_header())
         {
             BraceType::Extern
@@ -354,7 +421,8 @@ impl FormatEngine<'_> {
         {
             // A macro standing for a function head at file scope.
             BraceType::Definition
-        } else if self.token_input.token_begins_source_line
+        } else if (self.token_input.token_begins_source_line
+            || is_macro_like_word(self.current.trimmed()))
             && matches!(
                 self.layout.nesting.brace_type_stack.last(),
                 Some(BraceType::Command | BraceType::Definition)
@@ -369,6 +437,9 @@ impl FormatEngine<'_> {
                     code.is_empty()
                         || code.ends_with_any(b";{}")
                         || code.trimmed_start().starts_with('#')
+                        || code.ends_with(':')
+                            && labels::line_kind(code.trimmed_start(), &self.options.access_labels)
+                                != LineKind::Normal
                 })
         {
             // A macro word heading a block in code, as `SEH_TRY`.
@@ -377,11 +448,24 @@ impl FormatEngine<'_> {
             // An argument's brace after the line its `,` ended.
             || self.layout.command_state.previous_command_char == Some(',')
                 && self.layout.nesting.paren_depth > 0
+            // A braced initializer below its declarator's line.
+            || self
+                .current
+                .active_token()
+                .is_some_and(|brace| self.opens_declarator_list(brace))
         {
             BraceType::Initializer
         } else {
             BraceType::NonStatement
         }
+    }
+
+    /// Whether the brace being pushed opens a function's body.
+    fn brace_opens_function_body(&self) -> bool {
+        self.current
+            .active_token()
+            .and_then(|brace| self.tree.groups.opened_at(brace))
+            .is_some_and(|group| self.tree.blocks.kind(group) == Some(BlockKind::FunctionBody))
     }
 
     fn brace_opens_constructor_body(&self) -> bool {
@@ -423,6 +507,17 @@ impl FormatEngine<'_> {
                             .map(|arrow| arrow - index - skipped),
                     )
             })
+    }
+
+    /// Whether the line's lambda head carries specifiers such as `mutable`
+    /// after its parameters, before any trailing return type.
+    pub(super) fn current_lambda_head_has_specifiers(&self) -> bool {
+        let head = self.current.trimmed_end();
+        let head = self
+            .current
+            .last_arrow()
+            .map_or(head, |arrow| head[..arrow].trimmed_end());
+        without_lambda_specifiers(head).len() != head.len()
     }
 
     pub(super) fn current_ends_trailing_return_definition(&self) -> bool {
@@ -481,12 +576,17 @@ impl FormatEngine<'_> {
     }
 
     pub(super) fn current_ends_definition_header(&self) -> bool {
-        let source = if self.current_is_blank() {
-            match self.output.scoped().iter().rev().find(|line| {
-                let trimmed = line.trimmed_start();
-                !trimmed.is_empty() && !is_comment_only_line(trimmed)
+        // Comments and directives alone before the brace leave the header on
+        // the line before them.
+        let source = if after_leading_comments(self.current.trimmed_start()).is_empty() {
+            match self.output.scoped_range().rev().find(|&index| {
+                let trimmed = self.output.trimmed(index);
+                !trimmed.is_empty()
+                    && !is_bare_comment_line(trimmed)
+                    && !trimmed.starts_with('#')
+                    && self.output.directive_of_continuation(index).is_none()
             }) {
-                Some(line) => self.output.code_of(line),
+                Some(index) => self.output.code_of(&self.output[index]),
                 None => return false,
             }
         } else {
@@ -645,6 +745,15 @@ impl FormatEngine<'_> {
         matches!(
             self.layout.nesting.brace_type_stack.last(),
             Some(BraceType::CompoundLiteral)
+        )
+    }
+
+    /// Whether the innermost brace holds a list of values: an array or
+    /// aggregate initializer or a compound literal.
+    pub(crate) fn innermost_brace_is_brace_list(&self) -> bool {
+        matches!(
+            self.layout.nesting.brace_type_stack.last(),
+            Some(BraceType::Array | BraceType::CompoundLiteral)
         )
     }
 

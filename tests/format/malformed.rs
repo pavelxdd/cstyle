@@ -118,7 +118,7 @@ fn keeps_line_after_malformed_close_word_idempotent() {
 fn keeps_block_comment_after_malformed_close_word_idempotent() {
     let mut options = FormatOptions::default();
     options.unpad_parens = true;
-    let expected = "structdefault\treturn=\n} struct\n/* block */==%\n    auto|| class\n";
+    let expected = "structdefault\treturn=\n} struct\n/* block */==%\nauto|| class\n";
 
     assert_eq!(
         format_exact(

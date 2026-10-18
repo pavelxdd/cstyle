@@ -1,8 +1,9 @@
+use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::text::columns::leading_visual_width;
+use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{ContainsAnyByte, has_hash_outside_literals};
 use crate::formatter::text::line_scan::{
-    trailing_comment_split_limit, unmatched_open_paren_column,
+    after_leading_comments, trailing_comment_split_limit, unmatched_open_paren_column,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -28,15 +29,25 @@ fn angle_depth_delta(line: &str) -> isize {
 }
 
 /// The angle brackets of `line` by char column, leaving out those naming an
-/// operator, as in `operator<<`.
+/// operator, as in `operator<<`, and those inside parentheses, where a `<`
+/// may compare.
 fn angle_chars(line: &str) -> impl Iterator<Item = (usize, char)> + '_ {
     let chars = line.chars().collect::<Vec<_>>();
     let mut operator_name_end = 0;
     let mut column = 0;
+    let mut paren_depth = 0usize;
     std::iter::from_fn(move || {
         while column < chars.len() {
             let at = column;
             column += 1;
+            match chars[at] {
+                '(' => paren_depth += 1,
+                ')' => paren_depth = paren_depth.saturating_sub(1),
+                _ => {}
+            }
+            if paren_depth > 0 {
+                continue;
+            }
             if chars[at..].starts_with(&['o', 'p', 'e', 'r', 'a', 't', 'o', 'r'])
                 && !at
                     .checked_sub(1)
@@ -71,24 +82,55 @@ fn angle_chars(line: &str) -> impl Iterator<Item = (usize, char)> + '_ {
     })
 }
 
-pub(crate) fn template_continuation_indent_spaces(line: &str) -> Option<usize> {
+/// The indent of the line after a template head `line` leaves open: past
+/// the innermost `<`, or, when parens indent, a step in for each open `<`.
+pub(crate) fn template_continuation_indent_spaces(
+    line: &str,
+    angle_step: Option<usize>,
+) -> Option<usize> {
+    // Comments leading the line keep the columns of the head after them;
+    // a step counts from the line's own indent.
+    let code = after_leading_comments(line);
+    if code.len() < line.trimmed_start().len() && code.starts_with("template") {
+        if let Some(step) = angle_step {
+            let code = &code[..trailing_comment_split_limit(code)];
+            let depth = angle_chars(code).fold(0usize, |depth, (_, ch)| {
+                if ch == '<' {
+                    depth + 1
+                } else {
+                    depth.saturating_sub(1)
+                }
+            });
+            return (depth > 0).then(|| line.len() - line.trimmed_start().len() + depth * step);
+        }
+        let masked = format!(
+            "{}{code}",
+            " ".repeat(line[..line.len() - code.len()].chars().count())
+        );
+        return template_continuation_indent_spaces(&masked, angle_step);
+    }
     let trimmed = line.trimmed_start();
-    if !trimmed.starts_with("template") || angle_depth_delta(trimmed) <= 0 {
+    let code = line[..trailing_comment_split_limit(line)].trimmed_end();
+    if !trimmed.starts_with("template") || angle_depth_delta(code) <= 0 {
         return None;
     }
-    let code = line[..trailing_comment_split_limit(line)].trimmed_end();
     if (code.ends_with("||") || code.ends_with("&&"))
         && let Some(open) = unmatched_open_paren_column(code)
     {
         return Some(open + 1);
     }
     let mut stack = Vec::new();
-    for (column, ch) in angle_chars(line) {
+    for (column, ch) in angle_chars(code) {
         if ch == '<' {
             stack.push(column);
         } else {
             stack.pop();
         }
+    }
+    if let Some(step) = angle_step
+        && !stack.is_empty()
+    {
+        return Some(line.len() - trimmed.len() + stack.len() * step);
     }
     stack
         .into_iter()
@@ -207,20 +249,47 @@ impl FormatEngine<'_> {
         {
             return;
         }
-        let previous = self.output.last_non_empty_scoped();
+        // Comment lines take no part in the head's layout.
+        let previous = self.output.last_code_line_in_scope();
         if previous.is_some_and(|line| has_hash_outside_literals(line)) {
             return;
         }
         let spaces = previous
             .and_then(|line| {
-                template_continuation_indent_spaces(line).or_else(|| {
-                    (source_column == 0)
-                        .then(|| leading_visual_width(line, self.options.tab_width))
-                        .filter(|&spaces| spaces > 0)
-                })
+                template_continuation_indent_spaces(line, self.template_angle_step())
+                    .or_else(|| {
+                        // Stepping after the angles, a row of the head goes
+                        // on from the row before it.
+                        let step = self.template_angle_step()?;
+                        let code = self.output.code_trimmed_of(line);
+                        let lead = leading_visual_width(line, self.options.tab_width);
+                        let delta = angle_depth_delta(code);
+                        Some(if delta >= 0 {
+                            lead + delta.unsigned_abs() * step
+                        } else {
+                            lead.saturating_sub(delta.unsigned_abs() * step)
+                        })
+                    })
+                    .or_else(|| {
+                        (source_column == 0)
+                            .then(|| leading_visual_width(line, self.options.tab_width))
+                            .filter(|&spaces| spaces > 0)
+                    })
             })
             .unwrap_or(source_column);
         self.layout.continuation_indent.set_next_line_spaces(spaces);
+        // A comment the line holds alone stands there too.
+        self.layout
+            .continuation_indent
+            .input_line_continuation_indent
+            .replace(ContinuationIndent::Spaces(spaces));
+    }
+
+    /// The step each open `<` of a template head adds when parens indent.
+    pub(crate) fn template_angle_step(&self) -> Option<usize> {
+        self.options
+            .indent_after_parens
+            .then(|| self.options.continuation_indent * self.options.indent_width)
     }
 
     pub(crate) fn template_continuation_active(&self) -> bool {
@@ -266,6 +335,25 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn observe_template_declaration_line(&mut self, line: &LineView<'_>) {
+        // Comments leading the line keep the columns of the head after them;
+        // a comment after its code takes no part in it.
+        let line = LineView::new(&line[..trailing_comment_split_limit(line)]);
+        let code = after_leading_comments(&line);
+        let masked;
+        let line = if code.len() < line.trimmed_start().len() && !code.is_empty() {
+            masked = format!(
+                "{}{code}",
+                " ".repeat(visual_width_from(
+                    &line[..line.len() - code.len()],
+                    0,
+                    self.options.tab_width
+                ))
+            );
+            LineView::new(&masked)
+        } else {
+            line.clone()
+        };
+        let line = &line;
         let trimmed = line.trimmed();
         let starts_template = trimmed.starts_with("template");
         if !starts_template && !self.layout.template_declaration.uses_source_indent {
@@ -279,15 +367,20 @@ impl FormatEngine<'_> {
         {
             self.layout.template_declaration.uses_source_indent = true;
             self.layout.template_declaration.angle_depth = angle_delta;
-            if let Some(spaces) = template_continuation_indent_spaces(line) {
+            if let Some(spaces) =
+                template_continuation_indent_spaces(line, self.template_angle_step())
+            {
                 self.layout.continuation_indent.set_next_line_spaces(spaces);
             }
         } else if self.layout.template_declaration.uses_source_indent {
             self.layout.template_declaration.angle_depth += angle_delta;
-            if self.layout.template_declaration.angle_depth <= 0 && trimmed.ends_with('>') {
+            if self.layout.template_declaration.angle_depth <= 0 {
                 self.layout.template_declaration = TemplateDeclarationState::default();
-                self.layout.nesting.clear_continuation_indents();
-                self.layout.continuation_indent.clear_next_line();
+                // Code after the head on its row continues on its own.
+                if trimmed.ends_with('>') {
+                    self.layout.nesting.clear_continuation_indents();
+                    self.layout.continuation_indent.clear_next_line();
+                }
             }
         }
     }

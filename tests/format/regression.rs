@@ -91,7 +91,7 @@ fn string_argument_after_split_else_case_call_aligns_to_call_open_paren() {
     check(
         "void f(int value){\n#ifndef OMIT\n  if(b0){ x0(); }else\n#endif\n\n  if(t){\n    switch(value){\n      case ONE: {\n        if(ok){\n          call(stderr,\n               \"text\\n\", value);\n        }\n        break;\n      }\n    }\n  }\n}\n",
         &[],
-        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    }\n    else\n#endif\n\n        if(t) {\n            switch(value) {\n            case ONE: {\n                if(ok) {\n                    call(stderr,\n                         \"text\\n\", value);\n                }\n                break;\n            }\n            }\n        }\n}\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    } else\n#endif\n\n        if(t) {\n            switch(value) {\n            case ONE: {\n                if(ok) {\n                    call(stderr,\n                         \"text\\n\", value);\n                }\n                break;\n            }\n            }\n        }\n}\n",
     );
 }
 
@@ -154,7 +154,7 @@ fn preprocessor_branches_inside_split_else_branch_keep_nested_block_indent() {
     check(
         "void f(void){\n#ifndef OMIT\n  if( a ){ first(); }else\n#endif\n\n  if( n ){\n    if( arg ){\n      set();\n    }else{\n      usage();\n      rc = 1;\n    }\n  }else\n\n  if( open ){\n    int mode = 0;\n    if( safe ) flags = READ;\n\n    for(i=1; i<count; i++){\n      const char *item = args[i];\n#ifndef OMIT_OPTION\n      if( option(item) ){\n        mode = 1;\n      }else\n#endif\n      if( item[0]=='-' ){\n        error();\n        rc = 1;\n        goto done;\n      }else if( name ){\n        extra();\n        rc = 1;\n        goto done;\n      }else{\n        name = item;\n      }\n    }\n\n    close_all();\n    handle = 0;\n\n    if( name || mode==HEX ){\n      if( fresh && name && !safe ){\n        if( prefix(name) ){\n          char *removed = uri(name);\n          check(removed);\n          delete(removed);\n          free(removed);\n        }else{\n          delete(name);\n        }\n      }\n#ifndef OMIT_OPTION\n      if( safe\n       && mode!=HEX\n       && name\n       && compare(name,\":temporary:\")!=0\n      ){\n        fail();\n      }\n#else\n      /* comment */\n#endif\n      if( name ){\n        new_name = copy(name);\n        check(new_name);\n      }else{\n        new_name = 0;\n      }\n      handle_name = new_name;\n      open_handle();\n      if( handle==0 ){\n        print();\n        free(new_name);\n      }else{\n        keep = new_name;\n      }\n    }\n  }\ndone:\n}\n",
         &[],
-        "void f(void) {\n#ifndef OMIT\n    if( a ) {\n        first();\n    }\n    else\n#endif\n\n        if( n ) {\n            if( arg ) {\n                set();\n            } else {\n                usage();\n                rc = 1;\n            }\n        } else\n\n            if( open ) {\n                int mode = 0;\n                if( safe ) flags = READ;\n\n                for(i=1; i<count; i++) {\n                    const char *item = args[i];\n#ifndef OMIT_OPTION\n                    if( option(item) ) {\n                        mode = 1;\n                    } else\n#endif\n                        if( item[0]=='-' ) {\n                            error();\n                            rc = 1;\n                            goto done;\n                        } else if( name ) {\n                            extra();\n                            rc = 1;\n                            goto done;\n                        } else {\n                            name = item;\n                        }\n                }\n\n                close_all();\n                handle = 0;\n\n                if( name || mode==HEX ) {\n                    if( fresh && name && !safe ) {\n                        if( prefix(name) ) {\n                            char *removed = uri(name);\n                            check(removed);\n                            delete(removed);\n                            free(removed);\n                        } else {\n                            delete(name);\n                        }\n                    }\n#ifndef OMIT_OPTION\n                    if( safe\n                            && mode!=HEX\n                            && name\n                            && compare(name,\":temporary:\")!=0\n                      ) {\n                        fail();\n                    }\n#else\n                    /* comment */\n#endif\n                    if( name ) {\n                        new_name = copy(name);\n                        check(new_name);\n                    } else {\n                        new_name = 0;\n                    }\n                    handle_name = new_name;\n                    open_handle();\n                    if( handle==0 ) {\n                        print();\n                        free(new_name);\n                    } else {\n                        keep = new_name;\n                    }\n                }\n            }\ndone:\n}\n",
+        "void f(void) {\n#ifndef OMIT\n    if( a ) {\n        first();\n    } else\n#endif\n\n        if( n ) {\n            if( arg ) {\n                set();\n            } else {\n                usage();\n                rc = 1;\n            }\n        } else\n\n            if( open ) {\n                int mode = 0;\n                if( safe ) flags = READ;\n\n                for(i=1; i<count; i++) {\n                    const char *item = args[i];\n#ifndef OMIT_OPTION\n                    if( option(item) ) {\n                        mode = 1;\n                    } else\n#endif\n                        if( item[0]=='-' ) {\n                            error();\n                            rc = 1;\n                            goto done;\n                        } else if( name ) {\n                            extra();\n                            rc = 1;\n                            goto done;\n                        } else {\n                            name = item;\n                        }\n                }\n\n                close_all();\n                handle = 0;\n\n                if( name || mode==HEX ) {\n                    if( fresh && name && !safe ) {\n                        if( prefix(name) ) {\n                            char *removed = uri(name);\n                            check(removed);\n                            delete(removed);\n                            free(removed);\n                        } else {\n                            delete(name);\n                        }\n                    }\n#ifndef OMIT_OPTION\n                    if( safe\n                            && mode!=HEX\n                            && name\n                            && compare(name,\":temporary:\")!=0\n                      ) {\n                        fail();\n                    }\n#else\n                    /* comment */\n#endif\n                    if( name ) {\n                        new_name = copy(name);\n                        check(new_name);\n                    } else {\n                        new_name = 0;\n                    }\n                    handle_name = new_name;\n                    open_handle();\n                    if( handle==0 ) {\n                        print();\n                        free(new_name);\n                    } else {\n                        keep = new_name;\n                    }\n                }\n            }\ndone:\n}\n",
     );
 }
 
@@ -163,7 +163,7 @@ fn preprocessor_else_body_in_split_else_branch_keeps_branch_indent() {
     check(
         "void f(void){\n#ifndef OMIT\n  if( a ){ first(); }else\n#endif\n\n  if( b ){\n#ifndef OMIT_CHECK\n    if( safe\n     && mode\n     && name\n    ){\n      fail();\n    }\n#else\n    /* comment */\n#endif\n    if( name ){\n      open();\n    }else{\n      close();\n    }\n  }\n}\n",
         &[],
-        "void f(void) {\n#ifndef OMIT\n    if( a ) {\n        first();\n    }\n    else\n#endif\n\n        if( b ) {\n#ifndef OMIT_CHECK\n            if( safe\n                    && mode\n                    && name\n              ) {\n                fail();\n            }\n#else\n            /* comment */\n#endif\n            if( name ) {\n                open();\n            } else {\n                close();\n            }\n        }\n}\n",
+        "void f(void) {\n#ifndef OMIT\n    if( a ) {\n        first();\n    } else\n#endif\n\n        if( b ) {\n#ifndef OMIT_CHECK\n            if( safe\n                    && mode\n                    && name\n              ) {\n                fail();\n            }\n#else\n            /* comment */\n#endif\n            if( name ) {\n                open();\n            } else {\n                close();\n            }\n        }\n}\n",
     );
 }
 
@@ -172,7 +172,7 @@ fn assignment_logical_continuation_in_deep_split_else_keeps_value_indent() {
     check(
         "void f(void){\n  if(a){x();}else\n\n  if(b){x();}else\n\n  if(c){x();}else\n\n  if( schema ){\n    int is_schema = same(name, \"one\")==0\n          || same(name, \"two\")==0\n          || same(name, \"three\")==0;\n    call();\n  }\n}\n",
         &[],
-        "void f(void) {\n    if(a) {\n        x();\n    }\n    else\n\n        if(b) {\n            x();\n        }\n        else\n\n            if(c) {\n                x();\n            }\n            else\n\n                if( schema ) {\n                    int is_schema = same(name, \"one\")==0\n                                    || same(name, \"two\")==0\n                                    || same(name, \"three\")==0;\n                    call();\n                }\n}\n",
+        "void f(void) {\n    if(a) {\n        x();\n    } else\n\n        if(b) {\n            x();\n        } else\n\n            if(c) {\n                x();\n            } else\n\n                if( schema ) {\n                    int is_schema = same(name, \"one\")==0\n                                    || same(name, \"two\")==0\n                                    || same(name, \"three\")==0;\n                    call();\n                }\n}\n",
     );
 }
 
@@ -181,7 +181,7 @@ fn statement_after_assignment_logical_continuation_in_split_else_keeps_block_ind
     check(
         "void f(void){\n#ifndef OMIT\n  if(a){x();}else\n#endif\n\n  if( schema ){\n    int is_schema = same(name, \"one\")==0\n                   || same(name, \"two\")==0;\n    if( is_schema ){\n      print(out,\n            \"text\",\n            name\n           );\n    }\n    int glob = find(name, '*') != 0 ||\n               find(name, '?') != 0;\n  }\n}\n",
         &[],
-        "void f(void) {\n#ifndef OMIT\n    if(a) {\n        x();\n    }\n    else\n#endif\n\n        if( schema ) {\n            int is_schema = same(name, \"one\")==0\n                            || same(name, \"two\")==0;\n            if( is_schema ) {\n                print(out,\n                      \"text\",\n                      name\n                     );\n            }\n            int glob = find(name, '*') != 0 ||\n                       find(name, '?') != 0;\n        }\n}\n",
+        "void f(void) {\n#ifndef OMIT\n    if(a) {\n        x();\n    } else\n#endif\n\n        if( schema ) {\n            int is_schema = same(name, \"one\")==0\n                            || same(name, \"two\")==0;\n            if( is_schema ) {\n                print(out,\n                      \"text\",\n                      name\n                     );\n            }\n            int glob = find(name, '*') != 0 ||\n                       find(name, '?') != 0;\n        }\n}\n",
     );
 }
 
@@ -190,7 +190,7 @@ fn conditional_preprocessor_block_after_split_else_keeps_chain_indent() {
     check(
         "void f(void){\n  if(a){x();}else\n\n#ifndef OMIT\n  if(b){x();}else\n#endif\n\n#ifdef DEBUG\n  /* comment one\n  ** comment two */\n  if(c){\n    x();\n  }else\n#endif\n\n  if(d){\n    y();\n  }\n}\n",
         &[],
-        "void f(void) {\n    if(a) {\n        x();\n    }\n    else\n\n#ifndef OMIT\n        if(b) {\n            x();\n        }\n        else\n#endif\n\n#ifdef DEBUG\n            /* comment one\n            ** comment two */\n            if(c) {\n                x();\n            } else\n#endif\n\n                if(d) {\n                    y();\n                }\n}\n",
+        "void f(void) {\n    if(a) {\n        x();\n    } else\n\n#ifndef OMIT\n        if(b) {\n            x();\n        } else\n#endif\n\n#ifdef DEBUG\n            /* comment one\n            ** comment two */\n            if(c) {\n                x();\n            } else\n#endif\n\n                if(d) {\n                    y();\n                }\n}\n",
     );
 }
 
@@ -199,7 +199,7 @@ fn operator_continuation_in_conditional_preprocessor_split_else_keeps_chain_inde
     check(
         "void f(void){\n  if(a){x();}else\n\n#ifndef OMIT\n  if(b){x();}else\n#endif\n\n#ifdef DEBUG\n  /* comment one\n  ** comment two */\n  if(c){\n    x();\n  }else\n#endif\n\n  if(d){\n    if( call(alpha,beta,gamma,delta,epsilon,zeta,eta,theta)\n      != OK ){\n      value = 0;\n    }else{\n      value = 1;\n    }\n  }\n}\n",
         &[],
-        "void f(void) {\n    if(a) {\n        x();\n    }\n    else\n\n#ifndef OMIT\n        if(b) {\n            x();\n        }\n        else\n#endif\n\n#ifdef DEBUG\n            /* comment one\n            ** comment two */\n            if(c) {\n                x();\n            } else\n#endif\n\n                if(d) {\n                    if( call(alpha,beta,gamma,delta,epsilon,zeta,eta,theta)\n                            != OK ) {\n                        value = 0;\n                    } else {\n                        value = 1;\n                    }\n                }\n}\n",
+        "void f(void) {\n    if(a) {\n        x();\n    } else\n\n#ifndef OMIT\n        if(b) {\n            x();\n        } else\n#endif\n\n#ifdef DEBUG\n            /* comment one\n            ** comment two */\n            if(c) {\n                x();\n            } else\n#endif\n\n                if(d) {\n                    if( call(alpha,beta,gamma,delta,epsilon,zeta,eta,theta)\n                            != OK ) {\n                        value = 0;\n                    } else {\n                        value = 1;\n                    }\n                }\n}\n",
     );
 }
 
@@ -208,7 +208,7 @@ fn body_after_multiline_else_if_in_conditional_split_else_keeps_header_body_inde
     check(
         "void f(void){\n  if(a){x();}else\n\n#ifndef OMIT\n  if(b){x();}else\n#endif\n\n#ifdef DEBUG\n  /* comment one\n  ** comment two */\n  if(c){\n    x();\n  }else\n#endif\n\n  if(d){\n    if( one ){\n      first();\n    }else if( same(z,\"alpha\")==0 || same(z,\"beta\")==0\n           || same(z,\"gamma\")==0 || same(z,\"delta\")==0\n         ){\n      value = get(z);\n    }else if( same(z,\"debug\")==0 ){\n      debug = 1;\n    }else{\n      fail();\n    }\n  }\n}\n",
         &[],
-        "void f(void) {\n    if(a) {\n        x();\n    }\n    else\n\n#ifndef OMIT\n        if(b) {\n            x();\n        }\n        else\n#endif\n\n#ifdef DEBUG\n            /* comment one\n            ** comment two */\n            if(c) {\n                x();\n            } else\n#endif\n\n                if(d) {\n                    if( one ) {\n                        first();\n                    } else if( same(z,\"alpha\")==0 || same(z,\"beta\")==0\n                               || same(z,\"gamma\")==0 || same(z,\"delta\")==0\n                             ) {\n                        value = get(z);\n                    } else if( same(z,\"debug\")==0 ) {\n                        debug = 1;\n                    } else {\n                        fail();\n                    }\n                }\n}\n",
+        "void f(void) {\n    if(a) {\n        x();\n    } else\n\n#ifndef OMIT\n        if(b) {\n            x();\n        } else\n#endif\n\n#ifdef DEBUG\n            /* comment one\n            ** comment two */\n            if(c) {\n                x();\n            } else\n#endif\n\n                if(d) {\n                    if( one ) {\n                        first();\n                    } else if( same(z,\"alpha\")==0 || same(z,\"beta\")==0\n                               || same(z,\"gamma\")==0 || same(z,\"delta\")==0\n                             ) {\n                        value = get(z);\n                    } else if( same(z,\"debug\")==0 ) {\n                        debug = 1;\n                    } else {\n                        fail();\n                    }\n                }\n}\n",
     );
 }
 
@@ -549,7 +549,7 @@ fn else_if_after_guarded_braceless_else_keeps_enclosing_block_indent() {
     check(
         "void f(void){\n#ifndef OMIT\n  if(a){x();}else\n#endif\n\n  if( prompt ){\n    for(i=0; i<n; i++){\n      if( option ){\n        set();\n      }else\n#ifndef COLOR\n      if( color ){\n        on();\n      }else\n#endif\n      if( dash ){\n        no();\n      }else{\n        bad();\n      }\n    }else if( extra ){\n      fail();\n    }else{\n      save();\n    }\n  }\n}\n",
         &[],
-        "void f(void) {\n#ifndef OMIT\n    if(a) {\n        x();\n    }\n    else\n#endif\n\n        if( prompt ) {\n            for(i=0; i<n; i++) {\n                if( option ) {\n                    set();\n                } else\n#ifndef COLOR\n                    if( color ) {\n                        on();\n                    } else\n#endif\n                        if( dash ) {\n                            no();\n                        } else {\n                            bad();\n                        }\n            } else if( extra ) {\n                fail();\n            } else {\n                save();\n            }\n        }\n}\n",
+        "void f(void) {\n#ifndef OMIT\n    if(a) {\n        x();\n    } else\n#endif\n\n        if( prompt ) {\n            for(i=0; i<n; i++) {\n                if( option ) {\n                    set();\n                } else\n#ifndef COLOR\n                    if( color ) {\n                        on();\n                    } else\n#endif\n                        if( dash ) {\n                            no();\n                        } else {\n                            bad();\n                        }\n            } else if( extra ) {\n                fail();\n            } else {\n                save();\n            }\n        }\n}\n",
     );
 }
 
@@ -558,7 +558,7 @@ fn continuation_after_split_else_endif_keeps_branch_indent() {
     check(
         "void f(void){\n#ifndef OMIT\n  if(a){x();}else\n#endif\n\n#ifndef OMIT_BRANCH\n  if( r ){\n    call();\n  }else\n#endif\n\n  if( c=='s' &&\n      (same(arg, \"one\")==0 ||\n       same(arg, \"two\")==0)\n    ){\n    open(\n      arg, value\n    );\n  }else\n\n  if( next ){\n    next();\n  }\n}\n",
         &[],
-        "void f(void) {\n#ifndef OMIT\n    if(a) {\n        x();\n    }\n    else\n#endif\n\n#ifndef OMIT_BRANCH\n        if( r ) {\n            call();\n        } else\n#endif\n\n            if( c=='s' &&\n                    (same(arg, \"one\")==0 ||\n                     same(arg, \"two\")==0)\n              ) {\n                open(\n                    arg, value\n                );\n            } else\n\n                if( next ) {\n                    next();\n                }\n}\n",
+        "void f(void) {\n#ifndef OMIT\n    if(a) {\n        x();\n    } else\n#endif\n\n#ifndef OMIT_BRANCH\n        if( r ) {\n            call();\n        } else\n#endif\n\n            if( c=='s' &&\n                    (same(arg, \"one\")==0 ||\n                     same(arg, \"two\")==0)\n              ) {\n                open(\n                    arg, value\n                );\n            } else\n\n                if( next ) {\n                    next();\n                }\n}\n",
     );
 }
 
@@ -567,7 +567,7 @@ fn endif_before_else_if_in_split_else_body_keeps_enclosing_if_indent() {
     check(
         "void f(void){\n#ifndef OMIT\n  if(a){x();}else\n#endif\n\n  if( read ){\n    if( pipe ){\n#ifdef OMIT\n      error();\n#else\n      open();\n      if( ok ){\n        read_pipe();\n      }else{\n        fail();\n      }\n#endif\n    }else if( file ){\n      read_file();\n    }else{\n      none();\n    }\n    done();\n  }else\n\n  if( next ){\n    call();\n  }\n}\n",
         &[],
-        "void f(void) {\n#ifndef OMIT\n    if(a) {\n        x();\n    }\n    else\n#endif\n\n        if( read ) {\n            if( pipe ) {\n#ifdef OMIT\n                error();\n#else\n                open();\n                if( ok ) {\n                    read_pipe();\n                } else {\n                    fail();\n                }\n#endif\n            } else if( file ) {\n                read_file();\n            } else {\n                none();\n            }\n            done();\n        } else\n\n            if( next ) {\n                call();\n            }\n}\n",
+        "void f(void) {\n#ifndef OMIT\n    if(a) {\n        x();\n    } else\n#endif\n\n        if( read ) {\n            if( pipe ) {\n#ifdef OMIT\n                error();\n#else\n                open();\n                if( ok ) {\n                    read_pipe();\n                } else {\n                    fail();\n                }\n#endif\n            } else if( file ) {\n                read_file();\n            } else {\n                none();\n            }\n            done();\n        } else\n\n            if( next ) {\n                call();\n            }\n}\n",
     );
 }
 
@@ -576,7 +576,7 @@ fn nested_condition_operator_in_split_else_aligns_to_inner_paren() {
     check(
         "void f(void){\n#ifndef OMIT\n  if(a){x();}else\n#endif\n\n  if( c=='i' && (same(arg, \"one\")==0\n       || same(arg, \"two\")==0)\n  ){\n    call();\n  }\n}\n",
         &[],
-        "void f(void) {\n#ifndef OMIT\n    if(a) {\n        x();\n    }\n    else\n#endif\n\n        if( c=='i' && (same(arg, \"one\")==0\n                       || same(arg, \"two\")==0)\n          ) {\n            call();\n        }\n}\n",
+        "void f(void) {\n#ifndef OMIT\n    if(a) {\n        x();\n    } else\n#endif\n\n        if( c=='i' && (same(arg, \"one\")==0\n                       || same(arg, \"two\")==0)\n          ) {\n            call();\n        }\n}\n",
     );
 }
 
@@ -696,25 +696,21 @@ fn else_if_body_after_switch_in_split_else_keeps_branch_indent() {
 #if FEATURE
     if( a0 ) {
         call0();
-    }
-    else
+    } else
 #endif
 
         if( a1 ) {
             call1();
-        }
-        else
+        } else
 
             if( a2 ) {
                 call2();
-            }
-            else
+            } else
 
 #if FEATURE
                 if( a3 ) {
                     call3();
-                }
-                else
+                } else
 #endif
 
                     if( b ) {
@@ -821,7 +817,7 @@ fn preprocessor_branch_initializer_rows_in_split_else_keep_row_indent() {
     check(
         "void f(void){\n#ifndef OMIT\n  if(b0){ x0(); }else\n#endif\n\n  if(b1){ x1(); }else\n\n  if(t){\n    static const struct {\n      const char *name;\n      int code;\n    } items[] = {\n      {\"one\",1},\n#ifdef FEATURE\n      {\"two\",2},\n#endif\n      {\"three\",3},\n    };\n    done();\n  }\n}\n",
         &[],
-        "void f(void) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    }\n    else\n#endif\n\n        if(b1) {\n            x1();\n        }\n        else\n\n            if(t) {\n                static const struct {\n                    const char *name;\n                    int code;\n                } items[] = {\n                    {\"one\",1},\n#ifdef FEATURE\n                    {\"two\",2},\n#endif\n                    {\"three\",3},\n                };\n                done();\n            }\n}\n",
+        "void f(void) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    } else\n#endif\n\n        if(b1) {\n            x1();\n        } else\n\n            if(t) {\n                static const struct {\n                    const char *name;\n                    int code;\n                } items[] = {\n                    {\"one\",1},\n#ifdef FEATURE\n                    {\"two\",2},\n#endif\n                    {\"three\",3},\n                };\n                done();\n            }\n}\n",
     );
 }
 
@@ -839,7 +835,7 @@ fn statement_after_multiline_condition_in_deep_split_else_keeps_branch_indent() 
     check(
         "void f(void){\n#if FEATURE\n  if( a0 ){ call0(); }else\n#endif\n\n  if( a1 ){ call1(); }else\n\n  if( a2 ){ call2(); }else\n\n#if FEATURE\n  if( a3 ){ call3(); }else\n#endif\n\n  if( b ){\n    if( value[0]=='-'\n     && (same(value,\"--one\")==0 || same(value,\"-one\")==0)\n     && n>=4\n    ){\n      x = 1;\n    }\n\n    /* comment */\n    if( same(cmd,\"help\")==0 ){\n      call();\n    }\n  }\n}\n",
         &[],
-        "void f(void) {\n#if FEATURE\n    if( a0 ) {\n        call0();\n    }\n    else\n#endif\n\n        if( a1 ) {\n            call1();\n        }\n        else\n\n            if( a2 ) {\n                call2();\n            }\n            else\n\n#if FEATURE\n                if( a3 ) {\n                    call3();\n                }\n                else\n#endif\n\n                    if( b ) {\n                        if( value[0]=='-'\n                                && (same(value,\"--one\")==0 || same(value,\"-one\")==0)\n                                && n>=4\n                          ) {\n                            x = 1;\n                        }\n\n                        /* comment */\n                        if( same(cmd,\"help\")==0 ) {\n                            call();\n                        }\n                    }\n}\n",
+        "void f(void) {\n#if FEATURE\n    if( a0 ) {\n        call0();\n    } else\n#endif\n\n        if( a1 ) {\n            call1();\n        } else\n\n            if( a2 ) {\n                call2();\n            } else\n\n#if FEATURE\n                if( a3 ) {\n                    call3();\n                } else\n#endif\n\n                    if( b ) {\n                        if( value[0]=='-'\n                                && (same(value,\"--one\")==0 || same(value,\"-one\")==0)\n                                && n>=4\n                          ) {\n                            x = 1;\n                        }\n\n                        /* comment */\n                        if( same(cmd,\"help\")==0 ) {\n                            call();\n                        }\n                    }\n}\n",
     );
 }
 
@@ -848,7 +844,7 @@ fn switch_cases_in_deep_split_else_keep_case_body_indent() {
     check(
         "void f(void){\n#if FEATURE\n  if( a0 ){ call0(); }else\n#endif\n\n  if( a1 ){ call1(); }else\n\n  if( a2 ){ call2(); }else\n\n#if FEATURE\n  if( a3 ){ call3(); }else\n#endif\n\n  if( b ){\n    if( bad ){\n      error();\n    }else{\n      switch(value){\n        case ONE: {\n          if( n!=2 ) break;\n          ok = 1;\n          break;\n        }\n        case TWO: {\n          int x;\n          if( n!=3 ) break;\n          x = value();\n          if( x ){\n            use(x);\n          }\n          ok = 2;\n          break;\n        }\n      }\n    }\n  }\n}\n",
         &[],
-        "void f(void) {\n#if FEATURE\n    if( a0 ) {\n        call0();\n    }\n    else\n#endif\n\n        if( a1 ) {\n            call1();\n        }\n        else\n\n            if( a2 ) {\n                call2();\n            }\n            else\n\n#if FEATURE\n                if( a3 ) {\n                    call3();\n                }\n                else\n#endif\n\n                    if( b ) {\n                        if( bad ) {\n                            error();\n                        } else {\n                            switch(value) {\n                            case ONE: {\n                                if( n!=2 ) break;\n                                ok = 1;\n                                break;\n                            }\n                            case TWO: {\n                                int x;\n                                if( n!=3 ) break;\n                                x = value();\n                                if( x ) {\n                                    use(x);\n                                }\n                                ok = 2;\n                                break;\n                            }\n                            }\n                        }\n                    }\n}\n",
+        "void f(void) {\n#if FEATURE\n    if( a0 ) {\n        call0();\n    } else\n#endif\n\n        if( a1 ) {\n            call1();\n        } else\n\n            if( a2 ) {\n                call2();\n            } else\n\n#if FEATURE\n                if( a3 ) {\n                    call3();\n                } else\n#endif\n\n                    if( b ) {\n                        if( bad ) {\n                            error();\n                        } else {\n                            switch(value) {\n                            case ONE: {\n                                if( n!=2 ) break;\n                                ok = 1;\n                                break;\n                            }\n                            case TWO: {\n                                int x;\n                                if( n!=3 ) break;\n                                x = value();\n                                if( x ) {\n                                    use(x);\n                                }\n                                ok = 2;\n                                break;\n                            }\n                            }\n                        }\n                    }\n}\n",
     );
 }
 
@@ -857,7 +853,7 @@ fn local_struct_in_switch_case_after_split_else_keeps_case_body_indent() {
     check(
         "void f(int value){\n#ifndef OMIT\n  if(b0){ x0(); }else\n#endif\n\n  if(b1){ x1(); }else\n\n  if(t){\n    switch(value){\n\n      /* comment */\n      case ONE: {\n        static const struct {\n          int id;\n          const char *name;\n        } items[] = {\n          {1, \"one\"},\n          {2, \"two\"},\n        };\n        done();\n        break;\n      }\n    }\n  }\n}\n",
         &[],
-        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    }\n    else\n#endif\n\n        if(b1) {\n            x1();\n        }\n        else\n\n            if(t) {\n                switch(value) {\n\n                /* comment */\n                case ONE: {\n                    static const struct {\n                        int id;\n                        const char *name;\n                    } items[] = {\n                        {1, \"one\"},\n                        {2, \"two\"},\n                    };\n                    done();\n                    break;\n                }\n                }\n            }\n}\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    } else\n#endif\n\n        if(b1) {\n            x1();\n        } else\n\n            if(t) {\n                switch(value) {\n\n                /* comment */\n                case ONE: {\n                    static const struct {\n                        int id;\n                        const char *name;\n                    } items[] = {\n                        {1, \"one\"},\n                        {2, \"two\"},\n                    };\n                    done();\n                    break;\n                }\n                }\n            }\n}\n",
     );
 }
 
@@ -866,7 +862,7 @@ fn statement_after_multiline_call_in_case_after_split_else_keeps_block_indent() 
     check(
         "void f(int value){\n#ifndef OMIT\n  if(b0){ x0(); }else\n#endif\n\n  if(b1){ x1(); }else\n\n  if(t){\n    switch(value){\n      case ONE: {\n        if( use ){\n          int jj;\n          if( jj>=count ){\n            print(err,\n                  \"Error: %s\\n\", text);\n            puts(\"one\", err);\n            for(jj=0; jj<count; jj++){\n              print(err, \" %s\", labels[jj]);\n            }\n            puts(\"\\n\", err);\n            rc = 1;\n            goto done;\n          }\n        }\n        break;\n      }\n    }\n  }\ndone:\n}\n",
         &[],
-        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    }\n    else\n#endif\n\n        if(b1) {\n            x1();\n        }\n        else\n\n            if(t) {\n                switch(value) {\n                case ONE: {\n                    if( use ) {\n                        int jj;\n                        if( jj>=count ) {\n                            print(err,\n                                  \"Error: %s\\n\", text);\n                            puts(\"one\", err);\n                            for(jj=0; jj<count; jj++) {\n                                print(err, \" %s\", labels[jj]);\n                            }\n                            puts(\"\\n\", err);\n                            rc = 1;\n                            goto done;\n                        }\n                    }\n                    break;\n                }\n                }\n            }\ndone:\n}\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    } else\n#endif\n\n        if(b1) {\n            x1();\n        } else\n\n            if(t) {\n                switch(value) {\n                case ONE: {\n                    if( use ) {\n                        int jj;\n                        if( jj>=count ) {\n                            print(err,\n                                  \"Error: %s\\n\", text);\n                            puts(\"one\", err);\n                            for(jj=0; jj<count; jj++) {\n                                print(err, \" %s\", labels[jj]);\n                            }\n                            puts(\"\\n\", err);\n                            rc = 1;\n                            goto done;\n                        }\n                    }\n                    break;\n                }\n                }\n            }\ndone:\n}\n",
     );
 }
 
@@ -875,7 +871,7 @@ fn commented_struct_members_in_switch_case_after_split_else_keep_case_body_inden
     check(
         "void f(int value){\n#ifndef OMIT\n  if(b0){ x0(); }else\n#endif\n\n  if(b1){ x1(); }else\n\n  if(t){\n    switch(value){\n      case ONE: {\n        static const struct {\n          unsigned int mask;    /* Mask */\n          unsigned int show;  /* Display */\n          const char *name;   /* Name */\n        } items[] = {\n          { 1, 1, \"one\" },\n        };\n        unsigned int cur;\n        unsigned int next;\n        break;\n      }\n    }\n  }\n}\n",
         &[],
-        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    }\n    else\n#endif\n\n        if(b1) {\n            x1();\n        }\n        else\n\n            if(t) {\n                switch(value) {\n                case ONE: {\n                    static const struct {\n                        unsigned int mask;    /* Mask */\n                        unsigned int show;  /* Display */\n                        const char *name;   /* Name */\n                    } items[] = {\n                        { 1, 1, \"one\" },\n                    };\n                    unsigned int cur;\n                    unsigned int next;\n                    break;\n                }\n                }\n            }\n}\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    } else\n#endif\n\n        if(b1) {\n            x1();\n        } else\n\n            if(t) {\n                switch(value) {\n                case ONE: {\n                    static const struct {\n                        unsigned int mask;    /* Mask */\n                        unsigned int show;  /* Display */\n                        const char *name;   /* Name */\n                    } items[] = {\n                        { 1, 1, \"one\" },\n                    };\n                    unsigned int cur;\n                    unsigned int next;\n                    break;\n                }\n                }\n            }\n}\n",
     );
 }
 
@@ -884,7 +880,7 @@ fn long_initializer_in_switch_case_after_split_else_keeps_case_body_indent() {
     check(
         "void f(int value){\n#ifndef OMIT\n  if(b0){ x0(); }else\n#endif\n\n  if(b1){ x1(); }else\n\n  if(t){\n    switch(value){\n      case ONE: {\n        static const struct {\n          int id;\n        } items[] = {\n          {1},\n          {2},\n          {3},\n          {4},\n          {5},\n          {6},\n          {7},\n          {8},\n          {9},\n          {10},\n          {11},\n          {12},\n          {13},\n          {14},\n          {15},\n          {16},\n          {17},\n          {18},\n          {19},\n          {20},\n          {21},\n          {22},\n          {23},\n          {24},\n          {25},\n          {26},\n          {27},\n          {28},\n          {29},\n          {30},\n          {31},\n          {32},\n          {33},\n          {34},\n          {35},\n        };\n        for(i=0; i<n; i++){\n          if(i==0){\n            one();\n          }else if(i==1){\n            two();\n          }else{\n            three();\n          }\n        }\n        break;\n      }\n      /* next */\n      case TWO: {\n        if(flag){\n          call(arg,\n               value);\n          done();\n        }\n        break;\n      }\n    }\n  }\n}\n",
         &[],
-        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    }\n    else\n#endif\n\n        if(b1) {\n            x1();\n        }\n        else\n\n            if(t) {\n                switch(value) {\n                case ONE: {\n                    static const struct {\n                        int id;\n                    } items[] = {\n                        {1},\n                        {2},\n                        {3},\n                        {4},\n                        {5},\n                        {6},\n                        {7},\n                        {8},\n                        {9},\n                        {10},\n                        {11},\n                        {12},\n                        {13},\n                        {14},\n                        {15},\n                        {16},\n                        {17},\n                        {18},\n                        {19},\n                        {20},\n                        {21},\n                        {22},\n                        {23},\n                        {24},\n                        {25},\n                        {26},\n                        {27},\n                        {28},\n                        {29},\n                        {30},\n                        {31},\n                        {32},\n                        {33},\n                        {34},\n                        {35},\n                    };\n                    for(i=0; i<n; i++) {\n                        if(i==0) {\n                            one();\n                        } else if(i==1) {\n                            two();\n                        } else {\n                            three();\n                        }\n                    }\n                    break;\n                }\n                /* next */\n                case TWO: {\n                    if(flag) {\n                        call(arg,\n                             value);\n                        done();\n                    }\n                    break;\n                }\n                }\n            }\n}\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    } else\n#endif\n\n        if(b1) {\n            x1();\n        } else\n\n            if(t) {\n                switch(value) {\n                case ONE: {\n                    static const struct {\n                        int id;\n                    } items[] = {\n                        {1},\n                        {2},\n                        {3},\n                        {4},\n                        {5},\n                        {6},\n                        {7},\n                        {8},\n                        {9},\n                        {10},\n                        {11},\n                        {12},\n                        {13},\n                        {14},\n                        {15},\n                        {16},\n                        {17},\n                        {18},\n                        {19},\n                        {20},\n                        {21},\n                        {22},\n                        {23},\n                        {24},\n                        {25},\n                        {26},\n                        {27},\n                        {28},\n                        {29},\n                        {30},\n                        {31},\n                        {32},\n                        {33},\n                        {34},\n                        {35},\n                    };\n                    for(i=0; i<n; i++) {\n                        if(i==0) {\n                            one();\n                        } else if(i==1) {\n                            two();\n                        } else {\n                            three();\n                        }\n                    }\n                    break;\n                }\n                /* next */\n                case TWO: {\n                    if(flag) {\n                        call(arg,\n                             value);\n                        done();\n                    }\n                    break;\n                }\n                }\n            }\n}\n",
     );
 }
 
@@ -893,14 +889,14 @@ fn long_preprocessor_split_else_chain_keeps_branch_indent() {
     let depth = 64;
     let mut input = String::from("void f(void){\n#ifndef OMIT\n  if(b0){ x0(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(void) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    }\n    else\n#endif\n\n",
+        "void f(void) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(b{index}){{ x{index}(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}} else\n\n"
         ));
     }
 
@@ -917,14 +913,14 @@ fn multiline_call_in_switch_case_after_long_split_else_keeps_call_indent() {
     let mut input =
         String::from("void f(int value){\n#ifndef OMIT\n  if(b0){ x0(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    }\n    else\n#endif\n\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(b{index}){{ x{index}(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}} else\n\n"
         ));
     }
 
@@ -947,14 +943,14 @@ fn long_split_else_preprocessor_case_keeps_post_while_statement_indent() {
     let mut input =
         String::from("void f(int value){\n#ifndef OMIT\n  if(b0){ x0(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    }\n    else\n#endif\n\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(b{index}){{ x{index}(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}} else\n\n"
         ));
     }
 
@@ -986,14 +982,14 @@ fn long_split_else_case_keeps_statement_after_braceless_break_indent() {
     let mut input =
         String::from("void f(int value){\n#ifndef OMIT\n  if(a0){ one(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int value) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    }\n    else\n#endif\n\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(a{index}){{ one(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}} else\n\n"
         ));
     }
 
@@ -1016,14 +1012,14 @@ fn long_split_else_nested_case_call_keeps_following_statement_indent() {
     let mut input =
         String::from("void f(int value){\n#ifndef OMIT\n  if(a0){ one(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int value) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    }\n    else\n#endif\n\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(a{index}){{ one(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}} else\n\n"
         ));
     }
 
@@ -1047,14 +1043,14 @@ fn call_argument_after_comma_in_case_after_long_split_else_aligns_to_call_paren(
     let mut input =
         String::from("void f(int value){\n#ifndef OMIT\n  if(a0){ one(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int value) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    }\n    else\n#endif\n\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(a{index}){{ one(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}} else\n\n"
         ));
     }
 
@@ -1077,14 +1073,14 @@ fn argument_after_string_literal_in_case_call_aligns_to_string_argument() {
     let mut input =
         String::from("void f(int value){\n#ifndef OMIT\n  if(a0){ one(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int value) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    }\n    else\n#endif\n\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(a{index}){{ one(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}} else\n\n"
         ));
     }
 
@@ -1107,14 +1103,14 @@ fn adjacent_string_call_in_case_after_long_split_else_keeps_string_indent() {
     let mut input =
         String::from("void f(int value){\n#ifndef OMIT\n  if(a0){ one(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int value) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    }\n    else\n#endif\n\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(a{index}){{ one(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}} else\n\n"
         ));
     }
 
@@ -1137,14 +1133,14 @@ fn adjacent_string_call_over_max_in_case_after_long_split_else_uses_block_contin
     let mut input =
         String::from("void f(int value){\n#ifndef OMIT\n  if(b0){ x0(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    }\n    else\n#endif\n\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(b{index}){{ x{index}(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}} else\n\n"
         ));
     }
 
@@ -1166,14 +1162,14 @@ fn assigned_string_call_close_after_long_split_else_aligns_to_value_column() {
     let depth = 8;
     let mut input = String::from("void f(void){\n#ifndef OMIT\n  if(a0){ one(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(void) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    }\n    else\n#endif\n\n",
+        "void f(void) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(a{index}){{ one(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}} else\n\n"
         ));
     }
 
@@ -1195,14 +1191,14 @@ fn call_argument_after_line_comment_string_in_long_split_else_aligns_to_call_par
     let mut input =
         String::from("void f(int c){\n#ifndef OMIT\n  if(a0){ one(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int c) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    }\n    else\n#endif\n\n",
+        "void f(int c) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(a{index}){{ one(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}} else\n\n"
         ));
     }
 
@@ -1223,14 +1219,14 @@ fn macro_string_call_argument_after_long_split_else_aligns_to_call_paren() {
     let mut input =
         String::from("void f(int c){\n#ifndef OMIT\n  if(a0){ one(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int c) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    }\n    else\n#endif\n\n",
+        "void f(int c) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(a{index}){{ one(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}} else\n\n"
         ));
     }
 
@@ -1251,14 +1247,14 @@ fn condition_sibling_operator_after_nested_group_in_long_split_else_keeps_group_
     let mut input =
         String::from("void f(int c){\n#ifndef OMIT\n  if(a0){ one(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int c) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    }\n    else\n#endif\n\n",
+        "void f(int c) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(a{index}){{ one(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}} else\n\n"
         ));
     }
 
@@ -1279,14 +1275,14 @@ fn call_close_after_string_in_case_after_long_split_else_aligns_to_call_paren() 
     let mut input =
         String::from("void f(int value){\n#ifndef OMIT\n  if(b0){ x0(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    }\n    else\n#endif\n\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(b{index}){{ x{index}(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}} else\n\n"
         ));
     }
 
@@ -1309,14 +1305,14 @@ fn statement_after_cast_call_in_case_after_long_split_else_keeps_case_body_inden
     let mut input =
         String::from("void f(int value){\n#ifndef OMIT\n  if(b0){ x0(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    }\n    else\n#endif\n\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(b{index}){{ x{index}(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}} else\n\n"
         ));
     }
 
@@ -1339,14 +1335,14 @@ fn block_comment_in_switch_case_after_long_split_else_keeps_case_indent() {
     let mut input =
         String::from("void f(int value){\n#ifndef OMIT\n  if(b0){ x0(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    }\n    else\n#endif\n\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(b{index}){{ x{index}(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}} else\n\n"
         ));
     }
 
@@ -1367,14 +1363,14 @@ fn switch_case_after_long_split_else_keeps_case_indent_past_lookback() {
     let mut input =
         String::from("void f(int value){\n#ifndef OMIT\n  if(b0){ x0(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    }\n    else\n#endif\n\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(b{index}){{ x{index}(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}} else\n\n"
         ));
     }
 
@@ -1395,14 +1391,14 @@ fn deep_switch_case_after_long_split_else_keeps_case_body_indent() {
     let mut input =
         String::from("void f(int value){\n#ifndef OMIT\n  if(b0){ x0(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    }\n    else\n#endif\n\n",
+        "void f(int value) {\n#ifndef OMIT\n    if(b0) {\n        x0();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(b{index}){{ x{index}(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(b{index}) {{\n{indent}    x{index}();\n{indent}}} else\n\n"
         ));
     }
 
@@ -1460,7 +1456,7 @@ fn multiline_call_argument_after_string_in_deep_split_else_keeps_call_indent() {
     check(
         "void f(void){\n#ifndef OMIT_X\n  if( a0 ){ call0(); }else\n#endif\n\n  if( a1 ){ call1(); }else\n\n  if( a2 ){ call2(); }else\n\n#ifndef OMIT_X\n  if( a3 ){ call3(); }else\n#endif\n\n  if( a4 ){\n    if( safe ){\n      print(out,\n            \"Cannot run command such as \\\"%s\\\" here\\n\",\n            arg[0]);\n      rc = 1;\n    }\n  }\n}\n",
         &[],
-        "void f(void) {\n#ifndef OMIT_X\n    if( a0 ) {\n        call0();\n    }\n    else\n#endif\n\n        if( a1 ) {\n            call1();\n        }\n        else\n\n            if( a2 ) {\n                call2();\n            }\n            else\n\n#ifndef OMIT_X\n                if( a3 ) {\n                    call3();\n                }\n                else\n#endif\n\n                    if( a4 ) {\n                        if( safe ) {\n                            print(out,\n                                  \"Cannot run command such as \\\"%s\\\" here\\n\",\n                                  arg[0]);\n                            rc = 1;\n                        }\n                    }\n}\n",
+        "void f(void) {\n#ifndef OMIT_X\n    if( a0 ) {\n        call0();\n    } else\n#endif\n\n        if( a1 ) {\n            call1();\n        } else\n\n            if( a2 ) {\n                call2();\n            } else\n\n#ifndef OMIT_X\n                if( a3 ) {\n                    call3();\n                } else\n#endif\n\n                    if( a4 ) {\n                        if( safe ) {\n                            print(out,\n                                  \"Cannot run command such as \\\"%s\\\" here\\n\",\n                                  arg[0]);\n                            rc = 1;\n                        }\n                    }\n}\n",
     );
 }
 
@@ -1469,7 +1465,7 @@ fn close_paren_after_adjacent_string_call_in_split_else_keeps_call_indent() {
     check(
         "void f(void){\n#ifndef OMIT_X\n  if( a0 ){ first(); }else\n#endif\n\n  if( a1 ){ second(); }else\n\n  if( b ){\n    make(out,\n         \"alpha\\n\"\n         \"beta\\n\"\n        );\n    if( flag ){\n      call();\n    }\n  }\n}\n",
         &[],
-        "void f(void) {\n#ifndef OMIT_X\n    if( a0 ) {\n        first();\n    }\n    else\n#endif\n\n        if( a1 ) {\n            second();\n        }\n        else\n\n            if( b ) {\n                make(out,\n                     \"alpha\\n\"\n                     \"beta\\n\"\n                    );\n                if( flag ) {\n                    call();\n                }\n            }\n}\n",
+        "void f(void) {\n#ifndef OMIT_X\n    if( a0 ) {\n        first();\n    } else\n#endif\n\n        if( a1 ) {\n            second();\n        } else\n\n            if( b ) {\n                make(out,\n                     \"alpha\\n\"\n                     \"beta\\n\"\n                    );\n                if( flag ) {\n                    call();\n                }\n            }\n}\n",
     );
 }
 
@@ -1478,7 +1474,7 @@ fn statement_after_adjacent_string_call_sequence_in_split_else_keeps_block_inden
     check(
         "void f(void){\n#ifndef OMIT_X\n  if( a0 ){ first(); }else\n#endif\n\n  if( a1 ){ second(); }else\n\n  if( b ){\n    make(out,\n         \"alpha\\n\"\n         \"beta\\n\"\n        );\n    if( expr ){\n      append(out,\n             \"gamma\\n\", sep);\n      sep = \"AND\";\n    }\n    if( flag ){\n      append(out, \"delta\", sep);\n    }\n    append(out, \"tail\");\n\n    /* comment */\n    if( debug ){\n      print();\n    }else{\n      run();\n    }\n    free(out);\n  }else\n\n  if( c ){\n    next();\n  }\n}\n",
         &[],
-        "void f(void) {\n#ifndef OMIT_X\n    if( a0 ) {\n        first();\n    }\n    else\n#endif\n\n        if( a1 ) {\n            second();\n        }\n        else\n\n            if( b ) {\n                make(out,\n                     \"alpha\\n\"\n                     \"beta\\n\"\n                    );\n                if( expr ) {\n                    append(out,\n                           \"gamma\\n\", sep);\n                    sep = \"AND\";\n                }\n                if( flag ) {\n                    append(out, \"delta\", sep);\n                }\n                append(out, \"tail\");\n\n                /* comment */\n                if( debug ) {\n                    print();\n                } else {\n                    run();\n                }\n                free(out);\n            } else\n\n                if( c ) {\n                    next();\n                }\n}\n",
+        "void f(void) {\n#ifndef OMIT_X\n    if( a0 ) {\n        first();\n    } else\n#endif\n\n        if( a1 ) {\n            second();\n        } else\n\n            if( b ) {\n                make(out,\n                     \"alpha\\n\"\n                     \"beta\\n\"\n                    );\n                if( expr ) {\n                    append(out,\n                           \"gamma\\n\", sep);\n                    sep = \"AND\";\n                }\n                if( flag ) {\n                    append(out, \"delta\", sep);\n                }\n                append(out, \"tail\");\n\n                /* comment */\n                if( debug ) {\n                    print();\n                } else {\n                    run();\n                }\n                free(out);\n            } else\n\n                if( c ) {\n                    next();\n                }\n}\n",
     );
 }
 
@@ -1496,7 +1492,7 @@ fn block_comment_before_adjacent_string_call_in_split_else_uses_call_indent() {
     check(
         "void f(void){\n  if( a0 ){ one(); }else\n\n  if( a1 ){ one(); }else\n\n  if( a2 ){ one(); }else\n\n  if( a3 ){ one(); }else\n\n  if( b ){\n    value = call(\n      /* note */\n      \"alpha\"\n      , other);\n  }\n}\n",
         &[],
-        "void f(void) {\n    if( a0 ) {\n        one();\n    }\n    else\n\n        if( a1 ) {\n            one();\n        }\n        else\n\n            if( a2 ) {\n                one();\n            }\n            else\n\n                if( a3 ) {\n                    one();\n                }\n                else\n\n                    if( b ) {\n                        value = call(\n                                    /* note */\n                                    \"alpha\"\n                                    , other);\n                    }\n}\n",
+        "void f(void) {\n    if( a0 ) {\n        one();\n    } else\n\n        if( a1 ) {\n            one();\n        } else\n\n            if( a2 ) {\n                one();\n            } else\n\n                if( a3 ) {\n                    one();\n                } else\n\n                    if( b ) {\n                        value = call(\n                                    /* note */\n                                    \"alpha\"\n                                    , other);\n                    }\n}\n",
     );
 }
 
@@ -1747,7 +1743,7 @@ fn member_init_list_stays_consistent_after_nested_lambda_close_brace() {
     check(
         "Type::Type()\n    : m_alpha(makeAlpha(\n                  [this]() {\n                  return ready();\n},\n                  extra))\n, m_beta(new Beta)\n, m_gamma(new Gamma)\n{\n}\n",
         &["--style=1tbs", "--min-conditional-indent=0"],
-        "Type::Type()\n    : m_alpha(makeAlpha(\n              [this]()\n{\n    return ready();\n},\n              extra))\n    , m_beta(new Beta)\n    , m_gamma(new Gamma)\n{\n}\n",
+        "Type::Type()\n    : m_alpha(makeAlpha(\n                  [this]()\n{\n    return ready();\n},\n                  extra))\n    , m_beta(new Beta)\n    , m_gamma(new Gamma)\n{\n}\n",
     );
 }
 
@@ -2384,7 +2380,7 @@ fn whitesmith_label_in_case_block_keeps_comments_and_statement_after_its_switch(
 
 #[test]
 fn trailing_comment_on_case_body_statement_keeps_it_before_next_label() {
-    let input = "void *f(int n)\n{\n    switch (t)\n    {\n    case 1:    /* C closure */\n    {\n        if (n)\n            return a;\n        /* else */\n        }  /* FALLTHROUGH */\n    case 2:\n        return NULL;  /* light */\n    default:\n    {\n        g();\n        return NULL;\n    }\n    }\n}\n";
+    let input = "void *f(int n)\n{\n    switch (t)\n    {\n    case 1:    /* C closure */\n    {\n        if (n)\n            return a;\n        /* else */\n    }  /* FALLTHROUGH */\n    case 2:\n        return NULL;  /* light */\n    default:\n    {\n        g();\n        return NULL;\n    }\n    }\n}\n";
     check(input, &["--style=allman"], input);
 }
 
@@ -3714,6 +3710,16 @@ fn added_braces_set_the_statement_comment_an_indent_past_it() {
 }
 
 #[test]
+fn added_braces_close_after_a_multi_row_trailing_comment_as_written_braces_do() {
+    let written = "void f(void)\n{\n    if (a) {\n        value = 1; /* first\n                      second */\n    }\n    else\n        value = 2;\n}\n";
+    let added = "void f(void)\n{\n    if (a)\n        value = 1; /* first\n                      second */\n    else\n        value = 2;\n}\n";
+    let expected = "void f(void)\n{\n    if (a) {\n        value = 1; /* first\n                      second */\n    } else {\n        value = 2;\n    }\n}\n";
+    check(written, &["--style=1tbs"], expected);
+    check(added, &["--style=1tbs"], expected);
+    check(expected, &["--style=1tbs"], expected);
+}
+
+#[test]
 fn broken_one_line_function_body_comment_keeps_the_gap_before_its_brace() {
     let input = "int f(){return 0;}// tail\nint g(){return 0;} // tail\n";
     let expected = "int f() {\n    return 0;   // tail\n}\nint g() {\n    return 0;   // tail\n}\n";
@@ -3922,10 +3928,11 @@ fn comment_after_a_case_block_takes_the_label_level_only_before_a_label() {
 }
 
 #[test]
-fn comment_trailing_a_switch_brace_stands_in_the_case_bodies() {
+fn comment_trailing_a_switch_brace_stands_at_the_case_labels() {
     let input = "int f(int c)\n{\n  switch( c ){  /* a\n          ** b */\n    case 1:\n      return 1;\n  }\n}\n";
-    let expected = "int f(int c)\n{\n    switch( c ) {\n        /* a\n                ** b */\n    case 1:\n        return 1;\n    }\n}\n";
+    let expected = "int f(int c)\n{\n    switch( c ) {\n    /* a\n            ** b */\n    case 1:\n        return 1;\n    }\n}\n";
     check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
 }
 
 #[test]
@@ -4042,13 +4049,11 @@ fn run_in_enum_after_a_typedef_enum_closes_at_its_own_brace() {
         ),
         (
             "--style=mozilla",
-            "typedef enum\n{ C = 0,\n  D = 1\n} s;\nenum e\n{ A,\n  B\n};\n",
+            "typedef enum\n{\n    C = 0,\n    D = 1\n} s;\nenum e\n{\n    A,\n    B\n};\n",
         ),
     ] {
         check(input, &[style], expected);
-        if style == "--style=kr" {
-            check(expected, &[style], expected);
-        }
+        check(expected, &[style], expected);
     }
 }
 
@@ -5735,7 +5740,7 @@ fn a_commented_case_block_closer_keeps_its_column_before_a_label() {
     check(
         input,
         &["--style=horstmann"],
-        "void f()\n{   switch (w)\n    {   case 1:\n        {   if (u)\n            {   set();\n                break;\n            }\n            /* else... */\n            }  /* FALLTHROUGH */\n        case 2:\n            y();\n    }\n}\n",
+        "void f()\n{   switch (w)\n    {   case 1:\n        {   if (u)\n            {   set();\n                break;\n            }\n            /* else... */\n        }  /* FALLTHROUGH */\n        case 2:\n            y();\n    }\n}\n",
     );
 }
 
@@ -6773,29 +6778,29 @@ fn an_initializer_run_in_after_a_block_brace_measures_from_the_brace() {
 }
 
 #[test]
-fn a_comment_after_a_joined_case_block_closer_keeps_a_level() {
+fn a_comment_after_a_joined_case_block_closer_moves_none_of_it() {
     check(
         "void f(void) {\n  switch (k) {\n    case A: {\n      g(e);\n    }  /* x */\n    case B: {\n      g(e);\n    }\n    case C: {\n      h();\n      break;\n    }\n  }\n}\n",
         &["--style=pico"],
-        "void f(void)\n{   switch (k)\n    {   case A:\n            {   g(e); } /* x */\n        case B:\n        {   g(e); }\n        case C:\n        {   h();\n            break; } } }\n",
+        "void f(void)\n{   switch (k)\n    {   case A:\n        {   g(e); } /* x */\n        case B:\n        {   g(e); }\n        case C:\n        {   h();\n            break; } } }\n",
     );
 }
 
 #[test]
-fn a_comment_after_a_lone_case_block_closer_keeps_a_level() {
+fn a_comment_after_a_lone_case_block_closer_moves_none_of_it() {
     check(
         "void f(void) {\n  switch (k) {\n    case A: {\n      g(e);  /* c */\n    }  /* x */\n    case B: {\n      g(e);  /* c */\n    }\n    case C: {\n      g(e);  // c\n    }  /* x */\n  }\n}\n",
         &["--style=pico"],
-        "void f(void)\n{   switch (k)\n    {   case A:\n        {   g(e);  /* c */\n            }  /* x */\n        case B:\n        {   g(e);  /* c */\n        }\n        case C:\n        {   g(e);  // c\n            }  /* x */\n    } }\n",
+        "void f(void)\n{   switch (k)\n    {   case A:\n        {   g(e);  /* c */\n        }  /* x */\n        case B:\n        {   g(e);  /* c */\n        }\n        case C:\n        {   g(e);  // c\n        }  /* x */\n    } }\n",
     );
 }
 
 #[test]
-fn a_comment_spares_a_level_after_a_whitesmith_case_block() {
+fn a_comment_line_after_a_whitesmith_case_block_spares_a_level_a_trailing_one_none() {
     check(
         "void f(void) {\n  switch (k) {\n    case A: {\n      g(e);\n    }\n    /* after */\n    h(); /* t */\n    case B: {\n      g(e);  /* c */\n    } // y\n    case C:\n      g(); /* z */\n  }\n}\n",
         &["--style=whitesmith"],
-        "void f(void)\n    {\n    switch (k)\n        {\n        case A:\n            {\n            g(e);\n            }\n            /* after */\n            h(); /* t */\n        case B:\n            {\n            g(e);  /* c */\n            } // y\n        case C:\n            g(); /* z */\n        }\n    }\n",
+        "void f(void)\n    {\n    switch (k)\n        {\n        case A:\n            {\n            g(e);\n            }\n            /* after */\n        h(); /* t */\n        case B:\n            {\n            g(e);  /* c */\n            } // y\n        case C:\n            g(); /* z */\n        }\n    }\n",
     );
 }
 
@@ -6804,16 +6809,16 @@ fn a_ratliff_case_closer_keeps_its_column_before_a_comment() {
     check(
         "void f(void) {\n  switch (k) {\n    case B: {\n      g(e);\n    } // y\n    case C: {\n      g(e);\n    } /* z */\n    case D: {\n      g(e);\n    }\n  }\n}\n",
         &["--style=ratliff"],
-        "void f(void) {\n    switch (k) {\n        case B: {\n            g(e);\n            } // y\n        case C: {\n            g(e);\n                } /* z */\n        case D: {\n            g(e);\n            }\n        }\n    }\n",
+        "void f(void) {\n    switch (k) {\n        case B: {\n            g(e);\n            } // y\n        case C: {\n            g(e);\n            } /* z */\n        case D: {\n            g(e);\n            }\n        }\n    }\n",
     );
 }
 
 #[test]
-fn a_comment_after_a_whitesmith_case_block_closer_spares_a_level() {
+fn a_comment_after_a_whitesmith_case_block_closer_moves_none_of_it() {
     check(
         "void f(void) {\n  switch (k) {\n    case B: {\n      g(e);\n    } // y\n    case C: {\n      g(e);\n    } /* z */\n    case D: {\n      g(e);\n    }\n  }\n}\n",
         &["--style=whitesmith"],
-        "void f(void)\n    {\n    switch (k)\n        {\n        case B:\n            {\n            g(e);\n            } // y\n        case C:\n            {\n            g(e);\n                } /* z */\n        case D:\n            {\n            g(e);\n            }\n        }\n    }\n",
+        "void f(void)\n    {\n    switch (k)\n        {\n        case B:\n            {\n            g(e);\n            } // y\n        case C:\n            {\n            g(e);\n            } /* z */\n        case D:\n            {\n            g(e);\n            }\n        }\n    }\n",
     );
 }
 
@@ -7391,6 +7396,23 @@ fn block_comment_in_column_one_takes_the_indent_of_the_code_after_it() {
 }
 
 #[test]
+fn row_of_adjacent_block_comments_after_a_header_stands_in_its_body() {
+    let input = "void f()\n{\n    while (b)\n        /* c */ /* d */\n    {\n        x();\n    }\n    if (b)\n        /* c */ /* d */\n        x();\n}\n";
+    check(input, &["--style=allman"], input);
+}
+
+// Attaching styles leave a brace off a row of block comments however many
+// the row holds, as off a row of one.
+#[test]
+fn attached_braces_stay_off_a_row_of_adjacent_block_comments_after_a_header() {
+    let input = "void f()\n{\n    while (b)\n        /* c */ /* d */\n    {\n        x();\n    }\n    if (b)\n        /* c */ /* d */\n        x();\n}\n";
+    check(input, &["--style=kr"], input);
+    let added = "void f()\n{\n    while (b)\n        /* c */ /* d */\n    {\n        x();\n    }\n    if (b)\n        /* c */ /* d */\n    {\n        x();\n    }\n}\n";
+    check(input, &["--style=kr", "-j"], added);
+    check(added, &["--style=kr", "-j"], added);
+}
+
+#[test]
 fn row_of_adjacent_block_comments_in_an_indented_case_stays_in_its_body() {
     check(
         "void f(int e)\n{\n  switch (e) {\n    case 1:\n      x();\n      /* else */ /* FALLTHROUGH */\n    case 2:\n      y();\n  }\n}\n",
@@ -7598,4 +7620,10831 @@ fn index_group_closing_row_takes_its_initializer_level() {
     for style in ["--style=kr", "--style=allman"] {
         check(&input, &[style, "--min-conditional-indent=0"], expected);
     }
+}
+
+#[test]
+fn attach_return_type_leaves_a_return_type_set_off_by_a_blank_line() {
+    // A blank line parts the lines, so neither is attached to the other and
+    // the blank line stays.
+    let input = "int value;\n\nstatic int\n\nhelper(void)\n{\n    return 0;\n}\n";
+    check(input, &["--style=1tbs", "--attach-return-type"], input);
+    let adjacent = "int value;\n\nstatic int\nhelper(void)\n{\n    return 0;\n}\n";
+    check(
+        adjacent,
+        &["--style=1tbs", "--attach-return-type"],
+        "int value;\n\nstatic int helper(void)\n{\n    return 0;\n}\n",
+    );
+}
+
+#[test]
+fn a_c_variable_named_template_continues_its_statement_like_any_name() {
+    // `template` is no keyword in C: rows continuing its assignment align as
+    // for any other variable.
+    let input = "void f()\n{\n    template = value +\n        result;\n    template = \"head \"\n        \"tail\";\n}\n";
+    check(
+        input,
+        &["--mode=c"],
+        "void f()\n{\n    template = value +\n               result;\n    template = \"head \"\n               \"tail\";\n}\n",
+    );
+}
+
+#[test]
+fn keeping_one_line_statements_keeps_statements_after_an_expanded_block() {
+    // Expanding a block breaks the statements inside it; the statements after
+    // its closer stay on the closer's line.
+    check(
+        "void f()\n{\n    if (ready) { value=0; } result=0; other=1;\n}\n",
+        &["-o"],
+        "void f()\n{\n    if (ready) {\n        value=0;\n    } result=0; other=1;\n}\n",
+    );
+    check(
+        "void f()\n{\n    value=1; do { value=0; } while (ready); result=0; other=1;\n}\n",
+        &["--style=kr", "-o"],
+        "void f()\n{\n    value=1; do {\n        value=0;\n    } while (ready); result=0; other=1;\n}\n",
+    );
+}
+
+#[test]
+fn lisp_keeps_a_statement_before_a_header_whose_block_it_expands() {
+    check(
+        "void f()\n{\n    value=1; if (ready) { value=0; } result=0;\n}\n",
+        &["--style=lisp"],
+        "void f() {\n    value=1; if (ready) {\n        value=0; } result=0; }\n",
+    );
+    check(
+        "void f()\n{\n    value=1; do { value=0; } while (ready); result=0;\n}\n",
+        &["--style=lisp"],
+        "void f() {\n    value=1; do {\n        value=0; }\n    while (ready); result=0; }\n",
+    );
+}
+
+#[test]
+fn breaking_one_line_headers_keeps_blocks_on_lines_holding_other_statements() {
+    // With one-line statements and blocks kept, the block of a header that
+    // follows a statement, or shares its line with more than one statement,
+    // stays whole; a header alone on its line still breaks its block.
+    let options = ["--break-one-line-headers", "--keep-one-line-blocks", "-o"];
+    for kept in [
+        "void f()\n{\n    value=1; if (ready) { value=0; }\n}\n",
+        "void f()\n{\nlabel: if (ready) { value=0; }\n}\n",
+    ] {
+        check(kept, &options, kept);
+    }
+    check(
+        "void f()\n{\n    if (ready) {\n        value=0; } else { result=0; }\n}\n",
+        &options,
+        "void f()\n{\n    if (ready) {\n        value=0;\n    } else { result=0; }\n}\n",
+    );
+    check(
+        "void f()\n{\n    if (ready) { value=0; }\n}\n",
+        &options,
+        "void f()\n{\n    if (ready) {\n        value=0;\n    }\n}\n",
+    );
+    // A statement broken off before the header leaves it alone on its line.
+    check(
+        "void f()\n{\n    if (ready) {value=1; if (other) {result=0; value=0;} count++; ready=0;}\n}\n",
+        &options,
+        "void f()\n{\n    if (ready) {\n        value=1;\n        if (other) {\n            result=0;\n            value=0;\n        } count++;\n        ready=0;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn without_a_brace_style_a_closing_header_stays_on_its_source_brace() {
+    // The source set the header against its `}`, so it stays there whether
+    // or not the block before it is expanded; a `}` the formatter adds has
+    // no source place and leaves the header a line of its own unless
+    // one-line statements are kept.
+    let attached = "void f()\n{\n    if (ready) {\n        value=0;\n    } else {\n        result=0;\n    }\n}\n";
+    for input in [
+        "void f()\n{\n    if (ready) {\n        value=0;\n    } else { result=0; }\n}\n",
+        "void f()\n{\n    if (ready) {\n        value=0; } else {\n        result=0;\n    }\n}\n",
+        "void f()\n{\n    if (ready) { value=0; } else { result=0; }\n}\n",
+    ] {
+        check(input, &[], attached);
+        check(input, &["--break-one-line-headers"], attached);
+        check(input, &["-o"], attached);
+    }
+    let do_while = "void f()\n{\n    do {\n        value=0;\n    } while (ready);\n}\n";
+    check(
+        "void f()\n{\n    do { value=0; } while (ready);\n}\n",
+        &[],
+        do_while,
+    );
+    check(
+        "void f()\n{\n    do {\n        value=0; } while (ready);\n}\n",
+        &[],
+        do_while,
+    );
+    let braceless = "void f()\n{\n    if (ready) value=0; else result=0;\n}\n";
+    check(
+        braceless,
+        &["--add-braces"],
+        "void f()\n{\n    if (ready) {\n        value=0;\n    }\n    else {\n        result=0;\n    }\n}\n",
+    );
+    check(braceless, &["--add-braces", "-o"], attached);
+}
+
+#[test]
+fn a_comment_after_an_expanded_block_follows_the_closer_run_into_its_only_line() {
+    // The comment of an expanded block moves to the block's first body line;
+    // where the closer runs into that line, the comment follows the closer.
+    check(
+        "void f()\n{\n    if (ready) { value=0; } // done\n    if (ready) { value=0; result=1; } /* both */\n}\n",
+        &["--style=lisp"],
+        "void f() {\n    if (ready) {\n        value=0; } // done\n    if (ready) {\n        value=0;    /* both */\n        result=1; } }\n",
+    );
+}
+
+#[test]
+fn break_blocks_pads_a_header_line_kept_with_other_statements() {
+    // A line a header starts takes blank lines around it with the statements
+    // kept after its body; a header after a statement on its line pads
+    // nothing.
+    let wrap = |body: &str| format!("void f()\n{{\n    first=1;\n    {body}\n    other=1;\n}}\n");
+    let padded =
+        |body: &str| format!("void f()\n{{\n    first=1;\n\n    {body}\n\n    other=1;\n}}\n");
+    let options = ["--style=kr", "--break-blocks", "-o"];
+    for body in [
+        "if (ready) value=0; result=0;",
+        "if (ready) value=0; else result=0;",
+    ] {
+        check(&wrap(body), &options, &padded(body));
+    }
+    check(
+        &wrap("if (ready) { value=0; } result=0;"),
+        &options,
+        &padded("if (ready) {\n        value=0;\n    } result=0;"),
+    );
+    let after_statement = wrap("x=1; if (ready) value=0;");
+    check(&after_statement, &options, &after_statement);
+    // A header whose blocks stay on its line pads as one on lines of its own.
+    check(
+        &wrap("if (ready) { value=0; } else { result=0; }"),
+        &["--style=kr", "--break-blocks", "-O", "-o"],
+        &padded("if (ready) { value=0; } else { result=0; }"),
+    );
+}
+
+#[test]
+fn max_code_length_leaves_a_kept_line_within_the_limit_whole() {
+    // The limit splits only lines longer than it; a header kept after a
+    // statement on a short line stays there as without the limit.
+    let input = "void f()\n{\n    if (ready) value=0; else result=0;\n    value=1; if (ready) result=0;\n}\n";
+    check(input, &["--style=kr", "-o"], input);
+    check(input, &["--style=kr", "-o", "--max-code-length=60"], input);
+}
+
+#[test]
+fn breaking_one_line_headers_keeps_a_header_after_a_kept_statement() {
+    // The option parts a header from its body, not from the statement kept
+    // before it, so the output formats to itself.
+    let expected = "void f()\n{\n    value=1; if (ready) {\n        value=0;\n    }\n}\n";
+    for input in [
+        "void f()\n{\n    value=1; if (ready) { value=0; }\n}\n",
+        expected,
+    ] {
+        check(
+            input,
+            &["--style=stroustrup", "-o", "--break-one-line-headers"],
+            expected,
+        );
+    }
+}
+
+#[test]
+fn breaking_one_line_headers_parts_a_header_from_the_statement_its_removed_braces_held() {
+    let input = "void f()\n{\n    if (ready) { value=0; } else { result=0; }\n    while (ready) { value--; }\n}\n";
+    let broken = "void f()\n{\n    if (ready)\n        value=0;\n    else\n        result=0;\n    while (ready)\n        value--;\n}\n";
+    check(
+        input,
+        &[
+            "--style=allman",
+            "--keep-one-line-blocks",
+            "--remove-braces",
+            "--break-one-line-headers",
+        ],
+        broken,
+    );
+    // Kept one-line statements keep a line that holds several of them.
+    check(
+        input,
+        &[
+            "--keep-one-line-blocks",
+            "--remove-braces",
+            "--break-one-line-headers",
+            "-o",
+        ],
+        "void f()\n{\n    if (ready)  value=0; else  result=0;\n    while (ready)\n        value--;\n}\n",
+    );
+    // An expanded block leaves its `else` a line of its own, as the
+    // statement it held ends its line.
+    check(
+        input,
+        &["--remove-braces", "--break-one-line-headers", "-o"],
+        broken,
+    );
+}
+
+#[test]
+fn indented_brace_styles_indent_a_kept_bare_block_as_its_brace_wherever_it_stands() {
+    // A one-line compound statement kept with its braces stands where the
+    // style puts those braces, first in the body or after a statement.
+    let first = "void f()\n{\n    { value=0; }\n}\n";
+    let after = "void f()\n{\n    value=1;\n    { value=0; }\n}\n";
+    let nested =
+        "void f()\n{\n    if (ready) {\n        { value=0; }\n        result=1;\n    }\n}\n";
+    for (style, first_expected, after_expected, nested_expected) in [
+        (
+            "--style=whitesmith",
+            "void f()\n    {\n        { value=0; }\n    }\n",
+            "void f()\n    {\n    value=1;\n        { value=0; }\n    }\n",
+            "void f()\n    {\n    if (ready)\n        {\n            { value=0; }\n        result=1;\n        }\n    }\n",
+        ),
+        (
+            "--style=ratliff",
+            "void f() {\n        { value=0; }\n    }\n",
+            "void f() {\n    value=1;\n        { value=0; }\n    }\n",
+            "void f() {\n    if (ready) {\n            { value=0; }\n        result=1;\n        }\n    }\n",
+        ),
+        // VTK keeps a one-line block in a function's own block at its
+        // statement, as after a header.
+        (
+            "--style=vtk",
+            "void f()\n{\n    { value=0; }\n}\n",
+            "void f()\n{\n    value=1;\n    { value=0; }\n}\n",
+            "void f()\n{\n    if (ready)\n        {\n            { value=0; }\n        result=1;\n        }\n}\n",
+        ),
+    ] {
+        check(first, &[style, "-O"], first_expected);
+        check(after, &[style, "-O"], after_expected);
+        check(nested, &[style, "-O"], nested_expected);
+    }
+}
+
+#[test]
+fn break_blocks_leaves_a_one_line_block_after_a_statement_unpadded() {
+    // A header after a statement on its line pads nothing around a block the
+    // source kept on that line, through its `else`; a block written over
+    // lines still takes the blank after it.
+    let wrap = |body: &str| format!("void f()\n{{\n    first=1;\n    {body}\n    other=1;\n}}\n");
+    for options in [
+        &["--style=kr", "--break-blocks", "-O", "-o"][..],
+        &["--style=kr", "--break-blocks", "-o"][..],
+    ] {
+        let kept = options.contains(&"-O");
+        let one = wrap("value=1; if (ready) { value=0; }");
+        let one_expected = if kept {
+            one.clone()
+        } else {
+            wrap("value=1; if (ready) {\n        value=0;\n    }")
+        };
+        check(&one, options, &one_expected);
+        let chain = wrap("value=1; if (ready) { value=0; } else { result=0; }");
+        let chain_expected = if kept {
+            chain.clone()
+        } else {
+            wrap("value=1; if (ready) {\n        value=0;\n    } else {\n        result=0;\n    }")
+        };
+        check(&chain, options, &chain_expected);
+    }
+    check(
+        &wrap("value=1; if (ready) {\n        value=0;\n    }"),
+        &["--style=kr", "--break-blocks", "-o"],
+        "void f()\n{\n    first=1;\n    value=1; if (ready) {\n        value=0;\n    }\n\n    other=1;\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_after_the_closer_of_an_else_header_block_leaves_its_column() {
+    let expected = "void f()\n{\n    if (ready) {\n        value = 1;\n    } else while (other) {\n            value = 0;\n        }\n    result = 1;\n    if (ready) {\n        value = 1;\n    } else switch (kind) {\n        case 1:\n            break;\n        }\n    result = 1;\n}\n";
+    for comment in ["", " // done", " /* done */"] {
+        let input = expected.replace("        }\n", &format!("        }}{comment}\n"));
+        for style in ["--style=java", "--style=kr"] {
+            check(
+                &input,
+                &[style],
+                &input.replace(
+                    "void f()\n{",
+                    if style == "--style=java" {
+                        "void f() {"
+                    } else {
+                        "void f()\n{"
+                    },
+                ),
+            );
+        }
+    }
+}
+
+#[test]
+fn pico_breaking_one_line_headers_keeps_a_label_with_its_header_and_block() {
+    // A label leads the line of the header after it as a statement does.
+    let options = ["--style=pico", "--break-one-line-headers"];
+    for line in [
+        "done: if (ready) { value=0; }",
+        "value=1; if (ready) { value=0; }",
+    ] {
+        let expected = format!("void f()\n{{   {line} }}\n");
+        check(
+            &format!("void f()\n{{\n    {line}\n}}\n"),
+            &options,
+            &expected,
+        );
+        check(&expected, &options, &expected);
+    }
+}
+
+#[test]
+fn pico_breaking_one_line_headers_splits_the_statements_of_the_block_it_breaks() {
+    // The block a header's line no longer holds is a block like any other:
+    // its statements stand one per line, a label keeping the one after it.
+    let options = ["--style=pico", "--break-one-line-headers"];
+    let input = "void f()\n{\n    if (ready) { value=0; result=1; }\n    switch (kind) { case 1: value=0; break; default: break; }\n}\n";
+    let expected = "void f()\n{   if (ready)\n    {   value=0;\n        result=1; }\n    switch (kind)\n    {   case 1: value=0;\n            break;\n        default: break; } }\n";
+    check(input, &options, expected);
+    check(expected, &options, expected);
+}
+
+#[test]
+fn a_case_block_closer_a_statement_follows_stands_where_it_would_alone() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: { value=0; } break;\n    case 2:\n        result=1;\n        break;\n    }\n}\n";
+    let cases: [(&[&str], &str); 7] = [
+        (
+            &["--style=allman", "-o"],
+            "void f()\n{\n    switch (kind)\n    {\n    case 1:\n    {\n        value=0;\n    } break;\n    case 2:\n        result=1;\n        break;\n    }\n}\n",
+        ),
+        (
+            &["--style=gnu", "-o"],
+            "void f()\n{\n    switch (kind)\n        {\n        case 1:\n        {\n            value=0;\n        } break;\n        case 2:\n            result=1;\n            break;\n        }\n}\n",
+        ),
+        (
+            &["--style=ratliff", "-o"],
+            "void f() {\n    switch (kind) {\n        case 1: {\n            value=0;\n            } break;\n        case 2:\n            result=1;\n            break;\n        }\n    }\n",
+        ),
+        (
+            &["--style=horstmann", "-o"],
+            "void f()\n{   switch (kind)\n    {   case 1:\n        {   value=0;\n        } break;\n        case 2:\n            result=1;\n            break;\n    }\n}\n",
+        ),
+        (
+            &["--style=vtk", "-o"],
+            "void f()\n{\n    switch (kind)\n        {\n        case 1:\n            {\n            value=0;\n            } break;\n        case 2:\n            result=1;\n            break;\n        }\n}\n",
+        ),
+        (
+            &["--style=allman", "-S", "-o"],
+            "void f()\n{\n    switch (kind)\n    {\n        case 1:\n        {\n            value=0;\n        } break;\n        case 2:\n            result=1;\n            break;\n    }\n}\n",
+        ),
+        (
+            &["--style=gnu", "-S", "-o"],
+            "void f()\n{\n    switch (kind)\n        {\n            case 1:\n            {\n                value=0;\n            } break;\n            case 2:\n                result=1;\n                break;\n        }\n}\n",
+        ),
+    ];
+    for (args, expected) in cases {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
+fn whitesmith_kept_else_block_ends_the_braceless_bodies_around_it() {
+    let input = "void f()\n    {\n    if (ready)\n        if (other)\n            { value=0; }\n        else\n            { result=0; }\n    switch (kind)\n        {\n        case 1:\n            value=0;\n            break;\n        }\n    x();\n    }\n";
+    check(input, &["--style=whitesmith", "-O"], input);
+}
+
+#[test]
+fn break_blocks_all_pads_a_closing_header_kept_on_its_brace_as_attached_styles_do() {
+    // Without a brace style an `else` written after `}` stays on it; padding
+    // its block then separates the `} else` line, as in attached styles.
+    let input = "void f()\n{\n    if (ready) { value=0; } else { result=0; }\n    x();\n}\n";
+    let expected = "void f()\n{\n    if (ready) {\n        value=0;\n\n    } else {\n        result=0;\n    }\n\n    x();\n}\n";
+    check(input, &["--break-blocks=all"], expected);
+    check(input, &["--style=kr", "--break-blocks=all"], expected);
+}
+
+#[test]
+fn vtk_keeps_a_one_line_block_after_a_label_where_other_one_line_blocks_stand() {
+    // An expanded block a label heads takes the indented brace; a kept
+    // one-line block stays at its statement in a function's own block and
+    // takes the brace's level within another.
+    let expanded = "void f()\n{\n    done: {\n        value=0;\n    }\n}\n";
+    check(
+        expanded,
+        &["--style=vtk"],
+        "void f()\n{\ndone:\n        {\n        value=0;\n        }\n}\n",
+    );
+    check(
+        "void f()\n{\n    done: { value=0; }\n}\n",
+        &["--style=vtk", "-O"],
+        "void f()\n{\ndone:\n    { value=0; }\n}\n",
+    );
+    check(
+        "void f()\n{\n    if (x) {\n    done: { value=0; }\n    }\n}\n",
+        &["--style=vtk", "-O"],
+        "void f()\n{\n    if (x)\n        {\ndone:\n            { value=0; }\n        }\n}\n",
+    );
+}
+
+#[test]
+fn whitesmith_bare_block_after_a_labels_block_stands_at_the_statements() {
+    let input = "void f()\n{\n    x();\n    again: {\n        value=0;\n    }\n    {\n        value=0;\n    }\n    y();\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    x();\nagain:\n        {\n        value=0;\n        }\n        {\n        value=0;\n        }\n    y();\n    }\n",
+    );
+}
+
+#[test]
+fn keeping_one_line_statements_leaves_an_else_switch_closer_at_its_column() {
+    // A case brace kept on its label's line opens the case block as one
+    // joined to the label later does, which leaves the switch closer alone.
+    let input = "void f()\n{\n    if (ready) {\n        value=1;\n    }\n    else switch (kind) {\n        case 1: {\n            value=0;\n            break;} // one\n        default: {\n            break;}\n        } // done\n    x();\n}\n";
+    let expected = "void f()\n{\n    if (ready) {\n        value=1;\n    } else switch (kind) {\n        case 1: {\n            value=0;\n            break;\n        } // one\n        default: {\n            break;\n        }\n        } // done\n    x();\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(input, &["--style=kr", "-o"], expected);
+}
+
+#[test]
+fn a_block_comment_between_a_do_closer_and_its_while_stays_between_them() {
+    // Only a comment ending the line follows a broken one-line block's
+    // statements; one before the `while` keeps its place.
+    let input = "void f()\n{\n    do { value=0; } /* again */ while (ready);\n    x();\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void f()\n{\n    do {\n        value=0;\n    } /* again */ while (ready);\n    x();\n}\n",
+        ),
+        (
+            "--style=allman",
+            "void f()\n{\n    do\n    {\n        value=0;\n    } /* again */ while (ready);\n    x();\n}\n",
+        ),
+        (
+            "--style=horstmann",
+            "void f()\n{   do\n    {   value=0;\n    } /* again */ while (ready);\n    x();\n}\n",
+        ),
+        (
+            "--style=pico",
+            "void f()\n{   do { value=0; } /* again */ while (ready);\n    x(); }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+    // A comment between a kept one-line block and its closing header holds
+    // them on one line, as it does where the block's closer ran in.
+    let kept = "void f()\n{\n    do { value=0; } /* again */ while (ready);\n    if (ready) { value=0; } /* c */ else { result=0; }\n}\n";
+    check(kept, &["--keep-one-line-blocks"], kept);
+    check(
+        "void f()\n{\n    do {\n        value=0;\n    } /* again */ while (ready);\n}\n",
+        &["--style=pico"],
+        "void f()\n{   do\n    {   value=0; } /* again */ while (ready); }\n",
+    );
+    check(
+        "void f()\n{   do\n    {   value=0; } /* again */ while (ready); }\n",
+        &["--style=pico"],
+        "void f()\n{   do\n    {   value=0; } /* again */ while (ready); }\n",
+    );
+}
+
+#[test]
+fn run_in_styles_attaching_closing_while_keep_it_after_a_one_line_do_block() {
+    let input = "void f()\n{\n    if (ready) { value=0; } else { result=0; }\n    do { value=0; } while (ready);\n    x();\n}\n";
+    check(
+        input,
+        &[
+            "--style=lisp",
+            "--attach-closing-while",
+            "--keep-one-line-blocks",
+        ],
+        "void f() {\n    if (ready) { value=0; }\n    else { result=0; }\n    do { value=0; } while (ready);\n    x(); }\n",
+    );
+    check(
+        input,
+        &["--style=pico", "--attach-closing-while"],
+        "void f()\n{   if (ready) { value=0; }\n    else { result=0; }\n    do { value=0; } while (ready);\n    x(); }\n",
+    );
+}
+
+#[test]
+fn break_blocks_leaves_a_kept_block_no_header_owns_unpadded() {
+    // Only a header's block is padded; a bare, label or case block is not.
+    let input = "void f()\n{\n    done: { value=0; }\n    value=0;\n    { value=1; }\n    value=2;\n    switch (kind) {\n    case 1: { value=0; } break;\n    case 2:\n        { value=0; }\n        break;\n    }\n    x();\n}\n";
+    check(
+        input,
+        &["--keep-one-line-blocks", "--break-blocks"],
+        "void f()\n{\ndone:\n    { value=0; }\n    value=0;\n    { value=1; }\n    value=2;\n\n    switch (kind) {\n    case 1:\n    { value=0; }\n    break;\n\n    case 2:\n    { value=0; }\n    break;\n    }\n\n    x();\n}\n",
+    );
+}
+
+#[test]
+fn break_blocks_pads_a_kept_else_block_on_a_line_of_its_own() {
+    let input =
+        "void f()\n{\n    if (ready)\n    { value=0; }\n    else\n    { result=0; }\n    x();\n}\n";
+    check(
+        input,
+        &["--keep-one-line-blocks", "--break-blocks"],
+        "void f()\n{\n    if (ready)\n    { value=0; }\n    else\n    { result=0; }\n\n    x();\n}\n",
+    );
+}
+
+#[test]
+fn break_blocks_reads_a_while_after_a_comment_as_its_do_blocks_end() {
+    // The comment between them leaves the `while` closing the do block, so
+    // no blank line opens a block before it.
+    let input = "void f()\n{\n    do {\n        value=0;\n    } /* again */ while (ready);\n}\n";
+    check(input, &["--break-blocks"], input);
+}
+
+#[test]
+fn lisp_break_blocks_keeps_an_else_with_its_if() {
+    // Breaking blocks pads around the if-else chain, not inside it.
+    let input = "void f() {\n    for (;;) {\n        if (ready) break;\n        else continue; }\n    x(); }\n";
+    check(
+        input,
+        &["--style=lisp", "--break-blocks"],
+        "void f() {\n    for (;;) {\n        if (ready) break;\n        else continue; }\n\n    x(); }\n",
+    );
+}
+
+#[test]
+fn indented_labels_leave_a_run_in_brace_at_its_block() {
+    // The label run into a block's brace takes the brace's column with it,
+    // not the brace to the label's.
+    let input = "void f()\n{\n    if (ready) {\n    again:\n        value=0;\n        goto again;\n    }\n}\n";
+    check(
+        input,
+        &["--style=horstmann", "--indent-labels"],
+        "void f()\n{   if (ready)\n    {   again:\n        value=0;\n        goto again;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn ratliff_keeping_one_line_statements_leaves_a_commented_case_block_closer_at_its_body() {
+    // Ratliff closes a case block at its body, a comment after the closer
+    // and kept statements or not.
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n    } // done\n    break;\n    case 2:\n        result=1;\n        break;\n    }\n}\n";
+    let expected = "void f() {\n    switch (kind) {\n        case 1: {\n            value=0;\n            } // done\n        break;\n        case 2:\n            result=1;\n            break;\n        }\n    }\n";
+    check(input, &["--style=ratliff"], expected);
+    check(input, &["--style=ratliff", "-o"], expected);
+}
+
+#[test]
+fn ratliff_indented_switch_keeps_a_commented_case_block_closer_at_its_body() {
+    let input = "void f()\n{\n    switch (kind) {\n        case 1: {\n            value=0;\n            break;} // one\n        default: {\n            break;}\n        } // done\n    x();\n}\n";
+    check(
+        input,
+        &["--style=ratliff", "--indent-switches"],
+        "void f() {\n    switch (kind) {\n        case 1: {\n            value=0;\n            break;\n            } // one\n        default: {\n            break;\n            }\n        } // done\n    x();\n    }\n",
+    );
+}
+
+#[test]
+fn ratliff_case_block_closer_kept_before_the_next_label_stands_at_its_body() {
+    // Each closer a label follows on its line stands where Ratliff closes
+    // the block, at its body.
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n        break;\n    } case 2: {\n        result=1;\n        break;\n    } default: done();\n    }\n}\n";
+    check(
+        input,
+        &["--style=ratliff", "--keep-one-line-statements"],
+        "void f() {\n    switch (kind) {\n        case 1: {\n            value=0;\n            break;\n            } case 2: {\n            result=1;\n            break;\n            } default: done();\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn ratliff_indented_cases_keep_a_closer_before_the_next_label_at_the_body() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n        break;\n    } case 2: {\n        result=1;\n        break;\n    } default: done();\n    }\n}\n";
+    check(
+        input,
+        &[
+            "--style=ratliff",
+            "--keep-one-line-statements",
+            "--indent-cases",
+        ],
+        "void f() {\n    switch (kind) {\n        case 1: {\n                value=0;\n                break;\n            } case 2: {\n                result=1;\n                break;\n            } default: done();\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_subscript_continued_past_the_maximum_aligns_to_its_assigned_value() {
+    // As a paren does, a bracket too far out for its operand leaves the
+    // continuation at the value the assignment gives, else two levels in.
+    let input = "void f()\n{\n    long_type_name *variable = &container->items[index -\n            offset_value];\n    variable_name = &container->items_with_long_name[index -\n            offset_value];\n    helper(container->items_with_a_long_name_here[index -\n            offset_value]);\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    long_type_name *variable = &container->items[index -\n                               offset_value];\n    variable_name = &container->items_with_long_name[index -\n                    offset_value];\n    helper(container->items_with_a_long_name_here[index -\n            offset_value]);\n}\n",
+    );
+}
+
+#[test]
+fn max_code_length_continues_a_far_subscript_at_its_assigned_value() {
+    let input =
+        "void f()\n{\n    long_type_name *variable = &container->items[index - offset_value];\n}\n";
+    check(
+        input,
+        &["--style=kr", "--max-code-length=60"],
+        "void f()\n{\n    long_type_name *variable = &container->items[index -\n                               offset_value];\n}\n",
+    );
+}
+
+#[test]
+fn a_subscript_continued_after_a_comma_aligns_inside_its_bracket() {
+    // A subscript holds an index, not a message's keywords.
+    let input = "void f()\n{\n    value = table[LIMIT + 1,\n                  SIZE + 1];\n    table[LIMIT + 1,\n          SIZE + 1] = 0;\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn indent_after_parens_continues_every_subscript_row_at_one_level() {
+    let input = "void f()\n{\n    unsigned char line[LIMIT + 1 +\n                       (2 * SIZE) + 1 +\n                       (2 * MAX) + 1];\n    value = table[LIMIT + 1\n                  + SIZE + 1\n                  + MAX + 1];\n}\n";
+    check(
+        input,
+        &["--style=kr", "--indent-after-parens"],
+        "void f()\n{\n    unsigned char line[LIMIT + 1 +\n        (2 * SIZE) + 1 +\n        (2 * MAX) + 1];\n    value = table[LIMIT + 1\n            + SIZE + 1\n            + MAX + 1];\n}\n",
+    );
+}
+
+#[test]
+fn indent_after_parens_continues_a_subscript_after_a_comma_as_a_call() {
+    // A `,` inside an open bracket ends no declarator, as one inside an
+    // open paren does not.
+    let input = "void f()\n{\n    value = table[LIMIT + 1,\n                  SIZE + 1];\n    value = helper(LIMIT + 1,\n                   SIZE + 1);\n}\n";
+    check(
+        input,
+        &["--style=kr", "--indent-after-parens"],
+        "void f()\n{\n    value = table[LIMIT + 1,\n            SIZE + 1];\n    value = helper(LIMIT + 1,\n            SIZE + 1);\n}\n",
+    );
+}
+
+#[test]
+fn a_leading_shift_aligns_inside_the_innermost_paren_left_open() {
+    // A shift row continues the paren still open at its line's start, not
+    // the first one its chain opened.
+    let input = "void f()\n{\n    std::cout << helper(a, (b\n                            << c));\n    std::cout << helper(a) << (b\n                               << c);\n    m = 1 << (((p & (size - 1))\n               >> shift)\n              + OFFSET);\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_return_type_holding_a_paren_group_or_attribute_is_neither_broken_nor_attached() {
+    // A group in parens or a `[[...]]` attribute before the name reads as
+    // something other than a return type, at a head's start or on its line.
+    let broken = "__attribute__((malloc)) char *duplicate(const char *text);\n[[nodiscard]] int checked(int value);\ndecltype(value) helper(int value);\nEXPORT(api) int exported(int value);\nstatic int other(int value);\n";
+    check(
+        broken,
+        &["--style=kr", "--break-return-type-decl"],
+        "__attribute__((malloc)) char *duplicate(const char *text);\n[[nodiscard]] int checked(int value);\ndecltype(value) helper(int value);\nEXPORT(api) int exported(int value);\nstatic int\nother(int value);\n",
+    );
+    let attached = "__attribute__((malloc)) char *\nduplicate(const char *text);\n[[nodiscard]] int\nchecked(int value);\nstatic int\nother(int value);\n";
+    check(
+        attached,
+        &["--style=kr", "--attach-return-type-decl"],
+        "__attribute__((malloc)) char *\nduplicate(const char *text);\n[[nodiscard]] int\nchecked(int value);\nstatic int other(int value);\n",
+    );
+}
+
+#[test]
+fn a_comment_run_into_a_lone_brace_fills_with_a_tab_under_tab_indents() {
+    // Without a brace style, a comment after a lone `{` runs in at the
+    // block's body column, the fill written as the indent is.
+    let input = "void f()\n{\n    if (ready)\n    {   // note\n        value=0;\n    }\n    if (ready)\n    { /* note */\n        value=0;\n    }\n}\n";
+    check(
+        input,
+        &["--indent=tab=4"],
+        "void f()\n{\n\tif (ready)\n\t{\t// note\n\t\tvalue=0;\n\t}\n\tif (ready)\n\t{\t/* note */\n\t\tvalue=0;\n\t}\n}\n",
+    );
+    check(
+        input,
+        &["--indent=force-tab=4"],
+        "void f()\n{\n\tif (ready)\n\t{\t// note\n\t\tvalue=0;\n\t}\n\tif (ready)\n\t{\t/* note */\n\t\tvalue=0;\n\t}\n}\n",
+    );
+}
+
+#[test]
+fn a_leading_shift_aligns_with_the_first_operand_inside_a_padded_paren() {
+    let input = "void f()\n{\n    out << helper(first, (second\n                          << third));\n    mask = 1 << (((value & (size - 1))\n                  >> shift)\n                 + offset);\n}\n";
+    check(
+        input,
+        &["--pad-paren-in"],
+        "void f()\n{\n    out << helper( first, ( second\n                            << third ) );\n    mask = 1 << ( ( ( value & ( size - 1 ) )\n                    >> shift )\n                  + offset );\n}\n",
+    );
+    check(
+        input,
+        &["--pad-paren-out"],
+        "void f()\n{\n    out << helper (first, (second\n                           << third) );\n    mask = 1 << ( ( (value & (size - 1) )\n                    >> shift)\n                  + offset);\n}\n",
+    );
+}
+
+#[test]
+fn an_added_do_closer_holding_its_while_stands_at_its_brace() {
+    // The braces add-braces puts around a do body stand where written ones
+    // would, the while attached to the closer included.
+    let input = "void f()\n{\n    do\n        value=0;\n    while (ready);\n}\n";
+    check(
+        input,
+        &["--style=gnu", "--add-braces", "--attach-closing-while"],
+        "void f()\n{\n    do\n        {\n            value=0;\n        } while (ready);\n}\n",
+    );
+    check(
+        input,
+        &[
+            "--style=whitesmith",
+            "--add-braces",
+            "--attach-closing-while",
+        ],
+        "void f()\n    {\n    do\n        {\n        value=0;\n        } while (ready);\n    }\n",
+    );
+}
+
+#[test]
+fn a_product_continuing_an_expression_keeps_its_space_before_a_paren() {
+    // A `*` read as multiplication leaves the paren after it alone when
+    // pointers align to their names.
+    let input = "void f()\n{\n    return first +\n           second * (third - fourth);\n    value = first +\n            second * (third\n                      - fourth);\n}\n";
+    check(input, &["--align-pointer=name"], input);
+}
+
+#[test]
+fn a_brace_after_a_header_comment_moves_before_it_after_a_directive_too() {
+    // The brace moves before the comment between it and its header
+    // wherever the header stands, a directive line before it included.
+    let input = "void f()\n{\n#ifdef FLAG\n    value=0;\n#endif\n    if (ready) /* why */ {\n        value=0;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n#ifdef FLAG\n    value=0;\n#endif\n    if (ready) { /* why */\n        value=0;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn break_blocks_pads_no_directive_after_an_initializer_following_a_header_block() {
+    // An initializer closes no header block, so the directives after it
+    // stay where they stand, as they do with no header block before it.
+    let input = "void f()\n{\n    if (ready) {\n        value=0;\n    }\n    struct Item item = {\n        .value = 1,\n    };\n#ifdef FLAG\n    value=0;\n#else\n    value=1;\n#endif\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-blocks"],
+        "void f()\n{\n    if (ready) {\n        value=0;\n    }\n\n    struct Item item = {\n        .value = 1,\n    };\n#ifdef FLAG\n    value=0;\n#else\n    value=1;\n#endif\n}\n",
+    );
+}
+
+#[test]
+fn pico_one_line_braces_added_before_a_comment_keep_the_unpadded_gap() {
+    // Unpadding moves the comment back to its column; the added braces do
+    // not, in pico as in the styles that keep the block on one line.
+    let input = "void f()\n{\n    value=1;\n    if (ready) value=0;   // note\n}\n";
+    check(
+        input,
+        &["--style=pico", "--unpad-paren", "--add-one-line-braces"],
+        "void f()\n{   value=1;\n    if(ready) { value=0; }    // note\n}\n",
+    );
+}
+
+#[test]
+fn a_label_kept_after_a_case_block_closer_opens_its_own_block() {
+    // A label kept after the closer of the case block before it opens the
+    // block its line ends with, so the closer after that block stands as
+    // the one before it does.
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n        break;\n    } case 2: {\n        result=1;\n        break;\n    } default: done();\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--keep-one-line-statements", "--indent-cases"],
+        "void f()\n{\n    switch (kind) {\n    case 1: {\n            value=0;\n            break;\n    } case 2: {\n            result=1;\n            break;\n    } default: done();\n    }\n}\n",
+    );
+}
+
+#[test]
+fn whitesmith_keeps_a_statement_on_a_label_kept_after_a_case_closer() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n        break;\n    } default: done();\n    }\n}\n";
+    check(
+        input,
+        &["--style=whitesmith", "--keep-one-line-statements"],
+        "void f()\n    {\n    switch (kind)\n        {\n        case 1:\n            {\n            value=0;\n            break;\n            } default: done();\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_label_kept_after_a_case_closer_stands_at_the_label_column() {
+    // The line stands with the labels, a level in where braces indent with
+    // their blocks.
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n        break;\n    } case 2: {\n        result=1;\n        break;\n    } default: done();\n    }\n}\n";
+    check(
+        input,
+        &[
+            "--style=allman",
+            "--keep-one-line-statements",
+            "--indent-cases",
+        ],
+        "void f()\n{\n    switch (kind)\n    {\n    case 1:\n        {\n            value=0;\n            break;\n    } case 2:\n        {\n            result=1;\n            break;\n    } default: done();\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=vtk", "--keep-one-line-statements"],
+        "void f()\n{\n    switch (kind)\n        {\n        case 1:\n            {\n            value=0;\n            break;\n            } case 2:\n            {\n            result=1;\n            break;\n            } default: done();\n        }\n}\n",
+    );
+    check(
+        input,
+        &["--style=horstmann", "--keep-one-line-statements"],
+        "void f()\n{   switch (kind)\n    {   case 1:\n        {   value=0;\n            break;\n        } case 2:\n        {   result=1;\n            break;\n        } default: done();\n    }\n}\n",
+    );
+}
+
+#[test]
+fn removing_braces_keeps_nested_initializer_braces_together() {
+    // Only statement braces go; an initializer's braces keep their line.
+    let input = "void f(void)\n{\n    struct Item list[] = { {\n            .value = 1,\n            .name = \"x\",\n        }\n    };\n}\n";
+    check(input, &["--style=allman", "--remove-braces"], input);
+}
+
+#[test]
+fn whitesmith_closes_an_initializer_opened_after_another_on_its_line_at_its_rows() {
+    // Two braces opened on one line put the inner rows two levels in, and
+    // the inner closer stands with them.
+    let input = "void f(void)\n{\n    struct Item list[] = { {\n            .value = 1,\n            .name = \"x\",\n        }\n    };\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f(void)\n    {\n    struct Item list[] = { {\n            .value = 1,\n            .name = \"x\",\n            }\n        };\n    }\n",
+    );
+    check(
+        input,
+        &["--style=vtk"],
+        "void f(void)\n{\n    struct Item list[] = { {\n            .value = 1,\n            .name = \"x\",\n            }\n        };\n}\n",
+    );
+}
+
+#[test]
+fn rows_of_a_comment_run_in_after_a_brace_keep_their_spaces_past_the_block_tabs() {
+    // The rows' tabs reach the block's level; the spaces after them align
+    // the text past the comment's opening and stay.
+    let input = "void f()\n{\n\tif (ready)\n\t{\t/* first row of a comment\n\t\t    second row\n\t\t    third row */\n\t\tvalue = 0;\n\t}\n}\n";
+    check(
+        input,
+        &[
+            "--style=horstmann",
+            "--indent=tab=4",
+            "--remove-comment-prefix",
+        ],
+        "void f()\n{\tif (ready)\n\t{\t/* first row of a comment\n\t\t    second row\n\t\t    third row */\n\t\tvalue = 0;\n\t}\n}\n",
+    );
+}
+
+#[test]
+fn an_added_do_closer_holding_its_while_in_a_case_block_stands_at_its_brace() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        do\n            value=0;\n        while (ready);\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=1tbs"],
+        "void f()\n{\n    switch (kind) {\n    case 1: {\n        do {\n            value=0;\n        } while (ready);\n    }\n    }\n}\n",
+    );
+}
+
+#[test]
+fn nested_initializers_opened_together_close_a_level_in() {
+    // After `= { {` the inner groups close a level past the row, so a
+    // `}, {` row and the rows after it keep their levels.
+    let input = "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }, {\n            .value = 2,\n        }\n    };\n}\n";
+    check(input, &[], input);
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_closer_kept_with_its_else_past_a_comment_stands_at_the_indented_brace() {
+    // Styles that indent braces part an else from its closer; the closer a
+    // comment keeps on the else's line still leads it at its own column.
+    let input = "void f()\n{\n    if (other) {\n        value=1;\n    } /* last */ else {\n        value=2;\n    }\n}\n";
+    check(
+        input,
+        &["--style=gnu"],
+        "void f()\n{\n    if (other)\n        {\n            value=1;\n        } /* last */ else\n        {\n            value=2;\n        }\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    if (other)\n        {\n        value=1;\n        } /* last */ else\n        {\n        value=2;\n        }\n    }\n",
+    );
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    if (other) {\n        value=1;\n        } /* last */ else {\n        value=2;\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn indent_after_parens_continues_template_parameters_a_level_in() {
+    // A template's `<` continues as a paren does when parens indent.
+    let input = "template <typename First,\n          typename Second>\nclass Pair {\n    First first;\n};\n";
+    check(
+        input,
+        &["--style=kr", "--indent-after-parens"],
+        "template <typename First,\n    typename Second>\nclass Pair\n{\n    First first;\n};\n",
+    );
+}
+
+#[test]
+fn break_blocks_all_pads_a_closing_header_a_comment_parts_from_its_brace() {
+    let input = "void f()\n{\n    if (other) {\n        value=1;\n    } /* last */ else {\n        value=2;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-blocks=all"],
+        "void f()\n{\n    if (other) {\n        value=1;\n\n    } /* last */ else {\n\n        value=2;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn lisp_nested_initializer_rows_after_a_run_in_closer_keep_their_level() {
+    let input = "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }, {\n            .value = 2,\n        }\n    };\n}\n";
+    check(
+        input,
+        &["--style=lisp"],
+        "void f() {\n    struct Item list[] = { {\n            .value = 1, }, {\n            .value = 2, } }; }\n",
+    );
+}
+
+#[test]
+fn an_element_brace_after_a_closer_keeps_its_row_in_broken_brace_styles() {
+    // Styles that break braces keep the next element's brace on the `}, `
+    // row, which stands where the closer before it does.
+    let input = "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }, {\n            .value = 2,\n        }\n    };\n}\n";
+    check(input, &["--style=allman"], input);
+    check(input, &["--style=gnu"], input);
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    struct Item list[] = { {\n            .value = 1,\n            }, {\n            .value = 2,\n            }\n        };\n    }\n",
+    );
+}
+
+#[test]
+fn breaking_else_ifs_keeps_unpadding_in_the_gap_before_a_comment() {
+    // The `if` broken off its `else` measures its comment from the column
+    // it had after the `else`, so unpadding still widens the gap.
+    let input = "void f()\n{\n    if (ready) {\n        value=0;\n    } else if (other) { // second\n        value=1;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-elseifs", "--unpad-paren"],
+        "void f()\n{\n    if(ready) {\n        value=0;\n    } else\n        if(other) {  // second\n            value=1;\n        }\n}\n",
+    );
+}
+
+#[test]
+fn pico_nested_initializer_rows_after_a_run_in_closer_keep_their_level() {
+    let input = "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }, {\n            .value = 2,\n        }\n    };\n}\n";
+    check(
+        input,
+        &["--style=pico"],
+        "void f()\n{   struct Item list[] = { {\n            .value = 1, }, {\n            .value = 2, } }; }\n",
+    );
+}
+
+#[test]
+fn indent_after_parens_leaves_a_lambda_argument_opening_its_body_at_the_statement() {
+    // A row inside the call that opens a lambda body stands with the body
+    // and its closer, as it does when parens align.
+    let input = "void f()\n{\n    helper(first,\n           [](int value) {\n               return value;\n           });\n}\n";
+    check(
+        input,
+        &["--style=kr", "--indent-after-parens"],
+        "void f()\n{\n    helper(first,\n    [](int value) {\n        return value;\n    });\n}\n",
+    );
+}
+
+#[test]
+fn whitesmith_keeps_a_range_for_colon_inside_its_parens() {
+    let input =
+        "void f()\n{\n    for (auto &item : items) {\n        total += item.value;\n    }\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    for (auto &item : items)\n        {\n        total += item.value;\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_block_closing_after_a_message_in_a_method_stands_at_its_header() {
+    // Only the method's own closer stands flush; a block inside it closes
+    // at its header after a message as after any statement.
+    let input = "@implementation Item\n- (void)update\n{\n    if (value) {\n        [self reset];\n    }\n}\n@end\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_declarator_starting_with_default_after_a_closer_is_no_label() {
+    let input = "extern struct Item {\n    int value;\n    char *name;\n} default_item;\n";
+    check(
+        input,
+        &["--style=vtk"],
+        "extern struct Item\n{\n    int value;\n    char *name;\n} default_item;\n",
+    );
+}
+
+#[test]
+fn an_objc_method_closer_after_a_message_stands_where_the_style_closes_bodies() {
+    let input = "@implementation Item\n- (int)total {\n    return [[self items] count] + [self.other countWith:1\n                                              and:2];\n}\n@end\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "@implementation Item\n- (int)total {\n    return [[self items] count] + [self.other countWith:1\n                                              and:2];\n    }\n@end\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "@implementation Item\n- (int)total\n    {\n    return [[self items] count] + [self.other countWith:1\n                                              and:2];\n    }\n@end\n",
+    );
+}
+
+#[test]
+fn a_lambda_argument_opening_its_body_after_a_ternary_stands_at_the_statement() {
+    let input = "void f()\n{\n    result = ready ? first\n             : third;\n    helper(first,\n           [](int value) {\n               return value;\n           });\n}\n";
+    check(
+        input,
+        &["--style=linux"],
+        "void f()\n{\n    result = ready ? first\n             : third;\n    helper(first,\n    [](int value) {\n        return value;\n    });\n}\n",
+    );
+}
+
+#[test]
+fn an_alias_pointer_declarator_follows_the_inside_paren_options() {
+    let input = "using Callback = void (*)(int value);\nusing Handler = void (  &  )(int);\n";
+    check(
+        input,
+        &["--pad-paren-in"],
+        "using Callback = void ( * )( int value );\nusing Handler = void (  &  )( int );\n",
+    );
+    check(
+        input,
+        &["--pad-paren-in", "--unpad-paren"],
+        "using Callback = void ( * )( int value );\nusing Handler = void ( & )( int );\n",
+    );
+    check(
+        "using Callback = void ( * )(int value);\nusing Handler = void ( ^)(int);\n",
+        &["--unpad-paren"],
+        "using Callback = void (*)(int value);\nusing Handler = void (^)(int);\n",
+    );
+}
+
+#[test]
+fn indent_after_parens_keeps_message_keywords_aligned_wherever_the_message_starts() {
+    let input = "@implementation Item\n- (void)update\n{\n    [self apply:value\n with:other];\n    result = [self apply:value\n with:other];\n}\n@end\n";
+    check(
+        input,
+        &["--indent-after-parens"],
+        "@implementation Item\n- (void)update\n{\n    [self apply:value\n          with:other];\n    result = [self apply:value\n                   with:other];\n}\n@end\n",
+    );
+}
+
+#[test]
+fn a_block_literal_brace_follows_the_style_at_file_scope_as_in_a_body() {
+    let input = "void (^handler)(int) = ^(int value) {\n    helper(value);\n};\nvoid f()\n{\n    void (^local)(int) = ^(int value) {\n        helper(value);\n    };\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void (^handler)(int) = ^(int value)\n{\n    helper(value);\n};\nvoid f()\n{\n    void (^local)(int) = ^(int value)\n    {\n        helper(value);\n    };\n}\n",
+    );
+}
+
+#[test]
+fn an_element_brace_after_a_comma_keeps_its_row_in_broken_brace_styles() {
+    // A row of values or of braces ending in an element's `{` keeps it; the
+    // styles that indent braces close it at its elements.
+    let input = "void f()\n{\n    Item items[] = {\n        1, {\n            7,\n            8\n        },\n        { 1, 2 }, {\n            3, 4\n        }\n    };\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    Item items[] =\n    {\n        1, {\n            7,\n            8\n        },\n        { 1, 2 }, {\n            3, 4\n        }\n    };\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    Item items[] =\n        {\n        1, {\n            7,\n            8\n            },\n            { 1, 2 }, {\n            3, 4\n            }\n        };\n    }\n",
+    );
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    Item items[] = {\n        1, {\n            7,\n            8\n            },\n            { 1, 2 }, {\n            3, 4\n            }\n        };\n    }\n",
+    );
+}
+
+#[test]
+fn a_run_in_brace_after_a_one_line_switch_fills_as_anywhere() {
+    let input = "void f()\n{\n    switch (kind) { case 1: value=0; break; default: break; }\n    struct Item item = {\n        .value = 1,\n        .name = \"x\",\n    };\n}\n";
+    check(
+        input,
+        &["--style=pico"],
+        "void f()\n{   switch (kind) { case 1: value=0; break; default: break; }\n    struct Item item =\n    {   .value = 1,\n        .name = \"x\", }; }\n",
+    );
+}
+
+#[test]
+fn vtk_keeps_a_case_body_after_a_label_on_its_closer_at_the_label_body() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n    } case 2:\n        value=1;\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=vtk", "-o"],
+        "void f()\n{\n    switch (kind)\n        {\n        case 1:\n            {\n            value=0;\n            } case 2:\n            value=1;\n            break;\n        }\n}\n",
+    );
+}
+
+#[test]
+fn indented_case_blocks_leave_the_statements_after_a_closer_label_at_the_label_body() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n    } case 2:\n        value=1;\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=pico", "--indent-cases"],
+        "void f()\n{   switch (kind)\n    {   case 1:\n            {   value=0; } case 2:\n            value=1;\n            break; } }\n",
+    );
+}
+
+#[test]
+fn an_indented_case_block_keeps_its_level_whatever_label_follows_its_closer() {
+    // A label run in after the closer moves neither the block's row nor
+    // its statements, whether a case or a default.
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n    } case 2:\n        value=1;\n        break;\n    case 3: {\n        value=2;\n    } default:\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=pico", "--indent-cases"],
+        "void f()\n{   switch (kind)\n    {   case 1:\n            {   value=0; } case 2:\n            value=1;\n            break;\n        case 3:\n            {   value=2; } default:\n            break; } }\n",
+    );
+    check(
+        input,
+        &["--style=lisp", "--indent-cases"],
+        "void f() {\n    switch (kind) {\n    case 1: {\n            value=0; } case 2:\n        value=1;\n        break;\n    case 3: {\n            value=2; } default:\n        break; } }\n",
+    );
+    check(
+        input,
+        &["--style=pico"],
+        "void f()\n{   switch (kind)\n    {   case 1:\n        {   value=0; } case 2:\n            value=1;\n            break;\n        case 3:\n        {   value=2; } default:\n            break; } }\n",
+    );
+}
+
+#[test]
+fn ratliff_returns_a_value_row_after_an_element_brace_row_to_the_elements() {
+    let input = "void f()\n{\n    int table[][2] = {\n        { 1, 2 }, {\n            3, 4\n        },\n        5, {\n            6, 7\n        }\n    };\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    int table[][2] = {\n            { 1, 2 }, {\n            3, 4\n            },\n        5, {\n            6, 7\n            }\n        };\n    }\n",
+    );
+}
+
+#[test]
+fn pico_aligns_a_paren_continuation_after_a_closer_run_into_the_row_before() {
+    // The rows of a paren the joined closer's line leaves open move with it.
+    let input = "void f()\n{\n    do {\n        value++;\n    } while (value < count &&\n             ready);\n}\n";
+    check(
+        input,
+        &["--style=pico", "--attach-closing-while"],
+        "void f()\n{   do\n    {   value++; } while (value < count &&\n                          ready); }\n",
+    );
+}
+
+#[test]
+fn a_condition_continued_after_an_indented_closer_aligns_inside_its_paren() {
+    let input = "void f()\n{\n    do {\n        value++;\n    } while (value < count &&\n             ready);\n}\n";
+    check(
+        input,
+        &["--style=whitesmith", "--attach-closing-while"],
+        "void f()\n    {\n    do\n        {\n        value++;\n        } while (value < count &&\n                 ready);\n    }\n",
+    );
+}
+
+#[test]
+fn a_closer_keeping_the_next_element_brace_stands_at_its_own_brace_in_gnu_and_horstmann() {
+    let input = "void f()\n{\n    struct Item refs[2] = {\n        {\n            .name = \"b\",\n        }, {\n            .name = \"a\",\n        }\n    };\n}\n";
+    check(
+        input,
+        &["--style=gnu"],
+        "void f()\n{\n    struct Item refs[2] =\n    {\n        {\n            .name = \"b\",\n        }, {\n            .name = \"a\",\n        }\n    };\n}\n",
+    );
+    check(
+        input,
+        &["--style=horstmann"],
+        "void f()\n{   struct Item refs[2] =\n    {   {   .name = \"b\",\n        }, {\n            .name = \"a\",\n        }\n    };\n}\n",
+    );
+}
+
+#[test]
+fn break_blocks_pads_a_header_after_a_labelled_one_line_block_as_after_any_block() {
+    let input = "void f()\n{\n    done: if (ready) { value=0; }\n    switch (kind) {\n    default:\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=pico", "--break-blocks"],
+        "void f()\n{   done: if (ready) { value=0; }\n\n    switch (kind)\n    {   default:\n            break; } }\n",
+    );
+}
+
+#[test]
+fn break_blocks_keeps_a_stream_continuation_aligned_after_the_blank_it_adds() {
+    let input = "void f()\n{\n    if (ready) {\n        value++;\n    }\n    std::cout << first\n              << second << std::endl;\n}\n";
+    check(
+        input,
+        &["--break-blocks"],
+        "void f()\n{\n    if (ready) {\n        value++;\n    }\n\n    std::cout << first\n              << second << std::endl;\n}\n",
+    );
+}
+
+#[test]
+fn indent_after_parens_indents_a_lambda_argument_after_a_ternary_statement() {
+    let input = "void f()\n{\n    result = ready\n        ? value\n        : other;\n    sort(first, second,\n         [](int value)\n    {\n        return value;\n    });\n}\n";
+    check(
+        input,
+        &["--style=allman", "--indent-after-parens"],
+        "void f()\n{\n    result = ready\n        ? value\n        : other;\n    sort(first, second,\n        [](int value)\n    {\n        return value;\n    });\n}\n",
+    );
+}
+
+#[test]
+fn a_braceless_body_in_an_indented_macro_indents_with_tabs() {
+    let input = "#define CHECK(A) \\\n  do {                         \\\n    helper(A);                 \\\n    if(result)                 \\\n      goto done;               \\\n  } while(0)\n";
+    check(
+        input,
+        &["--indent=tab=4", "--indent-preproc-define"],
+        "#define CHECK(A) \\\n\tdo {                         \\\n\t\thelper(A);                 \\\n\t\tif(result)                 \\\n\t\t\tgoto done;               \\\n\t} while(0)\n",
+    );
+    // A header whose condition spans rows opens its body once it closes.
+    check(
+        "#define LOOP(A) \\\n  if (a &&                  \\\n      b)                    \\\n    value = 1;              \\\n  else                      \\\n    value = 2\n",
+        &["--indent=tab=4", "--indent-preproc-define"],
+        "#define LOOP(A) \\\n\tif (a &&                  \\\n\t        b)                    \\\n\t\tvalue = 1;              \\\n\telse                      \\\n\t\tvalue = 2\n",
+    );
+}
+
+#[test]
+fn pad_oper_pads_a_product_after_any_sizeof_operand() {
+    let input = "void f()\n{\n    memmove(pool, pool, sizeof(pool[0])*count);\n    value = sizeof(item)*count;\n}\n";
+    check(
+        input,
+        &["--pad-oper"],
+        "void f()\n{\n    memmove(pool, pool, sizeof(pool[0]) * count);\n    value = sizeof(item) * count;\n}\n",
+    );
+}
+
+#[test]
+fn a_split_kept_case_statement_aligns_after_the_padding_inside_its_paren() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: snprintf(buffer, length, \"Unknown system error %d\", error);\n    }\n}\n";
+    check(
+        input,
+        &[
+            "--max-code-length=60",
+            "--pad-paren-in",
+            "--keep-one-line-statements",
+        ],
+        "void f()\n{\n    switch ( kind ) {\n    case 1: snprintf( buffer, length, \"Unknown system error %d\",\n                          error );\n    }\n}\n",
+    );
+}
+
+#[test]
+fn an_argument_after_a_compound_literal_aligns_inside_its_call() {
+    // A literal's braces leave the call's parenthesis open: every argument
+    // row after one aligns inside it, as after any argument.
+    let input = "void f()\n{\n    helper((struct Item){ 1, 2 },\n           other);\n    helper((struct Item){ 1, 2 }, second,\n           other);\n    helper(first, (int[]){ 1, 2 }, second,\n           other);\n}\n";
+    check(
+        input,
+        &[],
+        "void f()\n{\n    helper((struct Item) { 1, 2 },\n           other);\n    helper((struct Item) { 1, 2 }, second,\n           other);\n    helper(first, (int[]) { 1, 2 }, second,\n           other);\n}\n",
+    );
+}
+
+#[test]
+fn a_block_broken_off_its_header_with_an_attribute_closes_under_its_line() {
+    // The attributed block becomes the header's body; its rows and closer
+    // follow the line it opens on.
+    let input = "void f()\n{\n    if (ready) [[likely]] {\n        value = 1;\n    }\n}\n";
+    check(
+        input,
+        &["--break-one-line-headers"],
+        "void f()\n{\n    if (ready)\n        [[likely]] {\n            value = 1;\n        }\n}\n",
+    );
+}
+
+#[test]
+fn a_kept_one_line_block_ends_its_assignment_before_a_trailing_comment() {
+    // The assignment inside the block ended with it; the statement after
+    // the commented line continues from its own columns.
+    let input = "void f()\n{\n    if (ready) { value=0; }   // note\n    value = table[first\n                  + second];\n}\n";
+    check(input, &["--keep-one-line-blocks"], input);
+    check(
+        "void f()\n{\n    if (ready) value=0;   // note\n    value = table[first\n                  + second];\n}\n",
+        &["--add-one-line-braces"],
+        input,
+    );
+}
+
+#[test]
+fn an_else_broken_off_its_closer_leaves_the_comment_where_the_joined_line_had_it() {
+    // As for a `while` broken off its `do` body, the closer and the space
+    // after it stay in the comment's gap; padding the else takes from it.
+    let input = "void f()\n{\n    if (ready) { a = 1; } else { b = 2; } // note\n    if (ready) { a = 1; }   else{ b = 2; } // note\n}\n";
+    check(
+        input,
+        &["--keep-one-line-blocks"],
+        "void f()\n{\n    if (ready) { a = 1; }\n    else { b = 2; }   // note\n    if (ready) { a = 1; }\n    else { b = 2; }    // note\n}\n",
+    );
+}
+
+#[test]
+fn whitesmith_keeps_the_statements_of_a_case_block_after_a_closer_label_at_its_brace() {
+    let input = "void f()\n    {\n    switch (kind)\n        {\n        case 1:\n            {\n            value = 0;\n            break;\n            } case 2:\n            {\n            size_t mib[3];\n            size_t miblen = 1;\n            helper(first,\n                   second);\n            break;\n            }\n        }\n    }\n";
+    check(
+        input,
+        &["--style=whitesmith", "--keep-one-line-statements"],
+        input,
+    );
+}
+
+#[test]
+fn a_lambda_inside_a_lambda_body_breaks_its_brace_as_any_lambda() {
+    let input = "void f()\n{\n    auto outer = [&](int value) {\n        auto inner = [value](int other) {\n            return value + other;\n        };\n        return inner(1);\n    };\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    auto outer = [&](int value)\n    {\n        auto inner = [value](int other)\n        {\n            return value + other;\n        };\n        return inner(1);\n    };\n}\n",
+    );
+}
+
+#[test]
+fn a_lambda_inside_a_capture_only_lambda_body_breaks_its_brace_as_any_lambda() {
+    let input = "void f()\n{\n    auto outer = [&] {\n        auto inner = [] {\n            return 1;\n        };\n        return inner();\n    };\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    auto outer = [&]\n    {\n        auto inner = []\n        {\n            return 1;\n        };\n        return inner();\n    };\n}\n",
+    );
+}
+
+#[test]
+fn a_structured_binding_reference_aligns_as_any_reference_declarator() {
+    let input =
+        "void f()\n{\n    for (auto &[key, value] : items) {\n        total += value;\n    }\n}\n";
+    check(
+        input,
+        &["--align-pointer=type"],
+        "void f()\n{\n    for (auto& [key, value] : items) {\n        total += value;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn an_added_closer_run_into_its_row_keeps_the_comment_gap() {
+    let input = "void f()\n{\n    if (ready) value=0;   // note\n}\n";
+    check(
+        input,
+        &["--style=pico", "--break-one-line-headers", "--add-braces"],
+        "void f()\n{   if (ready)\n    {   value=0; }   // note\n}\n",
+    );
+}
+
+#[test]
+fn a_definition_with_parameter_declarations_breaks_and_attaches_its_return_type() {
+    // A definition declaring its parameters before its body is a function
+    // definition like any other.
+    let joined = "int helper(value, other)\nint value;\nchar *other;\n{\n    return value;\n}\n";
+    let broken = "int\nhelper(value, other)\nint value;\nchar *other;\n{\n    return value;\n}\n";
+    check(joined, &["--break-return-type"], broken);
+    check(broken, &["--attach-return-type"], joined);
+}
+
+#[test]
+fn a_label_kept_after_a_case_block_closer_leaves_the_block_at_its_label() {
+    // A label later on the line moves no code before it: the block stands
+    // where it does with the label on a line of its own.
+    let expected = "void f()\n{   switch (kind)\n    {   case 1:\n        {   value=0; } case 2:\n            value=1;\n            break; } }\n";
+    for input in [
+        "void f()\n{\n    switch (kind) {\n    case 1:\n    {\n        value=0;\n    } case 2:\n        value=1;\n        break;\n    }\n}\n",
+        "void f()\n{\n    switch (kind) {\n    case 1:\n    {   value=0; } case 2:\n        value=1;\n        break;\n    }\n}\n",
+        expected,
+    ] {
+        check(input, &["--style=pico"], expected);
+    }
+}
+
+#[test]
+fn a_lambda_with_template_parameters_opens_its_body_as_any_lambda() {
+    let input = "void f()\n{\n    auto add = []<typename T>(T a, T b) {\n        return a + b;\n    };\n    call([]<class T>(T a) {\n        go(a);\n    });\n}\n";
+    let expected = "void f()\n{\tauto add = []<typename T>(T a, T b)\n\t{\treturn a + b; };\n\tcall([]<class T>(T a)\n\t{\tgo(a); }); }\n";
+    let args = ["--style=pico", "--indent=tab=4"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
+
+#[test]
+fn a_comment_before_a_braced_initializer_closer_leaves_it_as_after_an_assignment() {
+    // With or without `=`, the list's closer takes its own row after the
+    // comment that led it.
+    for head in ["std::vector<int> values{", "std::vector<int> values = {"] {
+        let input = format!("void f()\n{{\n    {head}\n        1,\n        /* note */ }};\n}}\n");
+        let expected =
+            format!("void f()\n{{\n    {head}\n        1,\n        /* note */\n    }};\n}}\n");
+        check(&input, &["--style=kr"], &expected);
+    }
+}
+
+#[test]
+fn a_comment_leading_a_declarator_row_leaves_it_where_it_stands_without() {
+    let input =
+        "void f()\n{\n    int first = 1,\n        /* note */ second = 2,\n        third;\n}\n";
+    for (style, expected) in [
+        (
+            "--style=horstmann",
+            "void f()\n{   int first = 1,\n            /* note */ second = 2,\n            third;\n}\n",
+        ),
+        (
+            "--style=kr",
+            "void f()\n{\n    int first = 1,\n        /* note */ second = 2,\n        third;\n}\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn ratliff_sets_a_comment_led_block_brace_where_the_brace_stands_without_it() {
+    // First in its block or after a statement, the brace stands a level in.
+    let input = "void f()\n{\n    /* note */ {\n        value = 1;\n    }\n    go();\n    /* note */ {\n        value = 2;\n    }\n}\n";
+    let expected = "void f() {\n        /* note */ {\n        value = 1;\n        }\n    go();\n        /* note */ {\n        value = 2;\n        }\n    }\n";
+    check(input, &["--style=ratliff"], expected);
+    check(expected, &["--style=ratliff"], expected);
+}
+
+#[test]
+fn lisp_closes_an_empty_body_after_a_header_comment_as_without_it() {
+    // The comment the brace moves before leaves the empty body joined; a
+    // comment written after the brace opens the body's rows.
+    let input = "void g()\n{\n}\nvoid f() /* note */\n{\n}\nItem::Item(int value)\n    : value(value) /* note */\n{\n}\nvoid h()\n{ /* note */\n}\n";
+    let expected = "void g() {}\nvoid f() { /* note */}\nItem::Item(int value)\n    : value(value) { /* note */}\nvoid h() {\n    /* note */\n}\n";
+    check(input, &["--style=lisp"], expected);
+    check(expected, &["--style=lisp"], expected);
+}
+
+#[test]
+fn a_comment_leading_a_method_header_leaves_its_body_as_without_it() {
+    let input = "@implementation Item\n/* note */ - (void)run {\n    [view animate:^{\n        go();\n    } completion:^(BOOL done) {\n        stop();\n    }];\n}\n@end\n";
+    let expected = "@implementation Item\n/* note */ - (void)run\n{\n    [view animate:^\n    {\n        go();\n    } completion:^(BOOL done)\n    {\n        stop();\n    }];\n}\n@end\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+}
+
+#[test]
+fn a_comment_split_off_a_method_closer_after_a_message_block_stands_in_the_body() {
+    let input = "@implementation Item\n- (void)run {\n    [view animate:^{\n        go();\n    }];\n/* note */ }\n@end\n";
+    let expected = "@implementation Item\n- (void)run\n{\n    [view animate:^ {\n        go();\n    }];\n    /* note */\n}\n@end\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn a_comment_led_initializer_after_a_run_in_lambda_body_stands_as_without_the_comment() {
+    let input = "Item::Item()\n    : value([] {\n        return 1;\n    }()),\n      /* note */ other(0)\n{\n}\n";
+    let expected = "Item::Item()\n    : value([]\n{   return 1; }()),\n/* note */ other(0)\n{}\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+}
+
+#[test]
+fn attach_inlines_attaches_the_bodies_of_methods_inside_structs_and_unions() {
+    // A union's methods attach as a struct's do in every brace style.
+    let input = "int g;\nstruct Item {\n    int run() const\n    {\n        return 1;\n    }\n};\nunion Value {\n    int run() const\n    {\n        return 1;\n    }\n};\n";
+    for (style, expected) in [
+        (
+            "--style=linux",
+            "int g;\nstruct Item {\n    int run() const {\n        return 1;\n    }\n};\nunion Value {\n    int run() const {\n        return 1;\n    }\n};\n",
+        ),
+        (
+            "--style=allman",
+            "int g;\nstruct Item\n{\n    int run() const {\n        return 1;\n    }\n};\nunion Value\n{\n    int run() const {\n        return 1;\n    }\n};\n",
+        ),
+        (
+            "--style=whitesmith",
+            "int g;\nstruct Item\n    {\n    int run() const {\n        return 1;\n        }\n    };\nunion Value\n    {\n    int run() const {\n        return 1;\n        }\n    };\n",
+        ),
+    ] {
+        let args = [style, "--attach-inlines"];
+        check(input, &args, expected);
+        check(expected, &args, expected);
+    }
+}
+
+#[test]
+fn an_attached_closing_while_condition_continues_under_its_paren_where_the_closer_moved() {
+    // The closer a style indents takes the `while` with it; the condition's
+    // rows align under the paren where it stands.
+    let input = "void f()\n{\n    do {\n        value++;\n    } while (value < count &&\n             ready);\n}\n";
+    let expected = "void f()\n    {\n    do\n        {\n        value++;\n        } while (value < count &&\n                 ready);\n    }\n";
+    let args = ["--style=whitesmith", "--attach-closing-while"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
+
+#[test]
+fn a_comment_led_declarator_after_an_attribute_line_keeps_its_column() {
+    let input = "void f()\n{\n    static const struct Item\n        first = {\n            1, 2\n        },\n        __attribute__((unused))\n        /* note */ second = {\n            3, 4\n        };\n}\n";
+    let expected = "void f()\n{   static const struct Item\n        first =\n    {   1, 2 },\n    __attribute__((unused))\n    /* note */ second =\n    {   3, 4 }; }\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+}
+
+#[test]
+fn pad_oper_keeps_the_three_way_comparison_operator_whole() {
+    let input = "struct Item {\n    auto operator<=>(const Item &) const = default;\n    bool less = (a<=>b) < 0;\n};\n";
+    check(
+        input,
+        &["--pad-oper"],
+        "struct Item {\n    auto operator<=>(const Item &) const = default;\n    bool less = (a <=> b) < 0;\n};\n",
+    );
+}
+
+#[test]
+fn mozilla_breaks_a_run_in_enum_list_below_the_brace_it_breaks() {
+    // The values stand in rows below the broken brace, as they do when the
+    // source broke it, so a second pass keeps them.
+    let input = "enum mode { FIRST, SECOND,\n  THIRD };\nvoid f()\n{\n    enum { A, B,\n        C } x;\n}\n";
+    let expected = "enum mode\n{\n    FIRST, SECOND,\n    THIRD\n};\nvoid f()\n{\n    enum\n    {\n        A, B,\n        C\n    } x;\n}\n";
+    check(input, &["--style=mozilla"], expected);
+    check(expected, &["--style=mozilla"], expected);
+}
+
+#[test]
+fn rows_of_a_trailing_comment_in_a_case_block_stand_as_written() {
+    // The case block's unindent leaves the rows where the source wrote
+    // them, so a second pass keeps them too.
+    let input = "void f()\n{\n    switch (op) {\n    case 1: {\n        if (ready) {\n            check(value);  /* first row\n                           ** second row */\n            go();\n        }\n        break;\n    }\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn rows_of_an_element_a_comment_leads_after_a_run_in_brace_stand_in_the_element() {
+    for (style, expected) in [
+        (
+            "--style=horstmann",
+            "void f()\n{   static const struct Item items[] =\n    {   /* note */ { name(\"a\"), NULL, first,\n            0, 0\n        },\n    };\n}\n",
+        ),
+        (
+            "--style=pico",
+            "void f()\n{   static const struct Item items[] =\n    {   /* note */ { name(\"a\"), NULL, first,\n            0, 0 }, }; }\n",
+        ),
+    ] {
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn rows_of_a_comment_run_in_after_nested_element_braces_keep_their_offset() {
+    let input = "void f()\n{\n  struct Item items[] = {\n    {\n      /* first row\n         second row */\n      \"first\", \"second\"\n    },\n  };\n}\n";
+    for (style, expected) in [
+        (
+            "--style=horstmann",
+            "void f()\n{   struct Item items[] =\n    {   {   /* first row\n               second row */\n            \"first\", \"second\"\n        },\n    };\n}\n",
+        ),
+        (
+            "--style=pico",
+            "void f()\n{   struct Item items[] =\n    {   {   /* first row\n               second row */\n            \"first\", \"second\" }, }; }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn an_argument_after_a_lambda_body_stands_at_the_statement_under_any_conditional_indent() {
+    let input = "void f()\n{\n    return call([] {\n        go();\n    }, value,\n                other);\n}\n";
+    let expected =
+        "void f()\n{\n    return call([] {\n        go();\n    }, value,\n    other);\n}\n";
+    for minimum in ["0", "2"] {
+        check(
+            input,
+            &["--style=kr", &format!("--min-conditional-indent={minimum}")],
+            expected,
+        );
+    }
+}
+
+#[test]
+fn a_word_headed_block_after_a_label_keeps_its_run_in_brace() {
+    let input = "void f()\n{\n    go();\nagain:\n    APPLY\n    {   run();\n    }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=allman",
+            "void f()\n{\n    go();\nagain:\n    APPLY\n    {\n        run();\n    }\n}\n",
+        ),
+        (
+            "--style=kr",
+            "void f()\n{\n    go();\nagain:\n    APPLY {\n        run();\n    }\n}\n",
+        ),
+        (
+            "--style=horstmann",
+            "void f()\n{   go();\nagain:\n    APPLY\n    {   run();\n    }\n}\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+    }
+    check(input, &[], input);
+    check(
+        "void f()\n{\n    switch (op) {\n    case 1:\n        APPLY\n        {   run();\n        }\n    }\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    switch (op) {\n    case 1:\n        APPLY {\n            run();\n        }\n    }\n}\n",
+    );
+}
+
+#[test]
+fn rows_of_a_comment_before_an_assigned_value_follow_its_opener() {
+    let input = "void f()\n{\n  APPLY {\n      Item * const value =\n        /* first row\n           second row */\n        1 ? left : right;\n  }\n}\n";
+    let expected = "void f()\n    {\n    APPLY\n        {\n        Item * const value =\n            /* first row\n               second row */\n            1 ? left : right;\n        }\n    }\n";
+    check(input, &["--style=whitesmith"], expected);
+    check(expected, &["--style=whitesmith"], expected);
+}
+
+#[test]
+fn rows_of_a_define_in_a_case_block_stand_as_written() {
+    // The rows of a define stand as written, which a case block's unindent
+    // leaves too, so a second pass keeps them.
+    for label in ["case 1", "default"] {
+        let input = format!(
+            "void f()\n{{\n    switch (op) {{\n    {label}: {{\n#define CHECK          \\\n          go(value);   \\\n          stop()\n        CHECK;\n    }}\n    }}\n}}\n"
+        );
+        check(&input, &["--style=kr"], &input);
+    }
+    let input = "void f()\n{\n    switch (op) {\n    case 1: {\n#if defined(FIRST) && \\\n    defined(SECOND)\n        go();\n#endif\n    }\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+    // An option indenting the directive lays its rows, which the unindent
+    // then takes as any line.
+    let input = "void f()\n{\n    switch (op) {\n    case 1: {\n#if defined(FIRST) && \\\n        defined(SECOND)\n        go();\n#endif\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--indent-preproc-cond"],
+        "void f()\n{\n    switch (op) {\n    case 1: {\n        #if defined(FIRST) && \\\n        defined(SECOND)\n        go();\n        #endif\n    }\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_comparison_in_parens_among_template_parameters_opens_no_angle() {
+    // astyle reads `I < 2` as an open angle and sets the declaration after
+    // the head past it, though not for `I > 2`.
+    let expected =
+        "template <typename T, ENABLE_IF(I < 2)>\nvoid get(T value);\nint first;\nint second;\n";
+    for comparison in ["I < 2", "I > 2"] {
+        let input = format!(
+            "template <typename T, ENABLE_IF({comparison})>\nvoid get(T value);\nint first;\n  int second;\n"
+        );
+        check(
+            &input,
+            &["--style=kr"],
+            &expected.replace("I < 2", comparison),
+        );
+    }
+}
+
+#[test]
+fn a_comment_led_row_closing_a_continued_call_in_a_conditional_ends_its_statement() {
+    let input = "#ifndef GUARD_H\nPUSH_WARNINGS(4251 \\\n/* note */)\nnamespace testing {\nint value;\n}\n#endif\n";
+    let expected = "#ifndef GUARD_H\nPUSH_WARNINGS(4251 \\\n              /* note */)\nnamespace testing\n{\nint value;\n}\n#endif\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn a_line_comment_after_a_block_argument_brace_opens_its_body() {
+    // The brace joins the call's line; the comment after it opens the body
+    // at the body column, not at the column set for the brace's own line.
+    let input = "void f() {\n  CHECK(EXPECT(\n      {  // note\n        a_++;\n        go();\n      },\n      value), other);\n}\n";
+    let expected = "void f()\n{\n    CHECK(EXPECT( {\n        // note\n        a_++;\n        go();\n    },\n          value), other);\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn a_constructor_body_after_a_template_base_initializer_breaks_as_any_body() {
+    // astyle takes the template arguments for no function head and keeps
+    // the brace attached, unlike after `Base(grow)`.
+    let expected = "class Item\n{\npublic:\n    Item(Item&& other) noexcept\n        : Base<T>(grow)\n    {\n        move(other);\n    }\n};\n";
+    for base in ["Base<T>", "detail::Base<T>"] {
+        let input = format!(
+            "class Item {{\n public:\n  Item(Item&& other) noexcept\n      : {base}(grow) {{\n    move(other);\n  }}\n}};\n"
+        );
+        let expected = expected.replace("Base<T>", base);
+        check(&input, &["--style=kr"], &expected);
+        check(&expected, &["--style=kr"], &expected);
+    }
+}
+
+#[test]
+fn whitesmith_keeps_a_trailing_return_head_after_a_directive_at_its_level() {
+    let input = "#ifdef A\nint x;\n#endif\nauto make() -> Item {\n  return value;\n}\n";
+    let expected =
+        "#ifdef A\nint x;\n#endif\nauto make() -> Item\n    {\n    return value;\n    }\n";
+    check(input, &["--style=whitesmith"], expected);
+    check(expected, &["--style=whitesmith"], expected);
+}
+
+#[test]
+fn a_macro_word_heads_the_block_its_brace_opens_on_its_line() {
+    // As with the brace on a line of its own, the block is the word's.
+    let input = "void f() {\n  APPLY {\n    std::visit(\n        [&](const auto& v) {\n          go(v);\n        },\n        value);\n  }\n}\n";
+    let expected = "void f()\n{\n    APPLY\n    {\n        std::visit(\n            [&](const auto& v)\n        {\n            go(v);\n        },\n        value);\n    }\n}\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+}
+
+#[test]
+fn whitesmith_keeps_the_base_of_a_class_head_over_lines_on_its_line() {
+    let input = "template <typename It>\nstruct is_inserter<\n    It, enable_if<is_same<\n            typename It::type, int>::value>> : std::true_type {};\n";
+    let expected = "template <typename It>\nstruct is_inserter<\n    It, enable_if<is_same<\ntypename It::type, int>::value>> : std::true_type {};\n";
+    check(input, &["--style=whitesmith"], expected);
+    check(expected, &["--style=whitesmith"], expected);
+}
+
+#[test]
+fn whitesmith_keeps_the_base_of_a_qualified_class_name_on_its_line() {
+    let input = "class Block::Iter : public Base {\n private:\n  int value_;\n};\n";
+    let expected =
+        "class Block::Iter : public Base\n    {\n    private:\n        int value_;\n    };\n";
+    check(input, &["--style=whitesmith"], expected);
+    check(expected, &["--style=whitesmith"], expected);
+}
+
+#[test]
+fn a_comment_after_the_last_row_of_a_brace_comment_stays_on_the_row() {
+    let input = "void f()\n{\n    {/* first row\n        second row */ /* note */\n      int t = 1;\n    }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=allman",
+            "void f()\n{\n    {\n        /* first row\n           second row */ /* note */\n        int t = 1;\n    }\n}\n",
+        ),
+        (
+            "--style=java",
+            "void f() {\n    {\n        /* first row\n           second row */ /* note */\n        int t = 1;\n    }\n}\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn a_block_a_word_heads_continues_its_statements_as_any_block() {
+    // astyle reads the block as a list and sets no continuation in it.
+    let input = "void f()\n{\n    APPLY {\n        value = first +\n            second;\n        go(first,\n           second);\n    }\n}\n";
+    let expected = "void f()\n{\n    APPLY {\n        value = first +\n                second;\n        go(first,\n           second);\n    }\n}\n";
+    let block = "void f()\n{\n    if (ready) {\n        value = first +\n                second;\n        go(first,\n           second);\n    }\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(
+        &input.replace("APPLY", "if (ready)"),
+        &["--style=kr"],
+        block,
+    );
+}
+
+#[test]
+fn the_method_prefix_options_set_the_gap_before_a_return_type_over_paren_padding() {
+    let input = "@implementation Item\n- (int)total {\n    return 1;\n}\n@end\n";
+    for (options, expected) in [
+        (
+            &["--pad-first-paren-out", "--unpad-method-prefix"][..],
+            "@implementation Item\n-(int)total {\n    return 1;\n}\n@end\n",
+        ),
+        (
+            &["--pad-paren-out", "--unpad-method-prefix"][..],
+            "@implementation Item\n-(int) total {\n    return 1;\n}\n@end\n",
+        ),
+        (
+            &["--pad-method-prefix", "--unpad-paren"][..],
+            "@implementation Item\n- (int)total {\n    return 1;\n}\n@end\n",
+        ),
+    ] {
+        check(input, options, expected);
+    }
+}
+
+#[test]
+fn rows_of_a_comment_a_brace_takes_back_follow_it_to_the_body() {
+    // With no brace style the comment after a block brace runs in at the
+    // body, its rows keeping their offset from the opener.
+    let input = "void f()\n{\n    {/* first row\n        second row */\n        int t = 1;\n    }\n    {  /* first\n       ** second */\n        go();\n    }\n}\n";
+    let expected = "void f()\n{\n    {   /* first row\n           second row */\n        int t = 1;\n    }\n    {   /* first\n        ** second */\n        go();\n    }\n}\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+}
+
+#[test]
+fn rows_of_a_comment_run_in_after_a_block_brace_follow_its_opener() {
+    // Rows past the `/*` keep their offset from it wherever the brace line
+    // moves; rows at or left of it stand at the body column.
+    for (input, expected) in [
+        (
+            "void f()\n{\n  g();\n  {/* first row\n      second row */\n    int t = 1;\n  }\n}\n",
+            "void f()\n{\n    g();\n    {/* first row\n        second row */\n        int t = 1;\n    }\n}\n",
+        ),
+        (
+            "void f()\n{\n  g();\n  {  /* first row\n      second row */\n    int t = 1;\n  }\n}\n",
+            "void f()\n{\n    g();\n    {  /* first row\n        second row */\n        int t = 1;\n    }\n}\n",
+        ),
+        (
+            "void f()\n{\n  g();\n  {/* first row\n second row */\n    int t = 1;\n  }\n}\n",
+            "void f()\n{\n    g();\n    {/* first row\n        second row */\n        int t = 1;\n    }\n}\n",
+        ),
+        (
+            "void f()\n{\n  g();\n  {      /* first row\n            second row */\n    int t = 1;\n  }\n}\n",
+            "void f()\n{\n    g();\n    {      /* first row\n              second row */\n        int t = 1;\n    }\n}\n",
+        ),
+        (
+            "void f()\n{\n  g();\n  {      /* first row\n      second row */\n    int t = 1;\n  }\n}\n",
+            "void f()\n{\n    g();\n    {      /* first row\n        second row */\n        int t = 1;\n    }\n}\n",
+        ),
+    ] {
+        check(input, &["--style=kr"], expected);
+        check(expected, &["--style=kr"], expected);
+    }
+    // Horstmann and pico set the opener at the body, which the rows follow.
+    let input = "int items[][2] = {\n  { /* first row\n       second row */\n    1, 2 },\n};\n";
+    for (style, expected) in [
+        (
+            "--style=pico",
+            "int items[][2] = {\n    {   /* first row\n           second row */\n        1, 2 }, };\n",
+        ),
+        (
+            "--style=horstmann",
+            "int items[][2] = {\n    {   /* first row\n           second row */\n        1, 2\n    },\n};\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn vtk_sets_a_function_try_block_at_the_function_body() {
+    let input = "void helper()\ntry {\n    go();\n} catch (...) {\n    stop();\n}\n";
+    let expected = "void helper()\ntry\n{\n    go();\n}\ncatch (...)\n{\n    stop();\n}\n";
+    check(input, &["--style=vtk"], expected);
+    check(expected, &["--style=vtk"], expected);
+}
+
+#[test]
+fn a_braced_initializer_below_its_declarator_stands_as_one_after_an_assignment() {
+    let input = "void f()\n{\n    Item other\n    {   .first = 1,\n        .second = 2,\n    };\n    Item more\n    { .first = 1, .second = 2 };\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void f()\n{\n    Item other {\n        .first = 1,\n        .second = 2,\n    };\n    Item more\n    { .first = 1, .second = 2 };\n}\n",
+        ),
+        (
+            "--style=allman",
+            "void f()\n{\n    Item other\n    {\n        .first = 1,\n        .second = 2,\n    };\n    Item more\n    { .first = 1, .second = 2 };\n}\n",
+        ),
+        (
+            "--style=horstmann",
+            "void f()\n{   Item other\n    {   .first = 1,\n        .second = 2,\n    };\n    Item more\n    { .first = 1, .second = 2 };\n}\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void f()\n    {\n    Item other\n        {\n        .first = 1,\n        .second = 2,\n        };\n    Item more\n        { .first = 1, .second = 2 };\n    }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn generic_selection_associations_keep_their_colons_and_rows() {
+    // `default:` among a generic selection's associations labels nothing.
+    for input in [
+        "void f()\n{\n    value = _Generic(item, int: 1, default: 0);\n}\n",
+        "void f()\n{\n    value = _Generic(item,\n                     int: 1,\n                     default: 0);\n}\n",
+        "void f()\n{\n    switch (kind) {\n    case 1:\n        value = _Generic(item,\n                         int: 1,\n                         default: 0);\n        break;\n    }\n}\n",
+    ] {
+        check(input, &[], input);
+        check(input, &["--style=kr"], input);
+    }
+}
+
+#[test]
+fn a_case_brace_attached_to_its_label_line_keeps_the_switch_open_for_later_labels() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1:\n    {\n        value=0;\n    } case 2:\n        value=1;\n        break;\n    }\n}\n";
+    let expected = "void f() {\n    switch (kind) {\n    case 1: {\n        value=0; } case 2:\n        value=1;\n        break; } }\n";
+    check(input, &["--style=lisp"], expected);
+    check(expected, &["--style=lisp"], expected);
+}
+
+#[test]
+fn break_blocks_keeps_a_label_after_a_case_closer_with_its_statements() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n    } case 2:\n        value=1;\n        break;\n    }\n}\n";
+    check(input, &["--style=kr", "--break-blocks", "-o"], input);
+}
+
+#[test]
+fn rows_after_a_sign_led_first_element_stand_with_it() {
+    // A sign opening the list's first element is no operator continuing
+    // the rows after it.
+    let input = "void f()\n{\n    int list[] = {\n        -1, 2,\n        3, 4,\n    };\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn an_element_after_a_directive_breaks_its_closer_as_any_element() {
+    let input = "static Item items[] = {\n\n#if (HAVE_THING)\n\n    { name(\"second\"),\n      helper,\n      NULL },\n\n#endif\n\n    { name(\"third\"),\n      helper,\n      NULL },\n\n    null_item\n};\n";
+    check(
+        input,
+        &["--style=kr"],
+        "static Item items[] = {\n\n#if (HAVE_THING)\n\n    {\n        name(\"second\"),\n        helper,\n        NULL\n    },\n\n#endif\n\n    {\n        name(\"third\"),\n        helper,\n        NULL\n    },\n\n    null_item\n};\n",
+    );
+}
+
+#[test]
+fn a_comment_set_against_a_brace_keeps_its_column_when_the_closer_before_breaks_off() {
+    let input = "void f()\n{\n    if (ready) {\n        value = 1;\n    } else if ((p = strstr(a, b))) {//Importing\n        value = 2;\n    }\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    if (ready) {\n        value = 1;\n        }\n    else if ((p = strstr(a, b))) {  //Importing\n        value = 2;\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn ratliff_closes_blocks_deep_in_a_commented_else_chain_at_their_bodies() {
+    // Each `else` a comment parts from its `if` nests the chain a level;
+    // closers deep in it still stand at their blocks' bodies.
+    let input = "void f()\n{\n  if( first ){\n    file = open_file(name, mode);\n    if( file==0 ){\n      stop(1);\n    }\n    if( status!=READY ){\n      fail(status);\n    }else if( size>0 ){\n      fail(size);\n    }\n    close_file(file);\n  }else\n\n  /* second */\n  if( second ){\n    file = open_file(name, mode);\n    if( file==0 ){\n      stop(1);\n    }\n    if( status!=READY ){\n      fail(status);\n    }else if( size>0 ){\n      fail(size);\n    }\n    close_file(file);\n  }else\n\n  /* third */\n  if( third ){\n    file = open_file(name, mode);\n    if( file==0 ){\n      stop(1);\n    }\n    if( status!=READY ){\n      fail(status);\n    }else if( size>0 ){\n      fail(size);\n    }\n    close_file(file);\n  }else\n\n  /* fourth */\n  if( fourth ){\n    file = open_file(name, mode);\n    if( file==0 ){\n      stop(1);\n    }\n    if( status!=READY ){\n      fail(status);\n    }else if( size>0 ){\n      fail(size);\n    }\n    close_file(file);\n  }else\n\n  /* fifth */\n  if( fifth ){\n    file = open_file(name, mode);\n    if( file==0 ){\n      stop(1);\n    }\n    if( status!=READY ){\n      fail(status);\n    }else if( size>0 ){\n      fail(size);\n    }\n    close_file(file);\n  }\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    if( first ) {\n        file = open_file(name, mode);\n        if( file==0 ) {\n            stop(1);\n            }\n        if( status!=READY ) {\n            fail(status);\n            }\n        else if( size>0 ) {\n            fail(size);\n            }\n        close_file(file);\n        }\n    else\n\n        /* second */\n        if( second ) {\n            file = open_file(name, mode);\n            if( file==0 ) {\n                stop(1);\n                }\n            if( status!=READY ) {\n                fail(status);\n                }\n            else if( size>0 ) {\n                fail(size);\n                }\n            close_file(file);\n            }\n        else\n\n            /* third */\n            if( third ) {\n                file = open_file(name, mode);\n                if( file==0 ) {\n                    stop(1);\n                    }\n                if( status!=READY ) {\n                    fail(status);\n                    }\n                else if( size>0 ) {\n                    fail(size);\n                    }\n                close_file(file);\n                }\n            else\n\n                /* fourth */\n                if( fourth ) {\n                    file = open_file(name, mode);\n                    if( file==0 ) {\n                        stop(1);\n                        }\n                    if( status!=READY ) {\n                        fail(status);\n                        }\n                    else if( size>0 ) {\n                        fail(size);\n                        }\n                    close_file(file);\n                    }\n                else\n\n                    /* fifth */\n                    if( fifth ) {\n                        file = open_file(name, mode);\n                        if( file==0 ) {\n                            stop(1);\n                            }\n                        if( status!=READY ) {\n                            fail(status);\n                            }\n                        else if( size>0 ) {\n                            fail(size);\n                            }\n                        close_file(file);\n                        }\n    }\n",
+    );
+}
+
+#[test]
+fn ratliff_closes_a_case_block_loop_deep_in_a_commented_else_chain_at_its_body() {
+    let input = "void f()\n{\n  if( first ){\n    switch( op ){\n      case 1: {\n        for(i=0; i<count; i++){\n          visit(i);\n        }\n        break;\n      }\n    }\n  }else\n\n  /* second */\n  if( second ){\n    switch( op ){\n      case 1: {\n        for(i=0; i<count; i++){\n          visit(i);\n        }\n        break;\n      }\n    }\n  }else\n\n  /* third */\n  if( third ){\n    switch( op ){\n      case 1: {\n        for(i=0; i<count; i++){\n          visit(i);\n        }\n        break;\n      }\n    }\n  }else\n\n  /* fourth */\n  if( fourth ){\n    switch( op ){\n      case 1: {\n        for(i=0; i<count; i++){\n          visit(i);\n        }\n        break;\n      }\n    }\n  }else\n\n  /* fifth */\n  if( fifth ){\n    switch( op ){\n      case 1: {\n        for(i=0; i<count; i++){\n          visit(i);\n        }\n        break;\n      }\n    }\n  }\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    if( first ) {\n        switch( op ) {\n            case 1: {\n                for(i=0; i<count; i++) {\n                    visit(i);\n                    }\n                break;\n                }\n            }\n        }\n    else\n\n        /* second */\n        if( second ) {\n            switch( op ) {\n                case 1: {\n                    for(i=0; i<count; i++) {\n                        visit(i);\n                        }\n                    break;\n                    }\n                }\n            }\n        else\n\n            /* third */\n            if( third ) {\n                switch( op ) {\n                    case 1: {\n                        for(i=0; i<count; i++) {\n                            visit(i);\n                            }\n                        break;\n                        }\n                    }\n                }\n            else\n\n                /* fourth */\n                if( fourth ) {\n                    switch( op ) {\n                        case 1: {\n                            for(i=0; i<count; i++) {\n                                visit(i);\n                                }\n                            break;\n                            }\n                        }\n                    }\n                else\n\n                    /* fifth */\n                    if( fifth ) {\n                        switch( op ) {\n                            case 1: {\n                                for(i=0; i<count; i++) {\n                                    visit(i);\n                                    }\n                                break;\n                                }\n                            }\n                        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_ternary_inside_a_subscript_ends_with_its_statement() {
+    // Its colon closes it: no open ternary carries into the switch after.
+    let input = "static void g(int n)\n{\n  buff[flag ? 0 : size - 1] = 1;\n}\nvoid f()\n{\n  switch (opt) {\n      case Kint: {  /* signed */\n        pack(n);\n      }\n  }\n}\n";
+    check(
+        input,
+        &["--style=gnu", "--indent-switches", "--indent-cases"],
+        "static void g(int n)\n{\n    buff[flag ? 0 : size - 1] = 1;\n}\nvoid f()\n{\n    switch (opt)\n        {\n            case Kint:    /* signed */\n                {\n                    pack(n);\n                }\n        }\n}\n",
+    );
+}
+
+#[test]
+fn a_ternary_choosing_between_messages_keeps_its_colon_spacing() {
+    // A selector colon inside a message leaves the `?` around it waiting
+    // for its own colon.
+    let input = "@implementation Item\n- (void)update {\n    value = ready ? [self first:1] : [self second:2];\n}\n@end\n";
+    check(input, &[], input);
+}
+
+#[test]
+fn an_indented_label_before_the_first_case_stands_with_the_case_labels() {
+    // Statements before the first case stand in the case body, so an
+    // indented label there takes one level less, as one after a case does.
+    let input = "void f()\n{\n    switch (state) {\nretry:\n    case 1:\n        value = 1;\n        break;\n    case 2:\n        goto retry;\n    }\n}\n";
+    check(
+        input,
+        &["--indent-switches", "--indent-labels"],
+        "void f()\n{\n    switch (state) {\n        retry:\n        case 1:\n            value = 1;\n            break;\n        case 2:\n            goto retry;\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=gnu", "--indent-switches", "--indent-labels"],
+        "void f()\n{\n    switch (state)\n        {\n            retry:\n            case 1:\n                value = 1;\n                break;\n            case 2:\n                goto retry;\n        }\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith", "--indent-labels"],
+        "void f()\n    {\n    switch (state)\n        {\n        retry:\n        case 1:\n            value = 1;\n            break;\n        case 2:\n            goto retry;\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_case_label_continued_before_its_colon_goes_on_two_levels_past_the_label() {
+    // Every split case label continues at the same distance from its own
+    // column, the first one in a switch as the later ones.
+    let input = "void f()\n{\n    switch (flags) {\n    case FIRST |\n        SECOND:\n        value = 1;\n        break;\n    case FIRST |\n        THIRD:\n        value = 2;\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--indent-switches"],
+        "void f()\n{\n    switch (flags) {\n        case FIRST |\n                SECOND:\n            value = 1;\n            break;\n        case FIRST |\n                THIRD:\n            value = 2;\n            break;\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=vtk"],
+        "void f()\n{\n    switch (flags)\n        {\n        case FIRST |\n                SECOND:\n            value = 1;\n            break;\n        case FIRST |\n                THIRD:\n            value = 2;\n            break;\n        }\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    switch (flags)\n        {\n        case FIRST |\n                SECOND:\n            value = 1;\n            break;\n        case FIRST |\n                THIRD:\n            value = 2;\n            break;\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_label_block_in_an_unindented_case_block_nests_from_the_case_body() {
+    // The case block's unindent moves a label's block with the statements
+    // around it, its closer included.
+    let input = "void f()\n{\n    switch (flags) {\n    case FIRST: {\nretry: {\n            value = 1;\n            goto retry;\n        }\n        break;\n    }\n    }\n}\n";
+    check(input, &[], input);
+    check(
+        input,
+        &["--indent-switches"],
+        "void f()\n{\n    switch (flags) {\n        case FIRST: {\nretry: {\n                value = 1;\n                goto retry;\n            }\n            break;\n        }\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=gnu"],
+        "void f()\n{\n    switch (flags)\n        {\n        case FIRST:\n        {\nretry:\n            {\n                value = 1;\n                goto retry;\n            }\n            break;\n        }\n        }\n}\n",
+    );
+}
+
+#[test]
+fn a_case_label_continued_into_its_block_in_an_unindented_case_block_keeps_its_block_shape() {
+    let input = "void f()\n{\n    switch (flags) {\n    case FIRST: {\n        switch (mode) {\n        case FIRST |\n            SECOND: {\n            value = 1;\n            break;\n        }\n        }\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &[],
+        "void f()\n{\n    switch (flags) {\n    case FIRST: {\n        switch (mode) {\n        case FIRST |\n                SECOND: {\n                value = 1;\n                break;\n            }\n        }\n        break;\n    }\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--indent-switches"],
+        "void f()\n{\n    switch (flags) {\n        case FIRST: {\n            switch (mode) {\n                case FIRST |\n                        SECOND: {\n                        value = 1;\n                        break;\n                    }\n            }\n            break;\n        }\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=gnu"],
+        "void f()\n{\n    switch (flags)\n        {\n        case FIRST:\n        {\n            switch (mode)\n                {\n                case FIRST |\n                        SECOND:\n                    {\n                        value = 1;\n                        break;\n                    }\n                }\n            break;\n        }\n        }\n}\n",
+    );
+}
+
+#[test]
+fn a_label_block_in_an_indented_case_block_nests_from_the_case_body_when_closers_attach() {
+    // Closers joining the rows before them leave the block a label opens in
+    // a case block one level past the case body, as in the other styles.
+    let input = "void f()\n{\n    switch (flags) {\n    case FIRST: {\nretry: {\n            value = 1;\n            goto retry;\n        }\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=lisp", "--indent-switches", "--indent-cases"],
+        "void f() {\n    switch (flags) {\n        case FIRST: {\nretry: {\n                    value = 1;\n                    goto retry; }\n                break; } } }\n",
+    );
+    check(
+        input,
+        &["--style=pico", "--indent-cases"],
+        "void f()\n{   switch (flags)\n    {   case FIRST:\n            {   retry:\n                {   value = 1;\n                    goto retry; }\n                break; } } }\n",
+    );
+}
+
+#[test]
+fn a_run_in_statement_past_the_brace_level_reaches_its_column_with_tabs() {
+    // A statement before the first case stands in the case body: run into
+    // the switch brace it keeps that column, with spaces or tabs alike.
+    let input = "void f()\n{\n    switch (state) {\n        value = 0;\n    case 1:\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=horstmann"],
+        "void f()\n{   switch (state)\n    {       value = 0;\n        case 1:\n            break;\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=horstmann", "--indent=tab"],
+        "void f()\n{\tswitch (state)\n\t{\t\tvalue = 0;\n\t\tcase 1:\n\t\t\tbreak;\n\t}\n}\n",
+    );
+    check(
+        input,
+        &["--style=pico", "--indent=tab"],
+        "void f()\n{\tswitch (state)\n\t{\t\tvalue = 0;\n\t\tcase 1:\n\t\t\tbreak; } }\n",
+    );
+}
+
+#[test]
+fn a_brace_after_a_directive_under_a_case_label_opens_a_plain_block_in_the_case_body() {
+    // A directive between a case label and a brace leaves the brace a
+    // plain block among the case's statements, whatever the case options.
+    let input = "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n    {\n        pop(state);\n    }\n    break;\n    case 2:\n    {\n        push(state);\n    }\n    break;\n    }\n}\n";
+    check(
+        input,
+        &[],
+        "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n        {\n            pop(state);\n        }\n        break;\n    case 2:\n    {\n        push(state);\n    }\n    break;\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--indent-cases"],
+        "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n        {\n            pop(state);\n        }\n        break;\n    case 2:\n        {\n            push(state);\n        }\n        break;\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    switch (state) {\n        case 1:\n#line 46 \"input.l\"\n                {\n                pop(state);\n                }\n            break;\n        case 2: {\n            push(state);\n            }\n        break;\n        }\n    }\n",
+    );
+    check(
+        input,
+        &["--style=gnu", "--indent-switches", "--indent-cases"],
+        "void f()\n{\n    switch (state)\n        {\n            case 1:\n#line 46 \"input.l\"\n                {\n                    pop(state);\n                }\n                break;\n            case 2:\n                {\n                    push(state);\n                }\n                break;\n        }\n}\n",
+    );
+}
+
+#[test]
+fn every_directive_but_a_conditional_parts_a_case_label_from_its_brace() {
+    // The kind of directive between a label and a brace does not change
+    // whose block the brace opens: only a conditional leaves it the label's.
+    let expected_plain = |directive: &str| {
+        format!(
+            "void f()\n{{\n    switch (state) {{\n    case 1:\n{directive}\n        {{\n            pop(state);\n        }}\n        break;\n    }}\n}}\n"
+        )
+    };
+    for directive in ["#pragma once", "#define LIMIT 4", "#line 46", "#error stop"] {
+        let input = format!(
+            "void f()\n{{\n    switch (state) {{\n    case 1:\n{directive}\n    {{\n        pop(state);\n    }}\n    break;\n    }}\n}}\n"
+        );
+        check(&input, &[], &expected_plain(directive));
+    }
+    let input = "void f()\n{\n    switch (state) {\n    case 1:\n#ifdef TRACE\n    {\n        pop(state);\n    }\n#endif\n    break;\n    }\n}\n";
+    check(input, &[], input);
+}
+
+#[test]
+fn a_case_block_after_a_comment_led_label_closes_where_case_blocks_do() {
+    // A comment leading the label leaves its block's closer where the
+    // closers of the other case blocks stand.
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value = 1;\n        break;\n    }\n    /*case 2*/ default: {\n        if (ready) {\n            start();\n        }\n        result = 2;\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    switch (kind) {\n        case 1: {\n            value = 1;\n            break;\n            }\n        /*case 2*/ default: {\n            if (ready) {\n                start();\n                }\n            result = 2;\n            break;\n            }\n        }\n    }\n",
+    );
+    check(input, &[], input);
+}
+
+#[test]
+fn a_statement_after_a_plain_or_macro_block_closer_breaks_as_after_a_header_block() {
+    // Code after the closer of any statement block goes to its own line
+    // unless one-line statements are kept.
+    let input = "void f()\n{\n    {\n        value = 2;\n    } other();\n    { value = 3; } more();\n    MACRO(x) {\n        value = 4;\n    } after();\n}\n";
+    check(
+        input,
+        &[],
+        "void f()\n{\n    {\n        value = 2;\n    }\n    other();\n    {\n        value = 3;\n    }\n    more();\n    MACRO(x) {\n        value = 4;\n    }\n    after();\n}\n",
+    );
+    check(
+        input,
+        &["--keep-one-line-blocks"],
+        "void f()\n{\n    {\n        value = 2;\n    }\n    other();\n    { value = 3; }\n    more();\n    MACRO(x) {\n        value = 4;\n    }\n    after();\n}\n",
+    );
+    check(
+        input,
+        &["--keep-one-line-statements"],
+        "void f()\n{\n    {\n        value = 2;\n    } other();\n    {\n        value = 3;\n    } more();\n    MACRO(x) {\n        value = 4;\n    } after();\n}\n",
+    );
+}
+
+#[test]
+fn vtk_indents_a_bare_one_line_block_as_after_a_header() {
+    // VTK leaves a kept one-line block's brace unindented in a function's
+    // block and indents it within another, a header's or not; Whitesmith
+    // indents both.
+    let nested = "void f()\n{\n    if (z) {\n        { value = 5; }\n        if (x)\n        { value = 3; }\n    }\n    { value = 6; }\n}\n";
+    check(
+        nested,
+        &["--style=vtk", "--keep-one-line-blocks"],
+        "void f()\n{\n    if (z)\n        {\n            { value = 5; }\n        if (x)\n            { value = 3; }\n        }\n    { value = 6; }\n}\n",
+    );
+    let input = "void f()\n{\n    if (x)\n    { value = 3; }\n    while (y)\n    { value = 4; }\n    { value = 5; }\n    {\n        value = 6;\n    }\n}\n";
+    check(
+        input,
+        &["--style=vtk", "--keep-one-line-blocks"],
+        "void f()\n{\n    if (x)\n    { value = 3; }\n    while (y)\n    { value = 4; }\n    { value = 5; }\n        {\n        value = 6;\n        }\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith", "--keep-one-line-blocks"],
+        "void f()\n    {\n    if (x)\n        { value = 3; }\n    while (y)\n        { value = 4; }\n        { value = 5; }\n        {\n        value = 6;\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn an_element_block_after_a_directive_closes_like_the_ones_before_it() {
+    // Every element block of the list breaks its closer off its last value,
+    // a directive before it or not.
+    let input = "static Command commands[] = {\n\n    { name(\"first\"),\n      set_slot,\n      NULL },\n\n#if (CACHE)\n\n    { name(\"second\"),\n      set_slot,\n      NULL },\n\n#endif\n\n    { name(\"third\"),\n      set_slot,\n      NULL },\n\n      null_command\n};\n";
+    check(
+        input,
+        &[],
+        "static Command commands[] = {\n\n    {   name(\"first\"),\n        set_slot,\n        NULL\n    },\n\n#if (CACHE)\n\n    {   name(\"second\"),\n        set_slot,\n        NULL\n    },\n\n#endif\n\n    {   name(\"third\"),\n        set_slot,\n        NULL\n    },\n\n    null_command\n};\n",
+    );
+}
+
+#[test]
+fn a_statement_after_a_word_headed_block_stays_on_its_closer() {
+    // A word heading a block makes the block the word's, as a macro's: the
+    // statement after the closer goes on from it, the brace on the word's
+    // line or its own.
+    let input = "void f()\n{\n    Binder {\n        bind(first);\n    } _Binder;\n    Binder\n    {\n        bind(second);\n    } _Binder;\n}\n";
+    check(input, &[], input);
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    Binder\n    {\n        bind(first);\n    } _Binder;\n    Binder\n    {\n        bind(second);\n    } _Binder;\n}\n",
+    );
+}
+
+#[test]
+fn break_blocks_parts_a_case_labels_block_from_a_directive_after_it() {
+    // The block under a case label stays the label's past a directive
+    // between them: it parts from a directive after it as a case block
+    // does, where a plain block among the statements does not.
+    let input = "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n        {\n            pop(state);\n        }\n#line 50 \"out.c\"\n        break;\n    case 2:\n        run(state);\n        {\n            push(state);\n        }\n#line 60 \"out.c\"\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--break-blocks"],
+        "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n        {\n            pop(state);\n        }\n\n#line 50 \"out.c\"\n        break;\n\n    case 2:\n        run(state);\n        {\n            push(state);\n        }\n#line 60 \"out.c\"\n        break;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn whitesmith_blocks_in_a_switch_after_a_statement_macro_stand_as_in_any_switch() {
+    // A macro line without a semicolon ends its own statement: the switch
+    // after it owns its body, whose blocks take the case body's columns.
+    let input = "void f()\n{\n  SETUP_BEGIN\n  switch (kind)\n    {\n    case FIRST:\n#line 37 \"input.y\"\n            { release(value); }\n        break;\n    case OTHER:\n        run(value);\n        { push(value); }\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    SETUP_BEGIN\n    switch (kind)\n        {\n        case FIRST:\n#line 37 \"input.y\"\n                {\n                release(value);\n                }\n            break;\n        case OTHER:\n            run(value);\n                {\n                push(value);\n                }\n            break;\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_brace_opening_an_alternative_branch_after_a_header_is_the_headers_block() {
+    // The other branch of a group right after a header gives the header its
+    // body: a brace there opens the header's block, not a statement of a
+    // braceless body.
+    let input = "void f()\n{\n  if (full)\n#if !defined OVERFLOW\n    fail();\n#else\n    {\n      grow();\n    }\n#endif\n  done();\n}\n";
+    check(
+        input,
+        &[],
+        "void f()\n{\n    if (full)\n#if !defined OVERFLOW\n        fail();\n#else\n    {\n        grow();\n    }\n#endif\n    done();\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    if (full)\n#if !defined OVERFLOW\n        fail();\n#else\n        {\n        grow();\n        }\n#endif\n    done();\n    }\n",
+    );
+    check(
+        "void f()\n{\n  while (busy)\n    {\n      if (full)\n#if !defined OVERFLOW\n        fail();\n#else\n        {\n          grow();\n        }\n#endif\n    }\n}\n",
+        &["--style=gnu"],
+        "void f()\n{\n    while (busy)\n        {\n            if (full)\n#if !defined OVERFLOW\n                fail();\n#else\n                {\n                    grow();\n                }\n#endif\n        }\n}\n",
+    );
+}
+
+#[test]
+fn indenting_define_bodies_leaves_a_conditional_between_a_case_and_its_brace_transparent() {
+    // Only a define's body follows that option: the brace after a
+    // conditional still opens the case's block, its statements after it.
+    let input = "void f()\n{\n    switch (state) {\n    case 2:\n#ifdef TRACE\n    {\n        push(state);\n    }\n#endif\n    break;\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+    check(input, &["--style=kr", "--indent-preproc-define"], input);
+}
+
+#[test]
+fn a_class_heads_continued_base_list_indents_with_tabs() {
+    // A class head's continuation rows stand a level in, which tab indents
+    // write as a tab, at file scope or in a function.
+    let input = "class Derived : public Base,\n    private Other\n{\n};\nclass Third :\n    public Base\n{\n};\nvoid f()\n{\n    struct Local : Base,\n        Other {\n    };\n}\n";
+    check(
+        input,
+        &["--indent=tab"],
+        "class Derived : public Base,\n\tprivate Other\n{\n};\nclass Third :\n\tpublic Base\n{\n};\nvoid f()\n{\n\tstruct Local : Base,\n\t\tOther {\n\t};\n}\n",
+    );
+}
+
+#[test]
+fn break_blocks_pads_an_attributed_header_block_like_any_header_block() {
+    // An attribute between a header and its brace leaves the block the
+    // header's: break-blocks parts it from the statement after.
+    let input = "void f()\n{\n    if (ready) [[likely]] {\n        value = 1;\n    }\n    done();\n    if (ready) {\n        value = 2;\n    }\n    done();\n}\n";
+    check(
+        input,
+        &["--break-blocks"],
+        "void f()\n{\n    if (ready) [[likely]] {\n        value = 1;\n    }\n\n    done();\n\n    if (ready) {\n        value = 2;\n    }\n\n    done();\n}\n",
+    );
+}
+
+#[test]
+fn break_blocks_parts_a_case_block_from_the_statement_after_it_but_its_break() {
+    // A case's block is a header's block: what follows it is padded, save
+    // the break that ends the case with it.
+    let input = "void f()\n{\n    switch (kind) {\n    case 1:\n        if (x) {\n            y();\n        }\n        break;\n    case 2:\n    {\n        y();\n    }\n    break;\n    case 3:\n    {\n        y();\n    }\n    z();\n    break;\n    }\n    while (x) {\n        y();\n    }\n    return;\n}\n";
+    check(
+        input,
+        &["--break-blocks"],
+        "void f()\n{\n    switch (kind) {\n    case 1:\n        if (x) {\n            y();\n        }\n\n        break;\n\n    case 2:\n    {\n        y();\n    }\n    break;\n\n    case 3:\n    {\n        y();\n    }\n\n    z();\n    break;\n    }\n\n    while (x) {\n        y();\n    }\n\n    return;\n}\n",
+    );
+}
+
+#[test]
+fn a_macro_built_function_heads_parameters_are_declarations() {
+    // `EXPORT(type, name)(params) {` heads a function body: its parameters
+    // declare pointers, which pad-oper leaves to the pointer options.
+    let input = "EXPORT(void, reset)(Item *item)\n{\n    clear(item);\n}\nEXPORT(int, count)(Item *item, char **names)\n{\n    return 0;\n}\n";
+    check(input, &["--pad-oper"], input);
+    check(
+        input,
+        &["--pad-oper", "--align-pointer=type"],
+        "EXPORT(void, reset)(Item* item)\n{\n    clear(item);\n}\nEXPORT(int, count)(Item* item, char** names)\n{\n    return 0;\n}\n",
+    );
+}
+
+#[test]
+fn a_function_pointer_declarator_with_calling_conventions_holds_a_pointer() {
+    // Words before the star of a declarator group are its calling
+    // convention: the star declares, whatever case the name takes.
+    let input = "typedef BOOL (PASCAL FAR *LPFN_ACCEPT)(\n    int value,\n    int other);\n";
+    check(input, &["--pad-oper"], input);
+    check(
+        input,
+        &["--pad-oper", "--align-pointer=type"],
+        "typedef BOOL (PASCAL FAR* LPFN_ACCEPT)(\n    int value,\n    int other);\n",
+    );
+}
+
+#[test]
+fn break_return_type_splits_the_name_line_of_a_head_past_directives() {
+    // The return type before the name on its line breaks off, whatever
+    // directives stand in the head or between it and a macro before it.
+    let input = "#ifndef CORE\nMACRO_INIT\n#endif\n\nstatic void third(\n    int v\n){\n    use(v);\n}\nstatic\n#ifdef X\ninline\n#endif\nint first(void)\n{\n    return 0;\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-return-type"],
+        "#ifndef CORE\nMACRO_INIT\n#endif\n\nstatic void\nthird(\n    int v\n)\n{\n    use(v);\n}\nstatic\n#ifdef X\ninline\n#endif\nint\nfirst(void)\n{\n    return 0;\n}\n",
+    );
+}
+
+#[test]
+fn an_indented_label_heading_a_braceless_body_stands_a_level_before_it() {
+    // The label is the header's body: it stands a level less than the
+    // statement it labels, as any indented label does.
+    let input = "void f()\n{\n    if (ready)\nretry:\n        value -= step;\n    done();\n}\n";
+    check(
+        input,
+        &["--indent-labels"],
+        "void f()\n{\n    if (ready)\n    retry:\n        value -= step;\n    done();\n}\n",
+    );
+    check(
+        "void f()\n{\n    while (busy) {\n        if (ready)\nretry:\n            value -= step;\n    }\n}\n",
+        &["--indent-labels"],
+        "void f()\n{\n    while (busy) {\n        if (ready)\n        retry:\n            value -= step;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn attach_return_type_leaves_a_head_after_a_conditional_macro_split() {
+    // A macro word left in a conditional before the head reads as the start
+    // of its statement: the head is not joined, while a plain one is.
+    let input = "#if defined(FAST)\nMACRO_NOINLINE\n#endif\nstatic bool\nfixup(Item *item) {\n    return true;\n}\nstatic bool\nplain(Item *item) {\n    return true;\n}\n";
+    check(
+        input,
+        &["--style=1tbs", "--attach-return-type"],
+        "#if defined(FAST)\nMACRO_NOINLINE\n#endif\nstatic bool\nfixup(Item *item)\n{\n    return true;\n}\nstatic bool plain(Item *item)\n{\n    return true;\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_after_a_case_block_stands_in_the_case_body_before_a_statement() {
+    let call = "void f(int x)\n{\n    switch (x) {\n    case 1: {\n        a();\n        break;\n    }\n    /* comment */\n    b();\n    default:\n        c();\n    }\n}\n";
+    let exit = "void f(int x)\n{\n    switch (x) {\n    case 1: {\n        a();\n    }\n    /* comment */\n    break;\n    default:\n        c();\n    }\n}\n";
+    for (args, input, expected) in [
+        (&["--style=kr"][..], call, call.replace("    /* comment */", "        /* comment */")),
+        (&["--style=kr"][..], exit, exit.replace("    /* comment */", "        /* comment */")),
+        (
+            &["--style=allman", "-S"][..],
+            call,
+            "void f(int x)\n{\n    switch (x)\n    {\n        case 1:\n        {\n            a();\n            break;\n        }\n            /* comment */\n        b();\n        default:\n            c();\n    }\n}\n".to_string(),
+        ),
+        (
+            &["--style=kr", "-S"][..],
+            call,
+            "void f(int x)\n{\n    switch (x) {\n        case 1: {\n            a();\n            break;\n        }\n            /* comment */\n        b();\n        default:\n            c();\n    }\n}\n".to_string(),
+        ),
+        (
+            &["--style=lisp", "-S"][..],
+            exit,
+            "void f(int x) {\n    switch (x) {\n        case 1: {\n            a(); }\n            /* comment */\n        break;\n        default:\n            c(); } }\n".to_string(),
+        ),
+        (
+            &["--style=gnu"][..],
+            exit,
+            "void f(int x)\n{\n    switch (x)\n        {\n        case 1:\n        {\n            a();\n        }\n            /* comment */\n        break;\n        default:\n            c();\n        }\n}\n".to_string(),
+        ),
+        (
+            &["--style=whitesmith"][..],
+            call,
+            "void f(int x)\n    {\n    switch (x)\n        {\n        case 1:\n            {\n            a();\n            break;\n            }\n            /* comment */\n        b();\n        default:\n            c();\n        }\n    }\n".to_string(),
+        ),
+        (
+            &["--style=horstmann"][..],
+            exit,
+            "void f(int x)\n{   switch (x)\n    {   case 1:\n        {   a();\n        }\n            /* comment */\n        break;\n        default:\n            c();\n    }\n}\n".to_string(),
+        ),
+        (
+            &["--style=ratliff"][..],
+            call,
+            "void f(int x) {\n    switch (x) {\n        case 1: {\n            a();\n            break;\n            }\n            /* comment */\n        b();\n        default:\n            c();\n        }\n    }\n".to_string(),
+        ),
+        (
+            &["--style=pico"][..],
+            exit,
+            "void f(int x)\n{   switch (x)\n    {   case 1:\n        {   a(); }\n            /* comment */\n        break;\n        default:\n            c(); } }\n".to_string(),
+        ),
+        (
+            &["--style=lisp"][..],
+            call,
+            "void f(int x) {\n    switch (x) {\n    case 1: {\n        a();\n        break; }\n        /* comment */\n    b();\n    default:\n        c(); } }\n".to_string(),
+        ),
+        // Indented cases keep the statement in the case body with it.
+        (
+            &["--style=ratliff", "-K"][..],
+            call,
+            "void f(int x) {\n    switch (x) {\n        case 1: {\n                a();\n                break;\n                }\n            /* comment */\n            b();\n        default:\n            c();\n        }\n    }\n".to_string(),
+        ),
+    ] {
+        check(input, args, &expected);
+        check(&expected, args, &expected);
+    }
+}
+
+#[test]
+fn a_row_of_comments_after_a_case_block_stands_at_the_next_label_as_comment_lines_do() {
+    let one_row = "void f(int x)\n{\n    switch (x) {\n    case 1: {\n        a();\n    }\n    /* first */ /* second */\n    case 2:\n        b();\n    }\n}\n";
+    let two_rows = "void f(int x)\n{\n    switch (x) {\n    case 1: {\n        a();\n    }\n    /* first */\n    /* second */\n    case 2:\n        b();\n    }\n}\n";
+    check(one_row, &["--style=kr"], one_row);
+    check(two_rows, &["--style=kr"], two_rows);
+}
+
+#[test]
+fn code_a_comment_leads_after_a_case_block_stands_where_the_code_alone_would() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1:\n        {\n            value = 0;\n        }\n        /* note */ break;\n    case 2:\n#ifdef TRACE\n    {\n        push(state);\n    }\n#endif\n    /* note */ break;\n    }\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=stroustrup"][..],
+            "void f()\n{\n    switch (kind) {\n    case 1: {\n        value = 0;\n    }\n    /* note */ break;\n    case 2:\n#ifdef TRACE\n    {\n        push(state);\n    }\n#endif\n    /* note */ break;\n    }\n}\n",
+        ),
+        (
+            &[][..],
+            "void f()\n{\n    switch (kind) {\n    case 1:\n    {\n        value = 0;\n    }\n    /* note */ break;\n    case 2:\n#ifdef TRACE\n    {\n        push(state);\n    }\n#endif\n    /* note */ break;\n    }\n}\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+        check(
+            &expected.replace("/* note */ break;", "break;"),
+            args,
+            &expected.replace("/* note */ break;", "break;"),
+        );
+    }
+}
+
+#[test]
+fn statements_after_a_commented_row_past_a_case_block_stand_where_the_row_before_it_would() {
+    let input = "void f(int x)\n{\n    switch (x) {\n    case 1: {\n        a();\n    }\n    b(); /* note */\n    c();\n    break;\n    default:\n        d();\n    }\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=kr"][..],
+            "void f(int x)\n{\n    switch (x) {\n    case 1: {\n        a();\n    }\n    b(); /* note */\n    c();\n    break;\n    default:\n        d();\n    }\n}\n",
+        ),
+        (
+            &["--style=allman"][..],
+            "void f(int x)\n{\n    switch (x)\n    {\n    case 1:\n    {\n        a();\n    }\n    b(); /* note */\n    c();\n    break;\n    default:\n        d();\n    }\n}\n",
+        ),
+        (
+            &["--style=whitesmith", "-S"][..],
+            "void f(int x)\n    {\n    switch (x)\n        {\n        case 1:\n            {\n            a();\n            }\n        b(); /* note */\n        c();\n        break;\n        default:\n            d();\n        }\n    }\n",
+        ),
+        (
+            &["--style=gnu"][..],
+            "void f(int x)\n{\n    switch (x)\n        {\n        case 1:\n        {\n            a();\n        }\n        b(); /* note */\n        c();\n        break;\n        default:\n            d();\n        }\n}\n",
+        ),
+        (
+            &["--style=horstmann"][..],
+            "void f(int x)\n{   switch (x)\n    {   case 1:\n        {   a();\n        }\n        b(); /* note */\n        c();\n        break;\n        default:\n            d();\n    }\n}\n",
+        ),
+        (
+            &["--style=pico"][..],
+            "void f(int x)\n{   switch (x)\n    {   case 1:\n        {   a(); }\n        b(); /* note */\n        c();\n        break;\n        default:\n            d(); } }\n",
+        ),
+        (
+            &["--style=vtk"][..],
+            "void f(int x)\n{\n    switch (x)\n        {\n        case 1:\n            {\n            a();\n            }\n        b(); /* note */\n        c();\n        break;\n        default:\n            d();\n        }\n}\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
+fn vtk_sets_an_initializer_brace_after_a_struct_closer_in_a_case_block_at_the_closer() {
+    let input = "void f(int op)\n{\n    if (op) {\n        static const struct {\n            int z;\n        } kw[] = {\n            { 1 },\n        };\n    }\n    switch (op) {\n    case 1: {\n        static const struct {\n            int z;\n        } kw[] = {\n            { 1 },\n        };\n        break;\n    }\n    }\n}\n";
+    let expected = "void f(int op)\n{\n    if (op)\n        {\n        static const struct\n            {\n            int z;\n            } kw[] =\n            {\n                { 1 },\n            };\n        }\n    switch (op)\n        {\n        case 1:\n            {\n            static const struct\n                {\n                int z;\n                } kw[] =\n                {\n                    { 1 },\n                };\n            break;\n            }\n        }\n}\n";
+    check(input, &["--style=vtk"], expected);
+    check(expected, &["--style=vtk"], expected);
+}
+
+#[test]
+fn an_else_switch_kept_on_its_if_line_indents_its_first_label_as_the_rest() {
+    let input = "void f(int x)\n{\n    if (a) b(); else switch (x) {\n    case 1:\n        c();\n        break;\n    }\n    g();\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=kr", "-S", "-o"][..],
+            "void f(int x)\n{\n    if (a) b(); else switch (x) {\n            case 1:\n                c();\n                break;\n        }\n    g();\n}\n",
+        ),
+        (
+            &["--style=ratliff", "-o"][..],
+            "void f(int x) {\n    if (a) b(); else switch (x) {\n            case 1:\n                c();\n                break;\n            }\n    g();\n    }\n",
+        ),
+        (
+            &["--style=kr", "-o"][..],
+            "void f(int x)\n{\n    if (a) b(); else switch (x) {\n        case 1:\n            c();\n            break;\n        }\n    g();\n}\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
+fn a_broken_while_closing_a_do_chained_after_else_stands_at_the_else_body() {
+    let input = "void f(int x)\n{\n    if (a) b(); else do {\n        c();\n    } while (x);\n    g();\n}\n";
+    for (style, expected) in [
+        (
+            "--style=allman",
+            "void f(int x)\n{\n    if (a) b();\n    else do\n        {\n            c();\n        }\n        while (x);\n    g();\n}\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void f(int x)\n    {\n    if (a) b();\n    else do\n            {\n            c();\n            }\n        while (x);\n    g();\n    }\n",
+        ),
+        (
+            "--style=gnu",
+            "void f(int x)\n{\n    if (a) b();\n    else do\n            {\n                c();\n            }\n        while (x);\n    g();\n}\n",
+        ),
+        (
+            "--style=ratliff",
+            "void f(int x) {\n    if (a) b();\n    else do {\n            c();\n            }\n        while (x);\n    g();\n    }\n",
+        ),
+        (
+            "--style=horstmann",
+            "void f(int x)\n{   if (a) b();\n    else do\n        {   c();\n        }\n        while (x);\n    g();\n}\n",
+        ),
+        (
+            "--style=vtk",
+            "void f(int x)\n{\n    if (a) b();\n    else do\n            {\n            c();\n            }\n        while (x);\n    g();\n}\n",
+        ),
+        (
+            "--style=stroustrup",
+            "void f(int x)\n{\n    if (a) b();\n    else do {\n            c();\n        }\n        while (x);\n    g();\n}\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn break_one_line_headers_parts_a_kept_if_line_from_its_header_when_a_brace_goes_on() {
+    // Kept one-line statements keep `if (x) a(); else b();` whole; a brace
+    // further on the line parts the `if` from the statement after it.
+    let input = "void f()\n{\n    if (ready) helper(); else other();\n    if (ready) helper(); else switch (state) {\n    case 1:\n        first();\n        break;\n    }\n    if (ready) helper(); else for (;;) {\n        first();\n    }\n    g();\n}\n";
+    for (style, kept, broken) in [
+        (
+            "--style=lisp",
+            "void f() {\n    if (ready) helper(); else other();\n    if (ready) helper(); else switch (state) {\n        case 1:\n            first();\n            break; }\n    if (ready) helper(); else for (;;) {\n            first(); }\n    g(); }\n",
+            "void f() {\n    if (ready) helper(); else other();\n    if (ready)\n        helper(); else switch (state) {\n        case 1:\n            first();\n            break; }\n    if (ready)\n        helper(); else for (;;) {\n            first(); }\n    g(); }\n",
+        ),
+        (
+            "--style=pico",
+            "void f()\n{   if (ready) helper(); else other();\n    if (ready) helper(); else switch (state)\n        {   case 1:\n                first();\n                break; }\n    if (ready) helper(); else for (;;)\n        {   first(); }\n    g(); }\n",
+            "void f()\n{   if (ready) helper(); else other();\n    if (ready)\n        helper(); else switch (state)\n        {   case 1:\n                first();\n                break; }\n    if (ready)\n        helper(); else for (;;)\n        {   first(); }\n    g(); }\n",
+        ),
+    ] {
+        check(input, &[style], kept);
+        check(input, &[style, "--break-one-line-headers"], broken);
+    }
+    let kept = "void f()\n{\n    if (ready) helper(); else other();\n    if (ready) helper(); else switch (state) {\n        case 1:\n            first();\n            break;\n        }\n    if (ready) helper(); else for (;;) {\n            first();\n        }\n    g();\n}\n";
+    check(input, &["--style=kr", "-o"], kept);
+    check(
+        input,
+        &["--style=kr", "-o", "--break-one-line-headers"],
+        "void f()\n{\n    if (ready) helper(); else other();\n    if (ready)\n        helper(); else switch (state) {\n        case 1:\n            first();\n            break;\n        }\n    if (ready)\n        helper(); else for (;;) {\n            first();\n        }\n    g();\n}\n",
+    );
+}
+
+#[test]
+fn break_blocks_all_keeps_an_else_with_its_one_line_if() {
+    let input = "void f()\n{\n    for (;;) { if (ready) break; else continue; }\n}\n";
+    check(
+        input,
+        &[
+            "--style=kr",
+            "--keep-one-line-statements",
+            "--break-blocks=all",
+        ],
+        "void f()\n{\n    for (;;) {\n        if (ready) break;\n        else continue;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn run_in_styles_keep_the_source_gap_before_a_closer_on_its_statement_line() {
+    let input = "void f()\n{\n    if (ready) {\n        value=0;\t}\n    if (ready) {\n        value=0; \t}\n    if (ready) {\n        value=0;\t\t}\n    if (ready) {\n        value=0;  }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=lisp",
+            "void f() {\n    if (ready) {\n        value=0;\t}\n    if (ready) {\n        value=0; \t}\n    if (ready) {\n        value=0;\t\t}\n    if (ready) {\n        value=0;  } }\n",
+        ),
+        (
+            "--style=pico",
+            "void f()\n{   if (ready)\n    {   value=0;\t}\n    if (ready)\n    {   value=0; \t}\n    if (ready)\n    {   value=0;\t\t}\n    if (ready)\n    {   value=0;  } }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn a_while_after_a_run_in_do_body_of_an_else_on_its_if_line_stands_at_the_else_body() {
+    let input = "void f()\n{\n    if (ready) helper(); else do {\n        first();\n    } while (state);\n}\n";
+    for (style, expected) in [
+        (
+            "--style=lisp",
+            "void f() {\n    if (ready) helper(); else do {\n            first(); }\n        while (state); }\n",
+        ),
+        (
+            "--style=pico",
+            "void f()\n{   if (ready) helper(); else do\n        {   first(); }\n        while (state); }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn an_added_block_of_a_header_chained_after_else_indents_past_the_else_body() {
+    let input = "void f(void)\n{\n    if (a) {\n        b();\n    }\n    else for (; pre>0; pre--) *c=0; // note\n    g();\n}\n";
+    let expected = "void f(void)\n{\n    if (a) {\n        b();\n    } else for (; pre>0; pre--) {\n            *c=0;    // note\n        }\n    g();\n}\n";
+    check(input, &["--style=1tbs"], expected);
+    check(expected, &["--style=1tbs"], expected);
+}
+
+#[test]
+fn a_block_of_a_do_run_in_after_an_else_on_its_if_line_closes_at_the_else_body() {
+    let input = "void f()\n{\n    if (ready) helper(); else do\n    {\n        first();\n    }\n    while (state);\n    if (ready) helper(); else for (;;)\n    {\n        first();\n    }\n    g();\n}\n";
+    let attached = "void f()\n{\n    if (ready) helper(); else do {\n            first();\n        } while (state);\n    if (ready) helper(); else for (;;) {\n            first();\n        }\n    g();\n}\n";
+    for (style, expected) in [
+        ("--style=kr", attached.to_string()),
+        ("--style=java", attached.replacen("()\n{", "() {", 1)),
+        (
+            "--style=allman",
+            "void f()\n{\n    if (ready) helper(); else do\n        {\n            first();\n        }\n        while (state);\n    if (ready) helper(); else for (;;)\n        {\n            first();\n        }\n    g();\n}\n".to_string(),
+        ),
+    ] {
+        check(input, &[style, "-o"], &expected);
+        check(&expected, &[style, "-o"], &expected);
+    }
+}
+
+#[test]
+fn keeping_one_line_statements_keeps_an_if_line_ending_in_its_else_whole() {
+    // Its `else` stays on the kept line whether the body follows on that
+    // line or the next, as the line the style formats it into does.
+    let input = "void f()\n{\n    if (ready) helper(); else\n    {\n        first();\n    }\n    if (ready) helper(); else\n        first();\n    if (ready) helper(); else {\n        first();\n    }\n    g();\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void f()\n{\n    if (ready) helper(); else {\n        first();\n    }\n    if (ready) helper(); else\n        first();\n    if (ready) helper(); else {\n        first();\n    }\n    g();\n}\n",
+        ),
+        (
+            "--style=allman",
+            "void f()\n{\n    if (ready) helper(); else\n    {\n        first();\n    }\n    if (ready) helper(); else\n        first();\n    if (ready) helper(); else\n    {\n        first();\n    }\n    g();\n}\n",
+        ),
+    ] {
+        check(input, &[style, "-o"], expected);
+        check(expected, &[style, "-o"], expected);
+    }
+}
+
+#[test]
+fn a_one_line_block_removed_from_a_header_run_in_after_an_else_nests_past_both() {
+    let input = "void f()\n{\n    if (ready) helper(); else for (;;)\n    {   first(); }\n    if (ready) helper(); else while (ready)\n    {\n        first();\n    }\n    g();\n}\n";
+    let expected = "void f()\n{\n    if (ready) helper();\n    else for (;;)\n            first();\n    if (ready) helper();\n    else while (ready)\n            first();\n    g();\n}\n";
+    for style in ["--style=kr", "--style=allman"] {
+        check(input, &[style, "--remove-braces"], expected);
+        check(expected, &[style, "--remove-braces"], expected);
+    }
+}
+
+#[test]
+fn a_switch_chained_after_an_else_kept_past_a_removed_block_lays_out_at_the_else_body() {
+    let input = "void f(int x)\n{\n    if (a) { b(); } else switch (x) {\n    case 1:\n        c();\n        break;\n    }\n    g();\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void f(int x)\n{\n    if (a)\n        b();   else switch (x) {\n        case 1:\n            c();\n            break;\n        }\n    g();\n}\n",
+        ),
+        (
+            "--style=allman",
+            "void f(int x)\n{\n    if (a)\n        b();   else switch (x)\n        {\n        case 1:\n            c();\n            break;\n        }\n    g();\n}\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void f(int x)\n    {\n    if (a)\n        b();   else switch (x)\n            {\n            case 1:\n                c();\n                break;\n            }\n    g();\n    }\n",
+        ),
+    ] {
+        check(input, &[style, "--remove-braces", "-o"], expected);
+        check(expected, &[style, "--remove-braces", "-o"], expected);
+    }
+}
+
+#[test]
+fn a_header_chained_after_an_else_on_its_ifs_body_line_nests_from_the_if() {
+    let input = "void f(int x)\n{\n    if (a)\n        b(); else for (;;) {\n            c();\n        }\n    if (a)\n        b(); else switch (x) {\n        case 1:\n            c();\n            break;\n        }\n    g();\n}\n";
+    for (args, expected) in [
+        (&["--style=kr", "-o"][..], input.to_string()),
+        (
+            &["--style=allman", "-o"][..],
+            "void f(int x)\n{\n    if (a)\n        b(); else for (;;)\n        {\n            c();\n        }\n    if (a)\n        b(); else switch (x)\n        {\n        case 1:\n            c();\n            break;\n        }\n    g();\n}\n".to_string(),
+        ),
+        (
+            &["--style=whitesmith", "-o"][..],
+            "void f(int x)\n    {\n    if (a)\n        b(); else for (;;)\n            {\n            c();\n            }\n    if (a)\n        b(); else switch (x)\n            {\n            case 1:\n                c();\n                break;\n            }\n    g();\n    }\n".to_string(),
+        ),
+        (
+            &["--style=kr", "-o", "-S"][..],
+            "void f(int x)\n{\n    if (a)\n        b(); else for (;;) {\n            c();\n        }\n    if (a)\n        b(); else switch (x) {\n            case 1:\n                c();\n                break;\n        }\n    g();\n}\n".to_string(),
+        ),
+    ] {
+        check(input, args, &expected);
+        check(&expected, args, &expected);
+    }
+}
+
+#[test]
+fn a_comment_after_an_added_one_line_block_keeps_its_column_through_unpadding_in_lisp() {
+    let input = "void f()\n{\n    if (ready) value=0;   // note\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void f()\n{\n    if(ready) { value=0; }    // note\n}\n",
+        ),
+        (
+            "--style=lisp",
+            "void f() {\n    if(ready) { value=0; }    // note\n}\n",
+        ),
+    ] {
+        let args = [
+            style,
+            "--keep-one-line-blocks",
+            "--add-braces",
+            "--unpad-paren",
+        ];
+        check(input, &args, expected);
+    }
+}
+
+#[test]
+fn break_else_ifs_leaves_a_kept_one_line_statement_chain_whole() {
+    let input = "void f()\n{\n    if (ready) value=0; else if (other) result=0; else result=1;\n    if (ready) { value=0; } else if (other) { result=0; } else { result=1; }\n}\n";
+    check(
+        input,
+        &["--style=kr", "-o", "--break-elseifs"],
+        "void f()\n{\n    if (ready) value=0; else if (other) result=0; else result=1;\n    if (ready) {\n        value=0;\n    } else\n        if (other) {\n            result=0;\n        } else {\n            result=1;\n        }\n}\n",
+    );
+    check(
+        input,
+        &["--style=kr", "-o", "--break-elseifs", "--remove-braces"],
+        "void f()\n{\n    if (ready) value=0; else if (other) result=0; else result=1;\n    if (ready)\n        value=0;   else if (other)\n        result=0;   else\n        result=1;\n}\n",
+    );
+}
+
+#[test]
+fn breaking_one_line_headers_keeps_a_closing_header_with_what_goes_on_after_it() {
+    // Kept one-line statements keep `else` and `while` on the statement's
+    // line while code goes on after them there; a brace the style breaks
+    // off leaves the `else` ending the line, which parts it.
+    let input = "void f(int x)\n{\n    if (a)\n        b(); else c();\n    if (a)\n        b(); else {\n        c();\n    }\n    if (a)\n        b(); else for (;;) {\n        c();\n    }\n    do\n        b(); while (x);\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void f(int x)\n{\n    if (a)\n        b(); else c();\n    if (a)\n        b(); else {\n        c();\n    }\n    if (a)\n        b(); else for (;;) {\n            c();\n        }\n    do\n        b(); while (x);\n}\n",
+        ),
+        (
+            "--style=allman",
+            "void f(int x)\n{\n    if (a)\n        b(); else c();\n    if (a)\n        b();\n    else\n    {\n        c();\n    }\n    if (a)\n        b(); else for (;;)\n        {\n            c();\n        }\n    do\n        b(); while (x);\n}\n",
+        ),
+    ] {
+        check(input, &[style, "-o", "--break-one-line-headers"], expected);
+        check(
+            expected,
+            &[style, "-o", "--break-one-line-headers"],
+            expected,
+        );
+    }
+}
+
+#[test]
+fn a_run_in_closer_after_a_comment_leaves_no_gap_behind() {
+    // The closer cannot join a row a comment ends, so the gap before it
+    // goes with it.
+    let input = "static void f(int *p){ g(p); /*none*/ }\n";
+    for (style, expected) in [
+        (
+            "--style=lisp",
+            "static void f(int *p) {\n    g(p); /*none*/\n}\n",
+        ),
+        ("--style=pico", "static void f(int *p) { g(p); /*none*/ }\n"),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+// An added brace goes right before its statement, after a comment the
+// statement's line starts with, as after a comment line.
+#[test]
+fn added_braces_open_after_a_comment_leading_the_statement_line() {
+    let input =
+        "void f()\n{\n    if (b)\n        /* c */ x();\n    else\n        /* d */ y();\n}\n";
+    let cases: [(&[&str], &str); 10] = [
+        (
+            &["-j"],
+            "void f()\n{\n    if (b)\n        /* c */ {\n        x();\n    }\n    else\n        /* d */ {\n        y();\n    }\n}\n",
+        ),
+        (
+            &["-j", "--style=kr"],
+            "void f()\n{\n    if (b)\n        /* c */ {\n        x();\n    } else\n        /* d */ {\n        y();\n    }\n}\n",
+        ),
+        (
+            &["-j", "--style=allman"],
+            "void f()\n{\n    if (b)\n        /* c */\n    {\n        x();\n    }\n    else\n        /* d */\n    {\n        y();\n    }\n}\n",
+        ),
+        (
+            &["-j", "--style=gnu"],
+            "void f()\n{\n    if (b)\n        /* c */\n        {\n            x();\n        }\n    else\n        /* d */\n        {\n            y();\n        }\n}\n",
+        ),
+        (
+            &["-j", "--style=whitesmith"],
+            "void f()\n    {\n    if (b)\n        /* c */\n        {\n        x();\n        }\n    else\n        /* d */\n        {\n        y();\n        }\n    }\n",
+        ),
+        (
+            &["-j", "--style=lisp"],
+            "void f() {\n    if (b)\n        /* c */ {\n        x(); }\n    else\n        /* d */ {\n        y(); } }\n",
+        ),
+        (
+            &["-j", "--style=horstmann"],
+            "void f()\n{   if (b)\n        /* c */\n    {   x();\n    }\n    else\n        /* d */\n    {   y();\n    }\n}\n",
+        ),
+        (
+            &["-j", "--style=ratliff"],
+            "void f() {\n    if (b)\n        /* c */ {\n        x();\n        }\n    else\n        /* d */ {\n        y();\n        }\n    }\n",
+        ),
+        (
+            &["-j", "--style=vtk"],
+            "void f()\n{\n    if (b)\n        /* c */\n        {\n        x();\n        }\n    else\n        /* d */\n        {\n        y();\n        }\n}\n",
+        ),
+        (
+            &["-j", "--style=1tbs"],
+            "void f()\n{\n    if (b)\n        /* c */ {\n        x();\n    } else\n        /* d */ {\n        y();\n    }\n}\n",
+        ),
+    ];
+    for (args, expected) in cases {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+    // A written brace there closes at its header as well.
+    let written = "void f()\n{\n    if (b)\n        /* c */ {\n        x();\n    }\n}\n";
+    check(written, &["--style=kr"], written);
+}
+
+// An added brace goes after every comment leading the statement's line, in
+// attached styles as in broken ones.
+#[test]
+fn added_braces_open_after_all_comments_leading_the_statement_line() {
+    let input = "void f()\n{\n    while (b)\n        /* c */ /* d */ x();\n}\n";
+    let attached =
+        "void f()\n{\n    while (b)\n        /* c */ /* d */ {\n        x();\n    }\n}\n";
+    let broken =
+        "void f()\n{\n    while (b)\n        /* c */ /* d */\n    {\n        x();\n    }\n}\n";
+    for (args, expected) in [
+        (&["-j", "--style=kr"][..], attached),
+        (&["-j", "--style=allman"][..], broken),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+// Pico gives a block added after a comment leading the statement's line the
+// run-in shape of its other added blocks.
+#[test]
+fn pico_keeps_a_block_added_after_a_comment_leading_its_line_on_that_line() {
+    let input = "void f()\n{\n    if (b)\n        /* c */ x();\n    if (b)\n        x();\n}\n";
+    let expected = "void f()\n{   if (b)\n        /* c */ { x(); }\n    if (b)\n    {   x(); } }\n";
+    check(input, &["-j", "--style=pico"], expected);
+    check(expected, &["-j", "--style=pico"], expected);
+}
+
+// A macro call standing for a header's condition ends the header for added
+// braces as it does for breaking one-line headers.
+#[test]
+fn added_braces_wrap_the_body_of_a_header_whose_condition_is_a_macro_call() {
+    let input = "void f()\n{\n    if EQ(\"\") return 0;\n    else if EQ(\"a\") value = 1;\n    if EQ(\"b\")\n        value = 2;\n    value = 3;\n    while MORE(x)\n        value = 4;\n}\n";
+    for (args, expected) in [
+        (
+            &["-j"][..],
+            "void f()\n{\n    if EQ(\"\") {\n        return 0;\n    }\n    else if EQ(\"a\") {\n        value = 1;\n    }\n    if EQ(\"b\") {\n        value = 2;\n    }\n    value = 3;\n    while MORE(x) {\n        value = 4;\n    }\n}\n",
+        ),
+        (
+            &["--style=kr", "-j"][..],
+            "void f()\n{\n    if EQ(\"\") {\n        return 0;\n    } else if EQ(\"a\") {\n        value = 1;\n    }\n    if EQ(\"b\") {\n        value = 2;\n    }\n    value = 3;\n    while MORE(x) {\n        value = 4;\n    }\n}\n",
+        ),
+        (
+            &["--style=allman", "-j"][..],
+            "void f()\n{\n    if EQ(\"\")\n    {\n        return 0;\n    }\n    else if EQ(\"a\")\n    {\n        value = 1;\n    }\n    if EQ(\"b\")\n    {\n        value = 2;\n    }\n    value = 3;\n    while MORE(x)\n    {\n        value = 4;\n    }\n}\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+// Loop headers take a macro call for their condition as `if` does.
+#[test]
+fn loop_headers_take_a_macro_call_for_their_condition() {
+    let input = "void f()\n{\n    while MORE(x) value = 5;\n    for EACH(x) value = 4;\n    value = 6;\n}\n";
+    for (args, expected) in [
+        (
+            &["-j"][..],
+            "void f()\n{\n    while MORE(x) {\n        value = 5;\n    }\n    for EACH(x) {\n        value = 4;\n    }\n    value = 6;\n}\n",
+        ),
+        (
+            &["-xb"][..],
+            "void f()\n{\n    while MORE(x)\n        value = 5;\n    for EACH(x)\n        value = 4;\n    value = 6;\n}\n",
+        ),
+        (
+            &["-J"][..],
+            "void f()\n{\n    while MORE(x) { value = 5; }\n    for EACH(x) { value = 4; }\n    value = 6;\n}\n",
+        ),
+        (
+            &["--style=allman", "-j"][..],
+            "void f()\n{\n    while MORE(x)\n    {\n        value = 5;\n    }\n    for EACH(x)\n    {\n        value = 4;\n    }\n    value = 6;\n}\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+    let next_line = "void f()\n{\n    while MORE(x)\n        value = 4;\n}\n";
+    check(
+        next_line,
+        &["-J"],
+        "void f()\n{\n    while MORE(x)\n    { value = 4; }\n}\n",
+    );
+}
+
+// An else broken off the closer of braces added on its line leaves its
+// comment where the joined line had it, as after a written closer.
+#[test]
+fn an_else_broken_off_an_added_closer_keeps_its_comment_column() {
+    let input = "void f()\n{\n    if (a) x(); else // note\n        y();\n    if (a) x();   else // note\n        y();\n    if (a) x();else // note\n    {\n        y();\n    }\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=allman", "-j"][..],
+            "void f()\n{\n    if (a)\n    {\n        x();\n    }\n    else   // note\n    {\n        y();\n    }\n    if (a)\n    {\n        x();\n    }\n    else     // note\n    {\n        y();\n    }\n    if (a)\n    {\n        x();\n    }\n    else  // note\n    {\n        y();\n    }\n}\n",
+        ),
+        (
+            &["--style=horstmann", "-j"][..],
+            "void f()\n{   if (a)\n    {   x();\n    }\n    else   // note\n    {   y();\n    }\n    if (a)\n    {   x();\n    }\n    else     // note\n    {   y();\n    }\n    if (a)\n    {   x();\n    }\n    else  // note\n    {   y();\n    }\n}\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+    // A comment that code follows on its line keeps its gap.
+    check(
+        "void f()\n{\n    if (a) x(); else /* note */ y();\n}\n",
+        &["--style=allman", "-j"],
+        "void f()\n{\n    if (a)\n    {\n        x();\n    }\n    else /* note */\n    {\n        y();\n    }\n}\n",
+    );
+}
+
+// A brace after a comment that leads its line takes the body of its header,
+// as a brace leading a line after that comment does.
+#[test]
+fn a_brace_after_a_comment_leading_its_line_after_an_else_holds_the_else_body() {
+    let input = "void f()\n{\n    if (a) {\n        x();\n    } else\n\n        /* note */{\n        y();\n    }\n    z();\n}\n";
+    for args in [&[][..], &["--style=kr"][..]] {
+        check(input, args, input);
+    }
+    // An else in an `if` a comment after an outer `else` nests closes its
+    // block at its own line.
+    let nested = "void f()\n{\n    if (a) {\n        x();\n    } else\n\n    /* c */\n    if (b) {\n        y();\n    } else\n\n    /* error */{\n        z();\n    }\n    w();\n}\n";
+    let attached = "void f()\n{\n    if (a) {\n        x();\n    } else\n\n        /* c */\n        if (b) {\n            y();\n        } else\n\n            /* error */{\n            z();\n        }\n    w();\n}\n";
+    let broken = "void f()\n{\n    if (a)\n    {\n        x();\n    }\n    else\n\n        /* c */\n        if (b)\n        {\n            y();\n        }\n        else\n\n            /* error */\n        {\n            z();\n        }\n    w();\n}\n";
+    for (args, expected) in [
+        (&[][..], attached),
+        (&["--style=kr"][..], attached),
+        (&["--style=allman"][..], broken),
+    ] {
+        check(nested, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+// A comment row inside brackets stands at the row it precedes, as inside
+// parentheses.
+#[test]
+fn a_comment_row_inside_brackets_stands_at_the_row_after_it() {
+    let input = "static char name[\n    /* note */\n#ifdef FEATURE\n    LIMIT +\n#endif\n    1];\nvoid f()\n{\n    value = table[\n                /* note */\n                index];\n    int name[\n        /* note */\n        COUNT];\n}\n";
+    check(input, &[], input);
+    // A message's keyword row is no label.
+    let message = "@implementation Item\n- (void)update {\n    [self apply:value\n     /* note */\n           with:other];\n}\n@end\n";
+    check(
+        message,
+        &[],
+        "@implementation Item\n- (void)update {\n    [self apply:value\n          /* note */\n          with:other];\n}\n@end\n",
+    );
+}
+
+// Without a brace style a bare block's brace keeps the code after it on its
+// line, whatever one-line block that code holds.
+#[test]
+fn a_run_in_bare_block_brace_keeps_its_code_beside_a_one_line_block() {
+    let input = "void f()\n{\n    x = 1;\n    { int cnt; for(cnt=0; cnt<3; cnt++){}\n        h(cnt);\n    }\n}\n";
+    let expected = "void f()\n{\n    x = 1;\n    {   int cnt;\n        for(cnt=0; cnt<3; cnt++) {}\n        h(cnt);\n    }\n}\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+}
+
+// A closer pico joins onto the row before takes the space joining it out of
+// the gap before its comment, whatever follows the closer, and parts a
+// comment set against it.
+#[test]
+fn pico_joins_a_closer_taking_the_joining_space_out_of_its_comment_gap() {
+    for (gap, output_gap) in [("", " "), ("  ", " "), ("     ", "    ")] {
+        let input = format!(
+            "int t[][2] = {{\n    {{ 1,\n      2\n    }},{gap}/* c */\n    {{ 3,\n      4\n    }}{gap}/* d */\n}};\nstruct S {{\n    int a;\n}} s, t;{gap}/* e */\n"
+        );
+        let expected = format!(
+            "int t[][2] = {{\n    {{   1,\n        2 }},{output_gap}/* c */\n    {{   3,\n        4 }}{output_gap}/* d */\n}};\nstruct S\n{{   int a; }} s, t;{output_gap}/* e */\n"
+        );
+        check(&input, &["--style=pico"], &expected);
+        check(&expected, &["--style=pico"], &expected);
+    }
+}
+
+// A case label line stands where case labels do though a statement label
+// follows it on the line.
+#[test]
+fn a_case_label_line_holding_a_statement_label_stands_with_the_case_labels() {
+    let input = "void f()\n{\n    switch (k) {\n    case 1:\n        goto again;\n    case 2: again:\n        x();\n        break;\n    case 3: other: {\n        y();\n    }\n    }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=pico",
+            "void f()\n{   switch (k)\n    {   case 1:\n            goto again;\n        case 2: again:\n            x();\n            break;\n        case 3: other:\n            {   y(); } } }\n",
+        ),
+        (
+            "--style=lisp",
+            "void f() {\n    switch (k) {\n    case 1:\n        goto again;\n    case 2: again:\n        x();\n        break;\n    case 3: other: {\n            y(); } } }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+// A declarator after a nested body's closer stands at the member it
+// declares, wherever the style sets the closer.
+#[test]
+fn a_declarator_after_a_nested_body_closer_stands_at_its_member() {
+    let input = "struct histindex {\n\tstruct record {\n\t\tunsigned int ptr, cnt;\n\t\tstruct record *next;\n\t} **records, /* an occurrence */\n\t  **line_map; /* map */\n\tint other;\n};\n";
+    for (style, expected) in [
+        (
+            "--style=whitesmith",
+            "struct histindex\n    {\n    struct record\n        {\n        unsigned int ptr, cnt;\n        struct record *next;\n        } **records, /* an occurrence */\n    **line_map; /* map */\n    int other;\n    };\n",
+        ),
+        (
+            "--style=ratliff",
+            "struct histindex {\n    struct record {\n        unsigned int ptr, cnt;\n        struct record *next;\n        } **records, /* an occurrence */\n    **line_map; /* map */\n    int other;\n    };\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+// The brace added after an else and a comment opens at the else's own level
+// in an else chain a directive split.
+#[test]
+fn an_else_brace_after_a_comment_in_a_directive_split_chain_opens_at_the_else() {
+    let input = "int f(void)\n{\n#ifdef FEATURE\n  if(*value == 1) {\n    first();\n  }\n  else\n#endif\n    if(*value == 2) {\n      second();\n    }\n    else {\n      if(end) {\n        third();\n      }\n      else\n        /* note */\n        size = 4;\n    }\n  return 0;\n}\n";
+    let expected = "int f(void)\n{\n#ifdef FEATURE\n    if(*value == 1) {\n        first();\n    } else\n#endif\n        if(*value == 2) {\n            second();\n        } else {\n            if(end) {\n                third();\n            } else\n                /* note */\n            {\n                size = 4;\n            }\n        }\n    return 0;\n}\n";
+    check(input, &["--style=1tbs"], expected);
+    check(expected, &["--style=1tbs"], expected);
+}
+
+// Ratliff closes a block after headers that conditional branches open
+// alike at the block's own header.
+#[test]
+fn ratliff_closes_a_block_after_branch_alternative_openers_at_its_header() {
+    let input = "void f(void) {\n  for (;;) {\n    for (;;) {\n#ifdef X\n      if (c == 1) {\n#else\n      if (c == 2) {\n#endif\n      }\n    }\n    if (e) {\n    }\n  }\n}\n";
+    let expected = "void f(void) {\n    for (;;) {\n        for (;;) {\n#ifdef X\n            if (c == 1) {\n#else\n            if (c == 2) {\n#endif\n                }\n            }\n        if (e) {\n            }\n        }\n    }\n";
+    check(input, &["--style=ratliff"], expected);
+    check(expected, &["--style=ratliff"], expected);
+}
+
+// Ratliff closes a block at the line its header leads, though a comment
+// before an else chain a directive splits leaves the engine a level off.
+#[test]
+fn ratliff_closes_blocks_of_a_split_else_chain_after_a_comment_at_their_headers() {
+    let input = "void f(void)\n{\n#ifndef A\n  if( ready ){\n  }else\n#endif\n  {\n    if( other ){\n    }\n    /* note */\n#ifndef C\n    if( more ){\n    }else\n#endif\n    {\n      helper();\n    }\n  }\n}\n";
+    let expected = "void f(void) {\n#ifndef A\n    if( ready ) {\n        }\n    else\n#endif\n        {\n        if( other ) {\n            }\n        /* note */\n#ifndef C\n        if( more ) {\n            }\n        else\n#endif\n            {\n            helper();\n            }\n        }\n    }\n";
+    check(input, &["--style=ratliff"], expected);
+    check(expected, &["--style=ratliff"], expected);
+}
+
+// Ratliff sets a compound literal's closer a level in after a nested one's,
+// as after any row.
+#[test]
+fn ratliff_sets_a_compound_literal_closer_after_a_nested_one_a_level_in() {
+    let input = "void f(void) {\n  for (;;) {\n    (*ci)[i++] = (uv_cpu_info_t) {\n      .model = p,\n      .cpu_times = (struct times) {\n        .user = 10,\n        .irq  = 10,\n      },\n    };\n  }\n  x = (struct T) {\n    .a = 1,\n    .b = 2,\n  };\n}\n";
+    let expected = "void f(void) {\n    for (;;) {\n        (*ci)[i++] = (uv_cpu_info_t) {\n            .model = p,\n            .cpu_times = (struct times) {\n                .user = 10,\n                .irq  = 10,\n                },\n            };\n        }\n    x = (struct T) {\n        .a = 1,\n        .b = 2,\n        };\n    }\n";
+    check(input, &["--style=ratliff"], expected);
+    check(expected, &["--style=ratliff"], expected);
+}
+
+// A bare block's brace after a comment stays where the source set it: only a
+// header's brace moves before a comment trailing the header.
+#[test]
+fn a_bare_block_brace_after_a_comment_stays_after_it() {
+    let input = "void f()\n{\n    if (a)\n        /* note */{\n        y();\n    }\n    x = 1; /* c */ {\n        y();\n    }\n    x = 1; /* c */{\n        y();\n    }\n}\n";
+    for args in [&[][..], &["--style=kr"][..]] {
+        check(input, args, input);
+    }
+    check(
+        "void f()\n{\n    if (a) /* c */ {\n        y();\n    }\n}\n",
+        &[],
+        "void f()\n{\n    if (a) { /* c */\n        y();\n    }\n}\n",
+    );
+}
+
+// A header broken off the statement before it on its source line keeps the
+// gap before its comment, as a statement broken off another does.
+#[test]
+fn a_header_broken_off_a_statement_keeps_its_comment_gap() {
+    let input = "void f()\n{\n    first(); second(); // note\n    if (a)\n        x(); else // note\n    value = 1; while (a) // note\n        x();\n}\n";
+    let expected = "void f()\n{\n    first();\n    second(); // note\n    if (a)\n        x();\n    else // note\n        value = 1;\n    while (a) // note\n        x();\n}\n";
+    for args in [&[][..], &["--style=kr"][..], &["--style=allman"][..]] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
+fn adding_braces_wraps_a_statement_whose_string_ends_in_an_escaped_quote_after_a_backslash() {
+    let input = "void f()\n{\n    if (c == 1)\n        add(out, \"\\\\\\\"\");\n    else\n        add(out, \"x\");\n}\n";
+    let expected = "void f()\n{\n    if (c == 1) {\n        add(out, \"\\\\\\\"\");\n    }\n    else {\n        add(out, \"x\");\n    }\n}\n";
+    check(input, &["--add-braces"], expected);
+    check(expected, &["--add-braces"], expected);
+}
+
+// Pico runs the body of a bare one-line block in after its brace as it
+// does a header's block below the header; a block on its header's line
+// keeps its space.
+#[test]
+fn pico_runs_a_bare_one_line_block_in_as_a_block_below_its_header() {
+    let input = "void f()\n{\n    value = 1;\n    { value = 0; }\n    if (ready) { value = 2; }\n    { value = 3; } more();\n}\n";
+    let expected = "void f()\n{   value = 1;\n    {   value = 0; }\n    if (ready) { value = 2; }\n    {   value = 3; } more(); }\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+}
+
+#[test]
+fn an_element_opening_a_preprocessor_branch_after_one_without_a_comma_stands_with_the_rows() {
+    let file_scope =
+        "struct Item items[] = {\n#if A\n    {1, 2}\n#else\n    {3, 4},\n    {5, 6}\n#endif\n};\n";
+    let block = "void f()\n{\n    static const struct Item items[] = {\n#if A\n        {1, 2}\n#else\n        {5, 6},\n        {7, 8}\n#endif\n    };\n}\n";
+    for (style, input, expected) in [
+        ("vtk", file_scope, file_scope),
+        (
+            "whitesmith",
+            file_scope,
+            "struct Item items[] = {\n#if A\n        {1, 2}\n#else\n        {3, 4},\n        {5, 6}\n#endif\n    };\n",
+        ),
+        (
+            "ratliff",
+            file_scope,
+            "struct Item items[] = {\n#if A\n        {1, 2}\n#else\n        {3, 4},\n        {5, 6}\n#endif\n    };\n",
+        ),
+        (
+            "vtk",
+            block,
+            "void f()\n{\n    static const struct Item items[] =\n        {\n#if A\n            {1, 2}\n#else\n            {5, 6},\n            {7, 8}\n#endif\n        };\n}\n",
+        ),
+        (
+            "whitesmith",
+            block,
+            "void f()\n    {\n    static const struct Item items[] =\n        {\n#if A\n            {1, 2}\n#else\n            {5, 6},\n            {7, 8}\n#endif\n        };\n    }\n",
+        ),
+        (
+            "ratliff",
+            block,
+            "void f() {\n    static const struct Item items[] = {\n#if A\n            {1, 2}\n#else\n            {5, 6},\n            {7, 8}\n#endif\n        };\n    }\n",
+        ),
+    ] {
+        let style = format!("--style={style}");
+        check(input, &[&style], expected);
+        check(expected, &[&style], expected);
+    }
+}
+
+#[test]
+fn vtk_sets_one_line_element_rows_at_the_rows_and_broken_element_braces_past_them() {
+    // Within a block the rows stand at the indented brace, as the broken
+    // elements' braces do.
+    let input = "void f()\n{\n    static const struct Item items[] = {\n        { name(\"a\"), NULL, first,\n          0, 0 },\n        { name(\"b\"), NULL, second, 0, 0 },\n        { name(\"c\"), NULL,\n          third, 0, 0 },\n    };\n}\n";
+    let expected = "void f()\n{\n    static const struct Item items[] =\n        {\n            {\n            name(\"a\"), NULL, first,\n            0, 0\n            },\n            { name(\"b\"), NULL, second, 0, 0 },\n            {\n            name(\"c\"), NULL,\n            third, 0, 0\n            },\n        };\n}\n";
+    check(input, &["--style=vtk"], expected);
+    check(expected, &["--style=vtk"], expected);
+    for (input, expected) in [
+        (
+            "static Item items[] = {\n    { name(\"a\"), NULL, first,\n      0, 0 },\n\n    { name(\"b\"), NULL, second, 0, 0 },\n\n    { name(\"c\"), NULL, third, 0, 0 },\n    { name(\"d\"), NULL,\n      fourth, 0, 0 },\n    { name(\"e\"), NULL, fifth, 0, 0 },\n};\n",
+            "static Item items[] = {\n        {\n        name(\"a\"), NULL, first,\n        0, 0\n        },\n\n    { name(\"b\"), NULL, second, 0, 0 },\n\n    { name(\"c\"), NULL, third, 0, 0 },\n        {\n        name(\"d\"), NULL,\n        fourth, 0, 0\n        },\n    { name(\"e\"), NULL, fifth, 0, 0 },\n};\n",
+        ),
+        (
+            "static Item items[] = {\n    { name(\"b\"), NULL, second, 0, 0 },\n    { name(\"d\"), NULL,\n      fourth, 0, 0 },\n    { name(\"e\"), NULL, fifth, 0, 0 },\n};\n",
+            "static Item items[] = {\n    { name(\"b\"), NULL, second, 0, 0 },\n        {\n        name(\"d\"), NULL,\n        fourth, 0, 0\n        },\n    { name(\"e\"), NULL, fifth, 0, 0 },\n};\n",
+        ),
+    ] {
+        check(input, &["--style=vtk"], expected);
+        check(expected, &["--style=vtk"], expected);
+    }
+}
+
+#[test]
+fn a_label_block_after_a_bare_block_closes_where_label_blocks_do() {
+    let input = "void f()\n{\n    { value=0; }\n    done: {\n        value=0;\n    }\n}\n";
+    let expected = "void f() {\n        {\n        value=0;\n        }\ndone: {\n        value=0;\n        }\n    }\n";
+    check(input, &["--style=ratliff"], expected);
+    check(expected, &["--style=ratliff"], expected);
+}
+
+#[test]
+fn breaking_one_line_headers_breaks_an_else_header_once_added_braces_take_the_statement_off() {
+    let input = "void f()\n{\n    if (ready) { helper(); } else switch (state) {\n    case 1:\n        first();\n    }\n    if (ready) helper(); else for (;;) {\n        first();\n    }\n    if (ready) helper(); else while (x) {\n        first();\n    }\n}\n";
+    let expected = "void f() {\n    if (ready) {\n        helper(); }\n    else\n        switch (state) {\n        case 1:\n            first(); }\n    if (ready) {\n        helper(); }\n    else\n        for (;;) {\n            first(); }\n    if (ready) {\n        helper(); }\n    else\n        while (x) {\n            first(); } }\n";
+    let args = ["--style=lisp", "--add-braces", "--break-one-line-headers"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
+
+#[test]
+fn an_else_after_an_added_one_line_block_starts_its_line_as_after_a_written_one() {
+    let input = "void f()\n{\n    if (ready) helper(); else other();\n    if (ready) helper(); else do {\n        first();\n    } while (state);\n    if (ready) helper();\n    else\n        other();\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=kr", "--add-one-line-braces"][..],
+            "void f()\n{\n    if (ready) { helper(); }\n    else { other(); }\n    if (ready) { helper(); }\n    else do {\n            first();\n        } while (state);\n    if (ready) { helper(); }\n    else\n    { other(); }\n}\n",
+        ),
+        (
+            &["--style=java", "--add-one-line-braces", "--break-blocks"][..],
+            "void f() {\n    if (ready) { helper(); }\n    else { other(); }\n\n    if (ready) { helper(); }\n    else do {\n            first();\n        } while (state);\n\n    if (ready) { helper(); }\n    else\n    { other(); }\n}\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
+fn added_braces_close_a_body_its_else_follows_on_the_line_before_the_else() {
+    let input = "void f()\n{\n    if (ready)\n        helper(); else for (;;) {\n        first();\n    }\n    if (ready)\n        helper(); else other();\n    if (ready)\n        helper(); else while (more) next();\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=1tbs"][..],
+            "void f()\n{\n    if (ready) {\n        helper();\n    } else for (;;) {\n            first();\n        }\n    if (ready) {\n        helper();\n    } else {\n        other();\n    }\n    if (ready) {\n        helper();\n    } else while (more) {\n            next();\n        }\n}\n",
+        ),
+        (
+            &["--style=allman", "--add-braces"][..],
+            "void f()\n{\n    if (ready)\n    {\n        helper();\n    }\n    else for (;;)\n        {\n            first();\n        }\n    if (ready)\n    {\n        helper();\n    }\n    else\n    {\n        other();\n    }\n    if (ready)\n    {\n        helper();\n    }\n    else while (more)\n        {\n            next();\n        }\n}\n",
+        ),
+        (
+            &["--style=lisp", "--add-braces"][..],
+            "void f() {\n    if (ready) {\n        helper(); }\n    else for (;;) {\n            first(); }\n    if (ready) {\n        helper(); }\n    else {\n        other(); }\n    if (ready) {\n        helper(); }\n    else while (more) {\n            next(); } }\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
+fn added_braces_wrap_a_statement_holding_a_block_comment() {
+    let input = "void f(void)\n{\n    if (ready)\n        helper(opt, /* detailed */ 0, result);\n    if (ready) helper(opt, /* detailed */ 0);\n    if (r != 0)\n        r = g(file, 85 /* F_X */);  /* tail */\n    if (n > m) return -1 /* bad */;\n    if (z) *oz++ = 0 /* back */;\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=1tbs"][..],
+            "void f(void)\n{\n    if (ready) {\n        helper(opt, /* detailed */ 0, result);\n    }\n    if (ready) {\n        helper(opt, /* detailed */ 0);\n    }\n    if (r != 0) {\n        r = g(file, 85 /* F_X */);    /* tail */\n    }\n    if (n > m) {\n        return -1 /* bad */;\n    }\n    if (z) {\n        *oz++ = 0 /* back */;\n    }\n}\n",
+        ),
+        (
+            &["--add-one-line-braces"][..],
+            "void f(void)\n{\n    if (ready)\n    { helper(opt, /* detailed */ 0, result); }\n    if (ready) { helper(opt, /* detailed */ 0); }\n    if (r != 0)\n    { r = g(file, 85 /* F_X */); }  /* tail */\n    if (n > m) { return -1 /* bad */; }\n    if (z) { *oz++ = 0 /* back */; }\n}\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
+fn a_comment_after_an_added_run_in_block_keeps_its_column() {
+    let input = "void f(void)\n{\n    if (r != 0)\n        r = g(file, 85);  /* tail */\n    if (r) x = 1;  /* t2 */\n}\n";
+    let expected = "void f(void)\n{   if (r != 0)\n    {   r = g(file, 85); }  /* tail */\n    if (r) { x = 1; }  /* t2 */\n}\n";
+    check(input, &["--style=pico", "--add-one-line-braces"], expected);
+    check(
+        expected,
+        &["--style=pico", "--add-one-line-braces"],
+        expected,
+    );
+}
+
+#[test]
+fn whitesmith_braces_after_a_directive_stand_where_their_owner_puts_them() {
+    for group in ["#ifdef A\n#endif\n", "#if A\n#else\n#endif\n"] {
+        let input = format!("void helper()\n{{\n{group}    {{\n        value++;\n    }}\n}}\n");
+        let expected = format!(
+            "void helper()\n    {{\n{group}        {{\n        value++;\n        }}\n    }}\n"
+        );
+        check(&input, &["--style=whitesmith"], &expected);
+        check(&expected, &["--style=whitesmith"], &expected);
+    }
+    for (input, expected) in [
+        (
+            "struct Item\n#ifdef A\n    : Base\n#endif\n{\n    int value;\n};\n",
+            "struct Item\n#ifdef A\n    : Base\n#endif\n    {\n    int value;\n    };\n",
+        ),
+        (
+            "class Item\n{\npublic:\n    void helper()\n#ifdef A\n#endif\n    {\n        value++;\n    }\n};\n",
+            "class Item\n    {\n    public:\n        void helper()\n#ifdef A\n#endif\n            {\n            value++;\n            }\n    };\n",
+        ),
+        (
+            "namespace demo\n#ifdef A\n#endif\n{\nint value;\n}\n",
+            "namespace demo\n#ifdef A\n#endif\n{\nint value;\n}\n",
+        ),
+        (
+            "namespace demo\n#define X\n{\nint value;\n}\n",
+            "namespace demo\n#define X\n{\nint value;\n}\n",
+        ),
+    ] {
+        check(input, &["--style=whitesmith"], expected);
+        check(expected, &["--style=whitesmith"], expected);
+    }
+}
+
+#[test]
+fn a_directive_comment_before_a_block_is_no_operator_for_the_closers_after_it() {
+    for directive in ["#else /* first */\n", "#endif /* first */\n"] {
+        let tail = if directive.starts_with("#else") {
+            "#endif\n"
+        } else {
+            ""
+        };
+        let input = format!(
+            "#ifdef A\n#else\nvoid helper(int value)\n#endif\n{{\n#ifdef B\n{directive}    {{\n    }}\n{tail}}}\n"
+        );
+        let expected = format!(
+            "#ifdef A\n#else\nvoid helper(int value)\n#endif\n    {{\n#ifdef B\n{directive}        {{\n        }}\n{tail}    }}\n"
+        );
+        check(&input, &["--style=whitesmith"], &expected);
+        check(&expected, &["--style=whitesmith"], &expected);
+    }
+}
+
+#[test]
+fn ratliff_closes_a_block_after_alike_branches_at_the_header_it_shares_a_line_with() {
+    let input = "void helper(int value)\n{\n    if (value != 0) do {\n#ifdef A\n        value--;\n#else\n        value -= 2;\n#endif\n    } while (value > 0);\n}\n";
+    let expected = "void helper(int value) {\n    if (value != 0) do {\n#ifdef A\n            value--;\n#else\n            value -= 2;\n#endif\n            }\n        while (value > 0);\n    }\n";
+    check(input, &["--style=ratliff"], expected);
+    check(expected, &["--style=ratliff"], expected);
+}
+
+#[test]
+fn ratliff_closes_a_block_at_the_opener_of_the_last_branch_that_opens_it() {
+    let input = "void helper(Item *item)\n{\n#ifndef A\n  assert( item!=0 );\n  {\n#else\n  if( item ){\n#endif\n    item->value = 0;\n  }\n}\n";
+    let expected = "void helper(Item *item) {\n#ifndef A\n    assert( item!=0 );\n        {\n#else\n    if( item ) {\n#endif\n        item->value = 0;\n        }\n    }\n";
+    check(input, &["--style=ratliff"], expected);
+    check(expected, &["--style=ratliff"], expected);
+}
+
+#[test]
+fn indented_brace_styles_close_an_element_list_nested_in_a_compound_literal_at_its_elements() {
+    let shallow = "void helper()\n{\n    value = (struct Item) {\n        .first = 1,\n        .inner = {\n            .second = 2,\n        },\n    };\n}\n";
+    let deep = "void helper()\n{\n    value = (struct Item) {\n        .first = 1,\n        .inner = {\n            .second = { 2, 3 },\n            .third = {\n                4,\n            },\n        },\n    };\n}\n";
+    for (input, style, expected) in [
+        (
+            shallow,
+            "--style=whitesmith",
+            "void helper()\n    {\n    value = (struct Item)\n        {\n        .first = 1,\n        .inner = {\n            .second = 2,\n            },\n        };\n    }\n",
+        ),
+        (
+            shallow,
+            "--style=vtk",
+            "void helper()\n{\n    value = (struct Item)\n        {\n        .first = 1,\n        .inner = {\n            .second = 2,\n            },\n        };\n}\n",
+        ),
+        (
+            shallow,
+            "--style=ratliff",
+            "void helper() {\n    value = (struct Item) {\n        .first = 1,\n        .inner = {\n            .second = 2,\n            },\n        };\n    }\n",
+        ),
+        (
+            deep,
+            "--style=whitesmith",
+            "void helper()\n    {\n    value = (struct Item)\n        {\n        .first = 1,\n        .inner = {\n            .second = { 2, 3 },\n            .third = {\n                4,\n                },\n            },\n        };\n    }\n",
+        ),
+        (
+            deep,
+            "--style=vtk",
+            "void helper()\n{\n    value = (struct Item)\n        {\n        .first = 1,\n        .inner = {\n            .second = { 2, 3 },\n            .third = {\n                4,\n                },\n            },\n        };\n}\n",
+        ),
+        (
+            deep,
+            "--style=ratliff",
+            "void helper() {\n    value = (struct Item) {\n        .first = 1,\n        .inner = {\n            .second = { 2, 3 },\n            .third = {\n                4,\n                },\n            },\n        };\n    }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn ratliff_sets_a_compound_literal_closer_its_line_shares_with_a_nested_one_a_level_in() {
+    let input = "void helper(void *arg)\n{\n    value = (struct Item) {\n        .u.obj = {\n            .first = 1,\n        } };\n}\n";
+    let expected = "void helper(void *arg) {\n    value = (struct Item) {\n        .u.obj = {\n            .first = 1,\n            }\n        };\n    }\n";
+    check(input, &["--style=ratliff"], expected);
+    check(expected, &["--style=ratliff"], expected);
+}
+
+#[test]
+fn a_one_line_block_after_a_comment_leading_its_line_leaves_no_level_to_the_next_header() {
+    for body in ["/* note */ helper();", "/* note */ { helper(); }"] {
+        let input = format!(
+            "void f()\n{{\n    if (ready)\n        {body}\n    while (ready)\n        /* note */\n        helper();\n}}\n"
+        );
+        let expected = "void f()\n{\n    if (ready)\n        /* note */ { helper(); }\n    while (ready)\n        /* note */\n    { helper(); }\n}\n";
+        check(&input, &["--add-one-line-braces"], expected);
+        check(expected, &["--add-one-line-braces"], expected);
+    }
+    let input = "void f()\n{\n    if (ready)\n        helper();\n    else\n        /* note */ other();\n    while (ready)\n        /* note */\n        helper();\n}\n";
+    let expected = "void f()\n{\n    if (ready)\n    { helper(); }\n    else\n        /* note */ { other(); }\n    while (ready)\n        /* note */\n    { helper(); }\n}\n";
+    check(input, &["--add-one-line-braces"], expected);
+    check(expected, &["--add-one-line-braces"], expected);
+}
+
+#[test]
+fn tab_indents_fill_an_element_brace_run_in_to_rows_below_with_a_tab() {
+    let input = "void f()\n{\n    static const struct Item items[] = {\n        {  1,  2 },\n        {5,\n         6}\n    };\n}\n";
+    let expected = "void f()\n{\n\tstatic const struct Item items[] = {\n\t\t{  1,  2 },\n\t\t{\t5,\n\t\t\t6\n\t\t}\n\t};\n}\n";
+    for indent in ["--indent=tab=4", "--indent=force-tab=4"] {
+        check(input, &[indent], expected);
+        check(expected, &[indent], expected);
+    }
+}
+
+#[test]
+fn vtk_sets_a_branch_row_after_a_broken_element_at_the_aggregate_rows() {
+    let input = "static const struct Item items[] = {\n#if A\n    {1, 2}\n#elif B\n    {1, 2},\n    {3,\n     4}\n#else\n    {5, 6},\n    {7, 8}\n#endif\n};\n";
+    let expected = "static const struct Item items[] = {\n#if A\n    {1, 2}\n#elif B\n    {1, 2},\n    {\n        3,\n        4\n    }\n#else\n    {5, 6},\n    {7, 8}\n#endif\n};\n";
+    check(input, &["--style=vtk"], expected);
+    check(expected, &["--style=vtk"], expected);
+}
+
+#[test]
+fn a_header_after_a_statement_its_line_ends_nests_in_no_header_before_it() {
+    let input = "void f()\n{\n    if (ready) helper(); else if (x) {\n        first();\n    }\n    if (ready) helper(); else while (x) {\n        first();\n    }\n    for (;;) if (x) {\n        first();\n    }\n}\n";
+    let expected = "void f() {\n    if (ready) helper(); else if (x) {\n        first(); }\n    if (ready) helper(); else while (x) {\n            first(); }\n    for (;;) if (x) {\n            first(); } }\n";
+    check(input, &["--style=lisp"], expected);
+    check(expected, &["--style=lisp"], expected);
+}
+
+// Breaking blocks pads around a statement, never inside it: a header an
+// `else` kept on a statement line heads runs straight into its block, as
+// it does on a line of its own.
+#[test]
+fn break_blocks_pads_no_line_between_a_header_after_a_kept_else_and_its_block() {
+    let input = "void f()\n{\n    if (ready) helper(); else do {\n        first();\n    } while (state);\n    if (ready)\n        helper(); else for (;;) {\n        first();\n    }\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=pico", "--break-blocks"][..],
+            "void f()\n{   if (ready) helper(); else do\n        {   first(); }\n        while (state);\n\n    if (ready)\n        helper(); else for (;;)\n        {   first(); } }\n",
+        ),
+        (
+            &["--style=lisp", "--break-blocks=all"][..],
+            "void f() {\n    if (ready) helper(); else do {\n            first(); }\n        while (state);\n\n    if (ready)\n        helper(); else for (;;) {\n            first(); } }\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
+fn break_blocks_pads_after_a_kept_one_line_block_that_continues_a_header_block() {
+    let input = "void f()\n{\n    if (state) {\n        a();\n    }\n    { value = 0; }\n    value = 1;\n    if (state) {\n        a();\n    }\n    {\n        value = 0;\n    }\n    value = 1;\n}\n";
+    let expected = "void f()\n{\n    if (state) {\n        a();\n    }\n\n    { value = 0; }\n\n    value = 1;\n\n    if (state) {\n        a();\n    }\n\n    {\n        value = 0;\n    }\n\n    value = 1;\n}\n";
+    let args = [
+        "--style=stroustrup",
+        "--keep-one-line-blocks",
+        "--break-blocks",
+    ];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
+
+#[test]
+fn a_braceless_body_after_a_label_heading_its_header_stands_past_the_header() {
+    let input = "void f()\n{\n    switch (kind) {\n    default: {\n        break;\n    }\n    }\n    done: if (ready) { value=0; }\n}\n";
+    let expected = "void f() {\n    switch (kind) {\n    default: {\n        break; } }\ndone: if (ready)\n        value=0;  }\n";
+    check(input, &["--style=lisp", "--remove-braces"], expected);
+    check(expected, &["--style=lisp", "--remove-braces"], expected);
+}
+
+#[test]
+fn a_braceless_body_of_a_header_an_else_keeps_on_a_statement_line_nests_from_its_if() {
+    let input = "void f()\n{\n    if (ready) helper(); else for (;;)\n        first();\n    if (ready)\n        helper(); else for (;;)\n        first();\n    if (ready)\n        helper(); else while (x) for (;;)\n        first();\n    if (ready)\n        helper(); else if (x)\n        first();\n}\n";
+    let expected = "void f()\n{\n    if (ready) helper(); else for (;;)\n            first();\n    if (ready)\n        helper(); else for (;;)\n            first();\n    if (ready)\n        helper(); else while (x) for (;;)\n                first();\n    if (ready)\n        helper(); else if (x)\n        first();\n}\n";
+    check(input, &["--style=allman", "-o"], expected);
+    check(expected, &["--style=allman", "-o"], expected);
+}
+
+#[test]
+fn break_blocks_pads_after_a_one_line_block_on_a_line_a_comment_leads() {
+    let input = "void f()\n{\n    if (ready)\n        /* note */ helper();\n    else\n        /* note */ other();\n    while (ready)\n        /* note */\n        helper();\n}\n";
+    let expected = "void f()\n{   if (ready)\n        /* note */ { helper(); }\n\n    else\n        /* note */ { other(); }\n\n    while (ready)\n        /* note */\n    { helper(); }\n}\n";
+    let args = [
+        "--style=horstmann",
+        "--break-blocks=all",
+        "--add-one-line-braces",
+    ];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+    let input = "void f()\n{\n    if (ready)\n        helper();\n    else\n        /* note */ other();\n    value = 1;\n}\n";
+    let expected = "void f()\n{\n    if (ready)\n    { helper(); }\n    else\n        /* note */ { other(); }\n\n    value = 1;\n}\n";
+    let args = ["--style=kr", "--break-blocks", "--add-one-line-braces"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
+
+#[test]
+fn kept_one_line_blocks_take_braces_added_after_a_comment_leading_the_statement_line() {
+    let input = "void f()\n{\n    if (ready)\n        /* note */ helper();\n    else\n        /* note */ other(); // tail\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=kr", "--add-braces", "--keep-one-line-blocks"][..],
+            "void f()\n{\n    if (ready)\n        /* note */ { helper(); }\n    else\n        /* note */ { other(); } // tail\n}\n",
+        ),
+        (
+            &["--style=allman", "--add-braces", "--keep-one-line-blocks"][..],
+            "void f()\n{\n    if (ready)\n        /* note */ { helper(); }\n    else\n        /* note */ { other(); } // tail\n}\n",
+        ),
+        (
+            &["--style=pico", "--add-braces", "--keep-one-line-blocks"][..],
+            "void f()\n{   if (ready)\n        /* note */ { helper(); }\n    else\n        /* note */ { other(); } // tail\n}\n",
+        ),
+        // Breaking one-line headers breaks the block it adds there.
+        (
+            &[
+                "--style=1tbs",
+                "--keep-one-line-blocks",
+                "--break-one-line-headers",
+            ][..],
+            "void f()\n{\n    if (ready)\n        /* note */ {\n        helper();\n    } else\n        /* note */ {\n        other();    // tail\n    }\n}\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
+fn a_member_split_off_its_return_type_after_an_indented_access_label_stands_at_the_members() {
+    let input =
+        "class Item {\npublic:\n    int value() const\n    {\n        return value_;\n    }\n};\n";
+    let expected = "class Item {\n  public:\n    int\n    value() const {\n        return value_;\n    }\n};\n";
+    let args = [
+        "--style=google",
+        "--break-return-type",
+        "--keep-one-line-statements",
+    ];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
+
+#[test]
+fn tab_indents_set_an_indented_directive_among_arguments_as_the_argument_rows() {
+    let input = "void f()\n{\n    result = helper(first,\n#ifdef FEATURE\n                    second,\n#endif\n                    third);\n}\n";
+    for (indent, expected) in [
+        (
+            "--indent=tab=4",
+            "void f()\n{\n\tresult = helper(first,\n\t                #ifdef FEATURE\n\t                second,\n\t                #endif\n\t                third);\n}\n",
+        ),
+        (
+            "--indent=force-tab=4",
+            "void f()\n{\n\tresult = helper(first,\n\t\t\t\t\t#ifdef FEATURE\n\t\t\t\t\tsecond,\n\t\t\t\t\t#endif\n\t\t\t\t\tthird);\n}\n",
+        ),
+    ] {
+        check(input, &["--indent-preproc-cond", indent], expected);
+        check(expected, &["--indent-preproc-cond", indent], expected);
+    }
+}
+
+#[test]
+fn horstmann_runs_an_access_label_in_at_its_column_whatever_the_gap() {
+    let input = "class Widget : public Base\n{\npublic:\n    int a;\nprivate:\n    int b;\n};\n";
+    for (indent, expected) in [
+        (
+            "--indent=spaces=2",
+            "class Widget : public Base\n{public:\n  int a;\n private:\n  int b;\n};\n",
+        ),
+        (
+            "--indent=tab=2",
+            "class Widget : public Base\n{public:\n\tint a;\n private:\n\tint b;\n};\n",
+        ),
+        (
+            "--indent=force-tab=2",
+            "class Widget : public Base\n{public:\n\tint a;\n private:\n\tint b;\n};\n",
+        ),
+    ] {
+        let args = ["--style=horstmann", "--indent-modifiers", indent];
+        check(input, &args, expected);
+        check(expected, &args, expected);
+    }
+}
+
+#[test]
+fn indented_access_labels_leave_the_members_at_the_class_level_with_an_odd_indent() {
+    let input =
+        "class Widget\n{\npublic:\n    int a;\n    void run()\n    {\n        a = 1;\n    }\n};\n";
+    for (indent, expected) in [
+        (
+            "--indent=spaces=3",
+            "class Widget\n{\n public:\n   int a;\n   void run()\n   {\n      a = 1;\n   }\n};\n",
+        ),
+        (
+            "--indent=spaces=5",
+            "class Widget\n{\n  public:\n     int a;\n     void run()\n     {\n          a = 1;\n     }\n};\n",
+        ),
+    ] {
+        let args = ["--style=allman", "--indent-modifiers", indent];
+        check(input, &args, expected);
+        check(expected, &args, expected);
+    }
+}
+
+#[test]
+fn an_attached_return_type_ending_in_a_pointer_keeps_the_pointer_alignment() {
+    let input = "static struct Item *\nmake(int value);\nstatic struct Item &\nfind(int value);\n";
+    for (align, expected) in [
+        (
+            "--align-pointer=type",
+            "static struct Item* make(int value);\nstatic struct Item& find(int value);\n",
+        ),
+        (
+            "--align-pointer=middle",
+            "static struct Item * make(int value);\nstatic struct Item & find(int value);\n",
+        ),
+        (
+            "--align-pointer=name",
+            "static struct Item *make(int value);\nstatic struct Item &find(int value);\n",
+        ),
+    ] {
+        let args = [align, "--attach-return-type-decl"];
+        check(input, &args, expected);
+        check(expected, &args, expected);
+    }
+}
+
+#[test]
+fn break_blocks_pads_around_a_header_a_comment_leads_on_its_line() {
+    let input =
+        "void f()\n{\n    value = 1;\n    /* c */ if (x)\n        a();\n    value = 2;\n}\n";
+    let expected =
+        "void f()\n{\n    value = 1;\n\n    /* c */ if (x)\n        a();\n\n    value = 2;\n}\n";
+    check(input, &["--style=linux", "--break-blocks"], expected);
+    check(expected, &["--style=linux", "--break-blocks"], expected);
+}
+
+#[test]
+fn break_blocks_keeps_a_comment_split_off_a_header_after_a_label_on_its_header() {
+    let input = "void f()\n{\n    value = 0;\nretry:\n    /* note */ for (;;) {\n        value = 1;\n    }\n    switch (state) {\n    again:\n    /* note */ case 1:\n        value = 1;\n        break;\n    }\n}\n";
+    let expected = "void f()\n{\n    value = 0;\nretry:\n\n    /* note */\n    for (;;) {\n        value = 1;\n    }\n\n    switch (state) {\nagain:\n\n    /* note */\n    case 1:\n        value = 1;\n        break;\n    }\n}\n";
+    check(input, &["--break-blocks=all"], expected);
+    check(expected, &["--break-blocks=all"], expected);
+}
+
+#[test]
+fn a_comment_led_brace_after_a_header_stands_past_a_directive_as_without_it() {
+    for (args, expected) in [
+        (
+            &[][..],
+            "void f()\n{\n    if (ready)\n#ifdef TRACE\n        /* note */ {\n        push(state);\n    }\n#endif\n    value = 0;\n}\n",
+        ),
+        (
+            &["--style=allman"][..],
+            "void f()\n{\n    if (ready)\n#ifdef TRACE\n        /* note */\n    {\n        push(state);\n    }\n#endif\n    value = 0;\n}\n",
+        ),
+    ] {
+        let input = "void f()\n{\n    if (ready)\n#ifdef TRACE\n    /* note */ {\n        push(state);\n    }\n#endif\n    value = 0;\n}\n";
+        check(input, args, expected);
+        check(expected, args, expected);
+        let plain = input.replace("#ifdef TRACE\n", "").replace("#endif\n", "");
+        check(
+            &plain,
+            args,
+            &expected
+                .replace("#ifdef TRACE\n", "")
+                .replace("#endif\n", ""),
+        );
+    }
+}
+
+#[test]
+fn a_comment_led_case_block_brace_past_a_directive_splits_as_without_it() {
+    let input = "void f()\n{\n    switch (state) {\n    case 2:\n#ifdef TRACE\n    /* note */ {\n        push(state);\n    }\n#endif\n    break;\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (state) {\n    case 2:\n#ifdef TRACE\n        /* note */\n    {\n        push(state);\n    }\n#endif\n    break;\n    }\n}\n";
+    for args in [&[][..], &["--style=kr"][..]] {
+        check(input, args, expected);
+        check(expected, args, expected);
+        let plain = input.replace("#ifdef TRACE\n", "").replace("#endif\n", "");
+        check(
+            &plain,
+            args,
+            &expected
+                .replace("#ifdef TRACE\n", "")
+                .replace("#endif\n", ""),
+        );
+    }
+}
+
+#[test]
+fn a_line_comment_before_a_headers_brace_stands_past_a_directive_as_without_it() {
+    let input = "void f()\n{\n    while (ready)\n#if TRACE\n    // note\n    {\n        push(state);\n    }\n#endif\n    for (;;)\n#if TRACE\n    // first\n    // second\n    {\n        push(state);\n    }\n#endif\n}\n";
+    let expected = "void f()\n{\n    while (ready)\n#if TRACE\n        // note\n    {\n        push(state);\n    }\n#endif\n    for (;;)\n#if TRACE\n        // first\n        // second\n    {\n        push(state);\n    }\n#endif\n}\n";
+    for args in [&[][..], &["--indent-col1-comments"][..]] {
+        check(input, args, expected);
+        check(expected, args, expected);
+        let plain = input.replace("#if TRACE\n", "").replace("#endif\n", "");
+        check(
+            &plain,
+            args,
+            &expected.replace("#if TRACE\n", "").replace("#endif\n", ""),
+        );
+    }
+}
+
+#[test]
+fn breaking_one_line_headers_leaves_a_comment_led_body_line_of_a_header_directives_split() {
+    let input = "void f()\n{\n#ifdef A\n    if (q > 9)\n#else\n    if (q > 15)\n#endif\n        /*d*/ Bug(\"x\");\n}\n";
+    check(input, &["--style=kr", "--break-one-line-headers"], input);
+}
+
+#[test]
+fn adding_braces_leaves_no_body_indent_after_a_comment_led_body_of_a_header_directives_split() {
+    let input = "void f()\n{\n#ifdef D\n#ifdef A\n    if (q > 9)\n#else\n    if (q > 15)\n#endif\n        /*d*/ Bug(\"x\");\n#endif\n    if (q) {\n        value = 1;\n    }\n}\n";
+    check(input, &["--style=kr", "--add-braces"], input);
+}
+
+#[test]
+fn indented_conditionals_close_a_case_block_group_at_the_column_of_its_opening_directive() {
+    let input = "void f()\n{\nswitch (state) {\ncase 2:\n#ifdef TRACE\n{\n    push(state);\n}\n#endif\nbreak;\n}\n}\n";
+    let expected = "void f()\n    {\n    switch (state)\n        {\n        case 2:\n            #ifdef TRACE\n            {\n            push(state);\n            }\n            #endif\n        break;\n        }\n    }\n";
+    check(
+        input,
+        &["--style=whitesmith", "--indent-preproc-cond"],
+        expected,
+    );
+}
+
+#[test]
+fn a_comment_between_declarators_stands_at_the_declarator_after_an_indented_initializer_closer() {
+    let input = "static const Item\n    first = {\n        1,\n        2\n    },\n    /* note */\n    second = {\n        3,\n        4\n    };\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "static const Item\nfirst = {\n    1,\n    2\n    },\n/* note */\nsecond = {\n    3,\n    4\n    };\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "static const Item\nfirst =\n    {\n    1,\n    2\n    },\n/* note */\nsecond =\n    {\n    3,\n    4\n    };\n",
+    );
+}
+
+#[test]
+fn whitesmith_sets_the_brace_of_a_declarator_an_attribute_leads_a_level_past_its_declaration() {
+    let input = "static const Item\n    first = {\n        1,\n        2\n    },\n    __attribute__ ((deprecated))\n    second = {\n        3,\n        4\n    };\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "static const Item\nfirst =\n    {\n    1,\n    2\n    },\n__attribute__ ((deprecated))\nsecond =\n    {\n    3,\n    4\n    };\n",
+    );
+}
+
+#[test]
+fn breaking_one_line_headers_parts_a_comment_leading_a_body_line_from_its_statement() {
+    let input = "void f() {\n    if (ready)\n        /* note */ helper();\n    else\n        /* note */ other();\n    x = 1;\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-one-line-headers"],
+        "void f()\n{\n    if (ready)\n        /* note */\n        helper();\n    else\n        /* note */\n        other();\n    x = 1;\n}\n",
+    );
+}
+
+#[test]
+fn an_else_body_a_comment_leads_after_a_conditional_stays_on_its_line() {
+    let input = "void f()\n{\n    if (ready)\n        helper();\n    else\n#ifdef A\n        /* note */ other();\n#else\n        /* note */ third();\n#endif\n    x = 1;\n}\n";
+    check(input, &["--style=kr"], input);
+    check(input, &["--style=kr", "--break-one-line-headers"], input);
+}
+
+#[test]
+fn a_header_and_body_comments_lead_close_its_body_before_a_closing_directive() {
+    let input = "void f()\n{\n#ifdef DEBUG\n    /*d*/ if (b > n)\n        /*d*/ Bug(\"x\");\n#endif\n    if (b < n)\n        return 0;\n    x = 1;\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n#ifdef DEBUG\n    /*d*/ if (b > n)\n        /*d*/ Bug(\"x\");\n#endif\n    if (b < n)\n        return 0;\n    x = 1;\n    }\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n#ifdef DEBUG\n    /*d*/ if (b > n)\n        /*d*/ Bug(\"x\");\n#endif\n    if (b < n)\n        return 0;\n    x = 1;\n    }\n",
+    );
+}
+
+#[test]
+fn a_case_block_holding_case_labels_closes_under_its_brace_and_keeps_its_comments_in_its_body() {
+    let input = "void run(int op)\n{\n    switch (op) {\n    case REOPEN: {\n        if (cursor) {\n            reset(cursor);\n            goto hints;\n        }\n        /* fall through into open */\n    case OPEN_READ:\n    case OPEN_WRITE:\n        open(cursor);\nhints:\n        apply(cursor);\n        break;\n    }\n    case CLOSE:\n        close(cursor);\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void run(int op)\n{\n    switch (op) {\n    case REOPEN: {\n        if (cursor) {\n            reset(cursor);\n            goto hints;\n        }\n        /* fall through into open */\n        case OPEN_READ:\n        case OPEN_WRITE:\n            open(cursor);\nhints:\n            apply(cursor);\n            break;\n    }\n    case CLOSE:\n        close(cursor);\n        break;\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=allman"],
+        "void run(int op)\n{\n    switch (op)\n    {\n    case REOPEN:\n    {\n        if (cursor)\n        {\n            reset(cursor);\n            goto hints;\n        }\n        /* fall through into open */\n        case OPEN_READ:\n        case OPEN_WRITE:\n            open(cursor);\nhints:\n            apply(cursor);\n            break;\n    }\n    case CLOSE:\n        close(cursor);\n        break;\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void run(int op)\n    {\n    switch (op)\n        {\n        case REOPEN:\n            {\n            if (cursor)\n                {\n                reset(cursor);\n                goto hints;\n                }\n            /* fall through into open */\n            case OPEN_READ:\n            case OPEN_WRITE:\n                open(cursor);\nhints:\n                apply(cursor);\n                break;\n            }\n        case CLOSE:\n            close(cursor);\n            break;\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_comment_after_an_element_brace_stays_on_the_brace_line_in_every_style() {
+    let input = "static const struct Item items[] = {\n  {\"first\",\n   \"one\", 0, 1},\n  { /* second item */\n    \"second\",\n    \"two\", 0, 2 },\n};\n";
+    check(
+        input,
+        &["--mode=c"],
+        "static const struct Item items[] = {\n    {   \"first\",\n        \"one\", 0, 1\n    },\n    { /* second item */\n        \"second\",\n        \"two\", 0, 2\n    },\n};\n",
+    );
+    let broken = "static const struct Item items[] = {\n    {\n        \"first\",\n        \"one\", 0, 1\n    },\n    { /* second item */\n        \"second\",\n        \"two\", 0, 2\n    },\n};\n";
+    check(input, &["--style=java"], broken);
+    check(input, &["--style=kr"], broken);
+}
+
+#[test]
+fn any_unconditional_directive_between_a_case_label_and_a_brace_makes_the_brace_a_plain_block() {
+    let input = "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n    {\n        pop(state);\n    }\n    break;\n    case 2:\n#pragma once\n    {\n        push(state);\n    }\n    break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n        {\n            pop(state);\n        }\n        break;\n    case 2:\n#pragma once\n        {\n            push(state);\n        }\n        break;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn lisp_padding_narrows_the_gap_before_a_comment_after_added_braces() {
+    let input = "void f()\n{\n    if (ready) value=1;   // note\n}\n";
+    check(
+        input,
+        &["--style=lisp", "--add-braces", "--pad-oper"],
+        "void f() {\n    if (ready) {\n        value = 1; } // note\n}\n",
+    );
+}
+
+#[test]
+fn padding_the_row_a_closer_joins_narrows_the_gap_before_its_comment() {
+    let lone = "void f()\n{\n    if (ready) {\n        value=a+b+c+d;\n    }        // note\n}\n";
+    let nested = "void f()\n{\n    if (a) {\n        if (b) {\n            x=1; } }   // note\n}\n";
+    check(
+        lone,
+        &["--style=lisp", "--pad-oper"],
+        "void f() {\n    if (ready) {\n        value = a + b + c + d; } // note\n}\n",
+    );
+    check(
+        nested,
+        &["--style=lisp", "--pad-oper"],
+        "void f() {\n    if (a) {\n        if (b) {\n            x = 1; } } // note\n}\n",
+    );
+    check(
+        lone,
+        &["--style=pico", "--pad-oper"],
+        "void f()\n{   if (ready)\n    {   value = a + b + c + d; } // note\n}\n",
+    );
+    check(
+        nested,
+        &["--style=pico", "--pad-oper"],
+        "void f()\n{   if (a)\n    {   if (b)\n        {   x = 1; } } // note\n}\n",
+    );
+}
+
+#[test]
+fn break_blocks_pads_after_a_kept_block_continuing_a_kept_header_block() {
+    let input = "void f()\n{\n    if (ready) { value=0; }\n    { value = 0; }\n    other();\n}\n";
+    check(
+        input,
+        &["--style=java", "--break-blocks", "--keep-one-line-blocks"],
+        "void f() {\n    if (ready) { value=0; }\n\n    { value = 0; }\n\n    other();\n}\n",
+    );
+}
+
+#[test]
+fn break_blocks_carries_a_header_block_through_bare_blocks_after_it() {
+    let input = "void f()\n{\n    while (ready) { value=0; }\n    { value = 0; }\n    { value = 1; }\n    other();\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-blocks", "--keep-one-line-blocks"],
+        "void f()\n{\n    while (ready) { value=0; }\n\n    { value = 0; }\n\n    { value = 1; }\n\n    other();\n}\n",
+    );
+}
+
+#[test]
+fn a_space_pico_sets_in_an_element_row_a_brace_runs_into_takes_from_its_comment_gap() {
+    let narrow = "static const Node dummy = {\n  {{NULL}, EMPTY,  /* value */\n   DEADKEY, 0, {NULL}}  /* key */\n};\n";
+    let wide = "static const Node dummy = {\n  {{NULL}, EMPTY,     /* value */\n   DEADKEY, 0, {NULL}}  /* key */\n};\n";
+    check(
+        narrow,
+        &["--style=pico"],
+        "static const Node dummy = {\n    {   {NULL }, EMPTY, /* value */\n        DEADKEY, 0, {NULL } } /* key */\n};\n",
+    );
+    check(
+        wide,
+        &["--style=pico"],
+        "static const Node dummy = {\n    {   {NULL }, EMPTY,    /* value */\n        DEADKEY, 0, {NULL } } /* key */\n};\n",
+    );
+    check(
+        wide,
+        &["--style=kr"],
+        "static const Node dummy = {\n    {   {NULL}, EMPTY,     /* value */\n        DEADKEY, 0, {NULL}\n    }  /* key */\n};\n",
+    );
+}
+
+#[test]
+fn breaking_one_line_headers_leaves_a_comment_inside_a_condition_directives_split() {
+    let input = "void f()\n{\n    if (rc == -1) {\n        if (err != BUSY\n#if (WIN)\n            /* note */\n            && err != AGAIN\n#endif\n            )\n        {\n            {\n            }\n        }\n    }\n}\n";
+    check(
+        input,
+        &["--style=1tbs", "--break-one-line-headers"],
+        "void f()\n{\n    if (rc == -1) {\n        if (err != BUSY\n#if (WIN)\n                /* note */\n                && err != AGAIN\n#endif\n           ) {\n            {\n            }\n        }\n    }\n}\n",
+    );
+}
+
+#[test]
+fn pico_attaching_closing_while_attaches_a_while_on_its_own_source_line_as_other_styles_do() {
+    let input = "void f()\n{\n    do {\n        value=0;\n    } while (ready);\n    do\n    {\n        value=1;\n    }\n    while (ready);\n}\n";
+    check(
+        input,
+        &["--style=pico", "--attach-closing-while"],
+        "void f()\n{   do\n    {   value=0; } while (ready);\n    do\n    {   value=1; } while (ready); }\n",
+    );
+    check(
+        input,
+        &["--style=lisp", "--attach-closing-while"],
+        "void f() {\n    do {\n        value=0; } while (ready);\n    do {\n        value=1; } while (ready); }\n",
+    );
+}
+
+#[test]
+fn vtk_closes_a_block_a_conditional_splits_in_a_case_block_under_its_brace() {
+    let input = "void f(int i)\n{\n    switch (i) {\n    case 1: {\n        if (a) {\n            x();\n#if B\n        } else if (c) {\n            y();\n#endif\n        } else {\n            z();\n        }\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=vtk"],
+        "void f(int i)\n{\n    switch (i)\n        {\n        case 1:\n            {\n            if (a)\n                {\n                x();\n#if B\n                }\n            else if (c)\n                {\n                y();\n#endif\n                }\n            else\n                {\n                z();\n                }\n            break;\n            }\n        }\n}\n",
+    );
+}
+
+#[test]
+fn vtk_indents_an_assigned_brace_row_in_a_block_its_braces_indent() {
+    let input = "Metrics g =\n    {0, a + b};\nvoid f()\n{\n    {\n        Metrics m =\n            {0, 1};\n    }\n    switch (x) {\n    case 1:\n        Metrics n =\n            {0, 1};\n        break;\n    }\n    while (x) {\n        if (y) {\n            Metrics k =\n                {0, 1};\n        }\n    }\n    Metrics other = {\n        0, a + b\n    };\n}\n";
+    check(
+        input,
+        &["--style=vtk"],
+        "Metrics g =\n{0, a + b};\nvoid f()\n{\n        {\n        Metrics m =\n            {0, 1};\n        }\n    switch (x)\n        {\n        case 1:\n            Metrics n =\n                {0, 1};\n            break;\n        }\n    while (x)\n        {\n        if (y)\n            {\n            Metrics k =\n                {0, 1};\n            }\n        }\n    Metrics other =\n        {\n        0, a + b\n        };\n}\n",
+    );
+}
+
+#[test]
+fn whitesmith_indents_an_assigned_brace_row_from_a_statement_after_a_case_label() {
+    let input = "void f()\n{\n    switch (x) {\n    case 1:\n        Metrics n =\n            {0, 1};\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    switch (x)\n        {\n        case 1:\n            Metrics n =\n                {0, 1};\n            break;\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn kept_switch_labels_ending_in_a_user_label_end_their_line() {
+    let input = "void f(int p) {\n  switch (p) {\n    case 1: one:\n      x();\n    case 2: case 3:\n      x();\n    default: dflt:\n      x();\n  }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--keep-one-line-statements"],
+        "void f(int p)\n{\n    switch (p) {\n    case 1: one:\n        x();\n    case 2: case 3:\n        x();\n    default: dflt:\n        x();\n    }\n}\n",
+    );
+}
+
+#[test]
+fn break_blocks_pads_after_a_comment_led_block_of_an_else_a_conditional_splits() {
+    let input = "void f()\n{\n    if (a) {\n        void *r;\n#if T\n        if (b) {\n            r = c;\n        } else\n#endif\n        /*if( !b )*/ {\n            r = d;\n        }\n        *n = r->k;\n        k = r->a;\n    } else {\n        k = 0;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-blocks"],
+        "void f()\n{\n    if (a) {\n        void *r;\n#if T\n\n        if (b) {\n            r = c;\n        } else\n#endif\n            /*if( !b )*/ {\n            r = d;\n        }\n\n        *n = r->k;\n        k = r->a;\n    } else {\n        k = 0;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_switch_closer_a_comment_follows_stands_under_its_brace_after_case_blocks() {
+    let input = "void f(int e)\n{\n    switch (e) {\n      case 1: {\n        x();\n        break;\n      }\n    } /* end */\n    z();\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f(int e)\n{\n    switch (e)\n    {\n    case 1:\n    {\n        x();\n        break;\n    }\n    } /* end */\n    z();\n}\n",
+    );
+}
+
+#[test]
+fn break_blocks_pads_before_an_else_a_comment_leads_once_its_closer_is_removed() {
+    let input = "void f()\n{\n    if (ready) {\n        value=0;\n    } else if (other) { // second\n        value=1;\n    } /* last */ else {\n        value=2;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--remove-braces", "--break-blocks=all"],
+        "void f()\n{\n    if (ready)\n        value=0;\n\n    else if (other)   // second\n        value=1;\n\n    /* last */ else\n        value=2;\n}\n",
+    );
+}
+
+#[test]
+fn whitesmith_sets_the_body_brace_of_a_function_returning_a_defined_enum_at_its_header() {
+    let input = "#include <x.h>\n\nstatic enum {\n\tFIRST,\n\tSECOND\n} config(struct repository *r)\n{\n\tconst char *str = NULL;\n\treturn FIRST;\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "#include <x.h>\n\nstatic enum\n    {\n    FIRST,\n    SECOND\n    } config(struct repository *r)\n    {\n    const char *str = NULL;\n    return FIRST;\n    }\n",
+    );
+}
+
+#[test]
+fn a_declarator_after_an_initializer_stands_at_its_declaration_in_a_function() {
+    let input = "void f()\n{\n    static const struct Item\n        first = {\n            1, 2\n        },\n        __attribute__((unused))\n        second = {\n            3, 4\n        };\n}\n";
+    check(
+        input,
+        &[],
+        "void f()\n{\n    static const struct Item\n        first = {\n        1, 2\n    },\n    __attribute__((unused))\n    second = {\n        3, 4\n    };\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_between_declarators_stands_at_a_continued_declaration() {
+    let input = "static const struct Item\n    first = {\n        1, 2\n    },\n    /* note */\n    second = {\n        3, 4\n    };\n";
+    check(
+        input,
+        &[],
+        "static const struct Item\n    first = {\n    1, 2\n},\n/* note */\nsecond = {\n    3, 4\n};\n",
+    );
+}
+
+#[test]
+fn vtk_sets_a_lone_brace_of_a_continued_declarator_a_level_past_its_declaration() {
+    let input = "void f()\n{\n    static const struct Item\n        first = {\n            1, 2\n        },\n        second = {\n            3, 4\n        };\n}\n";
+    check(
+        input,
+        &["--style=vtk"],
+        "void f()\n{\n    static const struct Item\n        first =\n        {\n        1, 2\n        },\n    second =\n        {\n        3, 4\n        };\n}\n",
+    );
+}
+
+#[test]
+fn break_blocks_pads_before_a_formatted_define_after_a_block() {
+    let input = "void f()\n{\n    if (ready) {\n        first();\n    }\n#define CHECK(A) \\\n      do {           \\\n        x(A);        \\\n      } while (0)\n    CHECK(value);\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-blocks", "--indent-preproc-define"],
+        "void f()\n{\n    if (ready) {\n        first();\n    }\n\n#define CHECK(A) \\\n    do {           \\\n        x(A);        \\\n    } while (0)\n    CHECK(value);\n}\n",
+    );
+}
+
+#[test]
+fn break_blocks_pads_no_statement_after_an_initializer_following_a_header_block() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1:\n        break;\n    }\n    struct Item list[] = {\n        1, 2\n    };\n    helper(1);\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-blocks"],
+        "void f()\n{\n    switch (kind) {\n    case 1:\n        break;\n    }\n\n    struct Item list[] = {\n        1, 2\n    };\n    helper(1);\n}\n",
+    );
+}
+
+#[test]
+fn ratliff_keeps_a_block_after_a_directive_in_a_case_at_its_brace_after_an_else_chain() {
+    let input = "void f()\n{\n    if (ready)\n        value=0;\n    else\n        value=2;\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n    {\n        pop(state);\n    }\n    break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    if (ready)\n        value=0;\n    else\n        value=2;\n    switch (state) {\n        case 1:\n#line 46 \"input.l\"\n                {\n                pop(state);\n                }\n            break;\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_nested_switch_body_after_an_element_table_stands_a_level_past_its_label() {
+    let input = "static const struct Item items[] = {\n    { 1 },\n};\n\nvoid f()\n{\n    switch (kind) {\n    case 1: {\n        switch (other) {\n        case 2:\n            value = 2;\n            break;\n        }\n        break;\n    }\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+    check(
+        input,
+        &["--style=allman"],
+        "static const struct Item items[] = {\n    { 1 },\n};\n\nvoid f()\n{\n    switch (kind)\n    {\n    case 1:\n    {\n        switch (other)\n        {\n        case 2:\n            value = 2;\n            break;\n        }\n        break;\n    }\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_nested_switch_body_after_a_table_in_a_case_block_stands_a_level_past_its_label() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 2:\n    {\n        static const struct Item other[] = {\n            { 1 },\n        };\n        switch (other) {\n        case 2:\n            value = 2;\n            break;\n        }\n    }\n    }\n}\n";
+    check(input, &[], input);
+    check(
+        input,
+        &["--indent-switches"],
+        "void f()\n{\n    switch (kind) {\n        case 2:\n        {\n            static const struct Item other[] = {\n                { 1 },\n            };\n            switch (other) {\n                case 2:\n                    value = 2;\n                    break;\n            }\n        }\n    }\n}\n",
+    );
+}
+
+#[test]
+fn keeping_one_line_statements_keeps_a_statement_after_an_empty_block_on_its_line() {
+    let input = "void f()\n{\n    if (ready) {} next();\n    while (busy()) {} next();\n    {} next();\n    switch (x) {} next();\n    do {} while (x); next();\n    if (a) {} else {} next();\n    for (;;) {} for (;;) {}\n}\n";
+    check(input, &["--style=kr", "--keep-one-line-statements"], input);
+    check(
+        input,
+        &["--style=allman", "--keep-one-line-statements"],
+        "void f()\n{\n    if (ready) {} next();\n    while (busy()) {} next();\n    {} next();\n    switch (x) {} next();\n    do {}\n    while (x); next();\n    if (a) {}\n    else {} next();\n    for (;;) {} for (;;) {}\n}\n",
+    );
+}
+
+#[test]
+fn styles_breaking_closing_braces_break_the_while_off_an_empty_do_block() {
+    let input = "void f()\n{\n    do {} while (x);\n    next();\n}\n";
+    let broken = "void f()\n{\n    do {}\n    while (x);\n    next();\n}\n";
+    check(input, &["--style=stroustrup"], broken);
+    check(input, &["--break-closing-braces"], broken);
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    do {}\n    while (x);\n    next();\n    }\n",
+    );
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn run_in_closers_take_the_padding_before_a_commented_else_ahead_of_the_row_they_join() {
+    let input = "void f()\n{\n    if (ready) {\n        first();\n        value=0;\n    } /* c */ else {\n        result=0;\n    }\n    if (ready) {\n        value=0; // note\n    } /* c */ else {\n        result=0;\n    }\n    next();\n}\n";
+    check(
+        input,
+        &["--style=lisp", "--break-blocks=all"],
+        "void f() {\n    if (ready) {\n        first();\n\n        value=0; } /* c */ else {\n\n        result=0; }\n\n    if (ready) {\n        value=0; // note\n\n    } /* c */ else {\n\n        result=0; }\n\n    next(); }\n",
+    );
+    check(
+        input,
+        &["--style=pico", "--break-blocks=all"],
+        "void f()\n{   if (ready)\n    {   first();\n\n        value=0; } /* c */ else\n\n    {   result=0; }\n\n    if (ready)\n    {   value=0; // note\n\n    } /* c */ else\n\n    {   result=0; }\n\n    next(); }\n",
+    );
+}
+
+#[test]
+fn lisp_pads_after_a_commented_else_if_a_closer_joins_as_after_a_commented_else() {
+    let input = "void f()\n{\n    if (ready) {\n        value=0;\n    } /* c */ else if (other) {\n        result=0;\n    } /* d */ else {\n        result=1;\n    }\n}\n";
+    check(
+        input,
+        &["--style=lisp", "--break-blocks"],
+        "void f() {\n    if (ready) {\n        value=0; } /* c */ else if (other) {\n\n        result=0; } /* d */ else {\n\n        result=1; } }\n",
+    );
+}
+
+#[test]
+fn ratliff_sets_broken_element_rows_of_a_table_in_a_case_body_as_outside_a_switch() {
+    let input = "void f()\n{\n    switch (op) {\n    default: {\n        int table[][2] = {\n            { FIRST,  1 },\n            {\n                SECOND, 2|\n                4\n            },\n        };\n        break;\n    }\n    case 2:\n        int other[][2] = {\n            {\n                SECOND, 2|\n                4\n            },\n        };\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    switch (op) {\n        default: {\n            int table[][2] = {\n                    { FIRST,  1 },\n                    {\n                    SECOND, 2|\n                    4\n                    },\n                };\n            break;\n            }\n        case 2:\n            int other[][2] = {\n                    {\n                    SECOND, 2|\n                    4\n                    },\n                };\n            break;\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_comment_leading_a_case_label_line_leaves_the_label_at_the_case_column() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1:\n        value = 1;\n    /* fall through */ case 2:\n        value = 2;\n        break;\n    /* other */ default:\n        break;\n    }\n}\n";
+    check(input, &[], input);
+    check(
+        input,
+        &["--indent-switches"],
+        "void f()\n{\n    switch (kind) {\n        case 1:\n            value = 1;\n        /* fall through */ case 2:\n            value = 2;\n            break;\n        /* other */ default:\n            break;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn gnu_sets_the_case_block_brace_of_a_comment_led_label_under_the_label() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value = 1;\n        break;\n    }\n    /*case 2*/ default: {\n        if (ready) {\n            start();\n        }\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=gnu"],
+        "void f()\n{\n    switch (kind)\n        {\n        case 1:\n        {\n            value = 1;\n            break;\n        }\n        /*case 2*/ default:\n        {\n            if (ready)\n                {\n                    start();\n                }\n            break;\n        }\n        }\n}\n",
+    );
+}
+
+#[test]
+fn keeping_one_line_statements_keeps_a_label_after_a_statement_on_its_line() {
+    let input = "void f()\n{\n    value = 1; again:\n    next();\n    if (ready) {\n        a(); stop:\n        b();\n    }\n}\n";
+    check(input, &["--keep-one-line-statements"], input);
+}
+
+#[test]
+fn a_kept_line_ending_in_a_label_stays_at_the_column_of_its_first_statement() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: one:\n        value = 1;\n        break;\n    case 2: value = 2; two:\n        break;\n    }\n}\n";
+    check(input, &["--keep-one-line-statements"], input);
+    check(
+        input,
+        &["--keep-one-line-statements", "--indent-labels"],
+        input,
+    );
+}
+
+#[test]
+fn a_declaration_after_a_define_ending_in_a_closer_continues_its_declarator_row() {
+    let input = "#define CHECK(v) \\\n    do { \\\n        h(v); \\\n    } while (0)\n\nstatic const struct Item\n    first = {\n        1, 2\n    };\n";
+    check(
+        input,
+        &["--style=kr"],
+        "#define CHECK(v) \\\n    do { \\\n        h(v); \\\n    } while (0)\n\nstatic const struct Item\n    first = {\n    1, 2\n};\n",
+    );
+}
+
+#[test]
+fn padding_options_reach_the_while_of_an_empty_do_block() {
+    let input = "void f()\n{\n    do {} while(x);\n    do {} while ( x );\n    next();\n}\n";
+    check(
+        input,
+        &["--unpad-paren"],
+        "void f()\n{\n    do {} while(x);\n    do {} while(x);\n    next();\n}\n",
+    );
+    check(
+        input,
+        &["--pad-header"],
+        "void f()\n{\n    do {} while (x);\n    do {} while ( x );\n    next();\n}\n",
+    );
+}
+
+#[test]
+fn a_case_block_after_a_comment_led_label_stands_as_after_a_plain_label() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1:\n        break;\n    /* other */ default: {\n        value = 2;\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    switch (kind)\n        {\n        case 1:\n            break;\n        /* other */ default:\n            {\n            value = 2;\n            break;\n            }\n        }\n    }\n",
+    );
+    check(
+        input,
+        &["--style=ratliff", "--indent-switches"],
+        "void f() {\n    switch (kind) {\n        case 1:\n            break;\n        /* other */ default: {\n            value = 2;\n            break;\n            }\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_parameter_paren_split_off_a_long_file_scope_header_stands_where_it_would_on_its_own_line() {
+    let input = "Decl(jint,first_very_long_function_name_component_that_goes_past_the_limit_of_eighty_xyz_abc)(\n    int a, int b\n) {\n    return 1;\n}\n";
+    let expected = "Decl(jint,\n     first_very_long_function_name_component_that_goes_past_the_limit_of_eighty_xyz_abc)\n(\n    int a, int b\n) {\n    return 1;\n}\n";
+    check(input, &["--style=google", "--max-code-length=80"], expected);
+    check(
+        expected,
+        &["--style=google", "--max-code-length=80"],
+        expected,
+    );
+}
+
+#[test]
+fn whitesmith_sets_a_comment_led_label_brace_on_its_own_line_as_a_case_block() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1:\n        break;\n    /* other */ default:\n    {\n        if (x)\n            y();\n        value = 2;\n        break;\n    }\n    }\n}\n";
+    let expected = "void f()\n    {\n    switch (kind)\n        {\n        case 1:\n            break;\n        /* other */ default:\n            {\n            if (x)\n                y();\n            value = 2;\n            break;\n            }\n        }\n    }\n";
+    check(input, &["--style=whitesmith"], expected);
+    check(expected, &["--style=whitesmith"], expected);
+}
+
+#[test]
+fn a_comment_leading_a_label_line_leaves_it_a_label() {
+    let input = "void f()\n{\n    /* note */ done: value=0;\n    /* note */ again:\n    next();\n    if (x) {\n        /* note */ stop: y();\n    }\n}\n";
+    check(
+        input,
+        &[],
+        "void f()\n{\n/* note */ done:\n    value=0;\n/* note */ again:\n    next();\n    if (x) {\n/* note */ stop:\n        y();\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--indent-labels"],
+        "void f()\n{\n/* note */ done:\n    value=0;\n/* note */ again:\n    next();\n    if (x) {\n    /* note */ stop:\n        y();\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--keep-one-line-statements"],
+        "void f()\n{\n/* note */ done: value=0;\n/* note */ again:\n    next();\n    if (x) {\n/* note */ stop: y();\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_after_an_expanded_block_follows_its_first_statement_when_braces_are_added() {
+    let input = "void f()\n{\n    for (;;) { if (ready) break; else continue; } /* note */\n}\n";
+    check(
+        input,
+        &["--style=java", "--add-braces"],
+        "void f() {\n    for (;;) {\n        if (ready) {\n            break;    /* note */\n        } else {\n            continue;\n        }\n    }\n}\n",
+    );
+}
+
+#[test]
+fn lisp_moves_a_comment_after_an_expanded_block_only_off_rows_no_closer_joins() {
+    let input = "void f()\n{\n    for (;;) { if (ready) break; else continue; } /* note */\n    for (;;) { a(); b(); } /* note */\n    if (x) { a(); } /* note */\n}\n";
+    let expected = "void f() {\n    for (;;) {\n        if (ready) {\n            break; }\n        else {\n            continue; } } /* note */\n    for (;;) {\n        a();    /* note */\n        b(); }\n    if (x) {\n        a(); } /* note */\n}\n";
+    check(input, &["--style=lisp", "--add-braces"], expected);
+    check(input, &["--style=lisp", "--add-one-line-braces"], expected);
+}
+
+#[test]
+fn a_line_splice_after_a_statement_stays_on_its_line_when_statements_are_kept() {
+    let input = "void f()\n{\n    fail();    \\\n    next();\n}\n";
+    check(input, &["--keep-one-line-statements"], input);
+    check(
+        input,
+        &["--style=lisp"],
+        "void f() {\n    fail();    \\\n    next(); }\n",
+    );
+}
+
+#[test]
+fn a_comment_leading_a_continuation_row_leaves_the_row_continued() {
+    // The comment changes nothing about the code after it.
+    let input = "static const struct Item\n    /* note */ first = {\n    1, 2\n};\n";
+    check(input, &["--style=google"], input);
+}
+
+#[test]
+fn breaking_return_types_breaks_a_definition_a_comment_leads() {
+    let input = "/* note */ void f()\n{\n    run();\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-return-type"],
+        "/* note */ void\nf()\n{\n    run();\n}\n",
+    );
+}
+
+#[test]
+fn a_constructor_member_after_a_directive_aligns_with_the_members_before_it() {
+    let input = "class Item {\npublic:\n    Item(int value, int other)\n#ifdef FEATURE\n        : value_(value),\n#endif\n          other_(other) {}\n};\n";
+    check(
+        input,
+        &["--style=kr"],
+        "class Item\n{\npublic:\n    Item(int value, int other)\n#ifdef FEATURE\n        : value_(value),\n#endif\n          other_(other) {}\n};\n",
+    );
+}
+
+#[test]
+fn run_in_styles_align_constructor_members_after_an_access_label() {
+    let input = "class Item {\npublic:\n    Item(int value, int other)\n        : value_(value),\n          other_(other) {}\n};\n";
+    check(
+        input,
+        &["--style=horstmann"],
+        "class Item\n{\npublic:\n    Item(int value, int other)\n        : value_(value),\n          other_(other) {}\n};\n",
+    );
+    check(
+        input,
+        &["--style=pico"],
+        "class Item\n{\npublic:\n    Item(int value, int other)\n        : value_(value),\n          other_(other) {} };\n",
+    );
+}
+
+#[test]
+fn a_comment_leading_a_function_brace_leaves_the_brace_a_function_body() {
+    let input = "void f()\n/* note */ {\n    if (x)\n    /* c */ {\n        y();\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n/* note */\n{\n    if (x)\n        /* c */ {\n        y();\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=java"],
+        "void f()\n/* note */ {\n    if (x)\n        /* c */ {\n        y();\n    }\n}\n",
+    );
+    let blank = "void f()\n/* note */ {\n    result = ((first + (second * 2))\n              - third) / (fourth\n\n                          + fifth);\n}\n";
+    check(
+        blank,
+        &["--style=gnu", "--delete-empty-lines"],
+        "void f()\n/* note */\n{\n    result = ((first + (second * 2))\n              - third) / (fourth\n                          + fifth);\n}\n",
+    );
+}
+
+#[test]
+fn the_while_of_a_do_a_comment_leads_stands_at_the_do_line() {
+    let input = "void f()\n{\n    /* note */ do {\n        value=0;\n    } while (ready);\n    /* note */ do\n        value=0;\n    while (ready);\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    /* note */ do\n    {\n        value=0;\n    }\n    while (ready);\n    /* note */ do\n        value=0;\n    while (ready);\n}\n",
+    );
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_statement_after_a_comment_led_label_in_a_directive_stands_in_its_block() {
+    let input = "void f()\n{\n    if (ready) {\n#ifdef FEATURE\n    /* note */ retry:\n#endif\n        value = 1;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    if (ready) {\n#ifdef FEATURE\n/* note */ retry:\n#endif\n        value = 1;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_statement_broken_off_its_label_keeps_the_gap_before_its_comment() {
+    let input = "void f()\n{\n    done: value=0;   /* note */\n    again: value=0; // note\n}\nclass Item\n{\n    public: int value; /* note */\n};\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\ndone:\n    value=0;   /* note */\nagain:\n    value=0; // note\n}\nclass Item\n{\npublic:\n    int value; /* note */\n};\n",
+    );
+    check(
+        input,
+        &["--style=kr", "--pad-oper"],
+        "void f()\n{\ndone:\n    value = 0; /* note */\nagain:\n    value = 0; // note\n}\nclass Item\n{\npublic:\n    int value; /* note */\n};\n",
+    );
+}
+
+#[test]
+fn a_comment_leading_the_first_case_label_leaves_it_at_the_case_column() {
+    let input = "void f()\n{\n    switch (kind) {\n    /* note */ case 1:\n        value = 1;\n        break;\n    default:\n        break;\n    }\n}\n";
+    check(input, &["--style=1tbs"], input);
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    switch (kind)\n    {\n    /* note */ case 1:\n        value = 1;\n        break;\n    default:\n        break;\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=1tbs", "--indent-switches"],
+        "void f()\n{\n    switch (kind) {\n        /* note */ case 1:\n            value = 1;\n            break;\n        default:\n            break;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn unpadding_a_header_broken_off_a_statement_widens_the_gap_before_its_comment() {
+    let input = "void f()\n{\n    a(); while (x) { /* note */\n        first();\n    }\n    if (ready) helper(); else switch (state) { /* note */\n    case 1:\n        first();\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=linux", "--unpad-paren"],
+        "void f()\n{\n    a();\n    while(x) {  /* note */\n        first();\n    }\n    if(ready) helper();\n    else switch(state) {  /* note */\n        case 1:\n            first();\n            break;\n        }\n}\n",
+    );
+    check(
+        input,
+        &["--style=1tbs", "--unpad-paren"],
+        "void f()\n{\n    a();\n    while(x) {  /* note */\n        first();\n    }\n    if(ready) {\n        helper();\n    } else switch(state) {  /* note */\n        case 1:\n            first();\n            break;\n        }\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_after_a_brace_stays_on_its_line_after_a_one_line_block_before_it() {
+    let input = "void f()\n{\n    if (ready) { helper(); } else { /* note */\n        first();\n    }\n    while (ready) { helper(); } if (state) { /* note */\n        first();\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    if (ready) {\n        helper();\n    } else { /* note */\n        first();\n    }\n    while (ready) {\n        helper();\n    }\n    if (state) { /* note */\n        first();\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    if (ready)\n    {\n        helper();\n    }\n    else     /* note */\n    {\n        first();\n    }\n    while (ready)\n    {\n        helper();\n    }\n    if (state)   /* note */\n    {\n        first();\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_broken_brace_comment_after_a_statement_keeps_its_gap() {
+    let input = "void f()\n{\n    if (state) { /* note */\n        first();\n    }\n    a(); if (state) { /* note */\n        first();\n    }\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    if (state)   /* note */\n    {\n        first();\n    }\n    a();\n    if (state)   /* note */\n    {\n        first();\n    }\n}\n",
+    );
+}
+
+#[test]
+fn unpadding_the_row_an_added_closer_joins_widens_the_gap_before_its_comment() {
+    let input = "void f()\n{\n    if (ready) helper (state); /* note */\n    if (ready) helper (state)+1;   /* note */\n}\n";
+    check(
+        input,
+        &["--style=lisp", "--add-braces", "--unpad-paren"],
+        "void f() {\n    if(ready) {\n        helper(state); }  /* note */\n    if(ready) {\n        helper(state)+1; }    /* note */\n}\n",
+    );
+    check(
+        input,
+        &[
+            "--style=lisp",
+            "--add-braces",
+            "--unpad-paren",
+            "--pad-oper",
+        ],
+        "void f() {\n    if(ready) {\n        helper(state); }  /* note */\n    if(ready) {\n        helper(state) + 1; }  /* note */\n}\n",
+    );
+    check(
+        input,
+        &["--style=pico", "--add-braces", "--unpad-paren"],
+        "void f()\n{   if(ready) { helper(state); }   /* note */\n    if(ready) { helper(state)+1; }     /* note */\n}\n",
+    );
+    check(
+        input,
+        &[
+            "--style=pico",
+            "--add-braces",
+            "--unpad-paren",
+            "--pad-oper",
+        ],
+        "void f()\n{   if(ready) { helper(state); }   /* note */\n    if(ready) { helper(state) + 1; }   /* note */\n}\n",
+    );
+}
+
+#[test]
+fn the_condition_rows_of_a_while_on_an_indented_closer_align_after_its_paren() {
+    let input = "void f()\n{\n    do {\n        value++;\n    } while (value < count &&\n             ready);\n}\n";
+    check(
+        input,
+        &["--style=vtk", "--attach-closing-while"],
+        "void f()\n{\n    do\n        {\n        value++;\n        } while (value < count &&\n                 ready);\n}\n",
+    );
+    check(
+        input,
+        &["--style=gnu", "--attach-closing-while"],
+        "void f()\n{\n    do\n        {\n            value++;\n        } while (value < count &&\n                 ready);\n}\n",
+    );
+}
+
+#[test]
+fn a_function_brace_after_a_directive_closing_its_header_opens_a_function_body() {
+    let input = "#ifdef FEATURE\nvoid f()\n#endif\n{\n    { value=0; }\n}\n";
+    let expected = "#ifdef FEATURE\nvoid f()\n#endif\n{\n    {\n        value=0;\n    }\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(input, &["--style=allman"], expected);
+    check(
+        input,
+        &["--style=ratliff"],
+        "#ifdef FEATURE\nvoid f()\n#endif\n    {\n        {\n        value=0;\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_block_comment_after_a_case_brace_on_its_own_line_opens_the_block() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1:\n        { /* note */\n            value=0;\n        }\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (kind) {\n    case 1: {\n        /* note */\n        value=0;\n    }\n    break;\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=lisp"],
+        "void f() {\n    switch (kind) {\n    case 1: {\n        /* note */\n        value=0; }\n    break; } }\n",
+    );
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    switch (kind) {\n        case 1: {\n            /* note */\n            value=0;\n            }\n        break;\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn the_statement_after_a_label_breaks_off_the_comments_after_the_label() {
+    let input = "void f()\n{\n    switch (op) {\n    default:\n        /* note */ break;\n    case 1: /* note */ break;\n    case 2:\n        // line\n        /* note */ break;\n    case 3:\n        value = 0;\n        /* note */ break;\n    }\ndone:\n    /* note */ value = 1;\n}\nclass Item {\npublic:\n    /* note */ int value;\n};\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (op) {\n    default:\n        /* note */\n        break;\n    case 1: /* note */\n        break;\n    case 2:\n        // line\n        /* note */\n        break;\n    case 3:\n        value = 0;\n        /* note */ break;\n    }\ndone:\n    /* note */\n    value = 1;\n}\nclass Item\n{\npublic:\n    /* note */\n    int value;\n};\n",
+    );
+    check(
+        input,
+        &["--style=kr", "--keep-one-line-statements"],
+        "void f()\n{\n    switch (op) {\n    default:\n        /* note */ break;\n    case 1: /* note */ break;\n    case 2:\n        // line\n        /* note */ break;\n    case 3:\n        value = 0;\n        /* note */ break;\n    }\ndone:\n    /* note */ value = 1;\n}\nclass Item\n{\npublic:\n    /* note */ int value;\n};\n",
+    );
+}
+
+#[test]
+fn a_brace_or_a_directive_after_the_comments_after_a_label_ends_its_reach() {
+    let input = "void f()\n{\n    switch (op) {\n    case 1: /* a */ /* b */ break;\n    case 2: // line\n        break;\n    case 3: /* a */ { value = 0; }\n    case 4:\n        /* a */ { value = 0; }\n    case 5: /* a */\n#if X\n        /* b */ value = 1;\n#endif\n        break;\n    }\nagain: /* c */ value = 2; /* d */\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (op) {\n    case 1: /* a */ /* b */\n        break;\n    case 2: // line\n        break;\n    case 3: { /* a */\n        value = 0;\n    }\n    case 4:\n        /* a */\n    {\n        value = 0;\n    }\n    case 5: /* a */\n#if X\n        /* b */ value = 1;\n#endif\n        break;\n    }\nagain: /* c */\n    value = 2; /* d */\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_led_statement_after_a_conditional_after_a_case_label_stands_in_its_body() {
+    let input = "void f()\n{\n    switch (op) {\n    case 5:\n#if X\n        /* b */ value = 1;\n#endif\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    switch (op) {\n        case 5:\n#if X\n            /* b */ value = 1;\n#endif\n            break;\n        }\n    }\n",
+    );
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_kept_label_line_with_a_comment_after_the_label_stands_at_the_label_column() {
+    let input = "void f()\n{\n    value = 1;\nagain: value = 2;\nretry: /* c */ value = 2;\n}\n";
+    check(input, &["--style=kr", "--keep-one-line-statements"], input);
+    check(
+        input,
+        &["--style=lisp"],
+        "void f() {\n    value = 1;\nagain: value = 2;\nretry: /* c */ value = 2; }\n",
+    );
+}
+
+#[test]
+fn a_comment_led_statement_after_comments_after_a_case_label_stands_in_its_body() {
+    let input = "void f()\n{\n    switch (op) {\n    case 1: break;\n    case 2:\n        // line\n        /* note */ break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=ratliff", "--keep-one-line-statements"],
+        "void f() {\n    switch (op) {\n        case 1: break;\n        case 2:\n            // line\n            /* note */ break;\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_kept_one_line_block_after_a_comment_after_a_case_label_takes_a_line_of_its_own() {
+    let input = "void f()\n{\n    if (ready) /* a */ { value = 0; }\n    switch (op) {\n    case 3: { value = 0; }\n    case 4: /* a */ { value = 0; }\n    case 5: /* a */ {\n        value = 0;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--keep-one-line-blocks"],
+        "void f()\n{\n    if (ready) /* a */ { value = 0; }\n    switch (op) {\n    case 3:\n    { value = 0; }\n    case 4: /* a */\n    { value = 0; }\n    case 5: { /* a */\n        value = 0;\n    }\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=allman", "--keep-one-line-blocks"],
+        "void f()\n{\n    if (ready) /* a */ { value = 0; }\n    switch (op)\n    {\n    case 3:\n    { value = 0; }\n    case 4: /* a */\n    { value = 0; }\n    case 5: /* a */\n    {\n        value = 0;\n    }\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_message_row_after_a_conditional_aligns_as_after_the_row_before_it() {
+    let input = "- (int)total\n{\n    return [[self items] count] + [self.other countWith:1\n#ifdef FEATURE\n                                                         and:2];\n#endif\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "- (int)total\n{\n    return [[self items] count] + [self.other countWith:1\n#ifdef FEATURE\n                                              and:2];\n#endif\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_split_off_an_initializer_closer_stands_at_the_row_before_it() {
+    let input = "void f()\n{\n    static const struct Item\n        first = {\n            1, 2\n        /* note */ };\n}\n";
+    check(
+        input,
+        &[],
+        "void f()\n{\n    static const struct Item\n        first = {\n        1, 2\n        /* note */\n    };\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_between_a_split_return_type_and_its_name_leaves_the_name_unindented() {
+    let input = "static struct Item *\n// note\nmake(int value);\nstatic struct Item *\n/* note */\nmake(int value);\n";
+    check(input, &["--style=kr"], input);
+    check(input, &["--style=ratliff"], input);
+}
+
+#[test]
+fn an_element_brace_after_a_comma_keeps_its_row_with_a_comment_ending_it() {
+    let input = "void f()\n{\n    int table[][2] = {\n        5, { /* note */\n            6, 7\n        }\n    };\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    int table[][2] =\n    {\n        5, { /* note */\n            6, 7\n        }\n    };\n}\n",
+    );
+    check(
+        input,
+        &["--style=horstmann"],
+        "void f()\n{   int table[][2] =\n    {   5, { /* note */\n            6, 7\n        }\n    };\n}\n",
+    );
+}
+
+#[test]
+fn a_one_line_initializer_after_a_blank_line_after_its_assignment_stays_on_its_line() {
+    let input = "void f()\n{\n    struct Item other =\n\n    { 3, 4 };\n}\n";
+    check(input, &["--style=kr"], input);
+    check(input, &["--style=allman"], input);
+}
+
+#[test]
+fn a_comment_ending_a_switch_run_in_after_an_else_stays_in_its_case_body() {
+    let input = "void f()\n{\n    if (ready) {\n        value=1;\n    } else switch (kind) {\n    case 1:\n        // first\n        break;\n    case 2:\n        value = 2;\n        // note\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    if (ready) {\n        value=1;\n    } else switch (kind) {\n        case 1:\n            // first\n            break;\n        case 2:\n            value = 2;\n            // note\n        }\n}\n",
+    );
+}
+
+#[test]
+fn an_operator_led_row_in_parentheses_after_a_blank_line_aligns_in_them() {
+    let input = "void f()\n{\n    out << helper(first, (second\n\n                          << third));\n}\n";
+    check(input, &["--style=kr"], input);
+    check(
+        input,
+        &["--style=vtk"],
+        "void f()\n{\n    out << helper(first, (second\n\n                          << third));\n}\n",
+    );
+}
+
+#[test]
+fn a_message_a_comment_leads_aligns_its_rows_past_the_comment() {
+    let input = "- (void)update\n{\n    /* note */ [self apply:value\n           with:other];\n}\n";
+    check(
+        input,
+        &["--style=linux"],
+        "- (void)update\n{\n    /* note */ [self apply:value\n                     with:other];\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_split_off_an_initializer_closer_after_an_element_stands_at_the_list_body() {
+    let input = "void f()\n{\n    switch (op) {\n    default: {\n        int table[][2] = {\n            { FIRST, 1 },\n            {\n                SECOND, 2\n            },\n        /* note */ };\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (op) {\n    default: {\n        int table[][2] = {\n            { FIRST, 1 },\n            {\n                SECOND, 2\n            },\n            /* note */\n        };\n        break;\n    }\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    switch (op)\n        {\n        default:\n            {\n            int table[][2] =\n                {\n                    { FIRST, 1 },\n                    {\n                    SECOND, 2\n                    },\n                /* note */\n                };\n            break;\n            }\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_comment_leading_a_switch_line_leaves_the_comment_after_its_brace_as_without_it() {
+    let input = "void f()\n{\n    /* note */ switch (kind) {  /* dispatch on kind\n                    ** of value */\n    case 1:\n        value = 0;\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    /* note */ switch (kind) {\n    /* dispatch on kind\n                    ** of value */\n    case 1:\n        value = 0;\n        break;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_one_line_initializer_after_a_conditional_after_its_assignment_stays_on_its_line() {
+    let input = "void f()\n{\n    struct Item item =\n    { 1, 2 };\n    struct Item next =\n#ifdef FEATURE\n    { 3, 4 };\n#endif\n}\n";
+    check(input, &[], input);
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn comments_after_a_case_block_stand_in_the_case_body() {
+    let input = "void f()\n{\n    switch (state) {\n    case 1: {\n        first();\n    }\n    // after block\n    second();\n    // after statement\n    third();\n    /* block */\n    break;\n    default:\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    switch (state)\n    {\n    case 1:\n    {\n        first();\n    }\n        // after block\n    second();\n        // after statement\n    third();\n        /* block */\n    break;\n    default:\n        break;\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (state) {\n    case 1: {\n        first();\n    }\n        // after block\n    second();\n        // after statement\n    third();\n        /* block */\n    break;\n    default:\n        break;\n    }\n}\n",
+    );
+    let closing = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n        break;\n    }\n    default: {\n        break;\n    }\n    // note\n    }\n}\n";
+    check(
+        closing,
+        &["--style=allman"],
+        "void f()\n{\n    switch (kind)\n    {\n    case 1:\n    {\n        value=0;\n        break;\n    }\n    default:\n    {\n        break;\n    }\n        // note\n    }\n}\n",
+    );
+    check(
+        closing,
+        &["--style=gnu"],
+        "void f()\n{\n    switch (kind)\n        {\n        case 1:\n        {\n            value=0;\n            break;\n        }\n        default:\n        {\n            break;\n        }\n            // note\n        }\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_after_a_constructor_initializer_stands_at_its_members() {
+    let input = "Item::Item(int value)\n    : value(value), other(0)\n/* note */ {\n}\nItem::Item(int value)\n    : value(value),\n      other(0)\n  // note\n{\n}\nItem::Item(int value)\n    : value(value),\n// between\n      other(0)\n{\n}\n";
+    check(
+        input,
+        &["--style=linux"],
+        "Item::Item(int value)\n    : value(value), other(0)\n      /* note */\n{\n}\nItem::Item(int value)\n    : value(value),\n      other(0)\n      // note\n{\n}\nItem::Item(int value)\n    : value(value),\n// between\n      other(0)\n{\n}\n",
+    );
+}
+
+#[test]
+fn a_member_after_a_conditional_member_after_an_access_label_stands_at_the_members() {
+    let input = "class Item {\npublic:\n#ifdef FEATURE\n    int value;\n#endif\n    Item() : value(0) {}\n    int count;\n};\n";
+    check(
+        input,
+        &["--style=kr"],
+        "class Item\n{\npublic:\n#ifdef FEATURE\n    int value;\n#endif\n    Item() : value(0) {}\n    int count;\n};\n",
+    );
+    check(
+        input,
+        &["--style=google"],
+        "class Item {\n  public:\n#ifdef FEATURE\n    int value;\n#endif\n    Item() : value(0) {}\n    int count;\n};\n",
+    );
+}
+
+#[test]
+fn a_template_head_a_comment_leads_aligns_its_parameters_past_the_comment() {
+    let input = "/* note */ template <typename First,\n                     typename Second>\nclass Pair\n{\n};\n";
+    check(input, &["--style=kr"], input);
+    check(
+        input,
+        &["--style=whitesmith"],
+        "/* note */ template <typename First,\n                     typename Second>\nclass Pair\n    {\n    };\n",
+    );
+}
+
+#[test]
+fn the_statement_after_a_comment_led_case_label_breaks_off_the_comments_after_it() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1:\n        value = 1;\n    /* fall through */ case 2:\n        /* note */ value = 2;\n        break;\n    /* other */ default: /* c */ value = 3;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (kind) {\n    case 1:\n        value = 1;\n    /* fall through */ case 2:\n        /* note */\n        value = 2;\n        break;\n    /* other */ default: /* c */\n        value = 3;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_after_an_element_closer_leaves_the_closer_where_it_stands_without_it() {
+    let input = "void f()\n{\n    static const struct Item\n        first = {\n            1, 2\n        }, /* note */\n        second = {\n            3, 4\n        };\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    static const struct Item\n        first = {\n        1, 2\n    }, /* note */\n    second = {\n        3, 4\n    };\n}\n",
+    );
+}
+
+#[test]
+fn a_one_line_initializer_after_a_commented_assignment_keeps_its_line() {
+    let input = "void f()\n{\n    struct Item item = /* note */\n        { 1, 2 };\n}\n";
+    check(
+        input,
+        &["--style=linux"],
+        "void f()\n{\n    struct Item item = /* note */\n    { 1, 2 };\n}\n",
+    );
+}
+
+#[test]
+fn a_template_head_a_comment_leads_realigns_its_parameters_past_the_comment() {
+    let input = "template <typename First,\n     typename Second>\nclass Pair\n{\n};\n/* note */ template <typename First,\n     typename Second>\nclass Other\n{\n};\n/* note */ template <typename First,\n          typename Second>\nclass Last\n{\n};\n";
+    check(
+        input,
+        &["--style=kr"],
+        "template <typename First,\n          typename Second>\nclass Pair\n{\n};\n/* note */ template <typename First,\n                     typename Second>\nclass Other\n{\n};\n/* note */ template <typename First,\n                     typename Second>\nclass Last\n{\n};\n",
+    );
+}
+
+#[test]
+fn a_stream_row_after_a_blank_line_aligns_in_its_chain() {
+    let input = "void f()\n{\n    std::cout << first\n\n              << second << std::endl;\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_comment_after_blocks_broken_off_one_line_follows_the_block_it_ends() {
+    let input = "void f()\n{\n    if (ready) { value=0; } else { result=0; } /* note */\n}\n";
+    check(
+        input,
+        &["--style=1tbs"],
+        "void f()\n{\n    if (ready) {\n        value=0;\n    } else {\n        result=0;    /* note */\n    }\n}\n",
+    );
+}
+
+#[test]
+fn an_element_brace_after_a_comment_alone_opens_its_row_as_one_leading_it() {
+    let input = "static const struct Item items[] = {\n    {1, 2},\n    /* note */ {3,\n     4},\n    {5,\n     6}\n};\n";
+    check(
+        input,
+        &["--style=kr"],
+        "static const struct Item items[] = {\n    {1, 2},\n    /* note */ {\n        3,\n        4\n    },\n    {\n        5,\n        6\n    }\n};\n",
+    );
+    check(
+        input,
+        &["--style=allman"],
+        "static const struct Item items[] = {\n    {1, 2},\n    /* note */ {\n        3,\n        4\n    },\n    {\n        5,\n        6\n    }\n};\n",
+    );
+}
+
+#[test]
+fn a_designated_row_after_a_blank_line_aligns_in_its_list() {
+    let input = "void f()\n{\n    return (struct Item) {\n        .value = 1,\n\n        .other = 2\n    };\n}\n";
+    check(input, &["--style=stroustrup"], input);
+}
+
+#[test]
+fn breaking_return_types_breaks_a_definition_a_conditional_parts_from_its_body() {
+    let input = "#ifdef FEATURE\nvoid f()\n#endif\n{\n    run();\n}\n";
+    check(
+        input,
+        &["--style=1tbs", "--break-return-type"],
+        "#ifdef FEATURE\nvoid\nf()\n#endif\n{\n    run();\n}\n",
+    );
+}
+
+#[test]
+fn a_class_brace_a_comment_leads_opens_its_body_as_any() {
+    let input = "class Item\n/* note */ {\npublic:\n    Item();\n};\n";
+    check(input, &[], input);
+}
+
+#[test]
+fn a_comment_split_off_an_initializer_closer_after_a_conditional_stands_at_its_rows() {
+    let input = "void f()\n{\n    static const struct Item items[] = {\n#if FEATURE\n        {1, 2}\n#else\n        {3, 4}\n#endif\n    /* note */ };\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    static const struct Item items[] = {\n#if FEATURE\n        {1, 2}\n#else\n        {3, 4}\n#endif\n        /* note */\n    };\n}\n",
+    );
+}
+
+#[test]
+fn deleting_empty_lines_keeps_those_of_an_enum_list_as_of_an_array() {
+    let input = "void f()\n{\n    enum Kind {\n\n        First,\n\n        Third\n    };\n    if (ready) {\n\n        run();\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--delete-empty-lines"],
+        "void f()\n{\n    enum Kind {\n\n        First,\n\n        Third\n    };\n    if (ready) {\n        run();\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_leading_an_access_label_line_leaves_the_label_at_its_column() {
+    let input = "class Item {\npublic:\n    int value;\n    Item() : value(0) {}\n    /* note */ private:\n    int other;\n};\n";
+    check(
+        input,
+        &["--style=google"],
+        "class Item {\n  public:\n    int value;\n    Item() : value(0) {}\n  /* note */ private:\n    int other;\n};\n",
+    );
+    check(
+        input,
+        &["--style=mozilla"],
+        "class Item\n{\npublic:\n    int value;\n    Item() : value(0) {}\n/* note */ private:\n    int other;\n};\n",
+    );
+}
+
+#[test]
+fn a_case_block_brace_attaches_to_a_comment_led_label_as_to_any() {
+    let input = "void f()\n{\n    switch (kind) {\n    /* note */ case 1: // first\n    {\n        value=0;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (kind) {\n    /* note */ case 1: { // first\n        value=0;\n    }\n    }\n}\n",
+    );
+}
+
+#[test]
+fn indenting_define_bodies_leaves_a_case_block_after_a_conditional_a_case_block() {
+    let input = "void f()\n{\n    switch (kind) {\n#ifdef FEATURE\n    case 3:\n#endif\n    {   // own\n        break;\n    }\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (kind) {\n#ifdef FEATURE\n    case 3:\n#endif\n    {\n        // own\n        break;\n    }\n    }\n}\n";
+    check(input, &["--style=mozilla"], expected);
+    check(
+        input,
+        &["--style=mozilla", "--indent-preproc-define"],
+        expected,
+    );
+}
+
+#[test]
+fn a_message_closer_alone_on_its_line_stands_at_its_bracket() {
+    let input = "void f()\n{\n    return [self.other countWith:1\n                         and:2\n           ];\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    return [self.other countWith:1\n                       and:2\n           ];\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_leading_the_body_of_a_header_after_else_stands_in_that_body() {
+    check(
+        "void f()\n{\n    if (ready) {\n        value=1;\n    } else while (other) {\n        /* note */ value=0;\n    }\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    if (ready) {\n        value=1;\n    } else while (other) {\n            /* note */ value=0;\n        }\n}\n",
+    );
+    check(
+        "void f()\n{\n    if (ready) {\n        value=1;\n    } else for (;;) {\n        /* note */\n        value=0;\n    }\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    if (ready) {\n        value=1;\n    } else for (;;) {\n            /* note */\n            value=0;\n        }\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_between_base_class_rows_stands_at_the_rows() {
+    for comment in ["// note", "/* note */"] {
+        check(
+            &format!(
+                "class Derived : public Base,\n                {comment}\n                private Other {{\n}};\n"
+            ),
+            &["--style=kr"],
+            &format!("class Derived : public Base,\n    {comment}\n    private Other\n{{\n}};\n"),
+        );
+        check(
+            &format!(
+                "class Derived\n    : public Base,\n  {comment}\n      private Other {{\n}};\n"
+            ),
+            &["--style=whitesmith"],
+            &format!(
+                "class Derived\n    : public Base,\n      {comment}\n      private Other\n    {{\n    }};\n"
+            ),
+        );
+    }
+}
+
+#[test]
+fn a_comment_before_the_body_of_a_class_with_bases_stands_at_the_class() {
+    for comment in ["// note", "/* note */"] {
+        check(
+            &format!(
+                "class Derived :\n    public Base,\n    private Other\n    {comment}\n{{\n}};\nstruct Item : Base\n  {comment}\n{{\n}};\n"
+            ),
+            &["--style=allman"],
+            &format!(
+                "class Derived :\n    public Base,\n    private Other\n{comment}\n{{\n}};\nstruct Item : Base\n{comment}\n{{\n}};\n"
+            ),
+        );
+    }
+}
+
+#[test]
+fn a_stream_chain_a_comment_leads_aligns_at_its_operator() {
+    check(
+        "void f()\n{\n    /* note */ std::cout << first\n              << second;\n    /* note */ std::cout << \"first\"\n              \"second\";\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    /* note */ std::cout << first\n                         << second;\n    /* note */ std::cout << \"first\"\n                         \"second\";\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_after_a_broken_off_brace_keeps_its_column_past_another_comment() {
+    check(
+        "void f()\n{\n    if (ready) {\n        first();\n    } /* c */ else { /* note */\n        result=0;\n    }\n}\n",
+        &["--style=allman"],
+        "void f()\n{\n    if (ready)\n    {\n        first();\n    } /* c */ else   /* note */\n    {\n        result=0;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_after_an_opening_brace_leads_what_follows_it_on_its_line() {
+    let input = "void f() { /* a */ value = 1;\n    first();\n}\nvoid g()\n{\n    while (ready) { /* a */ /* b */\n        first();\n    }\n    do { /* a */ value = 1;\n    } while (ready);\n    if (ready) { /* a */ // b\n        first();\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    /* a */ value = 1;\n    first();\n}\nvoid g()\n{\n    while (ready) {\n        /* a */ /* b */\n        first();\n    }\n    do {\n        /* a */ value = 1;\n    } while (ready);\n    if (ready) { /* a */ // b\n        first();\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    /* a */ value = 1;\n    first();\n}\nvoid g()\n{\n    while (ready)\n    {\n        /* a */ /* b */\n        first();\n    }\n    do\n    {\n        /* a */ value = 1;\n    }\n    while (ready);\n    if (ready) { /* a */ // b\n        first();\n    }\n}\n",
+    );
+}
+
+#[test]
+fn elements_after_a_comment_leading_the_first_align_to_the_first() {
+    check(
+        "enum Kind { /* a */ First,\n    Second };\nint list[] = { /* a */ 1,\n    2 };\n",
+        &["--style=kr"],
+        "enum Kind { /* a */ First,\n                    Second\n          };\nint list[] = { /* a */ 1,\n                       2\n             };\n",
+    );
+}
+
+#[test]
+fn a_comment_leading_a_definition_head_leaves_its_broken_brace_alone() {
+    check(
+        "/* note */ void f()\n/* note */ {\n    value = 1;\n}\n",
+        &["--style=kr"],
+        "/* note */ void f()\n/* note */\n{\n    value = 1;\n}\n",
+    );
+}
+
+#[test]
+fn a_case_label_continued_past_a_comment_or_directive_stays_a_case_label() {
+    check(
+        "void f()\n{\n    switch (flags) {\n    case FIRST |\n         // note\n         SECOND:\n        value = 1;\n        break;\n    case FIRST |\n         /* note */\n         THIRD:\n        break;\n    case FIRST |\n#ifdef FEATURE\n         FOURTH:\n#endif\n        break;\n    }\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    switch (flags) {\n    case FIRST |\n            // note\n            SECOND:\n        value = 1;\n        break;\n    case FIRST |\n            /* note */\n            THIRD:\n        break;\n    case FIRST |\n#ifdef FEATURE\n            FOURTH:\n#endif\n        break;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_leading_a_constructor_head_keeps_its_initializer_spacing() {
+    check(
+        "/* note */ Item::Item(int value, int other)\n    : value_(value),\n      other_(other)\n{\n}\n",
+        &["--style=kr"],
+        "/* note */ Item::Item(int value, int other)\n    : value_(value),\n      other_(other)\n{\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_among_call_arguments_after_a_nested_call_stands_at_the_arguments() {
+    check(
+        "void f()\n{\n    observe(items.begin(), notice,\n            // note\n            other);\n    observe(items.begin(), notice,\n            // note\n            [](int x) {\n        call(x);\n    });\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    observe(items.begin(), notice,\n            // note\n            other);\n    observe(items.begin(), notice,\n            // note\n    [](int x) {\n        call(x);\n    });\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_after_a_parameter_declaration_body_brace_opens_the_body() {
+    check(
+        "int helper(value)\nint value;\n{ /* note */\n    return value;\n}\n",
+        &["--style=kr"],
+        "int helper(value)\nint value;\n{\n    /* note */\n    return value;\n}\n",
+    );
+}
+
+#[test]
+fn an_enum_opening_the_file_breaks_its_brace_as_anywhere() {
+    check(
+        "enum Kind {\n    First,\n    Second\n};\nenum Other {\n    Third\n};\n",
+        &["--style=allman"],
+        "enum Kind\n{\n    First,\n    Second\n};\nenum Other\n{\n    Third\n};\n",
+    );
+}
+
+#[test]
+fn a_line_a_backslash_continues_keeps_its_break() {
+    check(
+        "void f()\n{\n    if (ready) \\\n        fail();\n    else \\\n        done();\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    if (ready) \\\n        fail();\n    else \\\n        done();\n}\n",
+    );
+}
+
+#[test]
+fn a_bare_block_run_in_on_its_own_row_stays_off_the_body_brace() {
+    check(
+        "void g()\n{\n    {   value = 1; } }\n",
+        &["--style=pico"],
+        "void g()\n{\n    {   value = 1; } }\n",
+    );
+    // An aggregate's brace runs into a nested one past comment rows.
+    check(
+        "int table[][2] =\n{\n    /* first */\n    {\n        1, 2\n    }\n};\n",
+        &["--style=pico"],
+        "int table[][2] =\n{   /* first */\n    {   1, 2 } };\n",
+    );
+}
+
+#[test]
+fn a_comment_leading_a_line_starts_no_operator_chain() {
+    check(
+        "void f()\n{\n    /* note */ out << helper(first, (second\n                         << third));\n}\n",
+        &["--style=allman"],
+        "void f()\n{\n    /* note */ out << helper(first, (second\n                                     << third));\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_leading_the_body_brace_of_a_class_with_bases_stands_at_the_class() {
+    check(
+        "class Next : public Base\n    /* note */ {\n};\n",
+        &["--style=allman"],
+        "class Next : public Base\n/* note */\n{\n};\n",
+    );
+    check(
+        "class Next : public Base\n    /* note */ {\n};\n",
+        &["--style=java"],
+        "class Next : public Base\n/* note */ {\n};\n",
+    );
+}
+
+#[test]
+fn a_comment_led_row_closing_a_paren_stands_where_the_row_would() {
+    check(
+        "void f()\n{\n    mask = 1 << (((value & (size - 1))\n                  /* note */ >> shift)\n                 + offset);\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    mask = 1 << (((value & (size - 1))\n                  /* note */ >> shift)\n                 + offset);\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_leading_a_declarator_continues_no_operator_into_its_brace() {
+    check(
+        "static const struct Item\n    /* note */ first = {\n        1, 2\n    },\n    second = {\n        3, 4\n    };\n",
+        &["--style=vtk"],
+        "static const struct Item\n    /* note */ first =\n{\n    1, 2\n},\nsecond =\n{\n    3, 4\n};\n",
+    );
+}
+
+#[test]
+fn an_access_label_a_comment_trails_keeps_its_class_brace_alone() {
+    check(
+        "class Item\n{\npublic: /* note */\n    int value;\n};\n",
+        &["--style=pico"],
+        "class Item\n{\npublic: /* note */\n    int value; };\n",
+    );
+}
+
+#[test]
+fn statements_a_comment_leads_keep_the_gap_before_their_trailing_comment() {
+    check(
+        "void f()\n{\n    /* note */ value=0; result=1;          // both\n}\n",
+        &["--style=linux", "--keep-one-line-statements"],
+        "void f()\n{\n    /* note */ value=0; result=1;          // both\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_before_a_broken_initializer_brace_stands_at_the_statement() {
+    let input = "void f()\n{\n    struct Item item =\n        // note\n    {\n        1, 2\n    };\n    struct Item other =\n        /* note */\n    {\n        1, 2\n    };\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    struct Item item =\n    // note\n    {\n        1, 2\n    };\n    struct Item other =\n    /* note */\n    {\n        1, 2\n    };\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    struct Item item =\n    // note\n        {\n        1, 2\n        };\n    struct Item other =\n    /* note */\n        {\n        1, 2\n        };\n    }\n",
+    );
+    // GNU's broken brace leaves the comment at the statement as well.
+    check(
+        input,
+        &["--style=gnu"],
+        "void f()\n{\n    struct Item item =\n    // note\n    {\n        1, 2\n    };\n    struct Item other =\n    /* note */\n    {\n        1, 2\n    };\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_before_a_nested_braceless_else_stands_at_the_else() {
+    check(
+        "void f()\n{\n    if (ready)\n        if (other)\n            value=0;\n    // note\n        else\n            result=0;\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    if (ready)\n        if (other)\n            value=0;\n        // note\n        else\n            result=0;\n}\n",
+    );
+}
+
+#[test]
+fn a_label_a_comment_leads_after_a_directive_stands_at_the_label_column() {
+    check(
+        "void f()\n{\n    switch (state) {\n#ifdef X\n#endif\n    /* note */ retry:\n    case 1:\n        value = 1;\n    }\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    switch (state) {\n#ifdef X\n#endif\n/* note */ retry:\n    case 1:\n        value = 1;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn base_class_rows_after_the_first_stand_at_its_column() {
+    check(
+        "struct Item\n    : public Base,\n      private Middle,\n      private Other {\n};\n",
+        &["--style=kr"],
+        "struct Item\n    : public Base,\n      private Middle,\n      private Other {\n};\n",
+    );
+}
+
+#[test]
+fn a_base_class_row_a_comment_leads_stands_at_the_rows() {
+    let input = "struct Item\n    : public Base,\n      /* c */ private Middle,\n      private Other {\n};\n";
+    check(
+        input,
+        &["--style=kr"],
+        "struct Item\n    : public Base,\n      /* c */ private Middle,\n      private Other {\n};\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "struct Item\n    : public Base,\n      /* c */ private Middle,\n      private Other\n    {\n    };\n",
+    );
+    // The brace broken off the row stands at the class.
+    check(
+        "class Derived\n    : public Base,\n      /* c */ private Other {\n};\n",
+        &["--style=kr"],
+        "class Derived\n    : public Base,\n      /* c */ private Other\n{\n};\n",
+    );
+}
+
+#[test]
+fn a_class_body_after_rows_of_bases_stands_a_level_past_the_head() {
+    check(
+        "class Derived : public Base,\n                private Other {\npublic:\n    /* note */\n    int value;\n};\n",
+        &["--style=stroustrup"],
+        "class Derived : public Base,\n    private Other {\npublic:\n    /* note */\n    int value;\n};\n",
+    );
+}
+
+#[test]
+fn a_declaration_a_comment_leads_keeps_its_pointer_declarator() {
+    check(
+        "void f()\n{\n    /* note */ Item *item = new Item(value);\n    /* note */ int *list = other;\n}\n",
+        &["--pad-oper"],
+        "void f()\n{\n    /* note */ Item *item = new Item(value);\n    /* note */ int *list = other;\n}\n",
+    );
+}
+
+#[test]
+fn class_members_after_a_conditional_opening_the_body_stand_in_the_body() {
+    check(
+        "class Pair {\n#if A\n    int x;\n#endif\n    int y;\n};\n",
+        &["--style=whitesmith"],
+        "class Pair\n    {\n#if A\n        int x;\n#endif\n        int y;\n    };\n",
+    );
+}
+
+#[test]
+fn a_case_label_a_comment_leads_continues_as_any() {
+    check(
+        "void f()\n{\n    switch (flags) {\n    /* note */ case FIRST |\n        THIRD:\n        value = 2;\n        break;\n    }\n}\n",
+        &["--style=mozilla"],
+        "void f()\n{\n    switch (flags) {\n    /* note */ case FIRST |\n            THIRD:\n        value = 2;\n        break;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_body_closer_after_a_trailing_comment_stands_at_its_brace_past_a_conditional_head() {
+    check(
+        "void f()\n#ifdef FEATURE\n{\n#endif\n    count = 1; // note\n}\n",
+        &["--style=whitesmith"],
+        "void f()\n#ifdef FEATURE\n    {\n#endif\n    count = 1; // note\n    }\n",
+    );
+}
+
+#[test]
+fn an_else_a_comment_leads_stands_at_its_if() {
+    check(
+        "void f()\n{\n    if (ready)\n        if (other)\n#ifdef FEATURE\n            { value=0; }\n#endif\n        /* note */ else\n            { result=0; }\n}\n",
+        &["--style=1tbs"],
+        "void f()\n{\n    if (ready)\n        if (other)\n#ifdef FEATURE\n        {\n            value=0;\n        }\n#endif\n        /* note */ else {\n            result=0;\n        }\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_before_the_first_row_of_a_nested_element_stands_at_the_row() {
+    check(
+        "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }, {\n            // note\n            .value = 2,\n        }\n    };\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }, {\n            // note\n            .value = 2,\n        }\n    };\n}\n",
+    );
+}
+
+#[test]
+fn a_declarator_split_from_its_type_continues_past_a_comment_line() {
+    check(
+        "void f()\n{\n    static const struct Item\n        // note\n        first = {\n        1, 2\n    };\n}\n",
+        &["--style=linux"],
+        "void f()\n{\n    static const struct Item\n        // note\n        first = {\n        1, 2\n    };\n}\n",
+    );
+}
+
+#[test]
+fn elements_of_a_list_a_comment_leads_align_to_its_first_element() {
+    check(
+        "void f()\n{\n    /* note */ int list[] = { 1,\n        2\n    };\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    /* note */ int list[] = { 1,\n                              2\n                            };\n}\n",
+    );
+}
+
+#[test]
+fn a_list_a_comment_leads_keeps_its_first_element_on_the_brace_line() {
+    check(
+        "void f()\n{\n    /* note */ int list[] = { 1,\n        2\n    };\n}\n",
+        &["--style=allman"],
+        "void f()\n{\n    /* note */ int list[] = { 1,\n                              2\n                            };\n}\n",
+    );
+}
+
+#[test]
+fn a_header_body_line_a_comment_leads_is_no_comment_line_for_the_row_after() {
+    check(
+        "int table[] = {\n    1,\n};\nvoid f()\n{\n    if (ready) {\n        /* note */ int list[] = { 1,\n                       2 };\n    }\n}\n",
+        &["--style=google"],
+        "int table[] = {\n    1,\n};\nvoid f() {\n    if (ready) {\n        /* note */ int list[] = { 1,\n                                  2\n                                };\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_head_in_the_other_branch_after_a_brace_stays_a_head() {
+    check(
+        "#ifdef WIDE\nint wide_main(int argc) {\n#else\nint main(int argc) {\n#endif\n    return 0;\n}\n",
+        &["--style=kr", "--break-return-type"],
+        "#ifdef WIDE\nint\nwide_main(int argc)\n{\n#else\nint\nmain(int argc)\n{\n#endif\n    return 0;\n}\n",
+    );
+}
+
+#[test]
+fn a_case_block_closer_after_a_body_line_a_comment_leads_keeps_the_block_column() {
+    check(
+        "void f()\n{\n    switch (state) {\n    case 1: {\n        /* note */ first();\n    }\n    break;\n    }\n}\n",
+        &["--style=stroustrup", "--indent-cases"],
+        "void f()\n{\n    switch (state) {\n    case 1: {\n            /* note */ first();\n        }\n        break;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_led_line_in_a_ratliff_block_stands_at_the_block_brace_column() {
+    let input = "void f()\n{\n    {\n#ifdef FEATURE\n    retry:\n#endif\n        /* note */ value = 1;\n    }\n}\n";
+    let expected = "void f() {\n        {\n#ifdef FEATURE\nretry:\n#endif\n        /* note */ value = 1;\n        }\n    }\n";
+    check(input, &["--style=ratliff"], expected);
+    check(input, &["--style=banner"], expected);
+}
+
+#[test]
+fn a_ratliff_closer_after_alternative_braces_of_a_header_stands_at_the_body() {
+    check(
+        "void f()\n{\n    if (ready)\n#ifdef A\n    {\n#else\n    {\n#endif\n        value = 1;\n    }\n}\n",
+        &["--style=ratliff"],
+        "void f() {\n    if (ready)\n#ifdef A\n        {\n#else\n        {\n#endif\n        value = 1;\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_header_after_directives_after_a_comment_led_brace_line_breaks_its_block() {
+    check(
+        "/* note */ void f()\n{\n#ifdef FEATURE\n    if (ready) {\n        value = 0;\n    }\n#endif\n}\n",
+        &["--style=java", "--break-blocks=all"],
+        "/* note */ void f() {\n#ifdef FEATURE\n\n    if (ready) {\n        value = 0;\n    }\n\n#endif\n}\n",
+    );
+    check(
+        "/* first\n   second */ void f()\n{\n#ifdef FEATURE\n    if (ready) {\n        value = 0;\n    }\n#endif\n}\n",
+        &["--style=java", "--break-blocks=all"],
+        "/* first\n   second */ void f() {\n#ifdef FEATURE\n\n    if (ready) {\n        value = 0;\n    }\n\n#endif\n}\n",
+    );
+}
+
+#[test]
+fn a_header_after_code_closing_a_block_comment_breaks_its_block() {
+    check(
+        "void f()\n{\n    value = 0;\n    /* first\n       second */ value = 1;\n    if (ready) {\n        value = 0;\n    }\n}\n",
+        &["--style=java", "--break-blocks"],
+        "void f() {\n    value = 0;\n    /* first\n       second */ value = 1;\n\n    if (ready) {\n        value = 0;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_statement_broken_off_a_block_closer_keeps_the_gap_before_its_comment() {
+    check(
+        "void f()\n{\n    if (ready) {\n        value=0;\n    } value=1;    /* note */\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    if (ready) {\n        value=0;\n    }\n    value=1;    /* note */\n}\n",
+    );
+    check(
+        "void f()\n{\n    if (ready) {\n        value=0;\n    } value=1;    /* note */\n}\n",
+        &["--style=kr", "--pad-oper"],
+        "void f()\n{\n    if (ready) {\n        value = 0;\n    }\n    value = 1;  /* note */\n}\n",
+    );
+    check(
+        "void f()\n{\n    while (ready) {\n        value=0;\n    } other(1); // note\n}\n",
+        &["--style=gnu"],
+        "void f()\n{\n    while (ready)\n        {\n            value=0;\n        }\n    other(1); // note\n}\n",
+    );
+}
+
+#[test]
+fn an_interface_line_a_comment_leads_sets_no_continuation_for_its_members() {
+    let input = "/* note */ @interface Item : NSObject\n@property (nonatomic) int value;\n- (void)update:(int)value;\n@end\n";
+    check(input, &["--style=kr"], input);
+    check(input, &["--style=vtk"], input);
+}
+
+#[test]
+fn a_message_argument_after_a_trailing_block_comment_aligns_its_colon() {
+    let input = "- (void)update:(int)value {\n    [self apply:value /* note */\n          with:other];\n}\n";
+    check(input, &["--style=java"], input);
+}
+
+#[test]
+fn a_comment_before_a_nested_element_closer_stands_at_its_rows() {
+    let input = "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n            // note\n        }, {\n            .value = 2,\n            /* note */\n        }\n    };\n}\n";
+    check(input, &["--style=kr"], input);
+    check(input, &["--style=mozilla"], input);
+    let after_label = "void f()\n{\n    switch (kind) {\n    case 1:\n        int list[] = { {\n                1,\n                // note\n            }\n        };\n    }\n}\n";
+    check(after_label, &["--style=kr"], after_label);
+}
+
+#[test]
+fn a_comment_before_the_closer_of_a_list_of_nested_elements_stands_at_its_body() {
+    let input = "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }, {\n            .value = 2,\n        }\n        // note\n    };\n    int table[][2] = { { 1, 2 },\n        { 3, 4 },\n        // note\n    };\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_lambda_argument_past_a_directive_stands_as_one_past_a_comma() {
+    check(
+        "void f()\n{\n    std::sort(items.begin(), items.end(),\n#ifdef FEATURE\n              [](const Item &first, const Item &second) {\n#endif\n        return first.value < second.value;\n    });\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    std::sort(items.begin(), items.end(),\n#ifdef FEATURE\n    [](const Item &first, const Item &second) {\n#endif\n        return first.value < second.value;\n    });\n}\n",
+    );
+}
+
+#[test]
+fn a_header_after_a_brace_a_comment_leads_past_a_directive_gets_no_blank_line() {
+    let input = "void f()\n{\n#if FEATURE\n    if( ready ) {\n        run();\n    } else\n#endif\n        /*if( other )*/{\n        if( value==0 ) {\n            run();\n        }\n    }\n}\n";
+    check(
+        input,
+        &["--style=java", "--break-blocks"],
+        "void f() {\n#if FEATURE\n\n    if( ready ) {\n        run();\n    } else\n#endif\n        /*if( other )*/{\n        if( value==0 ) {\n            run();\n        }\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_before_a_compound_literal_closer_stands_at_its_body() {
+    let input = "void f()\n{\n    value = (struct Item) {\n        .value = 1,\n        .other = 2\n        // note\n    };\n    call((struct Item) {\n        .other = 2\n        // note\n    });\n    return (struct Item) {\n        1,\n        2\n        // note\n    };\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_lambda_argument_a_comment_leads_stands_as_one_past_a_comma() {
+    let input = "void f()\n{\n    std::sort(items.begin(), items.end(),\n              /* note */ [](const Item &first, const Item &second) {\n        return first.value < second.value;\n    });\n}\n";
+    check(
+        input,
+        &["--style=linux"],
+        "void f()\n{\n    std::sort(items.begin(), items.end(),\n    /* note */ [](const Item &first, const Item &second) {\n        return first.value < second.value;\n    });\n}\n",
+    );
+    let past_directive = "void f()\n{\n#ifdef FEATURE\n    std::sort(items.begin(), items.end(),\n#endif\n              /* note */ [](const Item &first, const Item &second) {\n                  return first.value < second.value;\n              });\n}\n";
+    check(
+        past_directive,
+        &["--style=linux"],
+        "void f()\n{\n#ifdef FEATURE\n    std::sort(items.begin(), items.end(),\n#endif\n    /* note */ [](const Item &first, const Item &second) {\n        return first.value < second.value;\n    });\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_after_a_brace_broken_off_a_line_a_comment_leads_keeps_its_gap() {
+    let input = "void f()\n{\n    if (ready) {\n        value=0;\n    /* note */ } else if (other) { // second\n        value=1;\n    }\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    if (ready)\n    {\n        value=0;\n        /* note */\n    }\n    else if (other)     // second\n    {\n        value=1;\n    }\n}\n",
+    );
+    check(
+        "void f()\n{\n    if (ready) {\n        value=0;\n    /* note */ } value = 1; // second\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    if (ready) {\n        value=0;\n        /* note */\n    }\n    value = 1; // second\n}\n",
+    );
+}
+
+#[test]
+fn a_brace_row_a_comment_leads_stands_with_the_brace_rows_as_without_it() {
+    let input = "void f()\n{\n    struct Item items[] = {\n        /* note */ { .value = 1, .name = \"a\" },\n        { .value = 2, .name = \"b\" },\n    };\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    struct Item items[] = {\n            /* note */ { .value = 1, .name = \"a\" },\n            { .value = 2, .name = \"b\" },\n        };\n    }\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    struct Item items[] =\n        {\n            /* note */ { .value = 1, .name = \"a\" },\n            { .value = 2, .name = \"b\" },\n        };\n    }\n",
+    );
+}
+
+#[test]
+fn a_nested_element_a_comment_leads_closes_at_its_row_in_a_case_block() {
+    let input = "void f()\n{\n    switch (op) {\n    default: {\n        int table[][2] = {\n            { FIRST, 1 },\n            /* note */ {\n                SECOND, 2\n            },\n        };\n        break;\n    }\n    }\n}\n";
+    check(input, &[], input);
+}
+
+#[test]
+fn a_vtk_else_block_broken_past_a_directive_indents_its_brace() {
+    check(
+        "void f()\n{\n    if (other)\n        { value=0; }\n    else\n#ifdef FEATURE\n        { result=0; }\n#endif\n}\n",
+        &["--style=vtk"],
+        "void f()\n{\n    if (other)\n        {\n        value=0;\n        }\n    else\n#ifdef FEATURE\n        {\n        result=0;\n        }\n#endif\n}\n",
+    );
+}
+
+#[test]
+fn a_statement_a_comment_leads_after_a_label_block_in_a_case_stands_in_the_body() {
+    check(
+        "void f()\n{\n    switch (flags) {\n    case FIRST: {\n    retry: {\n            value = 1;\n            goto retry;\n        }\n        /* note */ break;\n    }\n    }\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    switch (flags) {\n    case FIRST: {\nretry: {\n            value = 1;\n            goto retry;\n        }\n        /* note */ break;\n    }\n    }\n}\n",
+    );
+    check(
+        "void f()\n{\n    switch (flags) {\n    case FIRST: {\n    retry: {\n            value = 1;\n            goto retry;\n        }\n        /* note */ break;\n    }\n    }\n}\n",
+        &["--style=whitesmith"],
+        "void f()\n    {\n    switch (flags)\n        {\n        case FIRST:\n            {\nretry:\n                {\n                value = 1;\n                goto retry;\n                }\n            /* note */ break;\n            }\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_comment_split_off_a_closer_after_a_bare_block_stands_at_the_body() {
+    let input = "void f()\n{\n    { value=0; }\n    /* note */ }\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n        {\n        value=0;\n        }\n    /* note */\n    }\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n        {\n        value=0;\n        }\n    /* note */\n    }\n",
+    );
+}
+
+#[test]
+fn a_declarator_split_from_an_aggregate_type_a_comment_leads_continues() {
+    let input = "void f()\n{\n    /* note */ static const struct Item\n        first = 1;\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_statement_a_comment_leads_after_a_run_in_case_block_closer_stands_as_without_it() {
+    check(
+        "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0; }\n    /* note */\n    break;\n    case 2: {\n        value=0; }\n    /* note */ break; }\n}\n",
+        &["--style=lisp"],
+        "void f() {\n    switch (kind) {\n    case 1: {\n        value=0; }\n        /* note */\n    break;\n    case 2: {\n        value=0; }\n    /* note */ break; } }\n",
+    );
+}
+
+#[test]
+fn an_indented_conditional_closes_at_its_opening_in_a_case_body() {
+    let input = "void f()\n{\n    switch (k) {\n    case 2:\n        int other[] = {\n            1, 2\n#ifdef FEATURE\n        };\n#endif\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=linux", "--indent-preproc-cond"],
+        "void f()\n{\n    switch (k) {\n    case 2:\n        int other[] = {\n            1, 2\n            #ifdef FEATURE\n        };\n            #endif\n        break;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_continuation_a_comment_leads_after_a_head_a_comment_leads_aligns_with_its_value() {
+    let input = "void f()\n{\n    /* note */ return first ||\n              /* c */ second;\n    /* note */ value = first &&\n        /* c */ second;\n}\n";
+    check(
+        input,
+        &["--style=java"],
+        "void f() {\n    /* note */ return first ||\n                      /* c */ second;\n    /* note */ value = first &&\n                       /* c */ second;\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_in_an_empty_switch_body_stands_past_its_labels() {
+    let input =
+        "void f()\n{\n    switch (op) {\n    /* c */\n    }\n    switch (op) {\n    /* c */ }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (op) {\n        /* c */\n    }\n    switch (op) {\n        /* c */\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=allman", "--indent-switches"],
+        "void f()\n{\n    switch (op)\n    {\n            /* c */\n    }\n    switch (op)\n    {\n            /* c */\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    switch (op)\n        {\n            /* c */\n        }\n    switch (op)\n        {\n            /* c */\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn an_if_constexpr_else_split_by_a_directive_closes_at_its_block() {
+    let input = "void f()\n{\n    if constexpr (sizeof(Item) > 4) {\n        value = 1;\n#ifdef FEATURE\n    } else {\n#endif\n        value = 2;\n    }\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    if constexpr (sizeof(Item) > 4)\n        {\n        value = 1;\n#ifdef FEATURE\n        }\n    else\n        {\n#endif\n        value = 2;\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_case_label_continued_past_a_trailing_block_comment_continues() {
+    let input = "void f()\n{\n    switch (flags) {\n    case FIRST | /* note */\n        SECOND:\n        value = 1;\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (flags) {\n    case FIRST | /* note */\n            SECOND:\n        value = 1;\n        break;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_macro_header_a_comment_leads_indents_its_body() {
+    check(
+        "#define CHECK(A) \\\n      do {           \\\n        /* note */ if (A)       \\\n          fail();    \\\n      } while (0)\n",
+        &["--style=kr", "--indent-preproc-define"],
+        "#define CHECK(A) \\\n    do {           \\\n        /* note */ if (A)       \\\n            fail();    \\\n    } while (0)\n",
+    );
+    check(
+        "#define CHECK(A) \\\n      switch (A) {           \\\n        /* note */ case 1:       \\\n          fail();    \\\n          break;    \\\n      }\n",
+        &["--style=kr", "--indent-preproc-define"],
+        "#define CHECK(A) \\\n    switch (A) {           \\\n    /* note */ case 1:       \\\n        fail();    \\\n        break;    \\\n    }\n",
+    );
+}
+
+#[test]
+fn a_case_label_a_comment_leads_keeps_the_gap_before_its_brace_comment() {
+    let input = "void f()\n{\n    switch (kind) {\n    /* note */ case 1: {    // note\n        value=0;\n    }\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_member_after_a_directive_in_a_case_block_type_stands_at_the_members() {
+    let input = "void f()\n{\n    switch (state) {\n    case 1: {\n#ifdef FEATURE\n        static const struct {\n#endif\n            int value;\n        } items[] = {\n            { 1 },\n        };\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    switch (state)\n    {\n    case 1:\n    {\n#ifdef FEATURE\n        static const struct\n        {\n#endif\n            int value;\n        } items[] =\n        {\n            { 1 },\n        };\n        break;\n    }\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_closer_after_a_directive_of_a_brace_a_comment_leads_stands_at_the_header() {
+    let input = "int f(void)\n{\n    for (i = 0; i < n; i++)\n    /* c */ {\n        g();\n#if A\n        h();\n#endif\n    }\n    return 0;\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "int f(void)\n{\n    for (i = 0; i < n; i++)\n        /* c */ {\n        g();\n#if A\n        h();\n#endif\n    }\n    return 0;\n}\n",
+    );
+}
+
+#[test]
+fn an_argument_after_a_comment_line_in_a_call_a_comment_leads_aligns_with_the_paren() {
+    let input = "void f()\n{\n    /* c */ std::sort(items.begin(), items.end(),\n              // note\n              [](const Item &first, const Item &second) {\n        return first.value < second.value;\n    });\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    /* c */ std::sort(items.begin(), items.end(),\n                      // note\n                      [](const Item &first, const Item &second)\n    {\n        return first.value < second.value;\n    });\n}\n",
+    );
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    /* c */ std::sort(items.begin(), items.end(),\n                      // note\n    [](const Item &first, const Item &second) {\n        return first.value < second.value;\n    });\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_after_a_nested_switch_in_a_case_stands_at_the_switch() {
+    let input = "void f()\n{\n    switch (kind)\n    {\n    case 1:\n        switch (op)\n        {\n        }\n    /* c */ }\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    switch (kind)\n        {\n        case 1:\n            switch (op)\n                {\n                }\n            /* c */\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_switch_brace_a_comment_leads_stays_off_the_header_as_any_header_brace() {
+    let input =
+        "void f(void)\n{\n    switch (op)\n    /* c */ {\n    case A:\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f(void)\n{\n    switch (op)\n        /* c */ {\n    case A:\n        break;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_after_code_broken_off_a_leading_comment_keeps_its_gap() {
+    check(
+        "struct S {\n    int x;\n/* c */ } s, t;/* e */\n",
+        &["--style=kr"],
+        "struct S {\n    int x;\n    /* c */\n} s, t;/* e */\n",
+    );
+}
+
+#[test]
+fn a_template_parameter_a_comment_leads_aligns_with_the_parameters() {
+    let input = "template <typename First,\n          /* c */ typename Second>\nclass Other {};\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_subscript_continued_past_a_line_comment_keeps_its_column() {
+    let input = "void f()\n{\n    value = table[first +\n                  // note\n                  second];\n    if (table[first +\n              // note\n              second] && other) {\n        value = 0;\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn an_initializer_a_comment_line_parts_from_its_assignment_stays_on_one_line() {
+    let input = "void f()\n{\n    struct Item other =\n        // note\n        { 3, 4 };\n}\n";
+    check(
+        input,
+        &[],
+        "void f()\n{\n    struct Item other =\n    // note\n    { 3, 4 };\n}\n",
+    );
+}
+
+#[test]
+fn a_case_label_a_comment_leads_after_a_user_label_stands_at_the_labels() {
+    let input = "void f()\n{\n    switch (state) {\n    retry:\n    /* note */ case 1:\n        value = 1;\n        break;\n    case 2:\n        goto retry;\n    }\n}\n";
+    check(
+        input,
+        &["--keep-one-line-statements"],
+        "void f()\n{\n    switch (state) {\nretry:\n    /* note */ case 1:\n        value = 1;\n        break;\n    case 2:\n        goto retry;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn comments_before_a_declarator_after_a_closed_initializer_share_its_column() {
+    let input = "static const struct Item\n    first = {\n        1, 2\n    },\n    /* note */\n    // note\n    second = {\n        3, 4\n    };\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "static const struct Item\n    first =\n    {\n    1, 2\n    },\n/* note */\n// note\nsecond =\n    {\n    3, 4\n    };\n",
+    );
+}
+
+#[test]
+fn a_comment_leading_a_case_label_of_a_switch_in_a_case_block_leaves_it_at_the_case_column() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        switch (other) {\n        /* note */ case 2:\n            value = 2;\n            break;\n        }\n        break;\n    }\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    switch (kind)\n    {\n    case 1:\n    {\n        switch (other)\n        {\n        /* note */ case 2:\n            value = 2;\n            break;\n        }\n        break;\n    }\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=gnu"],
+        "void f()\n{\n    switch (kind)\n        {\n        case 1:\n        {\n            switch (other)\n                {\n                /* note */ case 2:\n                    value = 2;\n                    break;\n                }\n            break;\n        }\n        }\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_leading_the_first_case_label_of_indented_switch_braces_leaves_it_at_the_case_column() {
+    let first = "void f()\n{\n    switch (kind) {\n    /* note */ case 2:\n        value = 2;\n        break;\n    }\n}\n";
+    let nested = "void f()\n{\n    switch (kind) {\n    case 1:\n        switch (other) {\n        /* note */ case 2:\n            value = 2;\n            break;\n        }\n        break;\n    }\n}\n";
+    check(
+        first,
+        &["--style=ratliff", "--indent-switches"],
+        "void f() {\n    switch (kind) {\n        /* note */ case 2:\n            value = 2;\n            break;\n        }\n    }\n",
+    );
+    check(
+        first,
+        &["--style=vtk", "--indent-switches"],
+        "void f()\n{\n    switch (kind)\n        {\n        /* note */ case 2:\n            value = 2;\n            break;\n        }\n}\n",
+    );
+    check(
+        nested,
+        &["--style=ratliff", "--indent-switches"],
+        "void f() {\n    switch (kind) {\n        case 1:\n            switch (other) {\n                /* note */ case 2:\n                    value = 2;\n                    break;\n                }\n            break;\n        }\n    }\n",
+    );
+    check(
+        nested,
+        &["--style=vtk", "--indent-switches"],
+        "void f()\n{\n    switch (kind)\n        {\n        case 1:\n            switch (other)\n                {\n                /* note */ case 2:\n                    value = 2;\n                    break;\n                }\n            break;\n        }\n}\n",
+    );
+}
+
+#[test]
+fn comments_in_a_template_head_over_lines_leave_its_rows_and_its_end_as_without_them() {
+    let expected = "template <typename First,\n          typename Second> /* note */\nclass Pair\n{\n    First first;\n};\n";
+    check(expected, &["--style=gnu"], expected);
+    let line_comment = expected.replace("/* note */", "// note");
+    check(&line_comment, &["--style=gnu"], &line_comment);
+    let angle_comment = "template <typename First, /* a < b */\n          typename Second>\nclass Pair\n{\n    First first;\n};\n";
+    check(angle_comment, &["--style=gnu"], angle_comment);
+}
+
+#[test]
+fn a_run_in_closer_of_an_enclosing_list_stays_after_the_comment_leading_its_line() {
+    let input = "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }\n    /* c */ };\n}\n";
+    check(
+        input,
+        &["--style=pico"],
+        "void f()\n{   struct Item list[] = { {\n            .value = 1, }\n        /* c */ }; }\n",
+    );
+    check(
+        input,
+        &["--style=lisp"],
+        "void f() {\n    struct Item list[] = { {\n            .value = 1, }\n        /* c */ }; }\n",
+    );
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }\n        /* c */\n    };\n}\n",
+    );
+}
+
+#[test]
+fn a_run_in_closer_of_an_enclosing_list_stays_after_a_comment_trailing_its_row() {
+    let input = "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }, other /* c */ };\n}\n";
+    check(
+        input,
+        &["--style=pico"],
+        "void f()\n{   struct Item list[] = { {\n            .value = 1, }, other /* c */ }; }\n",
+    );
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }, other /* c */\n    };\n}\n",
+    );
+}
+
+#[test]
+fn adjacent_comments_leading_a_list_closer_stand_at_the_elements() {
+    let input = "void f()\n{\n    int list[] = {\n        1,\n    /* c */ /* d */ };\n    struct Item more[] = { {\n            .value = 1,\n        }\n    /* c */ /* d */ };\n}\n";
+    check(
+        input,
+        &["--style=pico"],
+        "void f()\n{   int list[] =\n    {   1,\n        /* c */ /* d */ };\n    struct Item more[] = { {\n            .value = 1, }\n        /* c */ /* d */ }; }\n",
+    );
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    int list[] = {\n        1,\n        /* c */ /* d */\n    };\n    struct Item more[] = { {\n            .value = 1,\n        }\n        /* c */ /* d */\n    };\n}\n",
+    );
+}
+
+#[test]
+fn adjacent_comments_leading_a_row_leave_it_where_one_comment_does() {
+    let input = "void f()\n{\n    value = first +\n        /* a */ /* b */ second;\n    call(first,\n         /* a */ /* b */ second);\n    if (ready)\n        /* a */ /* b */ run();\n    if (ready &&\n        /* a */ /* b */ other)\n        run();\n}\nint x = 1 +\n    /* a */ /* b */ 2;\n";
+    let expected = "void f()\n{\n    value = first +\n            /* a */ /* b */ second;\n    call(first,\n         /* a */ /* b */ second);\n    if (ready)\n        /* a */ /* b */ run();\n    if (ready &&\n            /* a */ /* b */ other)\n        run();\n}\nint x = 1 +\n        /* a */ /* b */ 2;\n";
+    check(input, &[], expected);
+    check(
+        &input.replace("/* a */ /* b */", "/* a */"),
+        &[],
+        &expected.replace("/* a */ /* b */", "/* a */"),
+    );
+}
+
+#[test]
+fn a_message_row_a_comment_leads_stands_at_the_rows_of_its_message() {
+    let input = "- (void)run\n{\n    [object performWith:first\n     /* a */ andWith:second];\n    [object performWith:first\n                andWith:second];\n    [object performWith:first\n        /* a */ andWith:second\n        /* b */ orWith:third];\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "- (void)run\n{\n    [object performWith:first\n            /* a */ andWith:second];\n    [object performWith:first\n            andWith:second];\n    [object performWith:first\n            /* a */ andWith:second\n            /* b */ orWith:third];\n}\n",
+    );
+    // Aligned colons count the comment among the row's text.
+    check(
+        input,
+        &["--style=kr", "--align-method-colon"],
+        "- (void)run\n{\n    [object performWith:first\n        /* a */ andWith:second];\n    [object performWith:first\n                andWith:second];\n    [object performWith:first\n        /* a */ andWith:second\n         /* b */ orWith:third];\n}\n",
+    );
+}
+
+#[test]
+fn a_definition_body_after_a_parameter_row_a_comment_leads_stands_at_the_definition() {
+    let input = "static void apply(int (*handler)(int value,\n                                 /* note */ int other), int value)\n{\n    handler(value, 0);\n}\n";
+    for style in ["--style=kr", "--style=mozilla", "--style=allman"] {
+        check(input, &[style], input);
+    }
+}
+
+#[test]
+fn an_initializer_row_after_a_directive_keeps_its_column_with_the_body_brace_attached() {
+    let input = "Item::Item(int value, int other)\n#ifdef FEATURE\n    : value_(value),\n#endif\n      other_(other)\n{\n}\n";
+    check(
+        input,
+        &["--style=java"],
+        "Item::Item(int value, int other)\n#ifdef FEATURE\n    : value_(value),\n#endif\n      other_(other) {\n}\n",
+    );
+    check(
+        input,
+        &["--style=lisp"],
+        "Item::Item(int value, int other)\n#ifdef FEATURE\n    : value_(value),\n#endif\n      other_(other) {}\n",
+    );
+}
+
+#[test]
+fn an_initializer_row_between_directives_keeps_the_column_of_the_rows() {
+    let input = "Item::Item(int value, int other)\n    : value_(value),\n#ifdef FEATURE\n      extra_(0),\n#endif\n      other_(other) {\n}\n";
+    check(input, &["--style=java"], input);
+    check(
+        input,
+        &["--style=lisp"],
+        "Item::Item(int value, int other)\n    : value_(value),\n#ifdef FEATURE\n      extra_(0),\n#endif\n      other_(other) {}\n",
+    );
+}
+
+#[test]
+fn a_header_after_a_directive_takes_its_brace_before_its_comment_as_anywhere() {
+    let input = "void f()\n{\n#ifdef FEATURE\n    run();\n#endif\n    if (ready) /* why */ {\n        value=0;\n    }\n    if (ready) /* why */ {\n        value=0;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n#ifdef FEATURE\n    run();\n#endif\n    if (ready) { /* why */\n        value=0;\n    }\n    if (ready) { /* why */\n        value=0;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_over_lines_trailing_a_switch_brace_stands_where_one_on_its_own_line_does() {
+    // astyle sets it a level deeper on a first pass and moves it on the
+    // next; the comment stands at the labels at once.
+    let input = "int f(int kind)\n{\n  switch( kind ){  /* Switch on the class of the first byte\n                   ** of the token. */\n    case 1: {\n      return 1;\n    }\n  }\n  return 0;\n}\n";
+    let cases: [(&[&str], &str); 4] = [
+        (
+            &["--style=kr"],
+            "int f(int kind)\n{\n    switch( kind ) {\n    /* Switch on the class of the first byte\n                     ** of the token. */\n    case 1: {\n        return 1;\n    }\n    }\n    return 0;\n}\n",
+        ),
+        (
+            &["--style=kr", "--indent-switches"],
+            "int f(int kind)\n{\n    switch( kind ) {\n        /* Switch on the class of the first byte\n                         ** of the token. */\n        case 1: {\n            return 1;\n        }\n    }\n    return 0;\n}\n",
+        ),
+        (
+            &["--style=allman"],
+            "int f(int kind)\n{\n    switch( kind )\n    {\n    /* Switch on the class of the first byte\n                     ** of the token. */\n    case 1:\n    {\n        return 1;\n    }\n    }\n    return 0;\n}\n",
+        ),
+        (
+            &["--style=gnu"],
+            "int f(int kind)\n{\n    switch( kind )\n        {\n        /* Switch on the class of the first byte\n                         ** of the token. */\n        case 1:\n        {\n            return 1;\n        }\n        }\n    return 0;\n}\n",
+        ),
+    ];
+    for (options, expected) in cases {
+        check(input, options, expected);
+        check(expected, options, expected);
+    }
+}
+
+#[test]
+fn an_empty_block_keeps_the_code_after_it_on_its_line() {
+    let input =
+        "void f()\n{\n    if (ready) {} else { value = 1; }\n    while (busy()) {} next();\n}\n";
+    let attached = "void f()\n{\n    if (ready) {} else {\n        value = 1;\n    }\n    while (busy()) {} next();\n}\n";
+    check(input, &[], attached);
+    check(input, &["--style=kr"], attached);
+    // A style breaking closing headers off their `}` breaks the `else`.
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    if (ready) {}\n    else\n    {\n        value = 1;\n    }\n    while (busy()) {} next();\n}\n",
+    );
+    check(
+        "void f()\n{\n    if (ready) {} // note\n    else { value = 1; }\n    while (busy()) {} /* c */ next();\n    for (;;) {} next();\n    do {} while (busy()); next();\n    if (ready) {} else if (other) {} else {}\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    if (ready) {} // note\n    else {\n        value = 1;\n    }\n    while (busy()) {} /* c */ next();\n    for (;;) {} next();\n    do {} while (busy());\n    next();\n    if (ready) {} else if (other) {} else {}\n}\n",
+    );
+    // A source that parts them keeps them parted.
+    let parted = "void f()\n{\n    if (ready) {}\n    else {\n        value = 1;\n    }\n    while (busy()) {}\n    next();\n}\n";
+    check(parted, &["--style=kr"], parted);
+}
+
+#[test]
+fn a_list_row_a_comment_leads_in_a_case_block_stands_at_the_rows() {
+    let input = "void f()\n{\n    switch (op) {\n    case 1: {\n        int other[] = { 1,\n                        /* e */ 2\n                      };\n        int table[][2] = {\n            { FIRST, 1 },\n            {\n                SECOND, 2|\n                /* note */ 4\n            },\n        };\n        break;\n    }\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_run_in_switch_brace_before_a_case_block_holding_a_table_stays_at_the_switch() {
+    // astyle sets the brace at column one here, though not when the case
+    // block holds no table.
+    let input = "void f()\n{\n    switch (op) {\n    default: {\n        int table[][2] = {\n            { FIRST, 1 },\n            {\n                SECOND, 2|\n                /* note */ 4\n            },\n        };\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=horstmann"],
+        "void f()\n{   switch (op)\n    {   default:\n        {   int table[][2] =\n            {   { FIRST, 1 },\n                {   SECOND, 2|\n                    /* note */ 4\n                },\n            };\n            break;\n        }\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_brace_after_a_directive_and_a_comment_after_a_case_label_stays_a_plain_block() {
+    let input = "void f()\n{\n    switch (state) {\n    case 2:\n#line 46 \"input.l\"\n    {\n        pop(state);\n    }\n    break;\n    case 3:\n#line 46 \"input.l\"\n    // note\n    {\n        pop(state);\n    }\n    break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (state) {\n    case 2:\n#line 46 \"input.l\"\n        {\n            pop(state);\n        }\n        break;\n    case 3:\n#line 46 \"input.l\"\n        // note\n        {\n            pop(state);\n        }\n        break;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_before_a_directive_ahead_of_a_label_in_a_case_block_stays_in_the_block_body() {
+    // As without the directive, the comment stands with the block's
+    // statements, not past the label after it.
+    let input = "void f()\n{\n    switch (op) {\n    case FIRST: {\n        if (ready) {\n            reset(value);\n        }\n        /* fall through */\n#ifdef FEATURE\n    case SECOND:\n#endif\n        apply(value);\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (op) {\n    case FIRST: {\n        if (ready) {\n            reset(value);\n        }\n        /* fall through */\n#ifdef FEATURE\n        case SECOND:\n#endif\n            apply(value);\n            break;\n    }\n    }\n}\n",
+    );
+}
+
+#[test]
+fn indented_conditionals_after_a_label_in_a_case_block_stand_at_the_label_body() {
+    let input = "void f()\n{\n    switch (op) {\n    case FIRST: {\n        run();\n#ifdef FEATURE\n    case SECOND:\n#endif\n        apply(value);\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--indent-preproc-cond"],
+        "void f()\n{\n    switch (op) {\n    case FIRST: {\n        run();\n        #ifdef FEATURE\n        case SECOND:\n            #endif\n            apply(value);\n            break;\n    }\n    }\n}\n",
+    );
+}
+
+#[test]
+fn deleting_empty_lines_keeps_those_of_a_type_body_in_a_function() {
+    let input = "void f()\n{\n    if (ready) {\n        struct {\n            int value;\n\n        } item;\n\n        run();\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--delete-empty-lines"],
+        "void f()\n{\n    if (ready) {\n        struct {\n            int value;\n\n        } item;\n        run();\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_call_argument_row_in_a_compound_literal_stays_at_its_paren() {
+    let input = "void f()\n{\n    value = (struct Item) {\n        .y = call(first,\n                  second),\n    };\n}\n";
+    check(input, &["--style=kr"], input);
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    value = (struct Item)\n    {\n        .y = call(first,\n                  second),\n    };\n}\n",
+    );
+}
+
+#[test]
+fn a_qualified_definition_head_takes_its_brace_before_a_trailing_comment() {
+    let input = "class Item {\n  public:\n    int value() const /* note */\n    {\n        return value_;\n    }\n    int other() // note\n    {\n        return value_;\n    }\n};\nint g() const /* note */\n{\n    return 0;\n}\n";
+    check(
+        input,
+        &["--style=google"],
+        "class Item {\n  public:\n    int value() const { /* note */\n        return value_;\n    }\n    int other() { // note\n        return value_;\n    }\n};\nint g() const { /* note */\n    return 0;\n}\n",
+    );
+}
+
+#[test]
+fn a_lambda_argument_row_with_a_comment_after_its_brace_stands_as_without_it() {
+    let input = "void f()\n{\n    std::sort(items.begin(), items.end(),\n    [](const Item &first, const Item &second) { /* note */\n        return first.value < second.value;\n    });\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn indented_brace_styles_set_a_brace_row_a_comment_leads_with_the_brace_rows() {
+    // astyle sets the comment at the plain rows' column; the row stands
+    // where it would without the comment.
+    let input = "static const struct Item items[] = {\n    {1, 2},\n    /* note */ {3,\n     4},\n    {5,\n     6}\n};\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "static const struct Item items[] = {\n        {1, 2},\n        /* note */ {\n        3,\n        4\n        },\n        {\n        5,\n        6\n        }\n    };\n",
+    );
+    check(
+        input,
+        &["--style=ratliff"],
+        "static const struct Item items[] = {\n        {1, 2},\n        /* note */ {\n        3,\n        4\n        },\n        {\n        5,\n        6\n        }\n    };\n",
+    );
+}
+
+#[test]
+fn a_shift_row_of_a_statement_a_comment_leads_after_a_stream_stays_in_its_parens() {
+    let input = "void f()\n{\n    out << value << ((b + (c - 1))\n                     << c);\n    /* c */ m = 1 << (((p & (size - 1))\n                       >> shift)\n                      + OFFSET);\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_comment_line_between_declarators_stands_at_the_declarator_after_it() {
+    let input = "void f()\n{\n    int g = 1,\n        /* note */\n        h = 2;\n    int a = 1,\n#ifdef FEATURE\n        /* note */\n        b = 2,\n#endif\n        c = 3;\n}\nint x = 1,\n    /* note */\n    y = 2;\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_comment_line_before_a_class_base_colon_leaves_the_clause_as_without_it() {
+    let input = "struct Item\n    /* note */\n    : public Base,\n      private Other {\n};\n";
+    check(input, &["--style=kr"], input);
+    check(
+        input,
+        &["--style=allman"],
+        "struct Item\n    /* note */\n    : public Base,\n      private Other\n{\n};\n",
+    );
+}
+
+#[test]
+fn a_comment_line_in_nested_parens_of_a_condition_stands_at_the_condition_rows() {
+    let input = "void f(void)\n{\n    if((a ? b :\n            /* note */\n            c) != -1) {\n    }\n    if( (first &&\n            /* note */\n            (second || third))\n      ) {\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_string_row_after_a_comment_line_in_a_case_block_stands_at_the_comment() {
+    let input = "void f()\n{\n    switch (x) {\n    case 1: {\n        static const char *names[] = { \"first\", \"second\",\n                                       /* note */\n                                       \"third\", \"fourth\"\n                                     };\n        break;\n    }\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_declarator_split_from_its_aggregate_type_continues_past_a_trailing_comment() {
+    let input = "void f()\n{\n    static struct foo /* note */\n        bar[3];\n}\nstatic struct foo /* note */\n    bar[3];\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn pointer_declarator_rows_after_a_trailing_comment_stay_at_the_first_declarator() {
+    let input = "struct Item {\n    robj *a, /* note */\n         *b,\n         *c;\n};\nvoid f()\n{\n    robj *a, /* note */\n         *b;\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_comment_line_among_the_rows_of_a_run_in_list_stands_at_the_rows() {
+    let input = "void f()\n{\n    int b[] = {{1, 2},\n        /* note */\n        3,\n        4, {5},\n        6\n    };\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_list_in_a_case_block_keeps_its_columns_where_its_line_stands() {
+    let input = "void f()\n{\n    switch (x) {\n    case 1: {\n        static const char *names[] = { \"first\", \"second\",\n                                       /* note */\n                                       \"third\", \"fourth\"\n                                     };\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    switch (x)\n        {\n        case 1:\n            {\n            static const char *names[] = { \"first\", \"second\",\n                                           /* note */\n                                           \"third\", \"fourth\"\n                                         };\n            break;\n            }\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_comment_led_row_after_a_comment_line_in_a_continuation_stays_in_it() {
+    let input = "void f()\n{\n    /* note */ return first ||\n                      /* note */\n                      /* c */ second;\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_comment_line_in_a_subscript_continued_in_a_condition_stands_at_its_rows() {
+    let input = "void f()\n{\n    if (table[first +\n              /* note */\n              second] && other) {\n        value=0;\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_comment_line_among_message_rows_stands_at_the_rows() {
+    let input = "- (int)total\n{\n    return y + [self.other countWith:1\n                           /* note */\n                           and:2];\n}\n";
+    check(input, &[], input);
+}
+
+#[test]
+fn a_message_keyword_spelled_as_a_word_operator_aligns_as_other_keywords() {
+    let input = "- (int)total\n{\n    return y + [self.other countWith:1\n and:2];\n    return y + [self.other countWith:1\n or:2];\n}\n";
+    check(
+        input,
+        &[],
+        "- (int)total\n{\n    return y + [self.other countWith:1\n                           and:2];\n    return y + [self.other countWith:1\n                           or:2];\n}\n",
+    );
+}
+
+#[test]
+fn message_rows_align_at_the_keyword_whatever_brackets_precede_on_the_line() {
+    let input = "- (int)total\n{\n    x = y + [self.other countWith:1\n using:2];\n    x = a[1] + [self.other countWith:1\n using:2];\n    x = [a b] + [self.other countWith:1\n using:2];\n}\n";
+    check(
+        input,
+        &[],
+        "- (int)total\n{\n    x = y + [self.other countWith:1\n                        using:2];\n    x = a[1] + [self.other countWith:1\n                           using:2];\n    x = [a b] + [self.other countWith:1\n                            using:2];\n}\n",
+    );
+}
+
+#[test]
+fn padding_operators_leaves_a_message_keyword_spelled_as_a_word_operator_attached() {
+    let input = "- (void)update\n{\n    [self.other countWith:value and:other or:last];\n}\n";
+    check(input, &["--pad-oper"], input);
+}
+
+#[test]
+fn a_long_message_splits_at_a_keyword_spelled_as_a_word_operator_as_at_any_keyword() {
+    let input = "- (void)update\n{\n    [self.otherObject countWith:valueNumberOne and:valueNumberTwo or:valueNumberThree];\n}\n";
+    check(
+        input,
+        &["--max-code-length=60", "--break-after-logical"],
+        "- (void)update\n{\n    [self.otherObject countWith:valueNumberOne and:\n                      valueNumberTwo or:valueNumberThree];\n}\n",
+    );
+    check(
+        input,
+        &["--max-code-length=76"],
+        "- (void)update\n{\n    [self.otherObject countWith:valueNumberOne and:valueNumberTwo or:\n                      valueNumberThree];\n}\n",
+    );
+}
+
+#[test]
+fn message_rows_in_any_header_condition_align_at_the_keyword() {
+    let input = "- (void)update\n{\n    if ([self.other countWith:1\n using:2]) {\n        go();\n    }\n    while ([self.other countWith:1\n using:2]) {\n        go();\n    }\n}\n";
+    check(
+        input,
+        &[],
+        "- (void)update\n{\n    if ([self.other countWith:1\n                    using:2]) {\n        go();\n    }\n    while ([self.other countWith:1\n                       using:2]) {\n        go();\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_designator_value_continues_under_the_value_in_any_brace_list() {
+    check(
+        "void f(void)\n{\n    struct Config c = {\n        .value = FLAG_A |\n        FLAG_B,\n        .other = FLAG_A | FLAG_B |\n        FLAG_C,\n        .third = helper(1) +\n        2,\n        .fourth =\n        5,\n        FLAG_A |\n        FLAG_B,\n        [2] = FLAG_A |\n        FLAG_B,\n        .last = FLAG_A\n        | FLAG_B,\n    };\n    helper((struct Config) {\n        .value = FLAG_A |\n        FLAG_B,\n        .other = FLAG_A | FLAG_B |\n        FLAG_C,\n        .third = helper(1) +\n        2,\n        .fourth =\n        5,\n        FLAG_A |\n        FLAG_B,\n        [2] = FLAG_A |\n        FLAG_B,\n        .last = FLAG_A\n        | FLAG_B,\n    });\n}\n",
+        &[],
+        "void f(void)\n{\n    struct Config c = {\n        .value = FLAG_A |\n                 FLAG_B,\n        .other = FLAG_A | FLAG_B |\n                 FLAG_C,\n        .third = helper(1) +\n                 2,\n        .fourth =\n        5,\n        FLAG_A |\n        FLAG_B,\n        [2] = FLAG_A |\n              FLAG_B,\n        .last = FLAG_A\n                | FLAG_B,\n    };\n    helper((struct Config) {\n        .value = FLAG_A |\n                 FLAG_B,\n        .other = FLAG_A | FLAG_B |\n                 FLAG_C,\n        .third = helper(1) +\n                 2,\n        .fourth =\n        5,\n        FLAG_A |\n        FLAG_B,\n        [2] = FLAG_A |\n              FLAG_B,\n        .last = FLAG_A\n                | FLAG_B,\n    });\n}\n",
+    );
+    check(
+        "void f(void)\n{\n    struct Config c = {\n        .inner = { .value = FLAG_A |\n        FLAG_B },\n    };\n}\n",
+        &[],
+        "void f(void)\n{\n    struct Config c = {\n        .inner = {\n            .value = FLAG_A |\n                     FLAG_B\n        },\n    };\n}\n",
+    );
+}
+
+#[test]
+fn a_designator_string_value_continues_under_the_value() {
+    let input = "void f(void)\n{\n    struct Item item = {\n        .name = \"first \"\n        \"second\",\n        [1] = \"first \"\n        \"second\",\n        \"first \"\n        \"second\",\n    };\n}\n";
+    check(
+        input,
+        &[],
+        "void f(void)\n{\n    struct Item item = {\n        .name = \"first \"\n                \"second\",\n        [1] = \"first \"\n              \"second\",\n        \"first \"\n        \"second\",\n    };\n}\n",
+    );
+}
+
+#[test]
+fn a_nested_designator_brace_split_over_rows_stays_after_its_designator() {
+    let input = "void f(void)\n{\n    struct Config c = {\n        .first = 1,\n        .inner = { .value = 1,\n        .other = 2 },\n        .last = 2,\n    };\n}\n";
+    let expected = "void f(void)\n{\n    struct Config c =\n    {\n        .first = 1,\n        .inner = {\n            .value = 1,\n            .other = 2\n        },\n        .last = 2,\n    };\n}\n";
+    check(input, &["--style=allman"], expected);
+    check(
+        &input.replace(".first = 1,", "FLAG_A |\n        FLAG_B,"),
+        &["--style=allman"],
+        &expected.replace(".first = 1,", "FLAG_A |\n        FLAG_B,"),
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f(void)\n    {\n    struct Config c =\n        {\n        .first = 1,\n        .inner = {\n            .value = 1,\n            .other = 2\n            },\n        .last = 2,\n        };\n    }\n",
+    );
+}
+
+#[test]
+fn a_comment_line_before_a_comment_led_case_label_leaves_the_label_in_place() {
+    let input = "void f(void)\n{\n    switch (x) {\n    case 1: {\n        break;\n    }\n    /* note */\n    /*case B*/ default:\n        y();\n    }\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f(void)\n    {\n    switch (x)\n        {\n        case 1:\n            {\n            break;\n            }\n        /* note */\n        /*case B*/ default:\n            y();\n        }\n    }\n",
+    );
+    check(
+        input,
+        &["--style=vtk"],
+        "void f(void)\n{\n    switch (x)\n        {\n        case 1:\n            {\n            break;\n            }\n        /* note */\n        /*case B*/ default:\n            y();\n        }\n}\n",
+    );
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f(void) {\n    switch (x) {\n        case 1: {\n            break;\n            }\n        /* note */\n        /*case B*/ default:\n            y();\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_comment_leading_a_member_after_a_comment_line_stands_at_the_members() {
+    let input = "@interface Item : NSObject\n/* first */\n/* second */ @property (nonatomic) int value;\n@end\n";
+    check(
+        input,
+        &[],
+        "@interface Item : NSObject\n    /* first */\n/* second */ @property (nonatomic) int value;\n@end\n",
+    );
+}
+
+#[test]
+fn a_comment_line_after_a_compound_literal_argument_stands_at_the_arguments() {
+    let input = "void f()\n{\n    helper((struct Item) { 1, 2 },\n           /* note */\n           other);\n}\n";
+    check(input, &[], input);
+}
+
+#[test]
+fn a_comment_line_after_the_last_designator_stands_at_the_designators() {
+    let input = "struct Config c = {\n    .first = 1,\n    .last = '*'\n    // note /* inner */ text\n};\nstruct Config d = {\n    .first = 1,\n    .last = '*'\n    /* note */\n};\n";
+    check(input, &[], input);
+}
+
+#[test]
+fn a_comment_line_after_a_condition_row_closing_parens_stands_at_the_open_paren() {
+    let input = "void f(void)\n{\n    if (\n        (a\n         || (b\n             && (c\n                 || d))\n         /* note */\n         || (e\n             && g))) {\n        h();\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_comment_trailing_a_nested_brace_run_stays_on_its_line() {
+    let input = "void f()\n{\n    struct Item list[] = { { /* note */\n            .value = 1,\n        }, {\n            .value = 2,\n        }\n    };\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    struct Item list[] = { { /* note */\n            .value = 1,\n        }, {\n            .value = 2,\n        }\n    };\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    struct Item list[] = { { /* note */\n            .value = 1,\n            }, {\n            .value = 2,\n            }\n        };\n    }\n",
+    );
+}
+
+#[test]
+fn a_comment_split_off_a_list_closer_indents_with_tabs_at_the_list_body() {
+    let input = "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }\n    /* note */ };\n}\n";
+    check(
+        input,
+        &["--indent=tab=4"],
+        "void f()\n{\n\tstruct Item list[] = { {\n\t\t\t.value = 1,\n\t\t}\n\t\t/* note */\n\t};\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_on_a_line_after_a_case_block_moves_none_of_its_code() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        pop(state);\n    }  /* FALLTHROUGH */\n    case 2: {\n        pop(state);\n    }\n    /* note */\n    break; /* note */\n    case 3: {\n        pop(state);\n    }\n    /* lead */ break;\n    }\n}\n";
+    check(
+        input,
+        &[],
+        "void f()\n{\n    switch (kind) {\n    case 1: {\n        pop(state);\n    }  /* FALLTHROUGH */\n    case 2: {\n        pop(state);\n    }\n        /* note */\n    break; /* note */\n    case 3: {\n        pop(state);\n    }\n    /* lead */ break;\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    switch (kind)\n        {\n        case 1:\n            {\n            pop(state);\n            }  /* FALLTHROUGH */\n        case 2:\n            {\n            pop(state);\n            }\n            /* note */\n        break; /* note */\n        case 3:\n            {\n            pop(state);\n            }\n        /* lead */ break;\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_comment_led_switch_label_sets_no_column_for_its_body_past_a_directive() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n    }\n    break;\n    /* note */ default:\n#ifdef FEATURE\n        break;\n#endif\n    }\n}\n";
+    check(input, &[], input);
+}
+
+#[test]
+fn a_comment_line_between_a_split_declaration_head_and_its_declarator_stands_at_the_declarator() {
+    let input = "static const struct Item\n  // note\nfirst = {\n    1, 2\n};\n";
+    check(
+        input,
+        &["--style=1tbs"],
+        "static const struct Item\n    // note\n    first = {\n    1, 2\n};\n",
+    );
+}
+
+#[test]
+fn comments_leading_a_case_block_brace_line_open_its_body() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 2: { /* a */ /* b */\n        result=1;\n    }\n    }\n}\n";
+    check(
+        input,
+        &[],
+        "void f()\n{\n    switch (kind) {\n    case 2: {\n        /* a */ /* b */\n        result=1;\n    }\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    switch (kind)\n    {\n    case 2:\n    {\n        /* a */ /* b */\n        result=1;\n    }\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_brace_before_a_block_and_a_line_comment_stays_on_its_header_line() {
+    let input = "void f()\n{\n    if (x) { /* a */ // b\n        y();\n    }\n}\n";
+    check(
+        input,
+        &["--style=vtk"],
+        "void f()\n{\n    if (x) { /* a */ // b\n        y();\n        }\n}\n",
+    );
+    check(
+        input,
+        &["--style=pico"],
+        "void f()\n{   if (x) { /* a */ // b\n        y(); } }\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    if (x) { /* a */ // b\n        y();\n        }\n    }\n",
+    );
+    check(
+        input,
+        &["--style=gnu"],
+        "void f()\n{\n    if (x) { /* a */ // b\n            y();\n        }\n}\n",
+    );
+}
+
+#[test]
+fn a_closing_directive_in_a_case_block_stands_at_the_directive_that_opened_it() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        if (ready) {\n            value=0;\n#ifdef FEATURE\n        }\n#endif\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--indent-preproc-cond"],
+        "void f()\n{\n    switch (kind) {\n    case 1: {\n        if (ready) {\n            value=0;\n            #ifdef FEATURE\n        }\n            #endif\n        break;\n    }\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_leading_an_enum_head_leaves_its_brace_to_the_style() {
+    let input = "/* note */ enum Kind {\n    First = 1,\n};\n";
+    check(
+        input,
+        &["--style=allman"],
+        "/* note */ enum Kind\n{\n    First = 1,\n};\n",
+    );
+}
+
+#[test]
+fn a_directive_closing_a_conditional_opened_before_a_switch_stands_at_its_opener() {
+    let input = "void f()\n{\n#ifdef FEATURE\n    switch (kind) {\n#endif\n    case 1:\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=ratliff", "--indent-preproc-cond"],
+        "void f() {\n    #ifdef FEATURE\n    switch (kind) {\n    #endif\n        case 1:\n            break;\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_comment_line_among_call_arguments_in_a_list_stands_at_the_arguments() {
+    let input = "void f()\n{\n    value = (struct Item) {\n        .y = call(first,\n                  /* note */\n                  second),\n    };\n    struct Item item = {\n        .y = call(first,\n                  /* note */\n                  second),\n    };\n}\n";
+    check(input, &[], input);
+}
+
+#[test]
+fn a_comment_in_a_later_branch_of_list_rows_stands_at_the_rows_values_take() {
+    let input = "static const struct Item items[] = {\n#if FEATURE\n    {1, 2}\n#else\n    // note\n    {1, 2},\n#endif\n};\n";
+    check(input, &["--style=vtk"], input);
+    check(
+        input,
+        &["--style=whitesmith"],
+        "static const struct Item items[] = {\n#if FEATURE\n        {1, 2}\n#else\n    // note\n        {1, 2},\n#endif\n    };\n",
+    );
+}
+
+#[test]
+fn vtk_sets_every_brace_row_of_a_list_in_code_a_level_past_its_values() {
+    let input = "void f()\n{\n    static const struct Item items[] = {\n        3,\n        {1, 2},\n        {\n            {1, 2},\n            3,\n            {1, 2},\n        },\n        4, {5, 6},\n        {7, 8}, {9, 10},\n    };\n    value = 1;\n}\n";
+    let expected = "void f()\n{\n    static const struct Item items[] =\n        {\n        3,\n            {1, 2},\n            {\n                {1, 2},\n            3,\n                {1, 2},\n            },\n        4, {5, 6},\n            {7, 8}, {9, 10},\n        };\n    value = 1;\n}\n";
+    check(input, &["--style=vtk"], expected);
+    check(
+        &input.replace("struct Item", "Item"),
+        &["--style=vtk"],
+        &expected.replace("struct Item", "Item"),
+    );
+}
+
+#[test]
+fn a_conditional_among_the_rows_of_a_list_its_line_runs_in_stands_at_the_rows() {
+    let input = "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }, {\n            .value = 2,\n#ifdef FEATURE\n            .other = 3,\n#endif\n        }\n    };\n}\n";
+    check(
+        input,
+        &["--style=google", "--indent-preproc-cond"],
+        "void f() {\n    struct Item list[] = { {\n            .value = 1,\n        }, {\n            .value = 2,\n            #ifdef FEATURE\n            .other = 3,\n            #endif\n        }\n    };\n}\n",
+    );
+}
+
+#[test]
+fn indented_brace_styles_set_every_nested_group_of_a_run_in_list_at_its_brace_levels() {
+    let file = "int list[][1] = { {\n        1,\n    }, {\n        2,\n    }\n};\n";
+    let code = "void f()\n{\n    static const struct Item items[] = { {\n            1,\n        }, {\n            2,\n        }\n    };\n}\n";
+    for (style, file_expected, code_expected) in [
+        (
+            "--style=whitesmith",
+            "int list[][1] = { {\n        1,\n        }, {\n        2,\n        }\n    };\n",
+            "void f()\n    {\n    static const struct Item items[] = { {\n            1,\n            }, {\n            2,\n            }\n        };\n    }\n",
+        ),
+        (
+            "--style=vtk",
+            "int list[][1] = { {\n        1,\n        }, {\n        2,\n        }\n};\n",
+            "void f()\n{\n    static const struct Item items[] = { {\n            1,\n            }, {\n            2,\n            }\n        };\n}\n",
+        ),
+        (
+            "--style=ratliff",
+            "int list[][1] = { {\n        1,\n        }, {\n        2,\n        }\n    };\n",
+            "void f() {\n    static const struct Item items[] = { {\n            1,\n            }, {\n            2,\n            }\n        };\n    }\n",
+        ),
+    ] {
+        check(file, &[style], file_expected);
+        check(code, &[style], code_expected);
+    }
+}
+
+#[test]
+fn a_run_in_list_opening_a_case_block_stands_at_the_blocks_statements() {
+    let input = "void f()\n{\n    switch (x) {\n    case 1: {\n        int list[][1] = { {\n                1,\n            }\n        };\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    switch (x)\n        {\n        case 1:\n            {\n            int list[][1] = { {\n                    1,\n                    }\n                };\n            }\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_closer_of_a_group_opened_mid_row_stands_at_the_braces_open_before_it() {
+    let input = "int list[][1][1] = { { {\n            1,\n        }, {\n            2,\n        } }, { {\n            3,\n        }\n    }\n};\n";
+    let plain = "int list[][1][1] = { { {\n            1,\n        }, {\n            2,\n        }\n    }, { {\n            3,\n        }\n    }\n};\n";
+    let indented = "int list[][1][1] = { { {\n            1,\n            }, {\n            2,\n            }\n        }, { {\n            3,\n            }\n        }\n    };\n";
+    for (style, expected) in [
+        ("--style=kr", plain.to_owned()),
+        ("--style=allman", plain.to_owned()),
+        ("--style=gnu", plain.to_owned()),
+        ("--style=whitesmith", indented.to_owned()),
+        ("--style=ratliff", indented.to_owned()),
+        ("--style=vtk", indented.replace("\n    };\n", "\n};\n")),
+    ] {
+        check(input, &[style], &expected);
+    }
+}
+
+#[test]
+fn a_declarator_a_comment_leads_after_a_split_declaration_head_stays_continued() {
+    let input =
+        "void f()\n{\n    static const struct Item\n        /* note */ first =\n    { 1, 2 };\n}\n";
+    check(input, &["--style=kr"], input);
+    check(
+        &input.replace("/* note */ ", ""),
+        &["--style=kr"],
+        &input.replace("/* note */ ", ""),
+    );
+}
+
+#[test]
+fn a_braceless_else_body_after_its_ifs_indented_closer_stands_past_the_if() {
+    let input = "void f()\n{\n    if (ready) {\n        first();\n    } /* c */ else\n        result=0;\n    after();\n}\n";
+    for (style, expected) in [
+        (
+            "--style=gnu",
+            "void f()\n{\n    if (ready)\n        {\n            first();\n        } /* c */ else\n        result=0;\n    after();\n}\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void f()\n    {\n    if (ready)\n        {\n        first();\n        } /* c */ else\n        result=0;\n    after();\n    }\n",
+        ),
+        (
+            "--style=ratliff",
+            "void f() {\n    if (ready) {\n        first();\n        } /* c */ else\n        result=0;\n    after();\n    }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(
+            &input.replace("else\n", "else if (other)\n"),
+            &[style],
+            &expected.replace("else\n", "else if (other)\n"),
+        );
+    }
+}
+
+#[test]
+fn a_closing_directive_after_a_continued_statement_in_a_case_block_stands_at_its_opener() {
+    let input = "void f()\n{\n    if (x) {\n        switch (op) {\n        case 1: {\n            value = 1;\n            check(a, b\n                  || c);\n#ifndef FEATURE\n#endif\n        }\n        /* b\n        */\n        }\n    }\n}\n";
+    check(
+        input,
+        &["--style=stroustrup", "--indent-preproc-cond"],
+        "void f()\n{\n    if (x) {\n        switch (op) {\n        case 1: {\n            value = 1;\n            check(a, b\n                  || c);\n            #ifndef FEATURE\n            #endif\n        }\n            /* b\n            */\n        }\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_file_scope_conditional_after_a_macro_holding_a_case_label_stays_at_the_margin() {
+    let input = "#define GEN(name) \\\ncase name: \\\n  return 1;\nint f(int x)\n{\n    return 0;\n}\n\n#ifdef FEATURE\n#define NAME 1\n#endif\n";
+    check(input, &["--indent-preproc-cond"], input);
+}
+
+#[test]
+fn a_conditional_inside_a_continued_statement_of_a_case_block_stands_at_the_continuation() {
+    let input = "void f(int x)\n{\n    switch (x) {\n    case 2: {\n        const char *name =\n#ifdef PREFIX\n            \"a\"\n#else\n            \"b\"\n#endif\n            ;\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--indent-preproc-cond"],
+        "void f(int x)\n{\n    switch (x) {\n    case 2: {\n        const char *name =\n            #ifdef PREFIX\n            \"a\"\n            #else\n            \"b\"\n            #endif\n            ;\n        break;\n    }\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith", "--indent-preproc-cond"],
+        "void f(int x)\n    {\n    switch (x)\n        {\n        case 2:\n            {\n            const char *name =\n                #ifdef PREFIX\n                \"a\"\n                #else\n                \"b\"\n                #endif\n                ;\n            break;\n            }\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_conditional_splitting_an_else_from_its_if_in_a_case_block_stands_at_the_statements() {
+    check(
+        "void f(int c)\n{\n    switch (c) {\n    case 1: {\n        if (a) {\n            token = 1;\n        } else\n#ifndef FEATURE\n            if (b) {\n                token = 2;\n            } else\n#endif\n            {\n                token = 3;\n            }\n        break;\n    }\n    }\n}\n",
+        &["--indent-preproc-cond"],
+        "void f(int c)\n{\n    switch (c) {\n    case 1: {\n        if (a) {\n            token = 1;\n        } else\n        #ifndef FEATURE\n            if (b) {\n                token = 2;\n            } else\n        #endif\n            {\n                token = 3;\n            }\n        break;\n    }\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_conditional_before_the_closer_of_a_run_in_group_stands_at_its_rows() {
+    check(
+        "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }, {\n            .value = 2,\n#ifdef FEATURE\n        }\n#endif\n    };\n}\n",
+        &["--style=google", "--indent-preproc-cond"],
+        "void f() {\n    struct Item list[] = { {\n            .value = 1,\n        }, {\n            .value = 2,\n            #ifdef FEATURE\n        }\n            #endif\n    };\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_line_before_the_first_member_of_a_struct_in_a_case_block_leaves_it_at_the_members() {
+    check(
+        "void f()\n{\n    switch (state) {\n    case 1: {\n#ifdef FEATURE\n        static const struct {\n#endif\n            /* note */\n            int value;\n        } items[] = {\n            { 1 },\n        };\n        break;\n    }\n    }\n}\n",
+        &["--style=stroustrup"],
+        "void f()\n{\n    switch (state) {\n    case 1: {\n#ifdef FEATURE\n        static const struct {\n#endif\n            /* note */\n            int value;\n        } items[] = {\n            { 1 },\n        };\n        break;\n    }\n    }\n}\n",
+    );
+}
+
+#[test]
+fn leading_comments_of_a_broken_closer_leave_the_trailing_comment_of_its_header_its_column() {
+    let input = "void f()\n{\n    if (ready) {\n        value=0;\n    /* a */ /* b */ } else { // second\n        value=1;\n    }\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    if (ready)\n    {\n        value=0;\n        /* a */ /* b */\n    }\n    else     // second\n    {\n        value=1;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_after_a_header_brace_past_added_braces_stays_on_its_line() {
+    let input = "void f()\n{\n    if (ready)\n        helper(); else for (;;) { /* note */\n        first();\n    }\n}\n";
+    let expected = "void f()\n{\n    if (ready) {\n        helper();\n    } else for (;;) { /* note */\n            first();\n        }\n}\n";
+    check(input, &["--style=1tbs"], expected);
+    check(expected, &["--style=1tbs"], expected);
+}
+
+#[test]
+fn a_first_list_row_a_comment_leads_after_a_split_declaration_stands_as_without_it() {
+    let input = "static const struct Item\n    first = {\n    /* note */ 1, 2\n};\n";
+    check(input, &["--style=stroustrup"], input);
+    check(
+        &input.replace("/* note */ ", ""),
+        &["--style=stroustrup"],
+        &input.replace("/* note */ ", ""),
+    );
+}
+
+#[test]
+fn a_nested_literal_closer_a_comment_trails_stands_as_without_it() {
+    let input = "void f(void) {\n    for (;;) {\n        (*ci)[i++] = (uv_cpu_info_t) {\n            .model = p,\n            .cpu_times = (struct times) {\n                .user = 10,\n            }, /* note */\n        };\n    }\n}\n";
+    check(input, &["--style=java"], input);
+    check(
+        &input.replace(" /* note */", ""),
+        &["--style=java"],
+        &input.replace(" /* note */", ""),
+    );
+}
+
+#[test]
+fn vtk_closes_the_groups_of_a_file_scope_aggregate_run_in_list_as_their_braces_open() {
+    // astyle sets a `}, {` a level past the last group's `}`; both close
+    // equal groups and stand alike.
+    let input =
+        "static const struct Item items[] = { {\n        1,\n    }, {\n        2,\n    }\n};\n";
+    check(input, &["--style=vtk"], input);
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_case_label_brace_before_a_block_and_a_line_comment_stays_on_the_label_line() {
+    let input = "void f()\n{\n    switch (x) {\n    case 1: { /* a */ // b\n        y();\n        break;\n    }\n    }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=allman",
+            "void f()\n{\n    switch (x)\n    {\n    case 1: { /* a */ // b\n        y();\n        break;\n    }\n    }\n}\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void f()\n    {\n    switch (x)\n        {\n        case 1: { /* a */ // b\n            y();\n            break;\n            }\n        }\n    }\n",
+        ),
+        (
+            "--style=vtk",
+            "void f()\n{\n    switch (x)\n        {\n        case 1: { /* a */ // b\n            y();\n            break;\n            }\n        }\n}\n",
+        ),
+        (
+            "--style=horstmann",
+            "void f()\n{   switch (x)\n    {   case 1: { /* a */ // b\n            y();\n            break;\n        }\n    }\n}\n",
+        ),
+        (
+            "--style=gnu",
+            "void f()\n{\n    switch (x)\n        {\n        case 1: { /* a */ // b\n            y();\n            break;\n        }\n        }\n}\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+    }
+}
+
+#[test]
+fn a_declarator_split_from_its_aggregate_type_by_a_blank_line_stays_continued() {
+    let input = "static const struct Item\n\n    first = { 1, 2 };\nvoid f()\n{\n    static const struct Item\n\n        first = { 1, 2 };\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn ratliff_closes_a_namespace_a_comment_leads_as_any_namespace() {
+    let input = "namespace outer {\n/* note */ namespace inner {\nint helper(int value);\n}\n}\n";
+    check(input, &["--style=ratliff"], input);
+}
+
+#[test]
+fn a_row_a_comment_leads_in_padded_parens_stands_at_the_padded_content() {
+    let input = "void f()\n{\n    mask = 1 << (((value & (size - 1))\n                  /* note */ >> shift)\n                 + offset);\n}\n";
+    check(
+        input,
+        &["--style=kr", "--pad-paren-out"],
+        "void f()\n{\n    mask = 1 << ( ( (value & (size - 1) )\n                    /* note */ >> shift)\n                  + offset);\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_line_before_a_list_closer_a_comment_leads_leaves_it_at_the_rows() {
+    let input = "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        /* note */\n        /* end */ }\n    };\n}\n";
+    check(
+        input,
+        &["--style=lisp"],
+        "void f() {\n    struct Item list[] = { {\n            .value = 1,\n            /* note */\n            /* end */ } }; }\n",
+    );
+    check(
+        input,
+        &["--style=pico"],
+        "void f()\n{   struct Item list[] = { {\n            .value = 1,\n            /* note */\n            /* end */ } }; }\n",
+    );
+}
+
+#[test]
+fn ratliff_closes_an_initializer_whose_brace_a_comment_leads_a_level_in() {
+    let input = "void f()\n{\n    struct Item item =\n    /* note */ {\n        1, 2\n    };\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    struct Item item =\n    /* note */ {\n        1, 2\n        };\n    }\n",
+    );
+}
+
+#[test]
+fn break_blocks_all_sets_a_blank_line_before_an_else_a_comment_leads_as_before_any_else() {
+    let input = "void f()\n{\n    x();\n    if (ready)\n        value=0;\n    /* note */ else\n        value=2;\n    y();\n}\n";
+    let expected = "void f()\n{\n    x();\n\n    if (ready)\n        value=0;\n\n    /* note */ else\n        value=2;\n\n    y();\n}\n";
+    check(input, &["--style=kr", "--break-blocks=all"], expected);
+    check(
+        &input.replace("/* note */ ", ""),
+        &["--style=kr", "--break-blocks=all"],
+        &expected.replace("/* note */ ", ""),
+    );
+}
+
+#[test]
+fn a_comment_line_before_the_first_member_of_an_indented_struct_brace_leaves_it_at_the_members() {
+    check(
+        "void f()\n{\n    switch (state) {\n    case 1: {\n#ifdef FEATURE\n        static const struct {\n#endif\n            /* note */\n            int value;\n        } items[] = {\n            { 1 },\n        };\n        break;\n    }\n    }\n}\n",
+        &["--style=vtk"],
+        "void f()\n{\n    switch (state)\n        {\n        case 1:\n            {\n#ifdef FEATURE\n            static const struct\n                {\n#endif\n                /* note */\n                int value;\n                } items[] =\n                {\n                    { 1 },\n                };\n            break;\n            }\n        }\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_line_before_a_case_label_leaves_a_comment_another_follows_on_its_last_line() {
+    let input = "void f(int a)\n{\n    switch (a) {\n    case 4:\n        w();\n        /* a\n         * b */ /* c */\n        /* note */\n    case 5:\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f(int a)\n{\n    switch (a) {\n    case 4:\n        w();\n        /* a\n         * b */ /* c */\n    /* note */\n    case 5:\n        break;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_brace_a_comment_leads_after_a_directive_past_a_case_label_opens_a_plain_block() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1:\n#line 46 \"input.l\"\n    /* note */ {\n        pop(state);\n    }\n    break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    switch (kind)\n    {\n    case 1:\n#line 46 \"input.l\"\n        /* note */\n        {\n            pop(state);\n        }\n        break;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_after_a_directive_past_a_case_label_stands_in_the_case_body() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1:\n#line 46 \"input.l\"\n    /* note */\n    {\n        pop(state);\n    }\n    break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=vtk"],
+        "void f()\n{\n    switch (kind)\n        {\n        case 1:\n#line 46 \"input.l\"\n            /* note */\n                {\n                pop(state);\n                }\n            break;\n        }\n}\n",
+    );
+}
+
+#[test]
+fn a_brace_a_comment_leads_after_a_case_label_and_a_directive_breaks_from_the_comment() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1:\n#line 46 \"input.l\"\n    /* note */ {\n        pop(state);\n    }\n    break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (kind) {\n    case 1:\n#line 46 \"input.l\"\n        /* note */\n        {\n            pop(state);\n        }\n        break;\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    switch (kind) {\n        case 1:\n#line 46 \"input.l\"\n            /* note */\n                {\n                pop(state);\n                }\n            break;\n        }\n    }\n",
+    );
+    check(
+        input,
+        &["--style=lisp"],
+        "void f() {\n    switch (kind) {\n    case 1:\n#line 46 \"input.l\"\n        /* note */ {\n            pop(state); }\n        break; } }\n",
+    );
+}
+
+#[test]
+fn a_comment_after_a_case_blocks_closer_moves_no_comment_led_statement_after_it() {
+    let input = "void f()\n{\n    switch (state) {\n    case 1: {\n        first();\n    } /* end */\n    /* note */ second();\n    third();\n    break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (state) {\n    case 1: {\n        first();\n    } /* end */\n    /* note */ second();\n    third();\n    break;\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    switch (state) {\n        case 1: {\n            first();\n            } /* end */\n        /* note */ second();\n        third();\n        break;\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_comment_after_an_assigned_brace_moves_none_of_its_list_under_indented_braces() {
+    let input =
+        "void f()\n{\n    struct Item\n        first = { /* note */\n        1, 2\n    };\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    struct Item\n        first =   /* note */\n        {\n        1, 2\n        };\n    }\n",
+    );
+    check(
+        input,
+        &["--style=vtk"],
+        "void f()\n{\n    struct Item\n        first =   /* note */\n        {\n        1, 2\n        };\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_after_the_closer_of_a_case_block_holding_a_label_moves_none_of_it() {
+    let input = "void f() {\n    switch (op) {\n    case FIRST: {\n        value = 0;\n    case SECOND:\n        apply(value);\n        break;\n    } /* end */\n    case THIRD:\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    switch (op) {\n        case FIRST: {\n            value = 0;\n            case SECOND:\n                apply(value);\n                break;\n            } /* end */\n        case THIRD:\n            break;\n        }\n    }\n",
+    );
+    check(
+        input,
+        &["--style=vtk"],
+        "void f()\n{\n    switch (op)\n        {\n        case FIRST:\n            {\n            value = 0;\n            case SECOND:\n                apply(value);\n                break;\n            } /* end */\n        case THIRD:\n            break;\n        }\n}\n",
+    );
+    check(
+        input,
+        &["--style=horstmann"],
+        "void f()\n{   switch (op)\n    {   case FIRST:\n        {   value = 0;\n            case SECOND:\n                apply(value);\n                break;\n        } /* end */\n        case THIRD:\n            break;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn an_empty_line_after_an_else_a_comment_trails_stays_before_its_if() {
+    let input = "void f(void)\n{\n    if (a)\n        x = 1;\n    else /* c */\n\n    if (c)\n        y = 1;\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f(void)\n{\n    if (a)\n        x = 1;\n    else /* c */\n\n        if (c)\n            y = 1;\n}\n",
+    );
+    check(
+        input,
+        &["--style=allman"],
+        "void f(void)\n{\n    if (a)\n        x = 1;\n    else /* c */\n\n        if (c)\n            y = 1;\n}\n",
+    );
+}
+
+#[test]
+fn an_empty_line_after_a_directive_in_a_continued_statement_keeps_its_continuation() {
+    let input = "void f()\n{\n    std::cout << first\n#endif\n\n              << second << std::endl;\n    value = first\n#endif\n\n            + second;\n}\n";
+    check(
+        input,
+        &["--style=java"],
+        "void f() {\n    std::cout << first\n#endif\n\n              << second << std::endl;\n    value = first\n#endif\n\n            + second;\n}\n",
+    );
+}
+
+#[test]
+fn a_chain_row_after_a_line_comment_left_at_column_one_continues_its_chain() {
+    let input =
+        "void f()\n{\n    std::cout << first\n// c\n              << second << std::endl;\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_chain_row_after_a_comment_and_an_empty_line_continues_its_chain() {
+    let input = "void f()\n{\n    std::cout << first\n              // c\n\n              << second;\n    std::cout << first\n\n              // c\n              << second;\n    std::cout << first\n              /* c */\n\n              << second;\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_comment_after_the_closer_of_a_labels_block_moves_none_of_it() {
+    let input = "void f()\n{\n    x = 1;\n    done: {\n        value = 1;\n    } // note\n    result = 1;\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    x = 1;\ndone: {\n        value = 1;\n    } // note\n    result = 1;\n}\n",
+    );
+}
+
+#[test]
+fn a_block_a_comment_leads_after_a_nested_braceless_else_closes_at_the_else() {
+    let input = "void f()\n{\n    if (ready)\n        if (other)\n            value=0;\n        else\n            /* note */ { result=0; }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    if (ready)\n        if (other)\n            value=0;\n        else\n            /* note */ {\n            result=0;\n        }\n}\n",
+    );
+}
+
+#[test]
+fn a_conditional_between_a_case_label_and_a_brace_a_comment_leads_leaves_it_as_without_it() {
+    // The brace opens the case's block and breaks from its comment as it
+    // does right after the label.
+    let input = "void f()\n{\n    switch (state) {\n    case 2:\n#ifdef TRACE\n    /* note */ {\n        push(state);\n    }\n#endif\n    break;\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (state) {\n    case 2:\n#ifdef TRACE\n        /* note */\n    {\n        push(state);\n    }\n#endif\n    break;\n    }\n}\n";
+    check(input, &[], expected);
+    check(input, &["--style=kr"], expected);
+    let plain = input.replace("#ifdef TRACE\n", "").replace("#endif\n", "");
+    let plain_expected = expected
+        .replace("#ifdef TRACE\n", "")
+        .replace("#endif\n", "");
+    check(&plain, &["--style=kr"], &plain_expected);
+}
+
+#[test]
+fn a_comment_leading_a_case_label_moves_no_aggregate_of_its_block_under_indented_switches() {
+    let input = "void f()\n{\n    switch (state) {\n    /* note */ case 1: {\n        static const struct {\n            int value;\n        } items[] = {\n            { 1 },\n        };\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--indent-switches"],
+        "void f()\n{\n    switch (state) {\n        /* note */ case 1: {\n            static const struct {\n                int value;\n            } items[] = {\n                { 1 },\n            };\n            break;\n        }\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    switch (state)\n        {\n        /* note */ case 1:\n            {\n            static const struct\n                {\n                int value;\n                } items[] =\n                {\n                    { 1 },\n                };\n            break;\n            }\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_namespace_a_comment_leads_keeps_its_first_member_off_its_brace_line() {
+    let input = "namespace outer {\n/* note */ namespace inner {\nint helper(int value);\n}\n}\n";
+    check(
+        input,
+        &["--style=pico"],
+        "namespace outer\n{\n/* note */ namespace inner\n{\nint helper(int value); } }\n",
+    );
+}
+
+#[test]
+fn a_declarator_split_from_its_aggregate_type_continues_after_a_conditional_elsewhere() {
+    let input = "#ifdef FEATURE\ntemplate <typename T>\n#endif\nT helper(T value)\n{\n    return value;\n}\n\nstatic const struct Item\n    first = {\n    1, 2\n};\n";
+    check(input, &["--style=linux"], input);
+}
+
+#[test]
+fn a_base_row_after_a_conditional_continues_its_class_head_before_a_brace_on_its_own_line() {
+    // The row continues the head where it was written, whatever column the
+    // brace after it stands at.
+    let input = "class Derived : public Base,\n#ifdef FEATURE\n    private Other\n{\n#endif\npublic:\n    int value;\n};\n";
+    check(input, &["--style=kr"], input);
+    check(input, &["--style=vtk"], input);
+}
+
+#[test]
+fn an_added_do_block_a_comment_leads_closes_at_its_do() {
+    let input = "void f()\n{\n    do\n        /* note */ value=0;\n    while (ready);\n}\n";
+    check(
+        input,
+        &["--style=1tbs"],
+        "void f()\n{\n    do\n        /* note */ {\n        value=0;\n    } while (ready);\n}\n",
+    );
+}
+
+#[test]
+fn a_line_comment_after_a_brace_a_comment_leads_past_a_case_label_stays_with_the_comment() {
+    let input = "void f()\n{\n    switch (k) {\n    case 3:\n    /* note */ {   // own\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    switch (k)\n    {\n    case 3:\n        /* note */     // own\n    {\n        break;\n    }\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    switch (k)\n        {\n        case 3:\n            /* note */     // own\n            {\n            break;\n            }\n        }\n    }\n",
+    );
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (k) {\n    case 3:\n    /* note */ {   // own\n        break;\n    }\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_statement_a_comment_leads_after_a_label_kept_on_its_closer_stands_in_the_label_body() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 3: {\n        value=2;\n    } default:\n        /* note */ break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=stroustrup", "--keep-one-line-statements"],
+        input,
+    );
+}
+
+#[test]
+fn a_kept_statement_after_a_case_label_a_comment_leads_keeps_its_space() {
+    let input =
+        "void f()\n{\n    switch (other) {\n    /* note */ case 2: value=0; break;\n    }\n}\n";
+    check(input, &["--keep-one-line-statements"], input);
+}
+
+#[test]
+fn vtk_closes_each_group_of_a_file_scope_aggregate_list_at_its_brace() {
+    // At file scope the list stands as in styles that indent no braces: a
+    // row closing one group and opening the next stands at the braces, as
+    // the last closer does.
+    let input = "static const struct Item items[] = {\n    {\n        1, 2\n    }, {\n        3, 4\n    }\n};\n";
+    check(input, &["--style=vtk"], input);
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_brace_after_a_case_label_split_over_lines_keeps_one_space_in_lisp() {
+    let input = "void f()\n{\n    switch (op) {\n    case FIRST |\n         THIRD: {\n        value = 2;\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=lisp"],
+        "void f() {\n    switch (op) {\n    case FIRST |\n            THIRD: {\n            value = 2;\n            break; } } }\n",
+    );
+}
+
+#[test]
+fn a_comment_line_opening_a_case_block_moves_none_of_its_statements_under_indented_cases() {
+    let input = "void f()\n{\n    switch (op) {\n    case FIRST: {\n        // note\n        if (ready) {\n            reset(value);\n        }\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--indent-cases"],
+        "void f()\n{\n    switch (op) {\n    case FIRST: {\n            // note\n            if (ready) {\n                reset(value);\n            }\n            break;\n        }\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_line_between_message_rows_keeps_them_at_the_selector_keyword() {
+    let input = "- (void)update:(int)value with:(int)other\n{\n    [self apply:value\n          // note\n          with:other];\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn padding_operators_leaves_the_closer_of_template_parameters_a_conditional_splits() {
+    let input = "#ifdef FEATURE\ntemplate <typename First,\n#endif\n          typename Second>\nclass Pair\n{\n};\n";
+    check(input, &["--style=allman", "--pad-oper"], input);
+}
+
+#[test]
+fn a_declarator_after_an_attribute_line_past_an_initializer_stands_with_the_attribute() {
+    let input = "void f()\n{\n    static const struct Item\n        first =\n    { 1, 2 },\n    __attribute__((unused))\n    second =\n    { 3, 4 };\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_comment_after_a_base_row_moves_none_of_the_rows_after_it() {
+    let input = "struct Item\n    : public Base, /* note */\n      private Other {\n};\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_comment_after_a_nested_compound_literals_brace_leaves_the_brace_in_place() {
+    let input = "void f(void)\n{\n    struct T t = {\n        .k = (S[]) { /* c */\n            {0}\n        },\n    };\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f(void)\n{\n    struct T t =\n    {\n        .k = (S[]) { /* c */\n            {0}\n        },\n    };\n}\n",
+    );
+    check(input, &["--style=kr"], input);
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f(void)\n    {\n    struct T t =\n        {\n        .k = (S[]) { /* c */\n                {0}\n            },\n        };\n    }\n",
+    );
+    let call = "void f(void)\n{\n    g(&(T) {\n        .k = (S[]) { /* c */\n            {0}\n        },\n    });\n}\n";
+    check(call, &["--style=kr"], call);
+}
+
+#[test]
+fn a_comment_after_the_closer_of_a_do_run_in_after_an_else_moves_none_of_it() {
+    let input = "void f()\n{\n    if (x) {\n        helper();\n    } else do {\n            first();\n        } while (state); /* note */\n    z();\n}\n";
+    check(input, &["--style=1tbs"], input);
+}
+
+#[test]
+fn a_plain_directive_before_a_conditional_between_a_case_label_and_a_brace_opens_a_plain_block() {
+    let input = "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n#ifdef FEATURE\n    {\n#endif\n        pop(state);\n    }\n    break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n#ifdef FEATURE\n        {\n#endif\n            pop(state);\n        }\n        break;\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=lisp"],
+        "void f() {\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n#ifdef FEATURE\n        {\n#endif\n            pop(state); }\n        break; } }\n",
+    );
+}
+
+#[test]
+fn a_row_after_a_closer_row_a_comment_leads_stands_at_the_elements_in_run_in_styles() {
+    let input = "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        /* note */ }, {\n            .value = 2,\n        }\n    };\n}\n";
+    check(
+        input,
+        &["--style=lisp"],
+        "void f() {\n    struct Item list[] = { {\n            .value = 1,\n            /* note */ }, {\n            .value = 2, } }; }\n",
+    );
+}
+
+#[test]
+fn a_comment_line_in_a_subscript_continues_at_its_content() {
+    let input = "void f()\n{\n    value = table[first +\n                  /* one */\n                  // two\n                  second];\n}\n";
+    check(input, &["--style=allman"], input);
+}
+
+#[test]
+fn a_comment_line_in_a_call_on_a_run_in_list_row_stands_at_the_arguments() {
+    let input = "void f()\n{\n    int list[] = { call(first,\n                        /* c */\n                        second), 2\n                 };\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_member_initializer_row_a_comment_leads_stands_at_the_initializers() {
+    let input = "Item::Item(int value, int other)\n    : value_(value),\n      /* note */ other_(other) {\n}\n";
+    check(input, &["--style=java"], input);
+    check(
+        input,
+        &["--style=kr"],
+        "Item::Item(int value, int other)\n    : value_(value),\n      /* note */ other_(other)\n{\n}\n",
+    );
+}
+
+#[test]
+fn keeping_one_line_statements_keeps_a_brace_a_comment_leads_past_a_case_label_and_a_directive() {
+    let input = "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n    /* note */ {\n        pop(state);\n    }\n    break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--keep-one-line-statements"],
+        "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n        /* note */ {\n            pop(state);\n        }\n        break;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_list_opening_after_a_case_brace_a_comment_follows_stands_at_the_case_block() {
+    let input = "void f(int op)\n{\n    switch (op) {\n    case 1: { /* c */\n        static const char *list[] = { \"first\",\n                                      \"second\" };\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--indent-cases"],
+        "void f(int op)\n{\n    switch (op) {\n    case 1: { /* c */\n            static const char *list[] = { \"first\",\n                                          \"second\"\n                                        };\n        }\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_list_holding_a_brace_past_an_element_keeps_its_elements_aligned() {
+    let input = "int list[][2] = { 7,\n                  8, { 1, 2 },\n                  9 };\n";
+    check(
+        input,
+        &["--style=allman"],
+        "int list[][2] = { 7,\n                  8, { 1, 2 },\n                  9\n                };\n",
+    );
+}
+
+#[test]
+fn a_list_whose_first_brace_follows_a_comment_keeps_its_elements_aligned() {
+    let input = "int list[] = { /* c */ {1, 2},\n               7 };\n";
+    check(
+        input,
+        &["--style=allman"],
+        "int list[] = { /* c */ {1, 2},\n                       7\n             };\n",
+    );
+}
+
+#[test]
+fn a_list_opening_past_an_element_of_an_aligned_list_aligns_to_its_own_elements() {
+    let input = "int list[][2] = { 7, { 1,\n                       2 } };\n";
+    check(
+        input,
+        &["--style=allman"],
+        "int list[][2] = { 7, { 1,\n                       2\n                     }\n                };\n",
+    );
+}
+
+#[test]
+fn a_list_opening_past_an_element_on_a_later_row_aligns_to_its_own_elements() {
+    let input = "int list[][2] = { 7,\n                  8, { 1,\n                       2 } };\n";
+    check(
+        input,
+        &["--style=allman"],
+        "int list[][2] = { 7,\n                  8, { 1,\n                       2\n                     }\n                };\n",
+    );
+}
+
+#[test]
+fn a_row_after_a_closer_row_of_an_inner_list_stands_at_its_own_list() {
+    let input = "void f(void)\n    {\n    int list[][2] = { 7,\n                      8, { 1,\n                           2\n                         },\n                      9\n                    };\n    }\n";
+    check(input, &["--style=whitesmith"], input);
+}
+
+#[test]
+fn a_row_after_a_row_holding_a_closed_inner_list_stands_at_its_own_list() {
+    let input = "int list[][2] = { 7,\n                  8, { 1, 2 },\n                  9\n                };\n";
+    check(input, &["--style=whitesmith"], input);
+}
+
+#[test]
+fn a_list_running_in_past_an_element_of_a_nested_list_breaks_after_its_brace() {
+    let input = "int list[][2] = {\n    {1, 2}, {3,\n             4}\n};\n";
+    let expected = "int list[][2] = {\n    {1, 2}, {\n        3,\n        4\n    }\n};\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+}
+
+#[test]
+fn a_double_brace_list_breaks_after_its_inner_brace_whatever_its_first_element() {
+    let input = "void f()\n{\n    value = {{\"first\",\n              2}};\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    value = {{\n            \"first\",\n            2\n        }\n    };\n}\n",
+    );
+}
+
+#[test]
+fn styles_running_rows_in_keep_a_nested_list_first_element_after_its_brace() {
+    let input = "void f()\n{\n    value = {{1,\n              2}};\n}\n";
+    let expected = "void f()\n{   value = {{1,\n            2\n        }\n    };\n}\n";
+    check(input, &["--style=horstmann"], expected);
+    check(expected, &["--style=horstmann"], expected);
+}
+
+#[test]
+fn a_list_holding_an_element_brace_that_ends_its_line_stands_its_rows_a_level_in() {
+    let input = "void f(void)\n{\n    int list[][2] = { 7, {\n            1,\n            2\n        }\n    };\n}\n";
+    check(input, &["--style=allman"], input);
+}
+
+#[test]
+fn a_brace_ending_its_line_inside_an_element_list_stands_the_outer_list_rows_a_level_in() {
+    let input = "void f(void)\n{\n    struct Record\n        record = { .name = 1,\n        .value = { .update = {\n                .first = 1,\n            }\n        }\n    };\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f(void) {\n    struct Record\n        record = { .name = 1,\n            .value = {\n                .update = {\n                    .first = 1,\n                    }\n                }\n        };\n    }\n",
+    );
+}
+
+#[test]
+fn an_element_brace_after_a_closer_keeps_its_row_with_a_comment_after_it() {
+    let input = "void f()\n{\n    struct Item list[] = { {\n            .value = 1,\n        }, { /* c */\n            .value = 2,\n        }\n    };\n}\n";
+    for style in ["--style=allman", "--style=gnu", "--style=kr"] {
+        check(input, &[style], input);
+    }
+}
+
+#[test]
+fn a_comment_led_ternary_arm_after_a_directive_stands_at_the_condition() {
+    let input = "void f()\n{\n    return value;\n#ifdef FEATURE\n    return ready ? first\n#endif\n                 /* note */ : second;\n}\n";
+    check(
+        input,
+        &["--style=mozilla"],
+        "void f()\n{\n    return value;\n#ifdef FEATURE\n    return ready ? first\n#endif\n           /* note */ : second;\n}\n",
+    );
+}
+
+#[test]
+fn indented_brace_styles_stand_a_nested_list_rows_past_its_run_in_first_row() {
+    let input = "void f(void)\n{\n    int list[][2] = { 7,\n        {3, 4} };\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f(void)\n    {\n    int list[][2] = { 7,\n            {3, 4}\n        };\n    }\n",
+    );
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f(void) {\n    int list[][2] = { 7,\n            {3, 4}\n        };\n    }\n",
+    );
+}
+
+#[test]
+fn a_nested_list_holding_a_later_element_brace_on_its_first_row_closes_at_its_statement() {
+    let input = "int list[] = { 7, {1, 2},\n               {3, 4} };\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "int list[] = { 7, {1, 2},\n        {3, 4}\n    };\n",
+    );
+}
+
+#[test]
+fn indented_brace_styles_close_a_list_around_a_line_ending_element_brace_past_the_statement() {
+    let input = "void f(void)\n{\n    int list[][2] = { 7, {\n            1,\n            2\n        }\n    };\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f(void) {\n    int list[][2] = { 7, {\n            1,\n            2\n            }\n        };\n    }\n",
+    );
+}
+
+#[test]
+fn a_row_of_an_inner_list_past_the_maximum_continuation_stands_at_the_outer_list() {
+    let input = "void f(void)\n{\n\tstruct_args_type value_args = {is_value, {(uintptr_t)ptr, size,\n\t\tflags, 0}};\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f(void)\n{\n    struct_args_type value_args = {is_value, {(uintptr_t)ptr, size,\n                                   flags, 0\n                                             }\n                                  };\n}\n",
+    );
+}
+
+#[test]
+fn a_kept_statement_ending_in_a_label_starts_no_continuation_across_a_directive() {
+    let input = "void f()\n{\n#ifdef FEATURE\n    value = 1; again:\n#endif\n    next();\n}\n";
+    check(input, &["--style=kr", "--keep-one-line-statements"], input);
+}
+
+#[test]
+fn a_comment_led_statement_before_the_first_case_stands_at_the_case_bodies() {
+    let input = "void f()\n{\n    switch (state) {\n        /* note */ value = 0;\n    case 1:\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    switch (state)\n        {\n            /* note */ value = 0;\n        case 1:\n            break;\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_comment_led_statement_before_the_first_case_runs_into_the_switch_brace() {
+    let input = "void f()\n{\n    switch (state) {\n        /* note */ value = 0;\n    case 1:\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=horstmann"],
+        "void f()\n{   switch (state)\n    {   /* note */ value = 0;\n        case 1:\n            break;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_row_continuing_a_call_in_a_run_in_list_stands_at_the_arguments() {
+    let input = "void f()\n{\n    call((struct Item) { .y = call(first,\n                                   second), .z = 1 });\n}\n";
+    check(input, &["--style=allman"], input);
+    let commented = "void f()\n{\n    call((struct Item) { .y = call(first,\n                                   /* note */\n                                   second), .z = 1 });\n}\n";
+    check(commented, &["--style=allman"], commented);
+}
+
+#[test]
+fn a_list_argument_of_a_call_in_a_list_aligns_to_its_own_elements() {
+    let input = "int list[] = { 7, f({1,\n                     2}),\n               8 };\n";
+    check(
+        input,
+        &["--style=allman"],
+        "int list[] = { 7, f({1,\n                     2}),\n               8\n             };\n",
+    );
+}
+
+#[test]
+fn a_comment_led_statement_before_the_first_case_stands_at_indented_case_bodies() {
+    let input = "void f()\n{\n    switch (state) {\n        /* note */ value = 0;\n    case 1:\n        break;\n    }\n}\n";
+    check(input, &["--style=mozilla", "--indent-cases"], input);
+}
+
+#[test]
+fn a_comment_led_brace_row_sets_its_branch_body_column_for_the_next_branch() {
+    let input = "static const struct Item items[] = {\n#if FEATURE\n    /* note */ {1, 2}\n#elif OTHER\n    {1, 2},\n    {3, 4}\n#endif\n};\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "static const struct Item items[] = {\n#if FEATURE\n        /* note */ {1, 2}\n#elif OTHER\n        {1, 2},\n        {3, 4}\n#endif\n    };\n",
+    );
+}
+
+#[test]
+fn a_conditional_between_a_nested_braceless_header_and_its_body_stands_at_the_header() {
+    let input = "void f()\n{\n    if (ready)\n        if (other)\n        #ifdef FEATURE\n            value=0;\n        #endif\n        else\n        #ifdef FEATURE\n            result=0;\n        #endif\n}\n";
+    check(input, &["--style=kr", "--indent-preproc-cond"], input);
+}
+
+#[test]
+fn a_comment_after_conditionals_closing_over_a_comment_line_stands_at_its_scope() {
+    let input = "#if FEATURE\n# ifndef VALUE\n   /* note */\n# endif\n#endif\n/* end */\n";
+    check(
+        input,
+        &["--style=stroustrup", "-w", "-xW", "-xw", "-Y"],
+        "#if FEATURE\n    #ifndef VALUE\n        /* note */\n    #endif\n#endif\n/* end */\n",
+    );
+}
+
+#[test]
+fn an_added_one_line_block_after_a_comment_led_header_stands_at_the_header() {
+    let input = "void f()\n{\n    if (ready)\n        /* note */ if (other)\n            value=0;\n        else\n            result=0;\n}\n";
+    check(
+        input,
+        &["--style=allman", "--add-one-line-braces"],
+        "void f()\n{\n    if (ready)\n        /* note */ if (other)\n        { value=0; }\n        else\n        { result=0; }\n}\n",
+    );
+}
+
+#[test]
+fn an_operand_after_a_comment_line_continues_the_expression_before_it() {
+    let input = "void f()\n{\n    total +=\n        // note\n        value * other;\n    total =\n        /* note */\n        value * other;\n}\n";
+    check(input, &["--style=1tbs", "--align-pointer=name"], input);
+}
+
+#[test]
+fn an_element_list_of_a_typed_brace_initializer_stays_on_its_row() {
+    let input = "void f()\n{\n    auto x = Item{ {1, 2},\n                   {3, 4} };\n    Item w{ {1, 2},\n            {3, 4} };\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    auto x = Item{ {1, 2},\n        {3, 4} };\n    Item w{ {1, 2},\n        {3, 4} };\n}\n",
+    );
+}
+
+#[test]
+fn vtk_stands_the_brace_rows_of_a_typed_brace_initializer_a_level_past_the_statement() {
+    let input = "void f()\n{\n    auto x = Item{ {1, 2},\n                   {3, 4} };\n}\n";
+    check(
+        input,
+        &["--style=vtk"],
+        "void f()\n{\n    auto x = Item{ {1, 2},\n        {3, 4} };\n}\n",
+    );
+}
+
+#[test]
+fn a_row_closing_a_list_past_the_maximum_continuation_stays_at_its_elements() {
+    let input = "void f(void)\n{\n  static const unsigned char partial_payload[] = { 0x00, 0x04, 0x00, 0x11,\n                                                   0x22 };\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f(void)\n{\n    static const unsigned char partial_payload[] = { 0x00, 0x04, 0x00, 0x11,\n                                                     0x22\n                                                   };\n}\n",
+    );
+}
+
+#[test]
+fn list_rows_past_the_maximum_continuation_stay_at_their_elements() {
+    let input = "void f(void)\n{\n\thelper_args_config_t result_with_iteration_args = {make_item(cx),\n\t    counter,\n\t    other};\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f(void)\n{\n    helper_args_config_t result_with_iteration_args = {make_item(cx),\n                                                       counter,\n                                                       other\n                                                      };\n}\n",
+    );
+}
+
+#[test]
+fn a_closing_conditional_in_a_header_stands_at_the_conditional_opened_before_it() {
+    let input = "void f()\n{\n    #ifdef FEATURE\n    while (ready &&\n    #endif\n            other) {\n        value=0;\n    }\n    while (ready &&\n        #ifdef FEATURE\n            more &&\n        #endif\n            other) {\n        value=0;\n    }\n}\n";
+    check(input, &["--indent-preproc-cond"], input);
+}
+
+#[test]
+fn vtk_stands_a_comment_led_first_row_of_a_file_scope_aggregate_with_its_rows() {
+    let input = "static const struct Item items[] =\n{\n    /* note */ { \"first\", 1 },\n    { \"second\", 2 },\n};\n";
+    check(input, &["--style=vtk"], input);
+}
+
+#[test]
+fn breaking_a_header_off_a_comment_leading_a_braceless_body_keeps_the_body_level() {
+    let input = "void f()\n{\n    if (ready)\n        /* note */ if (other)\n            { value=0; }\n        else\n            /* note */ { result=0; }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-one-line-headers"],
+        "void f()\n{\n    if (ready)\n        /* note */\n        if (other) {\n            value=0;\n        } else\n            /* note */ {\n            result=0;\n        }\n}\n",
+    );
+}
+
+#[test]
+fn a_bare_block_after_a_header_braces_were_added_to_takes_the_blank_after_it() {
+    let input = "void f()\n{\n    if (ready) result=0;\n    {\n        value=0;\n    }\n    result = 1;\n}\n";
+    check(
+        input,
+        &["--style=kr", "--add-braces", "--break-blocks"],
+        "void f()\n{\n    if (ready) {\n        result=0;\n    }\n\n    {\n        value=0;\n    }\n\n    result = 1;\n}\n",
+    );
+    check(
+        input,
+        &["--style=kr", "--add-one-line-braces", "--break-blocks"],
+        "void f()\n{\n    if (ready) { result=0; }\n\n    {\n        value=0;\n    }\n\n    result = 1;\n}\n",
+    );
+}
+
+#[test]
+fn a_block_after_a_header_holding_a_header_one_line_braces_were_added_to_stands_at_the_header() {
+    let input = "void f()\n{\n    while (ready) if (other) value++;\n    {\n        value=0;\n    }\n    result = 1;\n}\n";
+    check(
+        input,
+        &["--style=kr", "--add-one-line-braces"],
+        "void f()\n{\n    while (ready) if (other) { value++; }\n    {\n        value=0;\n    }\n    result = 1;\n}\n",
+    );
+}
+
+#[test]
+fn a_do_body_closer_added_braces_break_stands_at_its_do_inside_another_do() {
+    let input = "void f()\n{\n    do do x; while(a); while(b);\n}\n";
+    check(
+        input,
+        &["--style=kr", "--add-braces"],
+        "void f()\n{\n    do do {\n            x;\n        } while(a);\n    while(b);\n}\n",
+    );
+}
+
+#[test]
+fn run_in_styles_set_the_body_of_a_do_on_a_case_label_line_a_level_past_the_case_body() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: do\n            x;\n        while (a);\n        break;\n    case 2: do {\n            x;\n        } while (a);\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=lisp"],
+        "void f() {\n    switch (kind) {\n    case 1: do\n            x;\n        while (a);\n        break;\n    case 2: do {\n            x; }\n        while (a);\n        break; } }\n",
+    );
+    check(
+        input,
+        &["--style=pico"],
+        "void f()\n{   switch (kind)\n    {   case 1: do\n                x;\n            while (a);\n            break;\n        case 2: do\n            {   x; }\n            while (a);\n            break; } }\n",
+    );
+}
+
+#[test]
+fn pico_runs_the_body_of_a_one_line_statement_block_in_after_its_brace() {
+    let input = "void f()\n{\n    value=1;\n    { value=0; }\n    {value=0;}\n    if (a)\n    { /* note */ }\n    { /* note */ }\n    { ; }\n    {;}\n    { }\n    MACRO\n    { value=0; }\n}\n";
+    check(
+        input,
+        &["--style=pico"],
+        "void f()\n{   value=1;\n    {   value=0; }\n    {   value=0;}\n    if (a)\n    {   /* note */ }\n    {   /* note */ }\n    {   ; }\n    {   ;}\n    { }\n    MACRO\n    { value=0; } }\n",
+    );
+}
+
+#[test]
+fn a_case_block_kept_whole_on_its_label_line_leaves_the_next_statement_in_the_case_body() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: { value=0; }\n        break;\n    case 2: value=1;\n        break;\n    }\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=kr", "-o", "-O"][..],
+            "void f()\n{\n    switch (kind) {\n    case 1: { value=0; }\n        break;\n    case 2: value=1;\n        break;\n    }\n}\n",
+        ),
+        (
+            &["--style=whitesmith", "-o", "-O"][..],
+            "void f()\n    {\n    switch (kind)\n        {\n        case 1: { value=0; }\n            break;\n        case 2: value=1;\n            break;\n        }\n    }\n",
+        ),
+        (
+            &["--style=pico"][..],
+            "void f()\n{   switch (kind)\n    {   case 1: { value=0; }\n            break;\n        case 2: value=1;\n            break; } }\n",
+        ),
+        (
+            &["--style=lisp", "-O"][..],
+            "void f() {\n    switch (kind) {\n    case 1: { value=0; }\n        break;\n    case 2: value=1;\n        break; } }\n",
+        ),
+    ] {
+        check(input, args, expected);
+    }
+}
+
+#[test]
+fn comments_alone_after_a_list_brace_leave_it_ending_its_line() {
+    let input = "void f()\n{\n    int table[][2] = { /* note */ /* note */\n        { 1, 2 },\n        { 3, 4 }\n    };\n}\n";
+    for style in ["--style=kr", "--style=mozilla"] {
+        check(input, &[style], input);
+    }
+    // A list argument's rows stand as after a brace one comment follows.
+    let argument =
+        "void f()\n{\n    call(value, { /* note */ /* note */\n        1, 2\n    });\n}\n";
+    check(argument, &["--style=kr"], argument);
+}
+
+// Allman breaks a list brace off the comments after it however many there
+// are, as it does off one.
+#[test]
+fn allman_breaks_a_list_brace_off_the_comments_after_it_as_off_one() {
+    let one = "void f()\n{\n    int table[][2] = { /* note */\n        { 1, 2 },\n        { 3, 4 }\n    };\n}\n";
+    let two = "void f()\n{\n    int table[][2] = { /* note */ /* note */\n        { 1, 2 },\n        { 3, 4 }\n    };\n}\n";
+    check(
+        one,
+        &["--style=allman"],
+        "void f()\n{\n    int table[][2] =   /* note */\n    {\n        { 1, 2 },\n        { 3, 4 }\n    };\n}\n",
+    );
+    check(
+        two,
+        &["--style=allman"],
+        "void f()\n{\n    int table[][2] =   /* note */ /* note */\n    {\n        { 1, 2 },\n        { 3, 4 }\n    };\n}\n",
+    );
+}
+
+// The directive closing the conditional stands at the one opening it.
+#[test]
+fn a_directive_after_a_case_block_stands_at_its_label() {
+    let input = "void f()\n{\n    switch (flags) {\n    case FIRST: {\n        value = 1;\n        break;\n    }\n#ifdef FEATURE\n    }\n#endif\n}\n";
+    check(
+        input,
+        &["--style=whitesmith", "--indent-preproc-cond"],
+        "void f()\n    {\n    switch (flags)\n        {\n        case FIRST:\n            {\n            value = 1;\n            break;\n            }\n        #ifdef FEATURE\n        }\n        #endif\n    }\n",
+    );
+    check(
+        input,
+        &[
+            "--style=whitesmith",
+            "--indent-cases",
+            "--indent-preproc-cond",
+        ],
+        "void f()\n    {\n    switch (flags)\n        {\n        case FIRST:\n                {\n                value = 1;\n                break;\n                }\n            #ifdef FEATURE\n        }\n            #endif\n    }\n",
+    );
+}
+
+#[test]
+fn an_operand_row_after_a_comment_led_operand_row_stands_with_it() {
+    let input = "void f()\n{\n    __asm__ volatile(\"nop\"\n                     /* note */ : \"=r\"(value)\n                     : \"r\"(other));\n}\n";
+    check(input, &["--style=kr"], input);
+    check(input, &["--style=allman"], input);
+}
+
+#[test]
+fn run_in_styles_keep_the_first_element_after_a_list_brace_comments_lead() {
+    let input = "void f()\n{\n    static const struct Item items[] = {\n        {3, 4},\n        /* note */ {5,\n         6}\n    };\n}\n";
+    check(
+        input,
+        &["--style=horstmann"],
+        "void f()\n{   static const struct Item items[] =\n    {   {3, 4},\n        /* note */ {5,\n            6\n        }\n    };\n}\n",
+    );
+    check(
+        input,
+        &["--style=pico"],
+        "void f()\n{   static const struct Item items[] =\n    {   {3, 4 },\n        /* note */ {5,\n            6 } }; }\n",
+    );
+}
+
+#[test]
+fn a_list_argument_a_comment_leads_closes_as_one_without_it() {
+    let input = "void f()\n{\n    call(value, {1,\n         2});\n    call(value, /* note */ {1,\n         2});\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    call(value, {1,\n                 2\n                });\n    call(value, /* note */ {1,\n                            2\n                           });\n}\n",
+    );
+}
+
+#[test]
+fn a_list_argument_closer_before_more_arguments_stands_at_its_brace() {
+    let input = "void f()\n{\n    helper(first, { .a = 1,\n                    .b = 2 }, last);\n    helper(first, {1,\n                   2}, last);\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    helper(first, { .a = 1,\n                    .b = 2\n                  }, last);\n    helper(first, {1,\n                   2\n                  }, last);\n}\n",
+    );
+}
+
+#[test]
+fn whitesmith_keeps_an_interface_header_a_comment_leads_on_its_line() {
+    let input = "/* note */ @interface Item : NSObject\n@property (nonatomic) int value;\n@end\n";
+    check(input, &["--style=whitesmith"], input);
+}
+
+#[test]
+fn breaking_one_line_headers_parts_a_header_from_a_kept_line_a_brace_goes_on() {
+    let input = "void f()\n{\n    if (ready) helper(); else {\n        other();\n    }\n    if (ready) helper(); else other();\n    while (ready) helper(); if (other) {\n        third();\n    }\n}\n";
+    check(
+        input,
+        &[
+            "--style=kr",
+            "--keep-one-line-statements",
+            "--break-one-line-headers",
+        ],
+        "void f()\n{\n    if (ready)\n        helper(); else {\n        other();\n    }\n    if (ready) helper(); else other();\n    while (ready)\n        helper(); if (other) {\n        third();\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=lisp", "--break-one-line-headers"],
+        "void f() {\n    if (ready)\n        helper(); else {\n        other(); }\n    if (ready) helper(); else other();\n    while (ready)\n        helper(); if (other) {\n        third(); } }\n",
+    );
+}
+
+#[test]
+fn keeping_one_line_statements_keeps_a_statement_going_on_past_the_line_after_another() {
+    let input = "void f()\n{\n    helper(); call(1,\n        2);\n    helper(); value = 1 +\n        2;\n    helper(); int list[] = {\n        1, 2 };\n}\n";
+    check(
+        input,
+        &["--style=kr", "--keep-one-line-statements"],
+        "void f()\n{\n    helper(); call(1,\n                   2);\n    helper(); value = 1 +\n                      2;\n    helper(); int list[] = {\n        1, 2\n    };\n}\n",
+    );
+}
+
+#[test]
+fn a_list_after_a_statement_a_header_line_went_on_with_opens_as_a_list() {
+    let input = "void f()\n{\n    if (ready) helper(); value = { 1,\n        2 };\n}\n";
+    check(
+        input,
+        &["--style=kr", "--keep-one-line-statements"],
+        "void f()\n{\n    if (ready) helper(); value = { 1,\n                                   2\n                                 };\n}\n",
+    );
+}
+
+#[test]
+fn the_while_of_an_else_do_kept_after_a_statement_stands_at_the_else_body() {
+    let input = "void f()\n{\n    if (ready)\n        helper(); else do {\n        first();\n    } while (state);\n    value = 1;\n}\n";
+    check(
+        input,
+        &["--style=lisp"],
+        "void f() {\n    if (ready)\n        helper(); else do {\n            first(); }\n        while (state);\n    value = 1; }\n",
+    );
+}
+
+#[test]
+fn a_block_opened_on_a_header_body_line_nests_past_that_line() {
+    // An `else if` block stands at its chain; a `do` the `if` heads nests
+    // past the line.
+    let input = "void f()\n{\n    if (a)\n        x(); else if (b) do {\n            y();\n        } while (c);\n    if (a)\n        x(); else if (b) {\n        y();\n    }\n}\n";
+    check(input, &["--style=kr", "--keep-one-line-statements"], input);
+}
+
+#[test]
+fn comments_run_in_after_a_list_brace_stay_on_its_line() {
+    let input = "void f()\n{\n    static const struct Item values[] = {\n        /* a */        /* b */  /* c */\n        {\"x\", \"y\"},\n    };\n}\n";
+    let expected = "void f()\n{   static const struct Item values[] =\n    {   /* a */        /* b */  /* c */\n        {\"x\", \"y\"},\n    };\n}\n";
+    check(input, &["--style=horstmann"], expected);
+    check(expected, &["--style=horstmann"], expected);
+}
+
+#[test]
+fn a_label_continued_over_lines_in_a_switch_a_comment_leads_stands_as_a_label() {
+    let input = "void f()\n{\n    /* note */ switch (flags) {\n    case FIRST |\n            SECOND:\n        value = 1;\n        break;\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+    check(
+        input,
+        &["--style=lisp"],
+        "void f() {\n    /* note */ switch (flags) {\n    case FIRST |\n            SECOND:\n        value = 1;\n        break; } }\n",
+    );
+}
+
+#[test]
+fn a_row_after_a_directive_in_a_continued_declarator_list_stands_as_without_it() {
+    let input = "void f()\n{\n    static const struct Item\n        first = {\n#ifdef FEATURE\n            1, 2\n#endif\n        },\n        second = {\n            3, 4\n        };\n}\n";
+    check(
+        input,
+        &[],
+        "void f()\n{\n    static const struct Item\n        first = {\n#ifdef FEATURE\n        1, 2\n#endif\n    },\n    second = {\n        3, 4\n    };\n}\n",
+    );
+}
+
+#[test]
+fn an_argument_after_an_empty_line_keeps_its_paren_column() {
+    let input = "void f()\n{\n    std::sort(items.begin(), items.end(),\n\n              [](const Item &first, const Item &second) {\n        return first.value < second.value;\n    });\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    std::sort(items.begin(), items.end(),\n\n              [](const Item &first, const Item &second)\n    {\n        return first.value < second.value;\n    });\n}\n",
+    );
+}
+
+#[test]
+fn deleting_empty_lines_attaches_the_brace_of_a_header_a_comment_leads() {
+    let input = "void f()\n{\n    /* note */ if (ready)\n\n    {\n        value=0;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--delete-empty-lines"],
+        "void f()\n{\n    /* note */ if (ready) {\n        value=0;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_line_comment_after_a_brace_an_empty_line_parted_opens_its_body() {
+    let input = "void f()\n{\n    if (ready)\n\n    {   // note\n        value=0;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--delete-empty-lines"],
+        "void f()\n{\n    if (ready) {\n        // note\n        value=0;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_designator_row_its_nested_brace_ends_stays_a_level_past_the_statement() {
+    let input = "void f()\n{\n    struct Item item = { .a = 1,\n        .obj = {\n            .b = 1,\n            .c = 2\n        },\n        .d = 3\n    };\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    struct Item item = { .a = 1,\n        .obj = {\n            .b = 1,\n            .c = 2\n            },\n        .d = 3\n        };\n    }\n",
+    );
+}
+
+#[test]
+fn a_list_run_into_its_first_element_brace_after_a_function_stays_at_file_scope() {
+    let input = "void f()\n{\n}\nint x[] = { {\n        1\n    }\n};\n";
+    check(input, &["--style=allman"], input);
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn an_element_brace_after_a_comma_and_a_comment_keeps_its_row() {
+    let input = "void f()\n{\n    int table[][2] = { {\n            1,\n            2\n        }, /* a */ {\n            3,\n            4\n        }\n    };\n}\n";
+    check(input, &["--style=allman"], input);
+}
+
+#[test]
+fn an_added_brace_goes_before_the_comment_after_a_header_a_comment_leads() {
+    let input = "void f()\n{\n    /* note */ if (ready) /* why */ value=0;\n    if (ready) /* why */ value=0;\n}\n";
+    check(
+        input,
+        &["--style=1tbs"],
+        "void f()\n{\n    /* note */ if (ready) { /* why */\n        value=0;\n    }\n    if (ready) { /* why */\n        value=0;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_typed_initializer_an_empty_line_parts_from_a_directive_keeps_its_gap() {
+    let input = "void f()\n{\n#ifdef FEATURE\n\n    auto *item = new Item{ 1, 2 };\n#endif\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn indenting_after_parens_steps_a_template_head_a_comment_leads_from_its_line() {
+    let input =
+        "/* note */ template <typename First,\n          typename Second>\nclass Pair\n{\n};\n";
+    check(
+        input,
+        &["--style=kr", "--indent-after-parens"],
+        "/* note */ template <typename First,\n    typename Second>\nclass Pair\n{\n};\n",
+    );
+}
+
+#[test]
+fn gnu_closes_an_else_kept_on_a_closer_line_at_its_brace_before_a_directive() {
+    let input = "void f()\n{\n    if (ready) {\n        first();\n    } /* c */ else {\n        result=0;\n#ifdef FEATURE\n    }\n#endif\n    value = 1;\n}\n";
+    check(
+        input,
+        &["--style=gnu"],
+        "void f()\n{\n    if (ready)\n        {\n            first();\n        } /* c */ else\n        {\n            result=0;\n#ifdef FEATURE\n        }\n#endif\n    value = 1;\n}\n",
+    );
+}
+
+#[test]
+fn a_list_a_comment_leads_in_a_case_block_indents_its_rows_past_the_declaration() {
+    let input = "void f()\n{\n    switch (op) {\n    default: {\n        /* note */ int table[][2] = {\n            { FIRST, 1 },\n            { SECOND, 2 },\n        };\n        break;\n    }\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn vtk_keeps_designator_rows_after_an_indented_nested_closer_at_their_level() {
+    let input = "static const struct Config config = {\n    .items = {\n        [FIRST] = {\n            .type = 1,\n            .mode = 2,\n        },\n        [SECOND] = {\n            .type = 1,\n        },\n    },\n};\n";
+    check(
+        input,
+        &["--style=vtk"],
+        "static const struct Config config = {\n    .items = {\n        [FIRST] = {\n            .type = 1,\n            .mode = 2,\n            },\n        [SECOND] = {\n            .type = 1,\n            },\n    },\n};\n",
+    );
+}
+
+#[test]
+fn a_comment_after_the_while_of_an_else_do_leaves_its_closer_at_the_else_body_before_a_directive() {
+    let input = "void f()\n{\n    if (ready) helper(); else do {\n        first();\n#ifdef FEATURE\n    } while (state); /* note */\n#endif\n    value = 1;\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    if (ready) helper();\n    else do {\n            first();\n#ifdef FEATURE\n        } while (state); /* note */\n#endif\n    value = 1;\n}\n",
+    );
+}
+
+#[test]
+fn a_preprocessor_block_opening_the_file_indents_a_class_head_as_one_after_code() {
+    let input = "#ifdef FEATURE\nclass Item;\n#endif\nint value;\n";
+    check(
+        input,
+        &["--style=kr", "--indent-preproc-block"],
+        "#ifdef FEATURE\n    class Item;\n#endif\nint value;\n",
+    );
+    let input = "int first;\n#ifdef FEATURE\nclass Item;\n#endif\nint value;\n";
+    check(
+        input,
+        &["--style=kr", "--indent-preproc-block"],
+        "int first;\n#ifdef FEATURE\n    class Item;\n#endif\nint value;\n",
+    );
+}
+
+#[test]
+fn indenting_after_parens_continues_a_bracket_row_a_comment_leads_as_any_bracket_row() {
+    let input =
+        "void f()\n{\n    value = table[first\n                  /* note */ + second];\n}\n";
+    check(
+        input,
+        &["--style=kr", "--indent-after-parens"],
+        "void f()\n{\n    value = table[first\n            /* note */ + second];\n}\n",
+    );
+}
+
+#[test]
+fn an_operand_row_a_comment_leads_after_a_comment_line_in_asm_stays_at_the_rows() {
+    let input = "void f()\n{\n    __asm__ volatile(\"nop\"\n                     // note\n                     : \"=r\"(v)\n                     /* c */ : \"r\"(o));\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn attaching_return_types_joins_a_name_to_a_type_block_comments_follow() {
+    let input = "static struct Item * /* note */\nmake(int value);\nint /* a */ /* b */\nhelper(int value);\nint /* note */\nhelper(int value)\n{\n    return 0;\n}\n";
+    check(
+        input,
+        &[
+            "--style=kr",
+            "--attach-return-type",
+            "--attach-return-type-decl",
+        ],
+        "static struct Item * /* note */ make(int value);\nint /* a */ /* b */ helper(int value);\nint /* note */ helper(int value)\n{\n    return 0;\n}\n",
+    );
+}
+
+#[test]
+fn attaching_return_types_leaves_a_name_off_a_type_a_line_comment_follows() {
+    let input = "int // note\nhelper(int value);\n";
+    check(input, &["--style=kr", "--attach-return-type-decl"], input);
+}
+
+#[test]
+fn attaching_return_types_joins_a_name_a_comment_leads_as_without_the_comment() {
+    check(
+        "int\n/* note */ helper(int value);\n",
+        &["--style=kr", "--attach-return-type-decl"],
+        "int /* note */ helper(int value);\n",
+    );
+}
+
+#[test]
+fn attaching_return_types_keeps_an_empty_line_between_a_type_and_its_name() {
+    let input = "int\n\nhelper(int value);\nint value;\n";
+    check(input, &["--style=kr", "--attach-return-type-decl"], input);
+}
+
+#[test]
+fn a_statement_a_comment_leads_in_a_block_run_in_after_a_braceless_body_stands_with_its_siblings() {
+    let input = "void f()\n{\n    if (ready)\n        helper(); else for (;;) {\n            /* note */ first();\n            second();\n        }\n}\n";
+    check(input, &["--style=kr", "--keep-one-line-statements"], input);
+}
+
+#[test]
+fn a_function_brace_inside_a_conditional_opens_a_function_body() {
+    check(
+        "void f()\n#ifdef FEATURE\n{\n#endif\n    { value = 0; }\n    value = 1;\n}\n",
+        &["--style=kr"],
+        "void f()\n#ifdef FEATURE\n{\n#endif\n    {\n        value = 0;\n    }\n    value = 1;\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_after_a_lambda_head_leaves_its_body_brace_as_without_it() {
+    let input = "void f()\n{\n    helper(items, [&](const Item &item)  /* note */\n    { return item.value > 0; });\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    helper(items, [&](const Item &item) { /* note */\n        return item.value > 0;\n    });\n}\n",
+    );
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    helper(items, [&](const Item &item)  /* note */\n    {\n        return item.value > 0;\n    });\n}\n",
+    );
+}
+
+#[test]
+fn pico_runs_the_one_line_body_of_a_lambda_argument_in_after_its_brace() {
+    let input = "void f()\n{\n    helper(items, [&](const Item &item)\n    { return item.value > 0; });\n    helper([]\n    { return 0; });\n}\n";
+    check(
+        input,
+        &["--style=pico"],
+        "void f()\n{   helper(items, [&](const Item &item)\n    {   return item.value > 0; });\n    helper([]\n    { return 0; }); }\n",
+    );
+}
+
+#[test]
+fn lisp_padding_before_a_row_a_closer_joins_leaves_an_empty_line_already_there() {
+    let input = "void f() {\n    if (ready) {\n        value=0; }\n\n    else if (other) {\n\n        value=1; } /* last */ else {\n\n        value=2; } /* note */\n}\n";
+    check(input, &["--style=lisp", "--break-blocks=all"], input);
+}
+
+#[test]
+fn deleting_empty_lines_keeps_one_ending_a_continued_line() {
+    let input = "void f()\n{\n#define CHECK(A) \\\n    fail();  \\\n\n    value = 1;\n}\n";
+    check(input, &["--style=kr", "--delete-empty-lines"], input);
+}
+
+#[test]
+fn breaking_return_types_breaks_a_declaration_a_comment_leads() {
+    check(
+        "/* note */ int helper(int value);\n",
+        &["--style=kr", "--break-return-type-decl"],
+        "/* note */ int\nhelper(int value);\n",
+    );
+}
+
+#[test]
+fn a_bare_block_after_the_block_of_an_attributed_if_starts_its_own_line() {
+    let input = "void f()\n{\n    if (ready) [[likely]] {\n        value = 1;\n    }\n    {\n        value = 1;\n    }\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    if (ready) [[likely]] {\n        value = 1;\n        }\n        {\n        value = 1;\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn a_label_inside_the_block_of_a_label_a_comment_leads_stands_in_that_block() {
+    let input = "void f()\n{\n    switch (op) {\n    /* note */ case FIRST: {\n        reset(value);\n    case SECOND:\n        apply(value);\n        break;\n    }\n    case THIRD:\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    switch (op) {\n    /* note */ case FIRST: {\n        reset(value);\n        case SECOND:\n            apply(value);\n            break;\n    }\n    case THIRD:\n        break;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn break_blocks_pads_an_if_with_an_empty_block_an_else_follows_as_any_if() {
+    check(
+        "void f()\n{\n    value = 0;\n    if (a) {} else { y(); }\n    value = 1;\n}\n",
+        &["--style=kr", "--break-blocks", "--keep-one-line-blocks"],
+        "void f()\n{\n    value = 0;\n\n    if (a) {} else { y(); }\n\n    value = 1;\n}\n",
+    );
+}
+
+#[test]
+fn a_comment_line_before_an_else_in_a_braceless_body_stands_at_the_else() {
+    let input = "void f()\n{\n    if (ready)\n        if (other) {\n            value=0;\n        }\n        // note\n        else {\n            result=0;\n        }\n    value = 1;\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_comma_between_template_arguments_ends_no_declarator() {
+    let input = "void f()\n{\n    auto result = helper<Item, Other>(value,\n#ifdef FEATURE\n                                       other);\n#endif\n    value = 1;\n}\n";
+    check(
+        input,
+        &[
+            "--style=kr",
+            "--indent-preproc-cond",
+            "--indent-after-parens",
+        ],
+        "void f()\n{\n    auto result = helper<Item, Other>(value,\n            #ifdef FEATURE\n            other);\n            #endif\n    value = 1;\n}\n",
+    );
+}
+
+#[test]
+fn indented_directives_before_a_brace_row_the_style_sets_in_stand_at_the_list_body() {
+    let input = "static const struct Item items[] = {\n    {1, 2},\n#ifdef OTHER\n    {5, 6},\n#endif\n    {7, 8}\n};\n";
+    let expected = "static const struct Item items[] = {\n        {1, 2},\n    #ifdef OTHER\n        {5, 6},\n    #endif\n        {7, 8}\n    };\n";
+    check(
+        input,
+        &["--style=whitesmith", "--indent-preproc-cond"],
+        expected,
+    );
+    check(
+        input,
+        &["--style=ratliff", "--indent-preproc-cond"],
+        expected,
+    );
+}
+
+#[test]
+fn vtk_indents_a_directive_after_a_branch_of_broken_aggregate_rows_at_the_rows() {
+    let input = "static const struct Item items[] = {\n#if FEATURE\n    {1, 2}\n#elif OTHER\n    {1, 2},\n    {3,\n     4}\n#else\n#ifdef FEATURE\n    {5, 6},\n#endif\n    {7, 8}\n#endif\n};\n";
+    check(
+        input,
+        &["--style=vtk", "--indent-preproc-cond"],
+        "static const struct Item items[] = {\n    #if FEATURE\n    {1, 2}\n    #elif OTHER\n    {1, 2},\n    {\n        3,\n        4\n    }\n    #else\n    #ifdef FEATURE\n    {5, 6},\n    #endif\n    {7, 8}\n    #endif\n};\n",
+    );
+}
+
+#[test]
+fn pico_runs_a_bare_block_after_a_switch_in_as_after_any_statement() {
+    check(
+        "void f()\n{\n    switch (state) {\n    case 1:\n        break;\n    }\n    { value=0; }\n}\n",
+        &["--style=pico"],
+        "void f()\n{   switch (state)\n    {   case 1:\n            break; }\n    {   value=0; } }\n",
+    );
+}
+
+#[test]
+fn a_block_kept_after_a_label_leaves_the_comments_leading_the_next_line() {
+    let input = "void f()\n{\ndone:\n    { value=0; }\n    /* note */ value = 1;\n}\n";
+    check(input, &["--style=1tbs", "--keep-one-line-blocks"], input);
+}
+
+#[test]
+fn pico_runs_a_comment_into_a_one_line_block_with_the_tab_fill_it_indents_with() {
+    let input = "void f()\n{\n\t{\t/* note */ value = 1; }\n}\n";
+    check(
+        input,
+        &["--style=pico", "--indent=force-tab=4"],
+        "void f()\n{\n\t{\t/* note */ value = 1; } }\n",
+    );
+}
+
+#[test]
+fn indenting_after_parens_stacks_no_initializer_brace_starting_its_line() {
+    let input = "static const struct Item\n    first =\n{   1, 2 },\nsecond =\n{   3, 4 };\n";
+    check(input, &["--style=kr", "--indent-after-parens"], input);
+}
+
+#[test]
+fn a_comment_line_after_a_chained_assignment_and_a_directive_carries_its_continuation() {
+    let input = "void f()\n{\n#ifdef FEATURE\n    first = second = third =\n#endif\n        // note\n        value;\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n#ifdef FEATURE\n    first = second = third =\n#endif\n                         // note\n                         value;\n}\n",
+    );
+}
+
+#[test]
+fn horstmann_runs_a_comment_led_member_in_at_the_indented_class_body() {
+    check(
+        "class Pair\n{\n    /* note */ First first;\n};\n",
+        &["--style=horstmann", "--indent-classes"],
+        "class Pair\n{       /* note */ First first;\n};\n",
+    );
+}
+
+#[test]
+fn a_comment_after_an_empty_line_continues_the_last_enumerator_as_without_it() {
+    let input = "enum Kind {\n    FIRST = 0x01,\n    SECOND = 0x02\n\n    /**\n      note\n    */\n};\nenum Other {\n    FIRST = 0x01\n\n    // note\n};\n";
+    check(
+        input,
+        &["--style=kr"],
+        "enum Kind {\n    FIRST = 0x01,\n    SECOND = 0x02\n\n             /**\n               note\n             */\n};\nenum Other {\n    FIRST = 0x01\n\n            // note\n};\n",
+    );
+}
+
+#[test]
+fn indenting_after_parens_steps_a_template_parameter_after_a_comment_line_as_without_it() {
+    let input = "template <typename First,\n          // note\n          typename Second>\nclass Pair\n{\n};\n";
+    check(
+        input,
+        &["--style=kr", "--indent-after-parens"],
+        "template <typename First,\n    // note\n    typename Second>\nclass Pair\n{\n};\n",
+    );
+}
+
+#[test]
+fn indenting_after_parens_keeps_later_template_parameters_at_the_step() {
+    let input = "template <typename First,\n          typename Second,\n          /* c */\n          typename Third>\nclass Pair\n{\n};\n";
+    check(
+        input,
+        &["--style=kr", "--indent-after-parens"],
+        "template <typename First,\n    typename Second,\n    /* c */\n    typename Third>\nclass Pair\n{\n};\n",
+    );
+}
+
+#[test]
+fn whitesmith_parts_a_label_from_its_statement_in_a_function_whose_brace_a_conditional_holds() {
+    let input = "void f()\n#ifdef FEATURE\n{\n#endif\n    done: if (ready) { value=0; }\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n#ifdef FEATURE\n    {\n#endif\ndone:\n    if (ready)\n        {\n        value=0;\n        }\n    }\n",
+    );
+}
+
+#[test]
+fn vtk_keeps_a_one_line_list_a_comment_leads_after_its_assignment() {
+    let input = "void f()\n{\n    struct Item item =\n        /* note */ { 1, 2 };\n}\n";
+    check(
+        input,
+        &["--style=vtk"],
+        "void f()\n{\n    struct Item item =\n    /* note */ { 1, 2 };\n}\n",
+    );
+}
+
+#[test]
+fn a_bit_field_colon_leading_its_line_keeps_the_space_after_it() {
+    let input = "struct Item {\n    int a\n    : 3;\n    int b\n    :  4;\n};\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn max_code_length_aligns_the_parameters_split_off_a_head_a_comment_leads() {
+    let input = "int count;\n\n/* note */ bool operator==(const Item &first, const Item &second)\n{\n    return first.value == second.value;\n}\n";
+    check(
+        input,
+        &["--style=stroustrup", "--max-code-length=60"],
+        "int count;\n\n/* note */ bool operator==(const Item &first,\n                           const Item &second)\n{\n    return first.value == second.value;\n}\n",
+    );
+}
+
+#[test]
+fn max_code_length_aligns_an_operand_row_split_off_an_assignment_a_comment_leads() {
+    let input =
+        "void f()\n{\n    /* c */ result = first_value + second_value + third_value + more;\n}\n";
+    check(
+        input,
+        &["--style=kr", "--max-code-length=60"],
+        "void f()\n{\n    /* c */ result = first_value + second_value + third_value +\n                     more;\n}\n",
+    );
+}
+
+#[test]
+fn indenting_after_parens_steps_arguments_split_off_an_assignment_a_comment_leads_past_it() {
+    let input =
+        "void f()\n{\n    /* c */ value = compute(first_argument, second_argument, third);\n}\n";
+    check(
+        input,
+        &[
+            "--style=kr",
+            "--max-code-length=60",
+            "--indent-after-parens",
+        ],
+        "void f()\n{\n    /* c */ value = compute(first_argument, second_argument,\n            third);\n}\n",
+    );
+}
+
+#[test]
+fn a_constructor_head_a_comment_leads_opens_its_initializers_as_without_it() {
+    let input =
+        "int count;\n\n/* note */ Item::Item(int value)\n    : value(value), other(0)\n{\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_function_try_head_a_comment_leads_parts_its_initializer_colon_as_without_it() {
+    check(
+        "int count;\n/* b */ Item::Item(int value) try\n    : value(value)\n{\n} catch (...) {\n}\n",
+        &["--style=kr"],
+        "int count;\n/* b */ Item::Item(int value) try\n:\n    value(value)\n{\n} catch (...)\n{\n}\n",
+    );
+}
+
+#[test]
+fn a_conditional_among_parameter_declarations_leaves_a_function_body() {
+    let input = "int helper(value, other)\nint value;\n#ifdef FEATURE\nchar *other;\n#endif\n{\n    return value;\n}\n";
+    check(input, &["--style=vtk"], input);
+    let input = "int helper(value, other)\n#ifdef FEATURE\nint value;\nchar *other;\n#endif\n{\n    return value;\n}\n";
+    check(input, &["--style=vtk"], input);
+}
+
+#[test]
+fn a_run_in_row_a_comment_leads_keeps_the_gap_before_its_trailing_comment() {
+    let input =
+        "void f()\n{   enum Kind\n    {   /* note */ First,  // first\n        Second\n    };\n}\n";
+    check(input, &["--style=horstmann"], input);
+}
+
+#[test]
+fn tab_indent_fills_a_list_closer_past_the_statement_with_spaces_when_its_list_opened_after_code() {
+    let input = "void f()\n{\n    if (ready) {\n        int list[] = { 1,\n                       2 };\n        helper(list);\n    }\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=vtk", "--indent=tab=4", "--indent-after-parens"][..],
+            "void f()\n{\n\tif (ready)\n\t\t{\n\t\tint list[] = { 1,\n\t\t        2\n\t\t    };\n\t\thelper(list);\n\t\t}\n}\n",
+        ),
+        (
+            &[
+                "--style=whitesmith",
+                "--indent=tab=4",
+                "--indent-after-parens",
+            ][..],
+            "void f()\n\t{\n\tif (ready)\n\t\t{\n\t\tint list[] = { 1,\n\t\t        2\n\t\t    };\n\t\thelper(list);\n\t\t}\n\t}\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+    let input = "int list[] = { 1,\n    2\n};\nint table[][2] = { { 1, 2 },\n    { 3, 4 }\n};\n";
+    check(
+        input,
+        &[
+            "--style=whitesmith",
+            "--indent=tab=4",
+            "--indent-after-parens",
+        ],
+        "int list[] = { 1,\n        2\n    };\nint table[][2] = { { 1, 2 },\n\t\t{ 3, 4 }\n\t};\n",
+    );
+}
+
+#[test]
+fn a_comment_leading_a_block_literal_argument_row_leaves_it_where_it_stands_without() {
+    for (args, input, expected) in [
+        (
+            &["--style=kr"][..],
+            "void f()\n{\n    dispatch(queue,\n             /* note */ ^{\n        go(value);\n    },\n    other);\n}\n",
+            "void f()\n{\n    dispatch(queue,\n    /* note */ ^ {\n        go(value);\n    },\n    other);\n}\n",
+        ),
+        (
+            &["--style=ratliff"][..],
+            "void f()\n{\n    dispatch(queue,\n             /* note */ ^(int value) {\n        go(value);\n    },\n    other);\n}\n",
+            "void f() {\n    dispatch(queue,\n    /* note */ ^(int value) {\n        go(value);\n        },\n    other);\n    }\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
+fn a_comment_led_argument_after_a_lambda_body_stands_at_the_statement_under_a_length_limit() {
+    let input = "void f()\n{\n    call(first, [](int value) {\n        return value;\n    },\n    other,\n    /* note */ more);\n    call(first, ^{\n        go();\n    },\n    /* note */ more);\n}\n";
+    for args in [&["--max-code-length=60"][..], &[][..]] {
+        check(input, args, input.replace("^{", "^ {").as_str());
+    }
+}
+
+#[test]
+fn an_argument_after_an_indented_block_closer_stands_at_the_statement_indent() {
+    let input = "void f(void)\n{\n    value = call(first, {\n        1, 2 },\n        other,\n        more);\n    call(first, ^{\n        go();\n    },\n    other);\n}\n";
+    for (style, expected) in [
+        (
+            "--style=ratliff",
+            "void f(void) {\n    value = call(first, {\n        1, 2\n        },\n    other,\n    more);\n    call(first, ^ {\n        go();\n        },\n    other);\n    }\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void f(void)\n    {\n    value = call(first,\n        {\n        1, 2\n        },\n    other,\n    more);\n    call(first, ^\n        {\n        go();\n        },\n    other);\n    }\n",
+        ),
+        (
+            "--style=vtk",
+            "void f(void)\n{\n    value = call(first,\n        {\n        1, 2\n        },\n    other,\n    more);\n    call(first, ^\n        {\n        go();\n        },\n    other);\n}\n",
+        ),
+        (
+            "--style=kr",
+            "void f(void)\n{\n    value = call(first, {\n        1, 2\n    },\n    other,\n    more);\n    call(first, ^ {\n        go();\n    },\n    other);\n}\n",
+        ),
+    ] {
+        let args = [style, "--break-after-logical", "--min-conditional-indent=0"];
+        check(input, &args, expected);
+        check(expected, &args, expected);
+    }
+    let input = "void f(void)\n{\n    call(first,\n         second, ^{\n        go();\n    },\n         other);\n}\n";
+    for (style, expected) in [
+        (
+            "--style=allman",
+            "void f(void)\n{\n    call(first,\n         second, ^\n    {\n        go();\n    },\n    other);\n}\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void f(void)\n    {\n    call(first,\n         second, ^\n        {\n        go();\n        },\n    other);\n    }\n",
+        ),
+    ] {
+        let args = [style, "--break-after-logical", "--min-conditional-indent=0"];
+        check(input, &args, expected);
+        check(expected, &args, expected);
+    }
+}
+
+#[test]
+fn tab_indent_tabs_a_ratliff_list_closer_whose_elements_stand_a_level_in() {
+    let input = "void f()\n{\n    value = call(first, {\n        1,\n        2,\n    });\n    run({\n        [](int x) {\n            go(x);\n        },\n    });\n}\n";
+    check(
+        input,
+        &["--style=ratliff", "--indent=tab=4"],
+        "void f() {\n\tvalue = call(first, {\n\t\t1,\n\t\t2,\n\t\t});\n\trun({\n\t\t[](int x) {\n\t\t\tgo(x);\n\t\t\t},\n\t\t});\n\t}\n",
+    );
+}
+
+#[test]
+fn a_nested_list_run_in_after_its_outer_brace_keeps_its_source_gap() {
+    for input in [
+        "void f()\n{\n    k = { { 1, 2 },\n        { 3, 4 }\n    };\n}\n",
+        "void f()\n{\n    k = {   { 1, 2 },\n        { 3, 4 }\n    };\n}\n",
+        "void f()\n{\n    int table[][2] = { { 1, 2 },\n        { 3, 4 }\n    };\n}\n",
+    ] {
+        check(input, &[], input);
+        check(input, &["--style=allman"], input);
+    }
+    let input = "void f()\n{\n    int table[][2] = { { 1, 2 },\n        { 3, 4 }\n    };\n}\n";
+    check(
+        input,
+        &["--indent=spaces=8"],
+        "void f()\n{\n        int table[][2] = { { 1, 2 },\n                { 3, 4 }\n        };\n}\n",
+    );
+}
+
+#[test]
+fn comment_rows_among_bit_field_declarators_stand_with_the_declarator_rows() {
+    let input = "struct Item {\n\tunsigned int\n\t\tfirst:1,\n\t\tsecond:1,\n\t\t/* note */\n\t\tthird:1,\n\t\t/*\n\t\t * more\n\t\t */\n\t\tfourth:1,\n\t\t/* note */ fifth:1;\n};\n";
+    let expected = "struct Item {\n    unsigned int\n    first:1,\n    second:1,\n    /* note */\n    third:1,\n    /*\n     * more\n     */\n    fourth:1,\n    /* note */ fifth:1;\n};\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+    let input = "struct Item {\n    unsigned int\n    first:1,\n    second:1,\n    // note\n    third:1;\n};\n";
+    check(input, &[], input);
+}
+
+#[test]
+fn delete_empty_lines_deletes_those_of_a_lambda_body_as_of_its_nested_blocks() {
+    let input = "void f()\n{\n    call([&](int v) {\n        first();\n\n        if (v) {\n            second();\n\n            third();\n        }\n\n    });\n    auto g = [&] {\n        first();\n\n        second();\n    };\n}\n";
+    let expected = "void f()\n{\n    call([&](int v) {\n        first();\n        if (v) {\n            second();\n            third();\n        }\n    });\n    auto g = [&] {\n        first();\n        second();\n    };\n}\n";
+    check(input, &["--delete-empty-lines"], expected);
+}
+
+#[test]
+fn indent_cases_sets_conditional_directives_in_a_case_block_at_its_statements() {
+    let input = "void f()\n{\n    switch (op) {\n    case FIRST: {\n#ifdef FEATURE\n        if (ready) {\n#endif\n            reset(value);\n        }\n    }\n    case SECOND: {\n        value = 1;\n#ifdef FEATURE\n        value = 2;\n#endif\n    }\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (op) {\n    case FIRST: {\n            #ifdef FEATURE\n            if (ready) {\n            #endif\n                reset(value);\n            }\n        }\n    case SECOND: {\n            value = 1;\n            #ifdef FEATURE\n            value = 2;\n            #endif\n        }\n    }\n}\n";
+    check(
+        input,
+        &["--indent-cases", "--indent-preproc-cond"],
+        expected,
+    );
+    check(
+        expected,
+        &["--indent-cases", "--indent-preproc-cond"],
+        expected,
+    );
+}
+
+#[test]
+fn declarator_rows_after_a_type_on_its_own_line_continue_as_from_their_own_line() {
+    let input = "unsigned int\nflag,\nother;\nvoid f()\n{\n    unsigned int\n    flag,\n    other;\n    static const char\n    *first,\n    *second;\n    unsigned\n    long value,\n    other;\n}\n";
+    let expected = "unsigned int\nflag,\nother;\nvoid f()\n{\n    unsigned int\n    flag,\n    other;\n    static const char\n    *first,\n    *second;\n    unsigned\n    long value,\n         other;\n}\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+}
+
+#[test]
+fn a_definition_among_conditionals_leaves_an_operator_continuation_going_on() {
+    let input = "void f()\n{\n    flags = FIRST\n            | SECOND\n#if !defined(LIMIT)\n# define LIMIT 3\n#endif\n#if FEATURE\n            | THIRD\n#endif\n            ;\n    value = 1;\n}\n";
+    check(input, &[], input);
+}
+
+#[test]
+fn pad_oper_pads_a_binary_xor_after_a_closing_paren_as_after_a_name() {
+    check(
+        "void f()\n{\n    x = a^b;\n    x = (a | b)^c;\n    x = f(a)^b;\n}\n",
+        &["-p"],
+        "void f()\n{\n    x = a ^ b;\n    x = (a | b) ^ c;\n    x = f(a) ^ b;\n}\n",
+    );
+}
+
+#[test]
+fn a_label_in_a_bare_block_a_comment_leads_leaves_its_statements_at_the_block_body() {
+    let input = "void f()\n{\n    return value;\n    /* note */ {\n    retry:\n        value = 1;\n    }\n}\n";
+    let expected = "void f() {\n    return value;\n        /* note */ {\nretry:\n        value = 1;\n        }\n    }\n";
+    check(input, &["--style=ratliff"], expected);
+    check(expected, &["--style=ratliff"], expected);
+}
+
+#[test]
+fn pico_parts_a_comment_leading_an_enum_closer_as_one_leading_a_block_closer() {
+    let input = "void f()\n{\n    enum Kind {\n        First,\n        Third\n    /* note */ };\n    if (ready) {\n        value = 1;\n    /* note */ }\n    value = 1;\n}\n";
+    let expected = "void f()\n{   enum Kind\n    {   First,\n        Third\n        /* note */\n    };\n    if (ready)\n    {   value = 1;\n        /* note */\n    }\n    value = 1; }\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+}
+
+#[test]
+fn a_conditional_after_a_label_of_a_switch_in_a_case_block_stands_at_the_label_body() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        switch (other) {\n        case 2:\n#ifdef FEATURE\n            value = 2;\n#endif\n            break;\n        }\n        break;\n    }\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (kind) {\n    case 1: {\n        switch (other) {\n        case 2:\n            #ifdef FEATURE\n            value = 2;\n            #endif\n            break;\n        }\n        break;\n    }\n    }\n}\n";
+    check(input, &["--indent-preproc-cond"], expected);
+    check(expected, &["--indent-preproc-cond"], expected);
+}
+
+#[test]
+fn a_comment_led_statement_closing_a_switch_in_a_case_block_stands_at_its_label_body() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        switch (other) {\n        case 3:\n            /* note */ value = 3;\n        }\n        break;\n    }\n    }\n}\n";
+    let expected = "void f() {\n    switch (kind) {\n    case 1: {\n        switch (other) {\n        case 3:\n            /* note */ value = 3; }\n        break; } } }\n";
+    check(input, &["--style=lisp"], expected);
+    check(expected, &["--style=lisp"], expected);
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        switch (other) {\n        case 3:\n            /* first */ /* second */ value = 3;\n        }\n        break;\n    }\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (kind) {\n    case 1: {\n        switch (other) {\n        case 3:\n            /* first */ /* second */\n            value = 3;\n        }\n        break;\n    }\n    }\n}\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+}
+
+#[test]
+fn rows_of_a_nested_compound_literal_in_parens_stand_under_its_first_element() {
+    let input = "void f(void)\n{\n    g((struct Item[]) { { 1, 2 },\n        { 3, 4 } }, 3);\n    g((struct Item[]) { { 1, 2 },\n        { 3, 4 } });\n}\n";
+    let expected = "void f(void)\n{\n    g((struct Item[]) { { 1, 2 },\n                        { 3, 4 } }, 3);\n    g((struct Item[]) { { 1, 2 },\n                        { 3, 4 } });\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+    let expected = "void f(void)\n    {\n    g((struct Item[]) { { 1, 2 },\n                        { 3, 4 } }, 3);\n    g((struct Item[]) { { 1, 2 },\n                        { 3, 4 } });\n    }\n";
+    check(input, &["--style=whitesmith"], expected);
+    check(expected, &["--style=whitesmith"], expected);
+}
+
+#[test]
+fn a_compound_literal_row_its_closer_parts_stands_among_the_rows_before_it() {
+    let input =
+        "void f(void)\n{\n    foo((struct Item[]) {\n        { 1, 2 },\n        { 3, 4 } });\n}\n";
+    let expected = "void f(void) {\n    foo((struct Item[]) {\n            { 1, 2 },\n            { 3, 4 }\n        });\n    }\n";
+    check(input, &["--style=ratliff"], expected);
+    check(expected, &["--style=ratliff"], expected);
+}
+
+#[test]
+fn a_conditional_before_a_label_after_a_case_block_and_its_statements_stands_at_the_labels() {
+    let input = "void f()\n{\n    switch (x) {\n    case 0:\n        a();\n        break;\n    case 1: {\n        b();\n    }\n    break;\n\n#ifdef FEATURE\n    case 2: {\n        c();\n    }\n    break;\n#endif\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (x) {\n    case 0:\n        a();\n        break;\n    case 1: {\n        b();\n    }\n    break;\n\n    #ifdef FEATURE\n    case 2: {\n        c();\n    }\n    break;\n    #endif\n    }\n}\n";
+    check(input, &["--indent-preproc-cond"], expected);
+    check(expected, &["--indent-preproc-cond"], expected);
+}
+
+#[test]
+fn whitesmith_sets_a_conditional_after_the_statements_past_a_case_block_with_them() {
+    let input = "void f()\n{\n    switch (x) {\n    case 1: {\n        a();\n    }\n    break;\n#ifdef FEATURE\n    value = 2;\n#endif\n    case 2:\n        b();\n    }\n}\n";
+    let expected = "void f()\n    {\n    switch (x)\n        {\n        case 1:\n            {\n            a();\n            }\n        break;\n        #ifdef FEATURE\n        value = 2;\n        #endif\n        case 2:\n            b();\n        }\n    }\n";
+    check(
+        input,
+        &["--style=whitesmith", "--indent-preproc-cond"],
+        expected,
+    );
+    check(
+        expected,
+        &["--style=whitesmith", "--indent-preproc-cond"],
+        expected,
+    );
+}
+
+#[test]
+fn a_conditional_closing_past_a_label_it_opened_before_stands_in_that_labels_body() {
+    let input = "void f()\n{\n    switch (x) {\n    case 1: {\n        a();\n    }\n    break;\n#ifdef FEATURE\n    case 2:\n        b();\n#endif\n    }\n    switch (y) {\n    case 1:\n        a();\n#ifdef FEATURE\n    case 2: {\n        b();\n    }\n    break;\n#endif\n    }\n}\n";
+    let expected = "void f()\n    {\n    switch (x)\n        {\n        case 1:\n            {\n            a();\n            }\n        break;\n        #ifdef FEATURE\n        case 2:\n            b();\n            #endif\n        }\n    switch (y)\n        {\n        case 1:\n            a();\n            #ifdef FEATURE\n        case 2:\n            {\n            b();\n            }\n        break;\n        #endif\n        }\n    }\n";
+    check(
+        input,
+        &["--style=whitesmith", "--indent-preproc-cond"],
+        expected,
+    );
+    check(
+        expected,
+        &["--style=whitesmith", "--indent-preproc-cond"],
+        expected,
+    );
+}
+
+#[test]
+fn pico_runs_a_closer_in_after_string_rows_a_line_comment_parts() {
+    let input = "void f()\n{\n    helper(\"first\"\n           // note\n           \"second\", value);\n    helper(first,\n           // note\n           second);\n}\n";
+    let expected = "void f()\n{   helper(\"first\"\n           // note\n           \"second\", value);\n    helper(first,\n           // note\n           second); }\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+    check(
+        input,
+        &["--style=lisp"],
+        "void f() {\n    helper(\"first\"\n           // note\n           \"second\", value);\n    helper(first,\n           // note\n           second); }\n",
+    );
+}
+
+#[test]
+fn a_comment_led_initializer_row_after_a_comment_led_colon_row_stands_as_without_its_comment() {
+    let input = "Item::Item(int value, int other)\n    /* note */ : value_(value),\n      /* note */ other_(other)\n{\n}\n";
+    let expected = "Item::Item(int value, int other)\n/* note */ : value_(value),\n    /* note */ other_(other)\n{\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+    check(
+        input,
+        &["--style=lisp"],
+        "Item::Item(int value, int other)\n/* note */ : value_(value),\n    /* note */ other_(other) {}\n",
+    );
+}
+
+#[test]
+fn run_in_styles_run_a_nested_first_row_into_a_compound_literals_broken_brace() {
+    let input = "void f(void)\n{\n    q = (struct Item[]) {\n        { 1, 2 },\n        { 3, 4 }\n    };\n    foo((struct Item[]) {\n        { 1, 2 },\n        { 3, 4 }\n    });\n}\n";
+    for (style, expected) in [
+        (
+            "--style=horstmann",
+            "void f(void)\n{   q = (struct Item[])\n    {   { 1, 2 },\n        { 3, 4 }\n    };\n    foo((struct Item[])\n    {   { 1, 2 },\n        { 3, 4 }\n    });\n}\n",
+        ),
+        (
+            "--style=pico",
+            "void f(void)\n{   q = (struct Item[])\n    {   { 1, 2 },\n        { 3, 4 } };\n    foo((struct Item[])\n    {   { 1, 2 },\n        { 3, 4 } }); }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn a_list_opened_mid_row_of_a_broken_list_breaks_after_its_brace_when_it_spans_rows() {
+    let input = "int t[] = {\n    10, { 11,\n          12 },\n    13,\n};\n";
+    let expected = "int t[] = {\n    10, {\n        11,\n        12\n    },\n    13,\n};\n";
+    for style in ["--style=kr", "--style=gnu"] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+    let input = "void f()\n{\n    x = { 10, { 11,\n                12 } };\n}\n";
+    check(
+        input,
+        &[],
+        "void f()\n{\n    x = { 10, { 11,\n                12\n              }\n        };\n}\n",
+    );
+}
+
+#[test]
+fn a_one_line_initializer_a_comment_leads_after_its_assignment_stays_on_one_line() {
+    let input = "void f()\n{\n    struct Item item =\n        /* note */ { 1, 2 };\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void f()\n{\n    struct Item item =\n    /* note */ { 1, 2 };\n}\n",
+        ),
+        (
+            "--style=allman",
+            "void f()\n{\n    struct Item item =\n    /* note */ { 1, 2 };\n}\n",
+        ),
+        (
+            "--style=gnu",
+            "void f()\n{\n    struct Item item =\n    /* note */ { 1, 2 };\n}\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void f()\n    {\n    struct Item item =\n        /* note */ { 1, 2 };\n    }\n",
+        ),
+        (
+            "--style=ratliff",
+            "void f() {\n    struct Item item =\n        /* note */ { 1, 2 };\n    }\n",
+        ),
+        (
+            "--style=horstmann",
+            "void f()\n{   struct Item item =\n    /* note */ { 1, 2 };\n}\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn a_comment_split_off_a_function_brace_after_an_objc_method_stands_at_the_brace() {
+    let input = "@implementation Item\n- (void)update:(int)value {\n    if (value) {\n        [self reset];\n    }\n}\n@end\n\nbool operator==(const Item &first, const Item &second)\n/* note */ {\n    return true;\n}\n";
+    let expected = "@implementation Item\n- (void)update:(int)value\n{\n    if (value) {\n        [self reset];\n    }\n}\n@end\n\nbool operator==(const Item &first, const Item &second)\n/* note */\n{\n    return true;\n}\n";
+    check(input, &["--style=1tbs"], expected);
+    check(expected, &["--style=1tbs"], expected);
+}
+
+#[test]
+fn a_conditional_among_arguments_in_a_braceless_body_stands_at_the_arguments() {
+    let input = "void f()\n{\n    if (!ready)\n        call(\"not ready\",\n#ifdef FEATURE\n             value);\n#endif\n    call(\"not ready\",\n#ifdef FEATURE\n         value);\n#endif\n}\n";
+    let expected = "void f()\n{\n    if (!ready)\n        call(\"not ready\",\n             #ifdef FEATURE\n             value);\n             #endif\n    call(\"not ready\",\n         #ifdef FEATURE\n         value);\n         #endif\n}\n";
+    check(input, &["--indent-preproc-cond"], expected);
+    check(expected, &["--indent-preproc-cond"], expected);
+}
+
+#[test]
+fn a_comment_led_template_parameter_row_past_a_directive_stands_as_without_it() {
+    let input = "#ifdef FEATURE\ntemplate <typename First,\n#endif\n          /* note */ typename Second>\nclass Pair {\n    First first;\n};\n";
+    check(input, &["--style=java"], input);
+    let plain = input
+        .replace("#ifdef FEATURE\n", "")
+        .replace("#endif\n", "");
+    check(&plain, &["--style=java"], &plain);
+}
+
+#[test]
+fn a_comment_led_row_ending_a_statement_past_a_directive_leaves_no_column_for_the_next() {
+    let input = "#ifdef A\nint value = first +\n#endif\n            /* note */ second;\n#ifdef B\nint x;\n#endif\n";
+    check(input, &[], input);
+}
+
+#[test]
+fn a_paren_and_dot_inside_a_string_continue_no_call_chain() {
+    let input = "static struct driver builtin[] = {\n    PATTERNS(\"first\",\n             \"(x).\"),\n    PATTERNS(\"second\",\n             \"y\"),\n};\nvoid f()\n{\n    call(first(\").\"),\n         second);\n}\n";
+    check(input, &[], input);
+}
+
+#[test]
+fn a_message_literal_brace_inside_a_string_aligns_no_rows() {
+    let input = "static struct driver builtin[] = {\n    PATTERNS(\"first\",\n             \"@[\",\n             \"\"),\n    PATTERNS(\"second\",\n             \"y\"),\n};\n";
+    check(input, &[], input);
+}
+
+#[test]
+fn attach_classes_attaches_the_brace_of_a_class_head_a_comment_leads() {
+    let input = "/* note */ class Item\n{\npublic:\n    Item();\n};\n";
+    let expected = "/* note */ class Item {\npublic:\n    Item();\n};\n";
+    for style in ["--style=gnu", "--style=allman"] {
+        check(input, &[style, "--attach-classes"], expected);
+        check(expected, &[style, "--attach-classes"], expected);
+    }
+    let input = "/* note */ namespace Space\n{\nint value;\n}\n";
+    let expected = "/* note */ namespace Space {\nint value;\n}\n";
+    check(input, &["--style=gnu", "--attach-namespaces"], expected);
+    check(expected, &["--style=gnu", "--attach-namespaces"], expected);
+}
+
+#[test]
+fn comments_before_a_declarator_after_a_multiline_value_stand_at_the_declarator() {
+    for comment in ["/* note */", "// note"] {
+        let input = format!(
+            "int value = helper(1,\n                   2),\n    {comment}\n    other = 2;\n"
+        );
+        let expected = format!(
+            "int value = helper(1,\n                   2),\n            {comment}\n            other = 2;\n"
+        );
+        for style in [
+            "--style=kr",
+            "--style=allman",
+            "--style=gnu",
+            "--style=lisp",
+        ] {
+            check(&input, &[style], &expected);
+            check(&expected, &[style], &expected);
+        }
+    }
+    let input = "void run()\n{\n    value = helper(1,\n                   2),\n    /* note */\n    other = 2;\n}\n";
+    let expected = "void run()\n{\n    value = helper(1,\n                   2),\n            /* note */\n            other = 2;\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn comment_after_a_comment_led_declarator_closer_stands_at_the_next_declarator() {
+    let input = "static const struct Item\n    first = {\n        1, 2\n    /* note */ },\n    /* note */\n    second = {\n        3, 4\n    };\n";
+    let expected = "static const struct Item\n    first = {\n    1, 2\n    /* note */ },\n/* note */\nsecond = {\n    3, 4 };\n";
+    check(input, &["--style=lisp"], expected);
+    check(expected, &["--style=lisp"], expected);
+}
+
+#[test]
+fn member_declarator_after_a_value_continued_in_parentheses_stands_at_the_value() {
+    let cases = [
+        (
+            "struct Item {\n    int value = helper(1,\n                       2),\n        other;\n};\n",
+            "struct Item {\n    int value = helper(1,\n                       2),\n                other;\n};\n",
+        ),
+        (
+            "struct Item {\n    int value = (1 +\n                 2),\n        other;\n};\n",
+            "struct Item {\n    int value = (1 +\n                 2),\n                other;\n};\n",
+        ),
+        (
+            "struct Item {\n    int value = helper(\n            1, 2),\n        other;\n};\n",
+            "struct Item {\n    int value = helper(\n                    1, 2),\n                other;\n};\n",
+        ),
+        (
+            "struct Item {\n    static const int value = helper(1,\n                                    2),\n        other;\n};\n",
+            "struct Item {\n    static const int value = helper(1,\n                                    2),\n                             other;\n};\n",
+        ),
+    ];
+    for (input, expected) in cases {
+        check(input, &["--style=kr"], expected);
+        check(expected, &["--style=kr"], expected);
+    }
+    let input = "struct Item {\n    int value = helper(1,\n                       2),\n        /* note */\n        other;\n};\n";
+    let expected = "struct Item {\n    int value = helper(1,\n                       2),\n                /* note */\n                other;\n};\n";
+    check(input, &["--style=kr"], expected);
+}
+
+#[test]
+fn declarator_after_a_run_in_list_spanning_lines_stands_where_the_assignment_registers() {
+    let cases = [
+        (
+            "void run()\n{\n    int value[2] = {1,\n                    2},\n        other;\n}\n",
+            "void run()\n{\n    int value[2] = {1,\n                    2\n                   },\n                   other;\n}\n",
+        ),
+        (
+            "void run()\n{\n    Item value = {1,\n                  2},\n        other;\n}\n",
+            "void run()\n{\n    Item value = {1,\n                  2\n                 },\n         other;\n}\n",
+        ),
+        (
+            "int value[2] = {1,\n                2},\n    other;\n",
+            "int value[2] = {1,\n                2\n               },\n               other;\n",
+        ),
+        (
+            "struct Item {\n    Item value = {1,\n                  2},\n        other;\n};\n",
+            "struct Item {\n    Item value = {1,\n                  2\n                 },\n         other;\n};\n",
+        ),
+    ];
+    for (input, expected) in cases {
+        check(input, &["--style=kr"], expected);
+        check(expected, &["--style=kr"], expected);
+    }
+}
+
+#[test]
+fn member_declarators_after_an_assignment_stand_where_a_statement_registers() {
+    let cases = [
+        (
+            "struct Item {\n    int value[2] = 3,\n        other;\n};\n",
+            "struct Item {\n    int value[2] = 3,\n                   other;\n};\n",
+        ),
+        (
+            "struct Item {\n    int value[2] = {1, 2},\n        other;\n};\n",
+            "struct Item {\n    int value[2] = {1, 2},\n                   other;\n};\n",
+        ),
+        (
+            "struct Item {\n    int *value = {1, 2},\n        other;\n};\n",
+            "struct Item {\n    int *value = {1, 2},\n         other;\n};\n",
+        ),
+    ];
+    for (input, expected) in cases {
+        check(input, &["--style=kr"], expected);
+        check(expected, &["--style=kr"], expected);
+    }
+}
+
+#[test]
+fn declarators_after_several_assignments_stand_at_the_last_registered_one() {
+    // A value after `]` registers on each assignment; a name only on the
+    // first assignment after a name.
+    let cases = [
+        (
+            "void run()\n{\n    int value = 3, other[2] = 4,\n        last;\n}\n",
+            "void run()\n{\n    int value = 3, other[2] = 4,\n                              last;\n}\n",
+        ),
+        (
+            "void run()\n{\n    int other[2] = 4, value = 3,\n        last;\n}\n",
+            "void run()\n{\n    int other[2] = 4, value = 3,\n                      last;\n}\n",
+        ),
+        (
+            "struct Item {\n    int other[2] = 4, value = 3,\n        last;\n};\n",
+            "struct Item {\n    int other[2] = 4, value = 3,\n                      last;\n};\n",
+        ),
+        (
+            "void run()\n{\n    int value = 3, other = 4,\n        last;\n}\n",
+            "void run()\n{\n    int value = 3, other = 4,\n        last;\n}\n",
+        ),
+    ];
+    for (input, expected) in cases {
+        check(input, &["--style=kr"], expected);
+        check(expected, &["--style=kr"], expected);
+    }
+}
+
+#[test]
+fn closer_of_a_run_in_list_before_more_declarators_stands_under_its_brace() {
+    let cases = [
+        (
+            "void run()\n{\n    int value[2] = {1,\n                    2}, other;\n}\n",
+            "void run()\n{\n    int value[2] = {1,\n                    2\n                   }, other;\n}\n",
+        ),
+        (
+            "int value[2] = {1,\n                2}, other,\n    last;\n",
+            "int value[2] = {1,\n                2\n               }, other,\n               last;\n",
+        ),
+        (
+            "struct Item {\n    Item value = {1,\n                  2}, other;\n};\n",
+            "struct Item {\n    Item value = {1,\n                  2\n                 }, other;\n};\n",
+        ),
+        (
+            "void run()\n{\n    int value[2] = {1,\n                    2}, other[2] = {3,\n                                    4};\n}\n",
+            "void run()\n{\n    int value[2] = {1,\n                    2\n                   }, other[2] = {3,\n                                  4\n                                 };\n}\n",
+        ),
+    ];
+    for (input, expected) in cases {
+        check(input, &["--style=kr"], expected);
+        check(expected, &["--style=kr"], expected);
+    }
+    let input = "void run()\n{\n    int value[2] = {1,\n                    2}, other;\n}\n";
+    let expected = "void run()\n    {\n    int value[2] = {1,\n                    2\n                   }, other;\n    }\n";
+    check(input, &["--style=whitesmith"], expected);
+}
+
+#[test]
+fn run_in_list_row_after_a_directive_and_a_blank_line_breaks_its_closer_as_elsewhere() {
+    let expected = "static const struct Item items[] = {\n#ifdef FEATURE\n    {3, 4},\n#endif\n\n    {\n        5,\n        6\n    }\n};\n";
+    for input in [
+        "static const struct Item items[] = {\n#ifdef FEATURE\n    {3, 4},\n#endif\n\n    {5,\n     6}\n};\n",
+        expected,
+    ] {
+        check(input, &["--style=kr"], expected);
+    }
+    let without_blank_line = "static const struct Item items[] = {\n#ifdef FEATURE\n    {3, 4},\n#endif\n    {5,\n     6}\n};\n";
+    let expected = "static const struct Item items[] = {\n#ifdef FEATURE\n    {3, 4},\n#endif\n    {\n        5,\n        6\n    }\n};\n";
+    check(without_blank_line, &["--style=kr"], expected);
+}
+
+#[test]
+fn code_a_comment_leads_after_a_whitesmith_case_block_stands_where_the_code_alone_would() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1:\n        {\n            value=0;\n        }\n        /* note */ break;\n    }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=whitesmith",
+            "void f()\n    {\n    switch (kind)\n        {\n        case 1:\n            {\n            value=0;\n            }\n        /* note */ break;\n        }\n    }\n",
+        ),
+        (
+            "--style=vtk",
+            "void f()\n{\n    switch (kind)\n        {\n        case 1:\n            {\n            value=0;\n            }\n        /* note */ break;\n        }\n}\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+        let bare = expected.replace("/* note */ break;", "break;");
+        check(&bare, &[style], &bare);
+    }
+}
+
+#[test]
+fn indent_preproc_define_leaves_a_case_block_outside_definitions_as_without_it() {
+    let input = "void f()\n{\n    switch (kind) {\n#ifdef FEATURE\n    case 1: // first\n#endif\n    {\n        value=0;\n    }\n    default:\n        break;\n    }\n}\n";
+    for style in [
+        "--style=kr",
+        "--style=vtk",
+        "--style=whitesmith",
+        "--style=gnu",
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_string()]).expect("valid options");
+        let output = format_bytes(input.as_bytes(), &options).expect("format bytes");
+        let expected = String::from_utf8(output).expect("utf8");
+        check(input, &[style, "--indent-preproc-define"], &expected);
+    }
+    let expected = "void f()\n{\n    switch (kind)\n        {\n#ifdef FEATURE\n        case 1: // first\n#endif\n            {\n            value=0;\n            }\n        default:\n            break;\n        }\n}\n";
+    check(input, &["--style=vtk", "--indent-preproc-define"], expected);
+}
+
+#[test]
+fn line_comments_after_an_interface_head_stand_a_level_in_as_block_comments_do() {
+    let expected = "@interface Item : NSObject\n    // note\n    // more\n@property (nonatomic) int value;\n@end\n";
+    for input in [
+        "@interface Item : NSObject\n// note\n    // more\n@property (nonatomic) int value;\n@end\n",
+        expected,
+    ] {
+        check(input, &["--indent-col1-comments"], expected);
+    }
+    check(
+        "@interface Item ()\n    // note\n\n@property (nonatomic) int value;\n@end\n",
+        &[],
+        "@interface Item ()\n    // note\n\n@property (nonatomic) int value;\n@end\n",
+    );
+    // A line comment in column one stays there unless the option indents it.
+    let column_one =
+        "@interface Item : NSObject\n// note\n@property (nonatomic) int value;\n@end\n";
+    check(column_one, &[], column_one);
+    let block =
+        "@interface Item : NSObject\n    /* note */\n@property (nonatomic) int value;\n@end\n";
+    check(block, &[], block);
+    let both = "@interface Item : NSObject\n    /* note */ // more\n@property (nonatomic) int value;\n@end\n";
+    check(both, &[], both);
+}
+
+#[test]
+fn declarations_after_an_indented_block_that_ends_a_split_declaration_return_to_file_scope() {
+    for tail in [
+        "template <typename T>\nT helper(T value)\n{\n    return value;\n}\n",
+        "int value;\n",
+        "int helper(int value)\n{\n    return value;\n}\n",
+    ] {
+        let input =
+            format!("static struct Item *\n#ifdef FEATURE\nmake(int value);\n#endif\n\n{tail}");
+        let expected =
+            format!("static struct Item *\n#ifdef FEATURE\n    make(int value);\n#endif\n\n{tail}");
+        check(
+            &input,
+            &["--style=allman", "--indent-preproc-block"],
+            &expected,
+        );
+    }
+}
+
+#[test]
+fn a_trailing_block_comment_after_a_case_block_moves_no_code() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n    } break; /* note */\n    default:\n        break;\n    }\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=linux", "--keep-one-line-statements"][..],
+            "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n    } break; /* note */\n    default:\n        break;\n    }\n}\n",
+        ),
+        (
+            &["--style=linux"][..],
+            "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n    }\n    break; /* note */\n    default:\n        break;\n    }\n}\n",
+        ),
+    ] {
+        check(input, args, expected);
+        let line_comment = input.replace("/* note */", "// note");
+        check(
+            &line_comment,
+            args,
+            &expected.replace("/* note */", "// note"),
+        );
+    }
+}
+
+#[test]
+fn lisp_sets_a_space_before_every_list_closer_a_row_holds() {
+    let cases = [
+        (
+            "Item run()\n{\n    return {1,\n            2};\n}\n",
+            "Item run() {\n    return {1,\n            2 }; }\n",
+        ),
+        (
+            "void run()\n{\n    call(helper({1,\n                 2}), value);\n}\n",
+            "void run() {\n    call(helper({1,\n                 2 }), value); }\n",
+        ),
+        (
+            "void run()\n{\n    call({1, {2,\n              3}});\n}\n",
+            "void run() {\n    call({1, {2,\n              3 } }); }\n",
+        ),
+        (
+            "void run()\n{\n    call({1,\n          2});\n}\n",
+            "void run() {\n    call({1,\n          2 }); }\n",
+        ),
+    ];
+    for (input, expected) in cases {
+        check(input, &["--style=lisp"], expected);
+        check(expected, &["--style=lisp"], expected);
+    }
+    // A closer right after a block comment keeps the source's gap.
+    for input in [
+        "int list[] = {1,\n              2 /* c */};\n",
+        "int list[] = {1,\n              2 /* c */ };\n",
+    ] {
+        check(input, &["--style=lisp"], input);
+    }
+    check(
+        "void run()\n{\n    call(helper({1,\n                 2}), value);\n}\n",
+        &["--style=pico"],
+        "void run()\n{   call(helper({1,\n                 2 }), value); }\n",
+    );
+}
+
+#[test]
+fn lisp_rows_of_a_list_a_joined_closer_line_opens_move_with_it() {
+    let cases = [
+        (
+            "int value[2] = {1,\n                2}, other[2] = {3,\n                                4};\n",
+            "int value[2] = {1,\n                2 }, other[2] = {3,\n                                 4 };\n",
+        ),
+        (
+            "void run()\n{\n    int value[2] = {1,\n                    2}, other[2] = {3,\n                                    4,\n                                    5};\n}\n",
+            "void run() {\n    int value[2] = {1,\n                    2 }, other[2] = {3,\n                                     4,\n                                     5 }; }\n",
+        ),
+        (
+            "int value[2] = {1,\n                2}, other[2] = {3, {4,\n                                    5}};\n",
+            "int value[2] = {1,\n                2 }, other[2] = {3, {4,\n                                     5 } };\n",
+        ),
+    ];
+    for (input, expected) in cases {
+        check(input, &["--style=lisp"], expected);
+        check(expected, &["--style=lisp"], expected);
+    }
+}
+
+#[test]
+fn run_in_styles_lay_out_a_nested_first_list_as_its_broken_form() {
+    let cases = [
+        (
+            "--style=horstmann",
+            "int list[2][2] = {{1,\n                   2}, {3,\n                   4}};\n",
+            "int list[2][2] = {{1,\n        2\n    }, {3,\n        4\n    }\n};\n",
+        ),
+        (
+            "--style=pico",
+            "int list[2][2] = {{1,\n                   2}, {3,\n                   4}};\n",
+            "int list[2][2] = {{1,\n        2 }, {3,\n        4 } };\n",
+        ),
+        (
+            "--style=horstmann",
+            "void run()\n{\n    int list[2][2] = {{1,\n                       2}, {3,\n                       4}};\n}\n",
+            "void run()\n{   int list[2][2] = {{1,\n            2\n        }, {3,\n            4\n        }\n    };\n}\n",
+        ),
+        (
+            "--style=pico",
+            "int list[2][3] = {{1,\n                   2,\n                   3}, {4,\n                   5,\n                   6}};\n",
+            "int list[2][3] = {{1,\n        2,\n        3 }, {4,\n        5,\n        6 } };\n",
+        ),
+    ];
+    for (style, input, expected) in cases {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn horstmann_closes_a_list_in_a_run_in_case_body_as_outside_a_switch() {
+    let input = "void run()\n{\n    switch (kind) {\n    case 1:\n        call({1,\n              2}, {3,\n                   4});\n    }\n}\n";
+    let expected = "void run()\n{   switch (kind)\n    {   case 1:\n            call({1,\n                  2}, {3,\n                       4\n                      });\n    }\n}\n";
+    check(input, &["--style=horstmann"], expected);
+    check(expected, &["--style=horstmann"], expected);
+}
+
+#[test]
+fn whitesmith_indents_the_brace_of_a_comment_led_method_head_as_any_method() {
+    let input = "class Item\n{\npublic:\n    /* note */ int value() const\n    {\n        return value_;\n    }\nprivate:\n    int value_;\n};\n";
+    let expected = "class Item\n    {\n    public:\n        /* note */ int value() const\n            {\n            return value_;\n            }\n    private:\n        int value_;\n    };\n";
+    check(
+        input,
+        &["--style=whitesmith", "--keep-one-line-statements"],
+        expected,
+    );
+    check(
+        expected,
+        &["--style=whitesmith", "--keep-one-line-statements"],
+        expected,
+    );
+}
+
+#[test]
+fn mid_row_list_spanning_rows_breaks_after_its_brace_in_a_list_the_output_levels() {
+    let cases = [
+        (
+            "--style=kr",
+            "Item items[] = {{\"a\", {1, 2}},\n                {\"b\", {3,\n                       4}}};\n",
+            "Item items[] = {{\"a\", {1, 2}},\n    {\n        \"b\", {\n            3,\n            4\n        }\n    }\n};\n",
+        ),
+        (
+            "--style=whitesmith",
+            "Item items[] = {{\"a\", {1, 2}},\n                {\"b\", {3,\n                       4}}};\n",
+            "Item items[] = {{\"a\", {1, 2}},\n        {\n        \"b\", {\n            3,\n            4\n            }\n        }\n    };\n",
+        ),
+        (
+            "--style=kr",
+            "void run()\n{\n    Item items[] = {{1, {2,\n                         3}}, {4, {5, 6}}};\n}\n",
+            "void run()\n{\n    Item items[] = {{\n            1, {\n                2,\n                3\n            }\n        }, {4, {5, 6}}\n    };\n}\n",
+        ),
+    ];
+    for (style, input, expected) in cases {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn designated_value_list_in_a_run_in_list_aligns_to_its_elements() {
+    let cases = [
+        (
+            "Item value = {.first = {1,\n                        2},\n              .second = 3};\n",
+            "Item value = {.first = {1,\n                        2\n                       },\n              .second = 3\n             };\n",
+        ),
+        (
+            "Item value = {.first = {1, 2},\n              .second = {3,\n                         4}};\n",
+            "Item value = {.first = {1, 2},\n              .second = {3,\n                         4\n                        }\n             };\n",
+        ),
+    ];
+    for style in ["--style=kr", "--style=whitesmith"] {
+        for (input, expected) in cases {
+            check(input, &[style], expected);
+            check(expected, &[style], expected);
+        }
+    }
+}
+
+#[test]
+fn run_in_styles_lay_out_a_mid_row_list_of_a_nested_first_list_as_its_broken_form() {
+    let cases = [
+        (
+            "--style=horstmann",
+            "Item items[] = {{1, {2,\n                     3}}};\n",
+            "Item items[] = {{1, {2,\n            3\n        }\n    }\n};\n",
+        ),
+        (
+            "--style=pico",
+            "Item items[] = {{1, {2,\n                     3}}};\n",
+            "Item items[] = {{1, {2,\n            3 } } };\n",
+        ),
+        (
+            "--style=horstmann",
+            "void run()\n{\n    Item items[] = {{1, {2,\n                         3}}, {4, {5, 6}}};\n}\n",
+            "void run()\n{   Item items[] = {{1, {2,\n                3\n            }\n        }, {4, {5, 6}}\n    };\n}\n",
+        ),
+    ];
+    for (style, input, expected) in cases {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn nested_first_list_after_a_call_argument_breaks_its_closer_as_other_lists_there() {
+    let input = "void run()\n{\n    call(value, {{1, 2},\n                 {3, 4}});\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void run()\n{\n    call(value, {{1, 2},\n        {3, 4}\n    });\n}\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void run()\n    {\n    call(value, {{1, 2},\n            {3, 4}\n        });\n    }\n",
+        ),
+        (
+            "--style=lisp",
+            "void run() {\n    call(value, {{1, 2 },\n        {3, 4 } }); }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn brace_row_after_a_broken_first_element_of_a_call_argument_list_stands_as_assigned() {
+    let assigned = "void run()\n{\n    value = {{\n            1,\n            2\n        },\n        {3, 4}\n    };\n}\n";
+    check(assigned, &["--style=kr"], assigned);
+    let input = "void run()\n{\n    call(value, {{1,\n                  2},\n                 {3, 4}});\n}\n";
+    let expected = "void run()\n{\n    call(value, {{\n            1,\n            2\n        },\n        {3, 4}\n    });\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn vtk_rows_of_a_nested_first_call_argument_list_stand_where_its_closer_leaves_them() {
+    // astyle sets the rows a level nearer when the closers join the last
+    // row; they stand as they do with the closer on its own line.
+    for (input, expected) in [
+        (
+            "void run()\n{\n    call({{1, 2},\n          {3, 4}});\n}\n",
+            "void run()\n{\n    call({{1, 2},\n            {3, 4}});\n}\n",
+        ),
+        (
+            "void run()\n{\n    call({{1, 2},\n          {3, 4}\n         });\n}\n",
+            "void run()\n{\n    call({{1, 2},\n            {3, 4}\n        });\n}\n",
+        ),
+    ] {
+        check(input, &["--style=vtk"], expected);
+    }
+}
+
+#[test]
+fn indented_brace_styles_close_a_nested_first_compound_literal_as_an_initializer() {
+    for (style, expected) in [
+        (
+            "--style=whitesmith",
+            "void run()\n    {\n    value = (Item) {{1, 2},\n            {3, 4}\n        };\n    }\n",
+        ),
+        (
+            "--style=vtk",
+            "void run()\n{\n    value = (Item) {{1, 2},\n            {3, 4}\n        };\n}\n",
+        ),
+        (
+            "--style=ratliff",
+            "void run() {\n    value = (Item) {{1, 2},\n            {3, 4}\n        };\n    }\n",
+        ),
+    ] {
+        check(
+            "void run()\n{\n    value = (Item){{1, 2},\n                   {3, 4}};\n}\n",
+            &[style],
+            expected,
+        );
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn an_access_label_a_comment_leads_breaks_the_comments_after_it_off_its_member() {
+    let input = "class Item\n{\n/* note */ public:\n    /* note */ int value() const\n    {\n        return value_;\n    }\n};\n";
+    let expected = "class Item\n{\n/* note */ public:\n    /* note */\n    int value() const\n    {\n        return value_;\n    }\n};\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+    let bit_fields =
+        "struct Item {\n    /* note */ unsigned flag : 1;\n    /* note */ int other : 2;\n};\n";
+    check(bit_fields, &["--style=kr"], bit_fields);
+}
+
+#[test]
+fn indent_col1_comments_sets_a_column_one_comment_among_initializers_at_the_members() {
+    let input = "Item::Item(int value, int other)\n    : value_(value),\n      other_(other)\n// note\n{}\n";
+    let expected = "Item::Item(int value, int other)\n    : value_(value),\n      other_(other)\n      // note\n{}\n";
+    check(input, &["--style=kr", "--indent-col1-comments"], expected);
+    check(
+        expected,
+        &["--style=kr", "--indent-col1-comments"],
+        expected,
+    );
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn returned_message_rows_align_at_the_keyword_as_other_message_rows() {
+    // astyle drops the rows to the receiver after `return`.
+    let input = "@implementation Item\n- (int)total\n{\n    return [self.other countWith:1\n            and:2];\n}\n@end\n";
+    let expected = "@implementation Item\n- (int)total\n{\n    return [self.other countWith:1\n                       and:2];\n}\n@end\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn indent_after_parens_continues_a_shift_chain_past_a_directive_a_level_in() {
+    let input = "void f()\n{\n    std::cout << first\n#ifdef FEATURE\n              << second\n#endif\n              << third;\n}\n";
+    let expected = "void f()\n{\n    std::cout << first\n#ifdef FEATURE\n        << second\n#endif\n        << third;\n}\n";
+    for style in ["--style=kr", "--style=gnu"] {
+        check(
+            input,
+            &[style, "--indent-preproc-block", "--indent-after-parens"],
+            expected,
+        );
+        check(
+            expected,
+            &[style, "--indent-preproc-block", "--indent-after-parens"],
+            expected,
+        );
+        check(input, &[style, "--indent-preproc-block"], input);
+    }
+}
+
+#[test]
+fn whitesmith_member_constructor_brace_after_same_line_initializers_stands_past_the_head() {
+    let cases = [
+        (
+            "class Item\n{\npublic:\n    Item() : Base(1),\n        Other(2)\n    {\n    }\n};\n",
+            "class Item\n    {\n    public:\n        Item() : Base(1),\n            Other(2)\n            {\n            }\n    };\n",
+        ),
+        (
+            "namespace Space\n{\nclass Item\n{\n    Item() : Base(1),\n        Other(2)\n    {\n    }\n};\n}\n",
+            "namespace Space\n{\nclass Item\n    {\n        Item() : Base(1),\n            Other(2)\n            {\n            }\n    };\n}\n",
+        ),
+        (
+            "class Item\n{\n    Item() noexcept : Base(1),\n        Other(2)\n    {\n    }\n};\n",
+            "class Item\n    {\n        Item() noexcept : Base(1),\n            Other(2)\n            {\n            }\n    };\n",
+        ),
+    ];
+    for (input, expected) in cases {
+        check(input, &["--style=whitesmith"], expected);
+        check(expected, &["--style=whitesmith"], expected);
+    }
+}
+
+#[test]
+fn same_line_initializer_rows_of_a_constructor_in_a_case_block_stand_past_its_head() {
+    let input = "void f()\n{\n    switch (kind)\n    {\n    case 1:\n        {\n            struct Local\n            {\n                Local() : value(1),\n                    other(2)\n                {\n                }\n            };\n        }\n    }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=gnu",
+            "void f()\n{\n    switch (kind)\n        {\n        case 1:\n        {\n            struct Local\n            {\n                Local() : value(1),\n                    other(2)\n                {\n                }\n            };\n        }\n        }\n}\n",
+        ),
+        (
+            "--style=horstmann",
+            "void f()\n{   switch (kind)\n    {   case 1:\n        {   struct Local\n            {   Local() : value(1),\n                    other(2)\n                {\n                }\n            };\n        }\n    }\n}\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn a_member_after_a_method_closer_of_a_type_in_a_case_block_stands_at_the_members() {
+    let input = "void f()\n{\n    switch (kind)\n    {\n    case 1:\n        {\n            struct Local\n            {\n                Local()\n                {\n                }\n                int value;\n            };\n        }\n    }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=whitesmith",
+            "void f()\n    {\n    switch (kind)\n        {\n        case 1:\n            {\n            struct Local\n                {\n                Local()\n                    {\n                    }\n                int value;\n                };\n            }\n        }\n    }\n",
+        ),
+        (
+            "--style=ratliff",
+            "void f() {\n    switch (kind) {\n        case 1: {\n            struct Local {\n                Local() {\n                    }\n                int value;\n                };\n            }\n        }\n    }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn run_in_access_label_a_comment_trails_stands_at_its_modifier_column() {
+    for comment in ["/* note */", "// note"] {
+        let input = format!(
+            "class Derived : public Base\n{{\npublic: {comment}\n    virtual ~Derived() override;\n}};\n"
+        );
+        let expected = format!(
+            "class Derived : public Base\n{{ public: {comment}\n    virtual ~Derived() override;\n}};\n"
+        );
+        for style in ["--style=horstmann", "--style=pico"] {
+            let expected = if style == "--style=pico" {
+                expected.replace("override;\n};", "override; };")
+            } else {
+                expected.clone()
+            };
+            check(&input, &[style, "--indent-modifiers"], &expected);
+        }
+    }
+}
+
+#[test]
+fn a_comment_led_function_name_after_a_split_return_type_stands_as_without_the_comment() {
+    for (input, expected) in [
+        (
+            "static struct Item *\n\n/* note */ make(int value);\n",
+            "static struct Item *\n\n/* note */ make(int value);\n",
+        ),
+        (
+            "static struct Item *\n\nmake(int value);\n",
+            "static struct Item *\n\nmake(int value);\n",
+        ),
+    ] {
+        for style in ["--style=kr", "--style=google"] {
+            check(input, &[style], expected);
+        }
+    }
+}
+
+#[test]
+fn a_comment_led_declarator_after_a_split_type_stands_as_without_the_comment() {
+    // astyle moves the row to the type's column when a comment leads it.
+    for (input, expected) in [
+        (
+            "struct Item\n/* note */ first, second;\n",
+            "struct Item\n    /* note */ first, second;\n",
+        ),
+        (
+            "struct Item\n\n/* note */ first, second;\n",
+            "struct Item\n\n    /* note */ first, second;\n",
+        ),
+        (
+            "struct Item\n\nfirst, second;\n",
+            "struct Item\n\n    first, second;\n",
+        ),
+    ] {
+        check(input, &["--style=kr"], expected);
+    }
+}
+
+#[test]
+fn indent_preproc_cond_sets_a_directive_among_arguments_at_them_in_a_braceless_body() {
+    // astyle sets it a level out from the arguments in a braceless body
+    // only.
+    for (input, expected) in [
+        (
+            "void f()\n{\n    if (!ready)\n        call(first,\n#ifdef FEATURE\n             value);\n#endif\n}\n",
+            "void f()\n{\n    if (!ready)\n        call(first,\n             #ifdef FEATURE\n             value);\n             #endif\n}\n",
+        ),
+        (
+            "void f()\n{\n    call(first,\n#ifdef FEATURE\n         value);\n#endif\n}\n",
+            "void f()\n{\n    call(first,\n         #ifdef FEATURE\n         value);\n         #endif\n}\n",
+        ),
+    ] {
+        check(input, &["--style=kr", "--indent-preproc-cond"], expected);
+    }
+}
+
+#[test]
+fn break_blocks_all_sets_no_blank_line_inside_a_comment_led_else_header() {
+    // astyle reads the comment-led `else` as a header of its own and
+    // breaks the comments before it apart.
+    let input = "void f()\n{\n    if (ready) {\n        value=0;\n    }\n    // between\n    /* note */ else {\n        result=0;\n    }\n}\n";
+    let expected = "void f()\n{\n    if (ready) {\n        value=0;\n    }\n\n    // between\n    /* note */ else {\n        result=0;\n    }\n}\n";
+    check(input, &["--style=kr", "--break-blocks=all"], expected);
+    check(expected, &["--style=kr", "--break-blocks=all"], expected);
+}
+
+#[test]
+fn indent_preproc_block_indents_a_block_after_an_interface_head_with_a_superclass() {
+    // astyle leaves the block unindented right after a head naming a
+    // superclass only.
+    for head in ["@interface Item : NSObject", "@interface Item"] {
+        let input = format!("{head}\n#ifdef FEATURE\n- (void)update;\n#endif\n@end\n");
+        let expected = format!("{head}\n#ifdef FEATURE\n    - (void)update;\n#endif\n@end\n");
+        check(&input, &["--style=kr", "--indent-preproc-block"], &expected);
+    }
+}
+
+#[test]
+fn run_in_styles_format_a_list_their_brace_ran_rows_into_as_before() {
+    let input = "/* clang-format off */\nstatic struct Entry entries[] = {\n\t[FIRST]  = { \"first\",\n\t\t     \"one\" },\n\t[SECOND] = { \"second\",\n\t\t     \"two\" },\n};\n";
+    for style in ["--style=horstmann", "--style=pico"] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_string()]).expect("valid options");
+        let once = String::from_utf8(format_bytes(input.as_bytes(), &options).expect("format"))
+            .expect("utf8");
+        check(&once, &[style], &once);
+    }
+}
+
+#[test]
+fn designator_row_opening_a_list_of_rows_stays_at_the_designators_and_holds() {
+    let input = "void f()\n{\n\tstruct reftable_log_record\n\t\tlog = { .refname = (char *) \"refs/heads/master\",\n\t\t\t.update_index = update_index,\n\t\t\t.value = { .update = {\n\t\t\t\t\t   .name = (char *) \"Han\",\n\t\t\t\t\t   .time = 0x5e430672,\n\t\t\t\t   } } };\n\tint i;\n}\n";
+    let expected = "void f()\n{\n    struct reftable_log_record\n        log = { .refname = (char *) \"refs/heads/master\",\n                .update_index = update_index,\n                .value = {\n                    .update = {\n                        .name = (char *) \"Han\",\n                        .time = 0x5e430672,\n                    }\n                }\n    };\n    int i;\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+    for style in ["--style=whitesmith", "--style=ratliff", "--style=vtk"] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_string()]).expect("valid options");
+        let once = String::from_utf8(format_bytes(input.as_bytes(), &options).expect("format"))
+            .expect("utf8");
+        check(&once, &[style], &once);
+    }
+}
+
+#[test]
+fn run_in_styles_level_string_rows_of_a_nested_list_as_other_rows() {
+    for (first, second) in [("1", "2"), ("\"a\"", "\"b\"")] {
+        let input =
+            format!("Item value[] = {{\n    [0] = {{ {first},\n            {second} }},\n}};\n");
+        let expected =
+            format!("Item value[] = {{\n    [0] = {{ {first},\n        {second}\n    }},\n}};\n");
+        check(&input, &["--style=horstmann"], &expected);
+        check(&expected, &["--style=horstmann"], &expected);
+    }
+}
+
+#[test]
+fn a_nested_list_spanning_rows_breaks_after_its_brace_whatever_its_first_element() {
+    // astyle keeps a first string element on the brace line.
+    for (first, second) in [("1", "2"), ("\"a\"", "\"b\"")] {
+        let input =
+            format!("Item value[] = {{\n    [0] = {{ {first},\n            {second} }},\n}};\n");
+        let expected = format!(
+            "Item value[] = {{\n    [0] = {{\n        {first},\n        {second}\n    }},\n}};\n"
+        );
+        check(&input, &["--style=kr"], &expected);
+    }
+}
+
+#[test]
+fn a_row_past_a_directive_continues_a_statement_a_trailing_block_comment_ends() {
+    let input = "void f()\n{\n    /* note */ result = ready   /* first */\n#ifdef FEATURE\n                        ? first(value)\n#endif\n                        : second(value);\n}\n";
+    check(input, &["--style=linux"], input);
+    let line_comment = input.replace("/* first */", "// first");
+    check(&line_comment, &["--style=linux"], &line_comment);
+}
+
+#[test]
+fn vtk_indents_the_braces_of_a_method_of_a_type_inside_a_function_like_its_type() {
+    let input = "void f()\n{\n    struct Local\n    {\n        void run()\n        {\n            go();\n        }\n        int value;\n    };\n    use();\n}\n";
+    let expected = "void f()\n{\n    struct Local\n        {\n        void run()\n            {\n            go();\n            }\n        int value;\n        };\n    use();\n}\n";
+    check(input, &["--style=vtk"], expected);
+    let input = "void f()\n{\n    if (ready)\n    {\n        class Local\n        {\n            struct Inner\n            {\n                int run() const\n                {\n                    return 1;\n                }\n            };\n            Local()\n            {\n                go();\n            }\n        };\n    }\n}\n";
+    let expected = "void f()\n{\n    if (ready)\n        {\n        class Local\n            {\n            struct Inner\n                {\n                int run() const\n                    {\n                    return 1;\n                    }\n                };\n            Local()\n                {\n                go();\n                }\n            };\n        }\n}\n";
+    check(input, &["--style=vtk"], expected);
+}
+
+#[test]
+fn a_header_brace_after_a_block_comment_moves_before_it_and_a_block_comment_after_it_down() {
+    let input = "void f()\n{\n    for (;;) /* a */ { /* b */\n        go();\n    }\n    if (ready) {\n        go();\n    } else /* a */ { /* b */\n        stop();\n    }\n    for (;;) /* a */\n    { /* c */\n        go();\n    }\n}\n";
+    let expected = "void f()\n{\n    for (;;) { /* a */\n        /* b */\n        go();\n    }\n    if (ready) {\n        go();\n    } else { /* a */\n        /* b */\n        stop();\n    }\n    for (;;) { /* a */\n        /* c */\n        go();\n    }\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(
+        input,
+        &["--style=java"],
+        &expected.replace("f()\n{", "f() {"),
+    );
+}
+
+#[test]
+fn a_header_brace_after_a_run_of_block_comments_keeps_its_place() {
+    // astyle moves it before the last of them, where its own output moves
+    // it again.
+    let input = "void f()\n{\n    for (;;) /* a */ /* b */\n    {\n        go();\n    }\n    for (;;) /* a */ /* b */ {\n        go();\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+    let input = "void f()\n{\n    for (;;) /* a */ /* b */ go();\n}\n";
+    let expected = "void f()\n{\n    for (;;) /* a */ /* b */ {\n        go();\n    }\n}\n";
+    check(input, &["--style=1tbs"], expected);
+}
+
+#[test]
+fn a_header_brace_after_a_block_comment_moves_before_it_ahead_of_a_line_comment() {
+    let input = "void f()\n{\n    while (ready) /* a */ { // b\n        go();\n    }\n}\n";
+    let expected = "void f()\n{\n    while (ready) { /* a */  // b\n        go();\n    }\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(
+        input,
+        &["--style=java"],
+        &expected.replace("f()\n{", "f() {"),
+    );
+    // The line comment keeps the gaps around the brace after an `else` too.
+    let input = "void f()\n{\n    if (ready) {\n        go();\n    } else /* a */ { // b\n        stop();\n    }\n}\n";
+    let expected = "void f()\n{\n    if (ready) {\n        go();\n    } else { /* a */  // b\n        stop();\n    }\n}\n";
+    check(input, &["--style=kr"], expected);
+}
+
+#[test]
+fn an_added_brace_stays_off_a_header_a_block_and_a_line_comment_trail() {
+    let input = "void f()\n{\n    for (;;) /* a */ // b\n        go();\n    if (ready) /* a */ go(); else /* b */ stop();\n}\n";
+    let expected = "void f()\n{\n    for (;;) /* a */ // b\n    {\n        go();\n    }\n    if (ready) { /* a */\n        go();\n    } else { /* b */\n        stop();\n    }\n}\n";
+    check(input, &["--style=1tbs"], expected);
+}
+
+#[test]
+fn a_nested_first_call_argument_list_spanning_rows_closes_its_first_element_alone() {
+    let input = "void f()\n{\n    call(value, {{1,\n            2},\n        {3, 4}});\n}\n";
+    for (style, expected) in [
+        (
+            "allman",
+            "void f()\n{\n    call(value, {{\n            1,\n            2\n        },\n        {3, 4}\n    });\n}\n",
+        ),
+        (
+            "gnu",
+            "void f()\n{\n    call(value, {{\n            1,\n            2\n        },\n        {3, 4}\n    });\n}\n",
+        ),
+        (
+            "vtk",
+            "void f()\n{\n    call(value, {{\n            1,\n            2\n            },\n            {3, 4}\n        });\n}\n",
+        ),
+        (
+            "horstmann",
+            "void f()\n{   call(value, {{1,\n            2\n        },\n        {3, 4}\n    });\n}\n",
+        ),
+        (
+            "pico",
+            "void f()\n{   call(value, {{1,\n            2 },\n        {3, 4 } }); }\n",
+        ),
+    ] {
+        check(input, &[&format!("--style={style}")], expected);
+        check(expected, &[&format!("--style={style}")], expected);
+    }
+}
+
+#[test]
+fn a_list_brace_broken_off_an_assigned_call_paren_stands_as_after_a_plain_call() {
+    let input = "void f()\n{\n    value = call({\n        1,\n        2\n    });\n}\n";
+    for (style, expected) in [
+        (
+            "allman",
+            "void f()\n{\n    value = call(\n    {\n        1,\n        2\n    });\n}\n",
+        ),
+        (
+            "whitesmith",
+            "void f()\n    {\n    value = call(\n        {\n        1,\n        2\n        });\n    }\n",
+        ),
+        (
+            "vtk",
+            "void f()\n{\n    value = call(\n        {\n        1,\n        2\n        });\n}\n",
+        ),
+    ] {
+        check(input, &[&format!("--style={style}")], expected);
+        check(expected, &[&format!("--style={style}")], expected);
+    }
+    // So does a row a list's brace leads, or one opening a lambda's body,
+    // as after a plain call.
+    let input = "void f()\n{\n    value = call(\n                {1, 2}, other);\n    value = call(\n        first, [&]() { go(); });\n    value = call(\n        Item{1, 2}, other);\n}\n";
+    let expected = "void f()\n{\n    value = call(\n    {1, 2}, other);\n    value = call(\n    first, [&]() {\n        go();\n    });\n    value = call(\n                Item{1, 2}, other);\n}\n";
+    check(input, &["--style=kr"], expected);
+}
+
+#[test]
+fn attach_styles_attach_a_list_brace_after_a_call_paren_the_line_ends_in() {
+    let input = "void f()\n{\n    call(\n    {\n        1,\n        2\n    });\n    value = call(\n    {\n        1,\n        2\n    });\n}\n";
+    let expected = "void f()\n{\n    call( {\n        1,\n        2\n    });\n    value = call( {\n        1,\n        2\n    });\n}\n";
+    for style in ["kr", "stroustrup", "mozilla"] {
+        check(input, &[&format!("--style={style}")], expected);
+    }
+    check(
+        input,
+        &["--style=java"],
+        &expected.replace("f()\n{", "f() {"),
+    );
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    call( {\n        1,\n        2\n        });\n    value = call( {\n        1,\n        2\n        });\n    }\n",
+    );
+}
+
+#[test]
+fn whitesmith_brace_rows_of_a_call_argument_list_stand_a_level_past_its_brace() {
+    let input = "void f()\n{\n    call(value, {\n        {1, 2},\n        {3, 4}\n    });\n    call(value, {\n        {2, 3},\n        4\n    });\n}\n";
+    let expected = "void f()\n    {\n    call(value,\n        {\n            {1, 2},\n            {3, 4}\n        });\n    call(value,\n        {\n            {2, 3},\n        4\n        });\n    }\n";
+    check(input, &["--style=whitesmith"], expected);
+    check(expected, &["--style=whitesmith"], expected);
+}
+
+#[test]
+fn ratliff_last_brace_row_of_a_call_argument_list_stands_at_the_row_before() {
+    let input = "void f() {\n    call(value, {\n            {2, 3},\n            {4, 5}\n        });\n    }\n";
+    check(input, &["--style=ratliff"], input);
+}
+
+#[test]
+fn a_kept_one_line_lambda_body_ends_the_continuation_as_a_broken_one_does() {
+    let input = "void f()\n{\n    call(first,\n         [&]() { go(); },\n         last);\n    value = call(\n        [&]() { go(); });\n    call([&]() { go(); },\n         last);\n}\n";
+    let expected = "void f()\n{\n    call(first,\n    [&]() { go(); },\n    last);\n    value = call(\n    [&]() { go(); });\n    call([&]() { go(); },\n    last);\n}\n";
+    check(input, &["--style=kr", "--keep-one-line-blocks"], expected);
+    check(
+        expected,
+        &["--style=kr", "--keep-one-line-blocks"],
+        expected,
+    );
+    let broken = "void f()\n{\n    call(first,\n    [&]() {\n        go();\n    },\n    last);\n    value = call(\n    [&]() {\n        go();\n    });\n    call([&]() {\n        go();\n    },\n    last);\n}\n";
+    check(input, &["--style=kr"], broken);
+    // A body after a trailing return type, `mutable` or no parameters
+    // continues it.
+    for head in ["[]", "[]() mutable", "[]() -> int"] {
+        let input = format!(
+            "void f()\n{{\n    call(first,\n         {head} {{ go(); }},\n         last);\n}}\n"
+        );
+        check(&input, &["--style=kr", "--keep-one-line-blocks"], &input);
+    }
+    for head in ["[](int a)", "[]() const", "[]() noexcept"] {
+        let input = format!(
+            "void f()\n{{\n    call(first,\n         {head} {{ go(); }},\n         last);\n}}\n"
+        );
+        let expected =
+            format!("void f()\n{{\n    call(first,\n    {head} {{ go(); }},\n    last);\n}}\n");
+        check(&input, &["--style=kr", "--keep-one-line-blocks"], &expected);
+    }
+    // Among a constructor's initializers the body's own row keeps its place.
+    let input = "Box::Box()\n    : one(call(first,\n               [this]() { return go(); },\n               last))\n{\n}\n";
+    let expected = "Box::Box()\n    : one(call(first,\n               [this]() { return go(); },\nlast))\n{\n}\n";
+    check(input, &["--style=kr", "--keep-one-line-blocks"], expected);
+}
+
+#[test]
+fn a_row_after_the_tail_of_a_block_comment_over_lines_stands_with_its_siblings() {
+    let input = "typedef enum {\n    VLOCAL,  /* local variable;\n              var.vidx = index */\n    VGLOBAL,  /* global;\n               info */\n    VCALL\n} expkind;\nstatic int first; /* note\n                     more */\nstatic int second;\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn arguments_of_a_call_a_constructor_initializer_line_ends_in_indent_past_the_enclosing_arguments()
+{
+    let input = "Box::Box()\n    : one(new Box(\n          nullptr,\n          this))\n    , two(call(\n          first))\n    , three(make(\n          first,\n          second))\n{\n}\n";
+    let expected = "Box::Box()\n    : one(new Box(\n              nullptr,\n              this))\n    , two(call(\n              first))\n    , three(make(\n                first,\n                second))\n{\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+    let input = "Box::Box()\n    : one(\n          first),\n      two(make(first,\n               second))\n{\n}\n";
+    check(input, &["--style=kr"], input);
+    // A call an argument row ends in sets its arguments as in any call.
+    let input = "Box::Box()\n    : two(make(first,\n               other(\n                   second,\n                   third),\n               last))\n{\n}\n";
+    check(input, &["--style=kr"], input);
+    let input = "Box::Box()\n    : two(make(first,\n               other(\n                   second,\n                   third)))\n{\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn an_argument_after_an_indented_lambda_closer_stands_at_the_statement() {
+    let input =
+        "void f()\n{\n    call(first,\n         [this]() { return call(); },\n         last);\n}\n";
+    let expected = "void f()\n    {\n    call(first,\n         [this]()\n        {\n        return call();\n        },\n    last);\n    }\n";
+    check(input, &["--style=whitesmith"], expected);
+    let expected = "void f()\n{\n    call(first,\n         [this]()\n        {\n        return call();\n        },\n    last);\n}\n";
+    check(input, &["--style=vtk"], expected);
+}
+
+#[test]
+fn a_comment_inside_a_for_header_leaves_its_brace_a_block() {
+    let input = "void f()\n{   for ( /* void */ ; data != end; data += 8)\n    {   go();\n        stop();\n    }\n}\n";
+    check(input, &["--style=horstmann"], input);
+    let input =
+        "void f()\n{\n    for ( /* void */ ; data != end; data += 8) {\n        go();\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn ratliff_rows_of_a_nested_list_run_into_its_brace_stand_at_the_first() {
+    let input = "const char table[2][2][2] = {\n\t{ { 1,1 }, /* 0 */\n\t  { 1,0 } },\n\t{ { 0,1 }, /* 1 */\n\t  { 0,1 } },\n};\n";
+    let expected = "const char table[2][2][2] = {\n        {   { 1,1 }, /* 0 */\n            { 1,0 }\n        },\n        {   { 0,1 }, /* 1 */\n            { 0,1 }\n        },\n    };\n";
+    check(input, &["--style=ratliff"], expected);
+}
+
+#[test]
+fn vtk_keeps_a_file_scope_row_a_mid_row_list_breaks_at_the_rows() {
+    // astyle sets that row and the broken list a level past the other
+    // rows of the same list.
+    let input = "int table[][2] = {\n    {1, 2}, {3,\n             4},\n    {5, 6}\n};\n";
+    let expected =
+        "int table[][2] = {\n    {1, 2}, {\n        3,\n        4\n    },\n    {5, 6}\n};\n";
+    check(input, &["--style=vtk"], expected);
+}
+
+#[test]
+fn a_list_brace_broken_off_a_return_stands_as_one_broken_off_an_assignment() {
+    let input = "Item make()\n{\n    return {\n        1,\n        2\n    };\n}\n";
+    for (style, expected) in [
+        (
+            "allman",
+            "Item make()\n{\n    return\n    {\n        1,\n        2\n    };\n}\n",
+        ),
+        (
+            "gnu",
+            "Item make()\n{\n    return\n    {\n        1,\n        2\n    };\n}\n",
+        ),
+        (
+            "horstmann",
+            "Item make()\n{   return\n    {   1,\n        2\n    };\n}\n",
+        ),
+    ] {
+        check(input, &[&format!("--style={style}")], expected);
+        check(expected, &[&format!("--style={style}")], expected);
+    }
+    // Attach styles attach it to the `return`.
+    let broken = "Item make()\n{\n    return\n    {\n        1,\n        2\n    };\n}\n";
+    check(broken, &["--style=kr"], input);
+}
+
+#[test]
+fn run_in_and_ratliff_styles_set_a_range_for_list_at_the_header_continuation() {
+    let input = "void f()\n{\n    for (auto value : {\n             1, 2, 3\n         }) {\n        go(value);\n    }\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    for (auto value : {\n                1, 2, 3\n            }) {\n        go(value);\n        }\n    }\n",
+    );
+    check(
+        input,
+        &["--style=lisp"],
+        "void f() {\n    for (auto value : {\n                1, 2, 3 }) {\n        go(value); } }\n",
+    );
+}
+
+#[test]
+fn allman_and_horstmann_break_a_range_for_list_brace_at_the_header_continuation() {
+    let input = "void f()\n{\n    for (auto value : {\n             1, 2, 3\n         }) {\n        go(value);\n    }\n}\n";
+    let expected = "void f()\n{\n    for (auto value :\n            {\n                1, 2, 3\n            })\n    {\n        go(value);\n    }\n}\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+    // astyle sets the closer at the statement; it stands at its brace.
+    let expected = "void f()\n{   for (auto value :\n            {   1, 2, 3\n            })\n    {   go(value);\n    }\n}\n";
+    check(input, &["--style=horstmann"], expected);
+    check(expected, &["--style=horstmann"], expected);
+}
+
+#[test]
+fn attach_styles_attach_a_constructor_body_after_an_initializer_list_closer() {
+    let input = "Holder::Holder()\n    : value_(1),\n      items_{\n          1,\n          2\n      }\n{\n}\n";
+    let expected = "Holder::Holder()\n    : value_(1),\n      items_{\n    1,\n    2\n} {\n}\n";
+    check(input, &["--style=java"], expected);
+    check(expected, &["--style=java"], expected);
+    // Styles breaking a function's brace keep it apart.
+    let expected = "Holder::Holder()\n    : value_(1),\n      items_{\n    1,\n    2\n}\n{\n}\n";
+    check(input, &["--style=kr"], expected);
+}
+
+#[test]
+fn a_directive_after_a_block_a_directive_parts_from_its_label_stands_with_the_code() {
+    let input = "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n    {\n        pop(state);\n    }\n#ifdef FEATURE\n    break;\n#endif\n    case 2:\n        break;\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n        {\n            pop(state);\n        }\n        #ifdef FEATURE\n        break;\n        #endif\n    case 2:\n        break;\n    }\n}\n";
+    check(input, &["--style=kr", "--indent-preproc-cond"], expected);
+    check(expected, &["--style=kr", "--indent-preproc-cond"], expected);
+}
+
+#[test]
+fn a_kept_one_line_switch_block_stands_at_its_statement() {
+    // astyle moves the switch to column one, and splits it amid its
+    // statements without keeping one-line statements.
+    let input = "void f()\n{\n    switch (value) { case 1: go(); break; default: break; }\n    next();\n}\n";
+    check(
+        input,
+        &[
+            "--style=kr",
+            "--keep-one-line-blocks",
+            "--keep-one-line-statements",
+        ],
+        input,
+    );
+    check(
+        input,
+        &["--style=kr", "--keep-one-line-blocks"],
+        "void f()\n{\n    switch (value) {\n    case 1:\n        go();\n        break;\n    default:\n        break;\n    }\n    next();\n}\n",
+    );
+}
+
+#[test]
+fn a_trailing_comment_after_a_statement_past_a_broken_case_block_moves_no_code() {
+    // astyle sets such a statement a level in when a comment trails it.
+    let input = "void f()\n{\n    switch (state) {\n    case 2:\n    {\n        push(state);\n    }\n    break; /* note */\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (state) {\n    case 2: {\n        push(state);\n    }\n    break; /* note */\n    }\n}\n";
+    check(input, &["--style=stroustrup"], expected);
+    check(
+        &input.replace(" /* note */", ""),
+        &["--style=stroustrup"],
+        &expected.replace(" /* note */", ""),
+    );
+}
+
+#[test]
+fn lisp_pads_a_list_closer_its_row_holds_before_a_directive_too() {
+    // astyle leaves the closer unpadded when a directive follows its row.
+    let input =
+        "static const struct Item others[] = {\n    {3,\n#ifdef FEATURE\n     4}\n#endif\n};\n";
+    let expected = "static const struct Item others[] = {\n    {\n        3,\n#ifdef FEATURE\n        4 }\n#endif\n};\n";
+    check(input, &["--style=lisp"], expected);
+}
+
+#[test]
+fn a_paren_in_a_char_literal_leaves_the_braces_after_it_attached() {
+    // astyle counts the paren and breaks the attached braces of the
+    // headers after it.
+    let input = "void f()\n{\n    if (c == '(') {\n        if (x) {\n            go();\n        }\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_designator_row_after_a_ternary_designator_of_an_earlier_list_stands_at_the_rows() {
+    let input = "void f(void)\n{\n    struct Config c = {\n        .tern = ready ? FIRST\n        : SECOND,\n        .x = 1,\n    };\n}\nstruct Config g = {\n    .value = FLAG_A |\n    FLAG_B,\n    .lead = FLAG_A\n    | FLAG_B,\n};\n";
+    let expected = "void f(void)\n{\n    struct Config c = {\n        .tern = ready ? FIRST\n                : SECOND,\n        .x = 1,\n    };\n}\nstruct Config g = {\n    .value = FLAG_A |\n             FLAG_B,\n    .lead = FLAG_A\n            | FLAG_B,\n};\n";
+    check(input, &[], expected);
+}
+
+#[test]
+fn a_message_keyword_after_a_block_closer_is_no_label() {
+    let input = "- (void)run\n{\n    [view animate:^ {\n        go();\n    } completion:^(BOOL finished) {\n        stop();\n    }];\n}\n";
+    check(input, &["--style=kr"], input);
+    check(input, &[], input);
+}
+
+#[test]
+fn a_parameterless_block_literal_kept_on_one_line_stays_whole() {
+    let input = "void run(void)\n{\n    dispatch_async(q, ^{ go(); });\n    block = ^{ go(); };\n    call(^{ go(); }, ^{ stop(); });\n}\n";
+    let expected = "void run(void)\n{\n    dispatch_async(q, ^ { go(); });\n    block = ^ { go(); };\n    call(^ { go(); }, ^ { stop(); });\n}\n";
+    for style in ["--style=kr", "--style=allman", "--style=gnu"] {
+        check(input, &[style], expected);
+    }
+    let input = "- (void)run\n{\n    [view animate:^{ go(); }];\n    [view animate:[^{ go(); } copy]];\n}\n";
+    let expected = "- (void)run\n{\n    [view animate:^ { go(); }];\n    [view animate:[^ { go(); } copy]];\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(input, &["--style=allman"], expected);
+}
+
+#[test]
+fn a_block_literal_in_a_message_lays_out_as_in_a_call() {
+    let input = "- (void)run\n{\n    dispatch_async(q, ^{\n        go();\n    });\n    [view animate:^{\n        go();\n    }];\n    x = [view animate:^{\n        go();\n    }];\n    [view animate:nil\n          completion:^{\n        go();\n    }];\n    [view animate:^{\n        if (a) {\n            go();\n        }\n    }];\n}\n";
+    let expected = "- (void)run\n{\n    dispatch_async(q, ^ {\n        go();\n    });\n    [view animate:^ {\n        go();\n    }];\n    x = [view animate:^ {\n        go();\n    }];\n    [view animate:nil\n          completion:^ {\n        go();\n    }];\n    [view animate:^ {\n        if (a) {\n            go();\n        }\n    }];\n}\n";
+    check(input, &["--style=kr"], expected);
+    let expected = "- (void)run\n{\n    dispatch_async(q, ^\n    {\n        go();\n    });\n    [view animate:^\n    {\n        go();\n    }];\n}\n";
+    let input = "- (void)run\n{\n    dispatch_async(q, ^{\n        go();\n    });\n    [view animate:^{\n        go();\n    }];\n}\n";
+    check(input, &["--style=allman"], expected);
+}
+
+#[test]
+fn arguments_after_a_closure_closer_stand_at_the_closer() {
+    let input = "void run()\n{\n    call(a,\n         b, [] {\n        go();\n    },\n    other,\n    more);\n    call(a,\n         b, ^{\n        go();\n    },\n    other,\n    more);\n}\n";
+    let expected = "void run()\n{\n    call(a,\n    b, [] {\n        go();\n    },\n    other,\n    more);\n    call(a,\n    b, ^ {\n        go();\n    },\n    other,\n    more);\n}\n";
+    check(input, &["--style=kr"], expected);
+}
+
+#[test]
+fn a_lambda_argument_at_file_scope_breaks_like_a_definition_whatever_its_source() {
+    let expected = "int a;\nREGISTER(name, [](int x)\n{\n    return x;\n});\nREGISTER(name, []\n{\n    return 1;\n});\n";
+    let input = "int a;\nREGISTER(name, [](int x) {\n    return x;\n});\nREGISTER(name, [] {\n    return 1;\n});\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn a_ternary_ending_a_macro_body_leaves_the_code_after_it() {
+    let input = "#define FIELDS(cfg) \\\n\t.depth = (cfg) ? 1 : 0\n\nstatic const char *\nlock_repo(int force)\n{\n    return 0;\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_macro_body_ending_in_a_logical_operator_leaves_the_code_after_it() {
+    let input = "#define M(cfg) \\\n\treturn a &&\n\nint value = 1;\nint other = 2;\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_macro_body_ending_mid_expression_or_at_a_label_leaves_the_code_after_it() {
+    for body in ["a = b ?", "x = a ? b :", "public:", "return a &&"] {
+        let input = format!(
+            "#define M(cfg) \\\n    {body}\n\nstatic const char *\nlock_repo(int force)\n{{\n    return 0;\n}}\nint value = 1;\n"
+        );
+        check(&input, &["--style=kr"], &input);
+        check(&input, &["--style=kr", "-w"], &input);
+    }
+}
+
+#[test]
+fn a_block_after_a_directive_read_as_a_comment_splits_long_rows() {
+    let row = "        x = make_matcher(make_const(alpha_value), BLOCK(make_simple(DUP), make_unbound(STOREV, beta_value)));";
+    let split = "        x = make_matcher(make_const(alpha_value), BLOCK(make_simple(DUP),\n                         make_unbound(STOREV, beta_value)));";
+    for directive in ["#line 796 \"parser.y\"", "#error stop", "#warning stop"] {
+        let input = format!("void f(void) {{\n{directive}\n    {{\n{row}\n    }}\n}}\n");
+        let expected = format!("void f(void) {{\n{directive}\n    {{\n{split}\n    }}\n}}\n");
+        check(
+            &input,
+            &["--style=google", "--max-code-length=80"],
+            &expected,
+        );
+    }
+    let input = format!("void f(void) {{\n#pragma once\n    {{\n{row}\n    }}\n}}\n");
+    check(&input, &["--style=google", "--max-code-length=80"], &input);
+}
+
+#[test]
+fn a_case_block_below_its_label_comment_stands_past_the_label_inside_a_labeled_case() {
+    let input = "void f(void)\n{\n  switch (x) {\n    case 1: done: {\n      switch (y) {\n        case 2: {  /* note */\n          int q;\n          break;\n        }\n      }\n      break;\n    }\n  }\n}\n";
+    let expected = "void f(void)\n{   switch (x)\n    {   case 1: done:\n            {   switch (y)\n                {   case 2:    /* note */\n                    {   int q;\n                        break; } }\n                break; } } }\n";
+    check(input, &["--style=pico"], expected);
+}
+
+#[test]
+fn a_case_label_sharing_its_line_with_a_goto_label_keeps_the_case_column() {
+    let input = "void f(void)\n{\n  switch (x) {\n    case 1:\n      go();\n      break;\n    default: done: {\n      int r;\n      break;\n    }\n  }\n}\n";
+    let expected = "void f(void)\n{   switch (x)\n    {   case 1:\n            go();\n            break;\n        default: done:\n            {   int r;\n                break; } } }\n";
+    check(input, &["--style=pico"], expected);
+}
+
+#[test]
+fn rows_of_a_list_split_off_a_type_closer_by_the_maximum_length_stand_in_the_list() {
+    let input = "struct Item {\n    char *name;\n} DefaultItems[] = { /* See the configuration notes for details on each one of them. */\n    {\"one\", 1},\n    {\"two\", 2},\n};\n";
+    let expected = "struct Item {\n    char *name;\n} DefaultItems[] =\n{ /* See the configuration notes for details on each one of them. */\n    {\"one\", 1},\n    {\"two\", 2},\n};\n";
+    check(input, &["--style=google", "--max-code-length=80"], expected);
+    let attached = "struct Item {\n    char *name;\n} DefaultItems[] = {\n    /* See the configuration notes for details on each one of them. */\n    {\"one\", 1},\n    {\"two\", 2},\n};\n";
+    check(
+        expected,
+        &["--style=google", "--max-code-length=80"],
+        attached,
+    );
+}
+
+#[test]
+fn a_block_after_a_closer_past_a_constructor_stays_on_its_line() {
+    let input = "Item::Item(int value)\n    : value(value)\n{\n}\nvoid f()\n{\n    if (a) {\n        count++;\n    }\n    {\n        value = 1;\n    }\n}\n";
+    let expected = "Item::Item(int value)\n    : value(value) {\n}\nvoid f() {\n    if (a) {\n        count++;\n    }\n    {\n        value = 1;\n    }\n}\n";
+    check(input, &["--style=java"], expected);
+}
+
+#[test]
+fn arguments_after_a_capture_only_lambda_broken_from_its_brace_stand_at_the_statement() {
+    let input =
+        "void f()\n{\n    result = call(first, [] {\n        go();\n    },\n    other);\n}\n";
+    let expected =
+        "void f()\n{\n    result = call(first, []\n    {\n        go();\n    },\n    other);\n}\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+    let expected = "void f()\n{   result = call(first, []\n    {   go();\n    },\n    other);\n}\n";
+    check(input, &["--style=horstmann"], expected);
+    check(expected, &["--style=horstmann"], expected);
+}
+
+#[test]
+fn an_argument_past_a_directive_after_a_lambda_closer_stands_at_the_statement() {
+    let input = "void f()\n{\n    call(first,\n         [] {\n        go();\n#ifdef FEATURE\n    },\n#endif\n    other,\n    more);\n}\n";
+    let expected = "void f()\n    {\n    call(first,\n         []\n        {\n        go();\n#ifdef FEATURE\n        },\n#endif\n    other,\n    more);\n    }\n";
+    check(input, &["--style=whitesmith"], expected);
+}
+
+#[test]
+fn a_block_literal_head_above_its_brace_opens_the_block_as_on_the_brace_line() {
+    let input = "void f()\n{\n    dispatch(queue,\n             ^(int value) {\n        go(value);\n    },\n    other);\n}\n";
+    let expected = "void f()\n    {\n    dispatch(queue,\n             ^(int value)\n        {\n        go(value);\n        },\n    other);\n    }\n";
+    check(input, &["--style=whitesmith"], expected);
+    check(expected, &["--style=whitesmith"], expected);
+    let expected = "void f()\n{\n    dispatch(queue,\n             ^(int value)\n        {\n        go(value);\n        },\n    other);\n}\n";
+    check(input, &["--style=vtk"], expected);
+    check(expected, &["--style=vtk"], expected);
+}
+
+#[test]
+fn arguments_after_a_lambda_body_stand_at_the_statement_when_parens_indent() {
+    let input = "void f()\n{\n    result = call(first, [] {\n        go();\n    },\n    other,\n    more);\n    call(first, [] {\n        go();\n    },\n    other);\n}\n";
+    check(input, &["--style=kr", "--indent-after-parens"], input);
+}
+
+#[test]
+fn arguments_after_a_lambda_body_opening_its_own_line_stand_at_the_statement() {
+    let input = "void f()\n{\n    call(first,\n         [] {\n        go();\n    },\n    other,\n    more);\n}\n";
+    let expected =
+        "void f()\n{   call(first,\n         []\n    {   go(); },\n    other,\n    more); }\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+}
+
+#[test]
+fn arguments_after_a_lambda_body_past_an_inline_constructor_stand_at_the_statement() {
+    let input = "class Item {\n    Item() : value(0) {}\n};\nvoid f()\n{\n    call(first,\n         [] {\n        go();\n    },\n    other,\n    more);\n}\n";
+    let expected = "class Item\n{   Item() : value(0) {}\n};\nvoid f()\n{   call(first,\n         []\n    {   go();\n    },\n    other,\n    more);\n}\n";
+    check(input, &["--style=horstmann"], expected);
+}
+
+#[test]
+fn arguments_after_a_lambda_body_stand_at_the_statement_after_an_inserted_blank_line() {
+    let input = "void f()\n{\n    if (a) {\n        first();\n    }\n    call([&](int value) {\n        go(value);\n    },\n    other,\n    more);\n}\n";
+    let expected = "void f()\n{\n    if (a) {\n        first();\n    }\n\n    call([&](int value) {\n        go(value);\n    },\n    other,\n    more);\n}\n";
+    check(input, &["--break-blocks=all"], expected);
+}
+
+#[test]
+fn arguments_after_a_lambda_closer_with_a_trailing_comment_stand_at_the_statement() {
+    let input = "void f()\n{\n    dispatch(queue,\n             [](int value) {\n        go(value);\n    }, /* note */\n    other);\n}\n";
+    let expected = "void f()\n{\n    dispatch(queue,\n    [](int value) {\n        go(value);\n    }, /* note */\n    other);\n}\n";
+    check(input, &[], expected);
+}
+
+#[test]
+fn a_comment_led_argument_after_a_lambda_body_stands_at_the_statement() {
+    let input = "void f()\n{\n    call(first, [] {\n        go();\n    },\n    /* note */ other,\n    more);\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_list_brace_before_a_run_of_comments_breaks_as_before_one_comment() {
+    let input = "int b[] = { /* c */\n    1,\n};\nint d[] = { /* c */ /* d */\n    1,\n};\n";
+    let expected =
+        "int b[] =   /* c */\n{\n    1,\n};\nint d[] =   /* c */ /* d */\n{\n    1,\n};\n";
+    check(input, &["--style=allman"], expected);
+}
+
+#[test]
+fn a_message_keyword_row_passing_a_lambda_keeps_the_keyword_column() {
+    let input = "- (void)run\n{\n    [view animate:nil\n          completion:[] {\n        go();\n    }];\n    [view animate:nil\n          completion:^ {\n        go();\n    }];\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_block_literal_at_file_scope_sets_its_body_in_from_its_brace_under_vtk() {
+    let input =
+        "int a;\nid other = ^{\n    return 1;\n};\nid third = ^(int x) {\n    return x;\n};\n";
+    let expected =
+        "int a;\nid other = ^\n{\n    return 1;\n};\nid third = ^(int x)\n{\n    return x;\n};\n";
+    check(input, &["--style=vtk"], expected);
+}
+
+#[test]
+fn an_argument_of_a_call_opened_on_an_indented_lambda_closer_row_aligns_under_its_paren() {
+    let input =
+        "void f()\n{\n    call(a, [] {\n        go();\n    }, g(x,\n         y),\n    b);\n}\n";
+    let expected = "void f()\n    {\n    call(a, []\n        {\n        go();\n        }, g(x,\n             y),\n    b);\n    }\n";
+    check(input, &["--style=whitesmith"], expected);
+}
+
+#[test]
+fn a_lambda_body_in_a_header_condition_stands_a_level_in_as_in_a_call() {
+    let input = "void f()\n{\n    if (call([] {\n        go();\n    },\n    other)) {\n        stop();\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_lambda_in_a_brace_list_opens_its_body_as_in_a_call() {
+    let input = "Handler handlers[] = {\n    { 1, [] {\n        go();\n    } },\n    { 2, [](int x) {\n        go(x);\n    } },\n};\nvoid f()\n{\n    Handler h[] = {\n        { 2, [](int x) {\n            go(x);\n        } },\n    };\n    call({ [] {\n        go();\n    } });\n}\n";
+    let expected = "Handler handlers[] = {\n    {\n        1, [] {\n            go();\n        }\n    },\n    {\n        2, [](int x) {\n            go(x);\n        }\n    },\n};\nvoid f()\n{\n    Handler h[] = {\n        {\n            2, [](int x) {\n                go(x);\n            }\n        },\n    };\n    call({ [] {\n            go();\n        } });\n}\n";
+    check(input, &["--style=kr"], expected);
+    let expected = "Handler handlers[] = {\n    {\n        1, [] {\n            go();\n        }\n    },\n    {\n        2, [](int x) {\n            go(x);\n        }\n    },\n};\nvoid f()\n{\n    Handler h[] =\n    {\n        {\n            2, [](int x) {\n                go(x);\n            }\n        },\n    };\n    call({ [] {\n            go();\n        } });\n}\n";
+    check(input, &["--style=allman"], expected);
+}
+
+#[test]
+fn an_immediately_invoked_lambda_keeps_its_call_on_its_closer_line() {
+    let input = "void f()\n{\n    auto a = []() {\n        return 1;\n    }();\n    auto b = [] {\n        return 1;\n    }();\n    auto c = [&](int v) {\n        return v;\n    }(1);\n    call([]() {\n        return 1;\n    }());\n}\n";
+    check(input, &[], input);
+    check(input, &["--style=kr"], input);
+    let expected = "void f()\n{\n    auto a = []()\n    {\n        return 1;\n    }();\n    auto b = []\n    {\n        return 1;\n    }();\n    auto c = [&](int v)\n    {\n        return v;\n    }(1);\n    call([]()\n    {\n        return 1;\n    }());\n}\n";
+    check(input, &["--style=allman"], expected);
+}
+
+#[test]
+fn comment_led_brace_rows_stand_where_the_rows_stand_without_the_comments() {
+    let input = "void f(void)\n{\n    static const int table[2][2] = {\n        /* first */ { 1, 0 },\n        /* second */ { 1, 1 },\n    };\n    static const struct Item items[] = {\n        { 0, 0 },\n#if FEATURE\n        { 1, 2 },\n        /* note */ { 3, 4 },\n#endif\n    };\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f(void) {\n    static const int table[2][2] = {\n            /* first */ { 1, 0 },\n            /* second */ { 1, 1 },\n        };\n    static const struct Item items[] = {\n            { 0, 0 },\n#if FEATURE\n            { 1, 2 },\n            /* note */ { 3, 4 },\n#endif\n        };\n    }\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f(void)\n    {\n    static const int table[2][2] =\n        {\n            /* first */ { 1, 0 },\n            /* second */ { 1, 1 },\n        };\n    static const struct Item items[] =\n        {\n            { 0, 0 },\n#if FEATURE\n            { 1, 2 },\n            /* note */ { 3, 4 },\n#endif\n        };\n    }\n",
+    );
+    check(
+        input,
+        &["--style=vtk"],
+        "void f(void)\n{\n    static const int table[2][2] =\n        {\n            /* first */ { 1, 0 },\n            /* second */ { 1, 1 },\n        };\n    static const struct Item items[] =\n        {\n            { 0, 0 },\n#if FEATURE\n            { 1, 2 },\n            /* note */ { 3, 4 },\n#endif\n        };\n}\n",
+    );
+}
+
+#[test]
+fn lambdas_in_a_call_brace_list_open_their_bodies_alike_whatever_their_heads() {
+    let input = "void f()\n{\n    call({ [] {\n        go();\n    } });\n    call({ [](int x) {\n        go(x);\n    } });\n    call({ []() mutable {\n        go();\n    } });\n    call({ [x]() noexcept {\n        go();\n    } });\n    call({ [] mutable {\n        go();\n    } });\n}\n";
+    let expected = "void f()\n{\n    call({ [] {\n            go();\n        } });\n    call({ [](int x) {\n            go(x);\n        } });\n    call({ []() mutable {\n            go();\n        } });\n    call({ [x]() noexcept {\n            go();\n        } });\n    call({ [] mutable {\n            go();\n        } });\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(input, &[], expected);
+}
+
+#[test]
+fn a_lambda_closer_in_a_call_brace_list_stands_alike_after_any_earlier_list() {
+    let input = "void f()\n{\n    Handler h[] = {\n        { 2, 3 },\n    };\n    call({ [] {\n        go();\n    } });\n}\n";
+    let expected = "void f()\n{\n    Handler h[] = {\n        { 2, 3 },\n    };\n    call({ [] {\n            go();\n        } });\n}\n";
+    check(input, &["--style=kr"], expected);
+}
+
+#[test]
+fn a_lambda_head_ending_in_specifiers_keeps_its_brace_and_one_line_body_as_a_trailing_return_does()
+{
+    let input = "void f()\n{\n    auto a = []() constexpr -> int {\n        return 1;\n    };\n    auto b = [=]() mutable { return 1; };\n    auto c = [=]() -> int { return 1; };\n}\n";
+    check(input, &["--style=kr"], input);
+    check(input, &[], input);
+}
+
+#[test]
+fn lambda_rows_of_a_call_brace_list_keep_their_braces_as_in_a_declaration_list() {
+    let input = "void f()\n{\n    run({\n        [] {\n            go();\n        },\n        [](int x) {\n            go(x);\n        },\n    });\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    run(\n    {\n        [] {\n            go();\n        },\n        [](int x) {\n            go(x);\n        },\n    });\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    run(\n        {\n        [] {\n            go();\n            },\n        [](int x) {\n            go(x);\n            },\n        });\n    }\n",
+    );
+}
+
+#[test]
+fn pad_oper_pads_a_capture_default_on_both_sides() {
+    let input = "void f()\n{\n    auto a = [=]() { return 1; };\n    call([=] {\n        go();\n    });\n    auto b = [=, &x]() { return x; };\n}\n";
+    check(
+        input,
+        &["--pad-oper"],
+        "void f()\n{\n    auto a = [ = ]() {\n        return 1;\n    };\n    call([ = ] {\n        go();\n    });\n    auto b = [ =, &x]() {\n        return x;\n    };\n}\n",
+    );
+}
+
+#[test]
+fn a_goto_label_block_after_a_case_label_stands_at_the_case_body() {
+    let input = "void f(void)\n{\n    switch (x) {\n    case 1: done: {\n        int q;\n        break;\n    }\n    }\n}\n";
+    let expected = "void f(void)\n{\n    switch (x)\n    {\n    case 1: done:\n        {\n            int q;\n            break;\n        }\n    }\n}\n";
+    check(
+        input,
+        &["--style=allman", "--keep-one-line-statements"],
+        expected,
+    );
+    check(
+        expected,
+        &["--style=allman", "--keep-one-line-statements"],
+        expected,
+    );
+    let expected = "void f(void)\n{\n    switch (x)\n        {\n        case 1: done:\n            {\n                int q;\n                break;\n            }\n        }\n}\n";
+    check(
+        input,
+        &["--style=gnu", "--keep-one-line-statements"],
+        expected,
+    );
+    check(
+        expected,
+        &["--style=gnu", "--keep-one-line-statements"],
+        expected,
+    );
+}
+
+#[test]
+fn a_goto_label_block_kept_on_a_case_line_nests_in_the_case_body() {
+    let input = "void f(void)\n{\n    switch (x) {\n    case 2: done: {\n        int q;\n        break;\n    }\n    case 3: {\n        int q;\n        break;\n    }\n    }\n}\n";
+    let expected = "void f(void)\n{\n    switch (x) {\n    case 2: done: {\n            int q;\n            break;\n        }\n    case 3: {\n        int q;\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--keep-one-line-statements"],
+        expected,
+    );
+    check(
+        expected,
+        &["--style=kr", "--keep-one-line-statements"],
+        expected,
+    );
+}
+
+#[test]
+fn a_goto_label_block_on_an_indented_case_line_keeps_the_case_column() {
+    let input = "void f(void)\n{\n    switch (x) {\n    case 2: done: {\n        int q;\n        break;\n    }\n    }\n}\n";
+    let expected = "void f(void)\n{\n    switch (x)\n        {\n        case 2: done:\n                {\n                int q;\n                break;\n                }\n        }\n}\n";
+    let options = [
+        "--style=vtk",
+        "--indent-switches",
+        "--keep-one-line-statements",
+    ];
+    check(input, &options, expected);
+    check(expected, &options, expected);
+}
+
+#[test]
+fn vtk_keeps_comment_led_rows_of_a_flush_file_scope_list_at_its_rows() {
+    let input = "static const Item items[2] = {\n    /* 0 */ { 1, 0 },\n    { 1, 1 },\n};\n";
+    check(input, &["--style=vtk"], input);
+    let input =
+        "static const Item items[2] = {\n    /* 0 */ { 1, 0 },\n    /* 1 */ { 1, 1 },\n};\n";
+    check(input, &["--style=vtk"], input);
+}
+
+#[test]
+fn a_lambda_body_row_in_a_call_brace_list_stands_at_the_body_after_a_comment_or_directive() {
+    let input = "void f()\n{\n    call({ [x]() {\n        /* note */ go();\n    } });\n#ifdef FEATURE\n    call({ [x]() {\n#endif\n        go();\n    } });\n}\n";
+    let expected = "void f()\n{\n    call({ [x]() {\n            /* note */ go();\n        } });\n#ifdef FEATURE\n    call({ [x]() {\n#endif\n            go();\n        } });\n}\n";
+    check(input, &["--style=allman"], expected);
+    check(input, &["--style=kr"], expected);
+}
+
+#[test]
+fn a_comment_led_call_opening_a_lambda_among_a_brace_list_stays_at_its_statement() {
+    let input = "void f()\n{\n    value = 0;\n    /* note */ call({ [] {\n        go();\n    } });\n    /* note */ call([] {\n        go();\n    });\n}\n";
+    let expected = "void f()\n{\n    value = 0;\n    /* note */ call({ [] {\n            go();\n        } });\n    /* note */ call([] {\n        go();\n    });\n}\n";
+    check(input, &["--style=kr"], expected);
+    let expected = "void f()\n{\n    value = 0;\n    /* note */ call({ [] {\n            go();\n        } });\n    /* note */ call([]\n    {\n        go();\n    });\n}\n";
+    check(input, &["--style=allman"], expected);
+}
+
+#[test]
+fn every_row_of_a_lambda_body_in_a_call_brace_list_stands_at_its_body() {
+    let input = "void f()\n{\n    call({ [x] {\n        go();\n#ifdef FEATURE\n        run();\n#endif\n        if (ready) {\n            stop();\n        }\n    } });\n}\n";
+    let expected = "void f()\n{\n    call({ [x] {\n            go();\n#ifdef FEATURE\n            run();\n#endif\n            if (ready) {\n                stop();\n            }\n        } });\n}\n";
+    check(input, &["--style=kr"], expected);
+    let expected = "void f()\n{\n    call({ [x] {\n            go();\n            #ifdef FEATURE\n            run();\n            #endif\n            if (ready) {\n                stop();\n            }\n        } });\n}\n";
+    check(input, &["--style=kr", "--indent-preproc-cond"], expected);
+}
+
+#[test]
+fn a_lambda_row_of_a_brace_list_keeps_its_column_with_a_comment_after_its_brace() {
+    let input = "void f()\n{\n    run({\n        [](int x) { /* note */\n            go(x);\n        },\n    });\n}\n";
+    check(input, &["--style=kr"], input);
+    check(input, &["--style=1tbs"], input);
+}
+
+#[test]
+fn a_template_typed_list_holding_a_lambda_lays_it_out_as_a_typed_list() {
+    let input = "void f()\n{\n    auto v = std::vector<Fn>{ [x] {\n        go();\n        run();\n    } };\n}\n";
+    let expected = "void f()\n{\n    auto v = std::vector<Fn> { [x] {\n            go();\n            run();\n        }\n    };\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(input, &["--style=allman"], expected);
+}
+
+#[test]
+fn run_in_list_closers_stay_together_in_a_call_or_return_and_part_after_an_assignment() {
+    let input = "void f()\n{\n    x = { {\n            1, 2\n        } };\n    call({ {\n            1, 2\n        } }, 3);\n    return { {\n            1, 2\n        } };\n}\n";
+    let expected = "void f()\n{\n    x = { {\n            1, 2\n        }\n    };\n    call({ {\n            1, 2\n        } }, 3);\n    return { {\n            1, 2\n        } };\n}\n";
+    check(input, &["--style=kr"], expected);
+}
+
+#[test]
+fn a_lambda_call_opening_an_outer_lambda_body_stands_at_that_body_when_braces_break() {
+    let input = "void f()\n{\n    outer([&] {\n        inner([] {\n            go();\n        },\n        first);\n    },\n    second);\n}\n";
+    let expected = "void f()\n{\n    outer([&]\n    {\n        inner([]\n        {\n            go();\n        },\n        first);\n    },\n    second);\n}\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+}
+
+#[test]
+fn an_initializer_after_an_invoked_lambda_initializer_stands_at_the_constructor() {
+    let input =
+        "Item::Item()\n    : value([] {\n        return 1;\n    }()),\n      other(0)\n{\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "Item::Item()\n    : value([]\n    {\n    return 1;\n    }()),\nother(0)\n    {\n    }\n",
+    );
+    check(
+        input,
+        &["--style=kr"],
+        "Item::Item()\n    : value([]\n{\n    return 1;\n}()),\nother(0)\n{\n}\n",
+    );
+}
+
+#[test]
+fn a_lambda_row_of_a_list_run_into_a_call_list_opens_its_body_past_the_row() {
+    let input = "void f()\n{\n    call({ { [x] {\n        go();\n        run();\n    } } });\n}\n";
+    let expected = "void f()\n{\n    call({ {\n            [x] {\n                go();\n                run();\n            }\n        } });\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn brace_rows_of_a_list_run_into_the_list_around_it_stand_past_both_lists() {
+    let input =
+        "void f()\n{\n    call({ {\n            {1, 2},\n            {3, 4}\n        } });\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    call({ {\n                {1, 2},\n                {3, 4}\n            } });\n    }\n",
+    );
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    call({ {\n                {1, 2},\n                {3, 4}\n            } });\n    }\n",
+    );
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_comment_led_lambda_closer_after_an_inner_lambda_closes_at_its_own_head() {
+    let input = "void f()\n{\n    outer([&] {\n        inner([] {\n            go();\n        },\n        first);\n    /* note */ },\n    second);\n}\n";
+    let expected = "void f()\n{\n    outer([&] {\n        inner([] {\n            go();\n        },\n        first);\n        /* note */\n    },\n    second);\n}\n";
+    check(input, &["--style=linux"], expected);
+}
+
+#[test]
+fn rows_inside_and_after_a_comment_led_multi_line_brace_row_stand_as_without_the_comment() {
+    let input = "void f()\n{\n    Handler handlers[] = {\n        /* note */ {\n            1, [] {\n                go();\n            }\n        },\n        { 2, nullptr },\n    };\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    Handler handlers[] =\n        {\n            /* note */ {\n            1, [] {\n                go();\n                }\n            },\n            { 2, nullptr },\n        };\n    }\n",
+    );
+    let input = "static const Item items[2] = {\n    /* 0 */ {\n        1,\n        2\n    },\n    { 3, 4 },\n};\n";
+    check(
+        input,
+        &["--style=vtk"],
+        "static const Item items[2] = {\n        /* 0 */ {\n        1,\n        2\n        },\n    { 3, 4 },\n};\n",
+    );
+}
+
+#[test]
+fn an_initializer_after_a_run_in_lambda_initializer_stays_at_the_constructor() {
+    let input =
+        "Item::Item()\n    : value([] {\n        return 1;\n    }()),\n      other(0)\n{\n}\n";
+    let expected = "Item::Item()\n    : value([]\n{   return 1; }()),\nother(0)\n{}\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+}
+
+#[test]
+fn a_returned_capture_only_lambda_keeps_its_broken_brace_on_a_second_pass() {
+    let input = "void f()\n{\n    return [x] {\n        go();\n    };\n}\n";
+    let expected = "void f()\n{\n    return [x]\n        {\n        go();\n        };\n}\n";
+    check(input, &["--style=vtk"], expected);
+    check(expected, &["--style=vtk"], expected);
+}
+
+#[test]
+fn a_comment_after_an_inner_lambda_brace_leaves_its_head_row_in_the_outer_body() {
+    let input = "void f()\n{\n    outer([&] {\n        inner([] { /* c */\n            go();\n        });\n    });\n}\n";
+    let expected = "void f()\n{\n    outer([&]\n    {\n        inner([]   /* c */\n        {\n            go();\n        });\n    });\n}\n";
+    check(input, &["--style=allman"], expected);
+}
+
+#[test]
+fn a_comment_after_a_lambda_argument_brace_leaves_its_row_at_the_statement() {
+    let input = "void f()\n{\n    call(first,\n         [] { /* note */\n        go();\n    },\n    other,\n    more);\n}\n";
+    let expected = "void f()\n{\n    call(first,\n    [] { /* note */\n        go();\n    },\n    other,\n    more);\n}\n";
+    check(input, &["--style=kr"], expected);
+}
+
+#[test]
+fn a_comment_after_a_comment_running_over_lines_keeps_its_gap() {
+    let input = "void f()\n{\n    switch (k) {  /* a\n          b */ /* c */\n    case 1:\n        break;\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (k)\n    {\n        /* a\n              b */ /* c */\n    case 1:\n        break;\n    }\n}\n";
+    check(input, &["--style=allman"], expected);
+}
+
+#[test]
+fn vtk_closes_a_flush_lambda_brace_at_its_statement_before_a_comment() {
+    let input = "auto handler = [&](int value) { return value + 1; }; /* note */\n";
+    check(
+        input,
+        &["--style=vtk"],
+        "auto handler = [&](int value)\n{\n    return value + 1;\n}; /* note */\n",
+    );
+}
+
+#[test]
+fn a_default_in_a_template_head_sets_no_column_for_the_declaration_after_it() {
+    let input = "template <typename E = int>\nint\nmake()\n{\n    return 1;\n}\n";
+    check(input, &["--style=kr"], input);
+    let member = "struct Item {\n    template <typename E = int>\n    static int\n    make();\n    int value;\n};\n";
+    check(member, &["--style=kr"], member);
+    let input = "template <typename E, size_t N = size<E>()>\nconsteval auto make() -> int {\n  return 1;\n}\n";
+    let expected = "template <typename E, size_t N = size<E>()>\nconsteval auto\nmake() -> int\n{\n    return 1;\n}\n";
+    check(input, &["--style=kr", "--break-return-type"], expected);
+    check(expected, &["--style=kr", "--break-return-type"], expected);
+}
+
+#[test]
+fn pad_oper_pads_the_base_colon_of_a_class_nested_in_a_class_once() {
+    // The space after the colon is padded; the one before it stays as written.
+    for (colon, padded) in [(" : ", " : "), (" :", " : "), (":", ": ")] {
+        let input = format!(
+            "struct List {{\n  struct Item{colon}Base {{\n    int value;\n  }};\n  class Node{colon}public Base<> {{\n    int value;\n  }};\n}};\n"
+        );
+        let expected = format!(
+            "struct List {{\n    struct Item{padded}Base {{\n        int value;\n    }};\n    class Node{padded}public Base<>\n    {{\n        int value;\n    }};\n}};\n"
+        );
+        check(&input, &["--style=kr", "--pad-oper"], &expected);
+        check(&expected, &["--style=kr", "--pad-oper"], &expected);
+    }
+}
+
+#[test]
+fn arguments_of_a_head_after_an_access_label_follow_its_split_return_type() {
+    let input = "class Store {\n public:\n  static Status Open(const Options& options,\n                     Store** result);\n  int Count(int first,\n            int second);\n};\n";
+    let expected = "class Store\n{\npublic:\n    static Status\n    Open(const Options& options,\n         Store** result);\n    int\n    Count(int first,\n          int second);\n};\n";
+    check(input, &["--style=kr", "--break-return-type-decl"], expected);
+    check(
+        expected,
+        &["--style=kr", "--break-return-type-decl"],
+        expected,
+    );
+}
+
+#[test]
+fn an_rvalue_reference_parameter_after_a_reference_return_type_line_stays_a_reference() {
+    // A head split after a return type ending in `&` continues no `&`
+    // expression into its parameters.
+    let input = "class Status {\n  Status&\n  operator=(Status&& other) noexcept;\n  Status&\n  assign(Status&& other);\n};\nStatus&\nassign(Status&& other) {\n  return *this;\n}\nint\nvalue() {\n  return first &\n         check(second && third);\n}\n";
+    let expected = "class Status\n{\n    Status&\n    operator=(Status&& other) noexcept;\n    Status&\n    assign(Status&& other);\n};\nStatus&\nassign(Status&& other)\n{\n    return *this;\n}\nint\nvalue()\n{\n    return first &\n           check(second && third);\n}\n";
+    check(input, &["--style=kr", "--pad-oper"], expected);
+    check(expected, &["--style=kr", "--pad-oper"], expected);
+}
+
+#[test]
+fn arguments_of_an_operator_head_follow_its_split_return_type() {
+    let input = "inline Flags operator|(Flags first,\n                       Flags second,\n                       Flags third) {\n  return first;\n}\nint Item::operator()(const char* first,\n                     const char* second) {\n  return 0;\n}\n";
+    let expected = "inline Flags\noperator|(Flags first,\n          Flags second,\n          Flags third)\n{\n    return first;\n}\nint\nItem::operator()(const char* first,\n                 const char* second)\n{\n    return 0;\n}\n";
+    check(input, &["--style=kr", "--break-return-type"], expected);
+    check(expected, &["--style=kr", "--break-return-type"], expected);
+    // Parameters after a `(` ending the head continue from its line.
+    let input = "Node* List::Make(\n    const Key& key, int height) {\n  return 0;\n}\n";
+    let expected = "Node*\nList::Make(\n    const Key& key, int height)\n{\n    return 0;\n}\n";
+    check(input, &["--style=kr", "--break-return-type"], expected);
+}
+
+#[test]
+fn a_body_brace_after_qualifiers_closing_a_multiline_head_stands_at_the_head() {
+    let input = "class Item {\n  int call(const char* first,\n           const char* second) const {\n    return 0;\n  }\n  auto size(int first,\n            int second) -> int {\n    return 0;\n  }\n  void run(int first,\n           int second) noexcept override {\n  }\n};\nint call(const char* first,\n         const char* second) const {\n  return 0;\n}\n";
+    let expected = "class Item\n{\n    int call(const char* first,\n             const char* second) const\n    {\n        return 0;\n    }\n    auto size(int first,\n              int second) -> int\n    {\n        return 0;\n    }\n    void run(int first,\n             int second) noexcept override\n    {\n    }\n};\nint call(const char* first,\n         const char* second) const\n{\n    return 0;\n}\n";
+    for style in [
+        "--style=kr",
+        "--style=allman",
+        "--style=gnu",
+        "--style=mozilla",
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn a_macro_call_among_template_parameters_ends_no_statement() {
+    let input = "template <typename To, typename From,\n          ENABLE_IF(first &&\n                    second)>\nauto convert(const From from) -> To {\n  return 0;\n}\n";
+    let expected = "template <typename To, typename From,\n          ENABLE_IF(first &&\n                    second)>\nauto\nconvert(const From from) -> To\n{\n    return 0;\n}\n";
+    check(input, &["--style=kr", "--break-return-type"], expected);
+    check(expected, &["--style=kr", "--break-return-type"], expected);
+}
+
+#[test]
+fn parameters_past_the_maximum_before_a_return_type_split_align_after_it() {
+    // The paren stands past the maximum continuation indent only before
+    // the split.
+    let input = "template <typename T>\nconstexpr void initialize_named_argument(argument_info<T>*, int& index,\n                                         int&) {\n  ++index;\n}\n";
+    let expected = "template <typename T>\nconstexpr void\ninitialize_named_argument(argument_info<T>*, int& index,\n                          int&)\n{\n    ++index;\n}\n";
+    check(input, &["--style=kr", "--break-return-type"], expected);
+    check(expected, &["--style=kr", "--break-return-type"], expected);
+}
+
+#[test]
+fn a_template_head_closing_before_code_on_its_row_ends_there() {
+    let input = "template <typename T,\n          typename U> struct Item {\n  int value;\n};\nint other;\ntemplate <typename T,\n          typename U> void run(T first,\n                               U second);\nint last;\ntemplate class Access<Tag, Buffer,\n                      &Buffer::file>;\nauto get_file(Buffer&) -> FILE*;\nint after;\n";
+    let expected = "template <typename T,\n          typename U> struct Item {\n    int value;\n};\nint other;\ntemplate <typename T,\n          typename U> void run(T first,\n                               U second);\nint last;\ntemplate class Access<Tag, Buffer,\n                      &Buffer::file>;\nauto get_file(Buffer&) -> FILE*;\nint after;\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn break_return_type_reads_a_head_with_a_trailing_return_type_as_any_head() {
+    let input = "auto get(int x) -> decltype(x) {\n  return x;\n}\nauto pair_of(int x) -> pair<int, int> {\n  return x;\n}\nauto find(int x) -> decltype(x);\n";
+    let expected = "auto\nget(int x) -> decltype(x)\n{\n    return x;\n}\nauto\npair_of(int x) -> pair<int, int>\n{\n    return x;\n}\nauto\nfind(int x) -> decltype(x);\n";
+    check(
+        input,
+        &[
+            "--style=kr",
+            "--break-return-type",
+            "--break-return-type-decl",
+        ],
+        expected,
+    );
+    check(
+        expected,
+        &[
+            "--style=kr",
+            "--break-return-type",
+            "--break-return-type-decl",
+        ],
+        expected,
+    );
+    // A declaration's head stays whole under the definition option alone.
+    let expected = "auto\nget(int x) -> decltype(x)\n{\n    return x;\n}\nauto\npair_of(int x) -> pair<int, int>\n{\n    return x;\n}\nauto find(int x) -> decltype(x);\n";
+    check(input, &["--style=kr", "--break-return-type"], expected);
+}
+
+#[test]
+fn a_head_on_its_own_line_after_its_return_type_starts_what_its_rows_continue() {
+    // astyle stacks from the line the name starts, with the return type
+    // split off or written above it.
+    let expected = "auto\nget(int x) -> pair<int,\n    int>\n{\n    return x;\n}\n";
+    for input in [
+        "auto get(int x) -> pair<int,\n                         int> {\n  return x;\n}\n",
+        "auto\nget(int x) -> pair<int,\n  int> {\n  return x;\n}\n",
+    ] {
+        check(input, &["--style=kr", "--break-return-type"], expected);
+    }
+    check(expected, &["--style=kr", "--break-return-type"], expected);
+    let expected = "template <typename T>\nauto\nfind_end(T&& range) -> select_t<check<T&&>::value,\n         decltype(end(range))>\n{\n    return end(range);\n}\n";
+    let input = "template <typename T>\nauto find_end(T&& range) -> select_t<check<T&&>::value,\n                                     decltype(end(range))> {\n  return end(range);\n}\n";
+    check(input, &["--style=kr", "--break-return-type"], expected);
+    check(expected, &["--style=kr", "--break-return-type"], expected);
+}
+
+#[test]
+fn a_colon_row_in_a_macro_body_starts_no_initializer_list_for_the_code_after_it() {
+    let input =
+        "#define CHECK(value) \\\n  : fail(value)\ninline int\nvalue(int first);\nint other;\n";
+    check(input, &["--style=kr"], input);
+    let input = "#define CHECK(value) \\\n  : fail(value)\ninline int value(int first,\n                 int second);\n";
+    let expected = "#define CHECK(value) \\\n  : fail(value)\ninline int\nvalue(int first,\n      int second);\n";
+    check(input, &["--style=kr", "--break-return-type-decl"], expected);
+    check(
+        expected,
+        &["--style=kr", "--break-return-type-decl"],
+        expected,
+    );
+    // The rows of the macro go on with its own initializers.
+    let input = "#define BUILD(Type) \\\n  Type::Type() \\\n    : first(1), \\\n      second(2) {}\nint other;\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn parameters_after_a_line_comment_on_a_split_head_follow_its_paren() {
+    let input = "struct Match {\n  bool operator ()(int text, int re,  // note\n                   int first = 0,\n                   int second = 0) const;\n  bool find(int text, int re,  // note\n            int first = 0) const;\n};\n";
+    let expected = "struct Match {\n    bool\n    operator ()(int text, int re,  // note\n                int first = 0,\n                int second = 0) const;\n    bool\n    find(int text, int re,  // note\n         int first = 0) const;\n};\n";
+    check(input, &["--style=kr", "--break-return-type-decl"], expected);
+    check(
+        expected,
+        &["--style=kr", "--break-return-type-decl"],
+        expected,
+    );
+}
+
+#[test]
+fn an_access_label_after_a_base_clause_row_opening_the_body_stands_as_any_label() {
+    let input =
+        "struct Item\n    : Base<View<Char>, Char> {\n public:\n  int value;\n  int other;\n};\n";
+    let expected = "struct Item\n    : Base<View<Char>, Char> {\npublic:\n    int value;\n    int other;\n};\n";
+    for style in ["--style=kr", "--style=java", "--style=attach"] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+    let expected = "struct Item\n    : Base<View<Char>, Char> {\n  public:\n    int value;\n    int other;\n};\n";
+    check(input, &["--style=java", "--indent-modifiers"], expected);
+}
+
+#[test]
+fn pad_oper_reads_a_pack_expansion_among_template_arguments_as_template_arguments() {
+    let input = "static auto check(index_sequence<Is...>);\nauto value = check(sequence<Is...>{});\nbool first = point.x < other.x && other.y > point.y;\n";
+    let expected = "static auto check(index_sequence<Is...>);\nauto value = check(sequence<Is...> {});\nbool first = point.x < other.x && other.y > point.y;\n";
+    check(input, &["--style=kr", "--pad-oper"], expected);
+    check(expected, &["--style=kr", "--pad-oper"], expected);
+}
+
+#[test]
+fn arguments_after_a_paren_ending_a_split_head_continue_from_the_stack_below_it() {
+    // A paren ending the head continues a level past the column below it,
+    // which the split moves. A braced argument stands with the others, at
+    // file scope as in a body.
+    let input = "static auto check(int value) -> decltype(all_true(\n    first,\n    second));\nstatic auto check(sequence<Is...>) -> decltype(all_true(\n    sequence<Is...>{},\n    second));\n";
+    let expected = "static auto\ncheck(int value) -> decltype(all_true(\n                                 first,\n                                 second));\nstatic auto\ncheck(sequence<Is...>) -> decltype(all_true(\n                                       sequence<Is...> {},\n                                       second));\n";
+    check(input, &["--style=kr", "--break-return-type-decl"], expected);
+    check(
+        expected,
+        &["--style=kr", "--break-return-type-decl"],
+        expected,
+    );
+}
+
+#[test]
+fn arguments_after_a_paren_ending_a_split_head_keep_a_capped_column_below_it() {
+    // The column below stays capped after the split, and the arguments
+    // continue a level past it.
+    let input = "class Check {\n  template <size_t... Is>\n  static auto check(index_sequence<Is...>) -> decltype(all_true(\n      index_sequence<Is...>{},\n      second));\n};\n";
+    let expected = "class Check\n{\n    template <size_t... Is>\n    static auto\n    check(index_sequence<Is...>) -> decltype(all_true(\n                index_sequence<Is...> {},\n                second));\n};\n";
+    check(input, &["--style=kr", "--break-return-type-decl"], expected);
+    check(
+        expected,
+        &["--style=kr", "--break-return-type-decl"],
+        expected,
+    );
+}
+
+#[test]
+fn a_brace_after_template_arguments_closing_a_head_row_opens_the_body_at_the_head() {
+    // The `>>` closing the arguments is no shift continuing an expression.
+    let input = "template <typename S>\nstruct char_of<\n    S, void_t<size_t>> {\n  using type = char;\n};\n";
+    let expected = "template <typename S>\nstruct char_of<\n    S, void_t<size_t>>\n{\n    using type = char;\n};\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+    let expected = "template <typename S>\nstruct char_of<\n    S, void_t<size_t>>\n{   using type = char; };\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+}
+
+#[test]
+fn a_function_defined_after_extern_c_opens_a_function_body() {
+    let input = "extern \"C\" int value(int first,\n                      int second) {\n  TRY {\n    go(first);\n  }\n  return first;\n}\nextern \"C\" {\nint other(int first);\n}\n";
+    let expected = "extern \"C\" int value(int first,\n                     int second)\n{\n    TRY {\n        go(first);\n    }\n    return first;\n}\nextern \"C\" {\n    int other(int first);\n}\n";
+    check(input, &["--style=kr"], expected);
+    let expected = "extern \"C\" int value(int first,\n                     int second)\n{   TRY\n    {   go(first); }\n    return first; }\nextern \"C\"\n{   int other(int first); }\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+}
+
+#[test]
+fn a_braced_initializer_in_a_kept_one_line_body_keeps_its_brace_on_its_type() {
+    let input = "int run() {\n  return visit(formatter{out});\n}\n";
+    let expected = "int run()\n{   return visit(formatter{out }); }\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+    let input = "int run() { return visit(formatter{out}); }\n";
+    check(input, &["--style=allman", "--keep-one-line-blocks"], input);
+    let input = "Item begin() {\n  return Item{stream};\n}\n";
+    let expected = "Item begin()\n{   return Item{stream }; }\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+}
+
+#[test]
+fn a_macro_call_leading_a_stream_ending_in_a_call_is_no_standalone_macro_line() {
+    let input = "void run() {\n  if (value) {\n    LOG(INFO) << \"first\" << escape(text)\n              << \"second\";\n    go();\n  }\n}\n";
+    let expected = "void run()\n{\n    if (value) {\n        LOG(INFO) << \"first\" << escape(text)\n                  << \"second\";\n        go();\n    }\n}\n";
+    check(input, &["--style=kr"], expected);
+    let expected = "void run()\n{   if (value)\n    {   LOG(INFO) << \"first\" << escape(text)\n                  << \"second\";\n        go();\n    }\n}\n";
+    check(input, &["--style=horstmann"], expected);
+    check(expected, &["--style=horstmann"], expected);
+}
+
+#[test]
+fn a_comment_after_a_closer_of_a_block_opened_above_stays_with_the_closer() {
+    // Only a one-line block's closer moves the comment after it into the
+    // expanded block.
+    let input = "namespace {\nint count;\nstruct Item {}; } // namespace\n";
+    let expected = "namespace\n{\nint count;\nstruct Item {};\n} // namespace\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+    let expected = "namespace {\nint count;\nstruct Item {}; } // namespace\n";
+    check(input, &["--style=lisp"], expected);
+    check(expected, &["--style=lisp"], expected);
+}
+
+#[test]
+fn a_member_initializer_row_with_a_run_in_body_continues_the_list() {
+    let input = "class Options {\n  Options() :\n    word_boundary_(false),\n    one_line_(false) {\n  }\n};\n";
+    let expected = "class Options {\n    Options() :\n        word_boundary_(false),\n        one_line_(false) {} };\n";
+    check(input, &["--style=lisp"], expected);
+    check(expected, &["--style=lisp"], expected);
+}
+
+#[test]
+fn an_empty_type_body_after_a_base_clause_over_lines_stays_empty() {
+    let input = "struct Item\n    : public First,\n      public Second {};\nstruct Other\n    : Base<T,\n           U> {};\ntemplate <typename T>\nstruct Third<T> : public First,\n                  public Second {};\n";
+    let expected = "struct Item\n    : public First,\n      public Second {};\nstruct Other\n    : Base<T,\n      U> {};\ntemplate <typename T>\nstruct Third<T> : public First,\n    public Second {};\n";
+    for style in ["--style=lisp", "--style=pico", "--style=kr"] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn a_brace_list_a_range_for_header_breaks_before_stands_there_on_the_next_pass() {
+    let input = "void run() {\n  for (bool word : {true, false}) {\n    go(word);\n  }\n}\n";
+    let expected = "void run()\n{\n    for (bool word :\n            {true, false})\n    {\n        go(word);\n    }\n}\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+    let expected = "void run()\n    {\n    for (bool word :\n            {true, false})\n        {\n        go(word);\n        }\n    }\n";
+    check(input, &["--style=whitesmith"], expected);
+    check(expected, &["--style=whitesmith"], expected);
+}
+
+#[test]
+fn gnu_a_list_in_a_header_over_lines_adds_no_level_to_the_body() {
+    let input = "void run()\n{\n    for (bool word :\n            list{1})\n        {\n            go(word);\n        }\n    for (bool word : {true, false})\n        {\n            go(word);\n        }\n}\n";
+    let expected = "void run()\n{\n    for (bool word :\n            list{1})\n        {\n            go(word);\n        }\n    for (bool word :\n            {true, false})\n        {\n            go(word);\n        }\n}\n";
+    check(input, &["--style=gnu"], expected);
+    check(expected, &["--style=gnu"], expected);
 }

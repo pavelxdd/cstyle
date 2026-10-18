@@ -2,9 +2,11 @@ use crate::config::{BraceStyle, FormatOptions, Mode, ObjCColonPad, PointerAlign}
 use crate::formatter::braces::classification::{
     code_ends_definition_header, is_class_like_brace_type,
 };
+use crate::formatter::braces::rewrite::token_begins_line;
 use crate::formatter::constructs::constructor_initializers::constructor_initializer_name_indent_from_line;
 use crate::formatter::constructs::headers::is_header;
 use crate::formatter::constructs::labels;
+use crate::formatter::constructs::switch_cases;
 use crate::formatter::engine::{FormatEngine, TokenPushContext, closer_width_after_semicolon};
 use crate::formatter::lexer::{CommentKind, Token};
 use crate::formatter::state::frame::{
@@ -13,6 +15,7 @@ use crate::formatter::state::frame::{
 };
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::structure::blocks::next_code_token;
+use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::language::{
     self, is_leading_continuation_operator, is_pointer_type_word, is_type_like_pointer_word,
     is_unpad_kept_type_word,
@@ -22,7 +25,10 @@ use crate::formatter::syntax::{
 };
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
-use crate::formatter::text::line_scan::{is_comment_only_line, trailing_matching_parens};
+use crate::formatter::text::line_scan::{
+    after_leading_comments, is_bare_comment_line, is_comment_only_line,
+    trailing_comment_split_limit, trailing_matching_parens,
+};
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::operators::find_assignment_operator;
 use crate::formatter::tokens::pointers::resolved_pointer_align;
@@ -313,7 +319,9 @@ impl FormatEngine<'_> {
             }
         }
         let next_is_close = matches!(next, Some(Token::Symbol(')')));
-        let outside_pad = !next_is_close
+        // The method prefix options set the gap before a return type.
+        let prefix_sets_gap = handled_objc_return_paren && self.options.unpad_method_prefix;
+        let outside_pad = !(next_is_close || prefix_sets_gap)
             && (self.options.pad_parens_outside
                 || (self.options.pad_first_paren_outside
                     && self.layout.previous != PreviousToken::OpenParen));
@@ -364,6 +372,7 @@ impl FormatEngine<'_> {
             && self.layout.previous == PreviousToken::Operator
             && self.options.pointer_align == PointerAlign::Name
             && self.current.trimmed_end().ends_with_any(b"*^")
+            && !self.follows_binary_operator()
             && self.looks_like_pointer_declaration_context()
             && !self.active_token_in_brackets()
         {
@@ -448,9 +457,10 @@ impl FormatEngine<'_> {
                 self.current_is_preindented = true;
             }
         }
-        let semicolonless_macro_call_indent =
-            is_semicolonless_macro_call_name(self.current.trimmed())
-                .then(|| self.current_line_indent_spaces());
+        // A call among a template's parameters is no statement.
+        let semicolonless_macro_call_indent = (!self.template_continuation_active()
+            && is_semicolonless_macro_call_name(self.current.trimmed()))
+        .then(|| self.current_line_indent_spaces());
         let inline_brace_call_indent = self.inline_brace_call_indent_spaces(&self.current);
         let paren_indent_spaces =
             // A line comment after the `(` ends its line as well.
@@ -827,7 +837,14 @@ impl FormatEngine<'_> {
         {
             self.finish_line();
         }
-        self.emit_source_space();
+        // A padded operator keeps its space before the bracket, as a
+        // capture default's `=` does.
+        if !(self.options.pad_operators
+            && self.layout.previous == PreviousToken::Operator
+            && self.current.ends_with(' '))
+        {
+            self.emit_source_space();
+        }
         self.current.push(']');
         self.layout.command_state.observe_char(']');
         if self.inline_array.initializer_designator_bracket_depth > 0 {
@@ -837,7 +854,14 @@ impl FormatEngine<'_> {
             return;
         }
         let closes_operator_name = self.current.trimmed_end().ends_with("operator[]");
+        // Only a nested message's closer ends the row's alignment; a
+        // lambda's capture list or a subscript leaves it.
         let closing_nested_message_argument = self.layout.frame_stack.bracket_depth() > 1
+            && self
+                .layout
+                .frame_stack
+                .active_bracket()
+                .is_some_and(|frame| frame.role == BracketRole::ObjCMessage)
             && self.layout.objc.message_active
             && self.current.contains(':')
             && !self.current.trimmed_start().starts_with('[');
@@ -894,13 +918,30 @@ impl FormatEngine<'_> {
             Token::StringLiteral(text) | Token::Comment(_, text) => text.contains('\n'),
             _ => false,
         };
+        // A brace the layout parted from the code before it leads the line
+        // of the block it broke.
+        let parted_brace_leads_line = || {
+            self.current.tokens().is_some_and(|span| span.first == open)
+                && !token_begins_line(&self.tree.tokens, open)
+        };
         matches!(self.tree.tokens[open], Token::Symbol('{'))
-            && !self.current.contains('{')
+            && (!self.current.contains('{') || parted_brace_leads_line())
             && !self.tree.tokens[open..index].iter().any(breaks_line)
             && groups
                 .get(group)
                 .close
                 .is_some_and(|close| !self.tree.tokens[index..close].iter().any(breaks_line))
+    }
+
+    pub(crate) fn exit_ended_braceless_blocks(&mut self, next: Option<&Token>) {
+        while let Some((base, delta)) = self.layout.indentation.last_braceless_block()
+            && self.layout.indentation.indent() == base + delta
+            && !self.next_keeps_braceless_block(next, base)
+        {
+            self.layout.indentation.exit_braceless_block();
+        }
+        // Leaving braceless bodies can end an else-if chain too.
+        self.unwind_else_if_break_depths_unless_else(next);
     }
 
     fn push_semicolon(
@@ -1008,13 +1049,10 @@ impl FormatEngine<'_> {
                 Some(Token::Word(word))
                     if is_header(self.options, word) && !matches!(word.as_str(), "case" | "default")
             );
-            let break_expanded_lisp_header = self.options.brace_style == BraceStyle::Lisp
-                && self.layout.line_state.is_one_line_block
-                && following_header;
-            let keep_following_header = !break_expanded_lisp_header
-                && !self.options.break_one_line_headers
-                && self.options.keeps_multi_statement_line()
-                && following_header;
+            // Breaking one-line headers parts a header from its body, not from
+            // the statement before it.
+            let keep_following_header =
+                self.options.keeps_multi_statement_line() && following_header;
             // Styles that break blocks from their statements still break
             // this one.
             let keep_following_block = self.options.keeps_multi_statement_line()
@@ -1031,6 +1069,12 @@ impl FormatEngine<'_> {
             if matches!(next, Some(Token::Comment(_, _))) {
                 self.emit_trailing_source_space();
                 self.schedule_block_spacing_semicolon();
+            } else if matches!(next, Some(Token::Symbol('\\')))
+                && self.options.keeps_multi_statement_line()
+            {
+                // A line splice kept with the statements before it stays at
+                // the end of the line it continues.
+                self.emit_trailing_source_space();
             } else if matches!(next, Some(Token::Symbol(';'))) {
                 self.trim_current_end();
             } else if matches!(next, Some(Token::Operator(operator)) if is_leading_continuation_operator(operator))
@@ -1039,19 +1083,17 @@ impl FormatEngine<'_> {
                 self.emit_trailing_source_space();
             } else if (self.options.brace_style == BraceStyle::Pico
                 && (self.token_input.token_line_opens_with_brace
-                    || self.output.last().is_some_and(|line| line.trimmed() == "{")))
+                    || self.output.last().is_some_and(|line| line.trimmed() == "{"))
+                && !self.statement_in_broken_one_line_block())
                 || self.attached_statement_expression_closer_follows()
             {
                 self.emit_trailing_source_space_or_ensure();
                 self.schedule_block_spacing_semicolon();
-            } else if break_expanded_lisp_header
-                || self.statement_in_broken_one_line_block()
+            } else if self.statement_in_broken_one_line_block()
                 || (!keep_following_header
                     && !keep_following_block
                     && (self.options.break_one_line_statements
-                        || !self.layout.line_state.is_multi_statement_line
-                        || (self.layout.line_state.is_one_line_block
-                            && self.options.break_one_line_blocks)))
+                        || !self.layout.line_state.is_multi_statement_line))
             {
                 self.finish_line();
                 self.observe_block_spacing_semicolon();
@@ -1076,14 +1118,12 @@ impl FormatEngine<'_> {
                 self.preprocessor.split_else.trigger_output_len = None;
                 self.layout.continuation_indent.clear_next_line();
             }
-            while let Some((base, delta)) = self.layout.indentation.last_braceless_block()
-                && self.layout.indentation.indent() == base + delta
-                && !self.next_keeps_braceless_block(next, base)
-            {
-                self.layout.indentation.exit_braceless_block();
+            // The comments closing the line stand on it at the body's level.
+            if self.comments.next_comment_ends_line && !self.current_is_blank() {
+                self.braceless_exit_after_line = true;
+            } else {
+                self.exit_ended_braceless_blocks(next);
             }
-            // Leaving braceless bodies can end an else-if chain too.
-            self.unwind_else_if_break_depths_unless_else(next);
         } else {
             if self.current.trimmed_start().starts_with(':')
                 && self.layout.nesting.paren_depth == 0
@@ -1156,13 +1196,22 @@ impl FormatEngine<'_> {
         {
             self.layout.nesting.clear_continuation_indents();
             self.layout.compound_literal.after_comma = true;
+        } else if self.innermost_brace_is_brace_list()
+            && self.layout.nesting.current_brace_paren_depth()
+                == Some(self.layout.nesting.paren_depth)
+        {
+            self.layout.nesting.trim_to_brace_element_continuation();
         } else if self.layout.indentation.statement_depth() > 0
             || self.layout.nesting.paren_depth > 0
         {
             self.layout.nesting.trim_to_current_statement_continuation();
         } else if self.innermost_brace_is_compound_literal() {
             self.layout.nesting.clear_continuation_indents();
-        } else if !self.in_initializer_brace() && !self.in_aggregate_declaration_brace() {
+        } else if !self.in_initializer_brace()
+            && !self.in_aggregate_declaration_brace()
+            // A comma between template arguments parts no declarators.
+            && self.layout.line_state.template_angle_depth == 0
+        {
             if self.multi_declarator_indent_spaces.is_none() && self.current.holds_equals() {
                 let line = self.current.trimmed_end();
                 let prefix = line.len() - line.trimmed_start().len();
@@ -1335,8 +1384,20 @@ impl FormatEngine<'_> {
             && self.layout.frame_stack.bracket_depth() == 0
             && !matches!(next, Some(Token::Symbol(':')));
         self.layout.command_state.case_label_colon_emitted = case_label_colon;
+        // A case label comments lead breaks its statement off as any does.
+        if case_label_colon && !is_label {
+            self.statement_after_label_pending =
+                self.options.break_one_line_statements && !self.one_line_block_mode;
+        }
         let pad_off =
             !self.options.pad_operators || self.layout.line_state.operator_padding_disabled;
+        // A colon no rule places, as a generic selection's, keeps the
+        // source's spacing; a case label's has its own.
+        let source_spaced = colon_role == ColonRole::Other
+            && !matches!(
+                self.layout.command_state.current_header.as_deref(),
+                Some("case" | "default")
+            );
         let colon_mode = self.options.pad_method_colon;
         let next_is_close_paren = matches!(next, Some(Token::Symbol(')')));
         if is_objc_interface_colon {
@@ -1362,6 +1423,7 @@ impl FormatEngine<'_> {
             || is_asm_operand_colon
             || aligned_continuation_colon
             || (is_ternary && pad_off)
+            || source_spaced
         {
             self.emit_source_space();
         } else {
@@ -1426,14 +1488,17 @@ impl FormatEngine<'_> {
                 .is_empty()
         {
             self.ensure_space();
-        } else if aligned_continuation_colon && !is_asm_operand_colon && !is_objc_colon {
+        } else if aligned_continuation_colon && !is_asm_operand_colon && !is_objc_colon
+            || source_spaced
+        {
             self.emit_trailing_source_space();
         }
         self.layout.objc.post_method_colon = is_objc_method_def_colon;
         if is_objc_colon && colon_mode != ObjCColonPad::NoChange && next_is_close_paren {
             self.layout.objc.after_paren_pad = Some(false);
         }
-        if !is_label {
+        // A message's selector colon leaves the `?` around it waiting.
+        if !is_label && !is_objc_colon {
             self.layout.nesting.exit_question();
         }
         self.layout.previous = PreviousToken::Other;
@@ -1492,14 +1557,10 @@ impl FormatEngine<'_> {
             self.layout.continuation_indent.next_line_indent_spaces = spaces;
             self.previous_was_newline = true;
         } else if is_label {
-            if self.options.brace_style == BraceStyle::OneTrueBrace
-                && matches!(next, Some(Token::Symbol('{')))
-            {
-                self.ensure_space();
-            } else if self.options.break_one_line_statements
-                && !self.one_line_block_mode
-                && !matches!(next, Some(Token::Comment(_, _)))
-            {
+            let breaks_statement =
+                self.options.break_one_line_statements && !self.one_line_block_mode;
+            self.statement_after_label_pending = breaks_statement;
+            if breaks_statement && !matches!(next, Some(Token::Comment(_, _))) {
                 self.finish_line();
                 self.layout.continuation_indent.next_line_indent = None;
                 self.layout.continuation_indent.next_line_indent_spaces = None;
@@ -1512,6 +1573,21 @@ impl FormatEngine<'_> {
                 } else {
                     self.emit_trailing_source_space();
                 }
+            }
+        } else if case_label_colon
+            && !aligned_continuation_colon
+            && !self.statement_after_label_pending
+            && !matches!(
+                next,
+                Some(Token::Comment(_, _)) | Some(Token::Newline) | None
+            )
+        {
+            // A case label comments lead keeps the statement it keeps on its
+            // line apart from it, as any label does.
+            if pad_off {
+                self.emit_trailing_source_space();
+            } else {
+                self.emit_trailing_source_space_or_ensure();
             }
         } else if is_asm_operand_colon
             || ((is_class_initializer
@@ -1543,7 +1619,8 @@ impl FormatEngine<'_> {
         let is_asm_operand_colon = self.is_asm_operand_colon();
         let is_class_initializer = !is_asm_operand_colon
             && (self.is_class_initializer_colon()
-                || (self.current.trimmed().is_empty() && self.colon_leads_class_initializer()));
+                || (after_leading_comments(self.current.trimmed()).is_empty()
+                    && self.colon_leads_class_initializer()));
         let function_try_initializer =
             is_class_initializer && self.class_initializer_follows_function_try();
         let is_objc_colon = self.is_objc_selector_or_message_colon();
@@ -1556,9 +1633,13 @@ impl FormatEngine<'_> {
         let is_bit_field = !is_asm_operand_colon
             && !is_class_initializer
             && !is_enum_underlying_type
+            && !is_class_base
             && self.is_bit_field_colon(match next {
                 // A member split at its colon has its width on the next line.
-                None | Some(Token::Newline) => next_code_token(&self.tree.tokens, token_index + 1)
+                // A token a rewrite made has no index in the source.
+                None | Some(Token::Newline) => token_index
+                    .checked_add(1)
+                    .and_then(|start| next_code_token(&self.tree.tokens, start))
                     .map(|index| &self.tree.tokens[index]),
                 _ => next,
             });
@@ -1569,6 +1650,16 @@ impl FormatEngine<'_> {
             .trimmed()
             .trim_start_matches('}')
             .trimmed();
+        // A statement label after comments leading the line is still one.
+        let after_comments = after_leading_comments(label_text);
+        let label_text = if after_comments.len() < label_text.len()
+            && !switch_cases::is_case_label_start(after_comments)
+            && !switch_cases::is_default_label_start(after_comments)
+        {
+            after_comments
+        } else {
+            label_text
+        };
         let label_candidate = labels::is_label_start(label_text, &self.options.access_labels);
         let access_label_candidate =
             labels::is_access_label_start(label_text, &self.options.access_labels);
@@ -1577,8 +1668,9 @@ impl FormatEngine<'_> {
             && !is_range_for
             && !access_label_candidate
             && (is_asm_operand_colon || self.current.first_assignment().is_none())
-            // A comment line before a statement leaves its column pending,
-            // which continues nothing.
+            // A comment line before a statement, or a line ending a statement
+            // or opening a block, leaves its column pending, which continues
+            // nothing.
             && (self
                 .layout
                 .continuation_indent
@@ -1588,23 +1680,69 @@ impl FormatEngine<'_> {
                     .output
                     .last_non_empty_index()
                     .is_some_and(|index| is_comment_only_line(self.output[index].trimmed_start()))
+                && !self
+                    .output
+                    .last_code_line_past_comments_and_directives()
+                    .is_some_and(|previous| {
+                        self.output.code_trimmed_of(previous).ends_with_any(b"{;}")
+                    })
                 || self.in_initializer_brace()
                 || self.current_inline_array_column().is_some());
+        // A message's keyword after a block closing on the line is no label,
+        // nor is a word before a colon among parenthesized operands, as a
+        // generic selection's `default:`.
+        let in_delimiters = token_index < self.tree.tokens.len()
+            && self
+                .tree
+                .groups
+                .enclosing(token_index)
+                .is_some_and(|group| {
+                    matches!(
+                        self.tree.groups.get(group).delimiter,
+                        Delimiter::Bracket | Delimiter::Paren
+                    )
+                });
         let is_label = !has_question
             && !is_objc_colon
+            && !in_delimiters
             && !is_bit_field
             && !is_class_base
             && !is_enum_underlying_type
             && !is_range_for
             && !aligned_continuation_colon
             && label_candidate;
+        // A `?` waiting inside the innermost open bracket or paren of the
+        // line, or in its statement outside them, takes the colon there,
+        // even inside or after a message's brackets.
+        let question_in_open_delimiter = has_question && {
+            let inside = match self.current.last_unmatched_open_delimiter() {
+                Some((_, open)) => &self.current[open + 1..],
+                None => &self.current[self.current.statement_start()..],
+            };
+            // Message selectors in closed brackets hold colons of their own,
+            // and `::` is no colon.
+            let bytes = inside.as_bytes();
+            let (mut questions, mut colons, mut depth, mut index) = (0usize, 0usize, 0usize, 0);
+            while index < bytes.len() {
+                match bytes[index] {
+                    b'?' => questions += 1,
+                    b'[' => depth += 1,
+                    b']' => depth = depth.saturating_sub(1),
+                    b':' if bytes.get(index + 1) == Some(&b':') => index += 1,
+                    b':' if depth == 0 => colons += 1,
+                    _ => {}
+                }
+                index += 1;
+            }
+            questions > colons
+        };
         let is_ternary = has_question
             && !is_label
             && !is_bit_field
             && !is_class_initializer
             && !is_class_base
             && !is_enum_underlying_type
-            && !is_objc_colon
+            && (!is_objc_colon || question_in_open_delimiter)
             && !is_objc_interface_colon
             && !aligned_continuation_colon;
         let in_objc_message = self.current.has_unclosed_bracket();
@@ -1640,7 +1778,7 @@ impl FormatEngine<'_> {
             asm_operand: is_asm_operand_colon,
             class_initializer: is_class_initializer,
             function_try_initializer,
-            objc_selector: is_objc_colon,
+            objc_selector: is_objc_colon && !is_ternary,
             objc_interface: is_objc_interface_colon,
             enum_underlying_type: is_enum_underlying_type,
             class_base: is_class_base,
@@ -1736,10 +1874,24 @@ impl FormatEngine<'_> {
             return false;
         }
         let current = self.current.trimmed_end();
-        let segment = current
-            .rfind([';', '{', '}'])
-            .map_or(current, |index| &current[index + 1..])
-            .trimmed();
+        // A colon leading its line goes on with the member before it.
+        let current = if current.is_empty() {
+            match self.output.last_code_line_past_comments_and_directives() {
+                Some(line) => self.output.code_trimmed_of(line),
+                None => return false,
+            }
+        } else {
+            current
+        };
+        if current.ends_with_any(b";{}") {
+            return false;
+        }
+        let segment = after_leading_comments(
+            current
+                .rfind([';', '{', '}'])
+                .map_or(current, |index| &current[index + 1..])
+                .trimmed(),
+        );
         if segment.is_empty()
             || segment.contains('?')
             || in_class && labels::is_access_label_start(segment, &self.options.access_labels)
@@ -1754,12 +1906,15 @@ impl FormatEngine<'_> {
     }
 
     fn is_class_initializer_colon(&self) -> bool {
-        let code = &self.current[..self.current_trailing_comment_split_limit()];
+        // Comments leading the head take no part in it.
+        let code = after_leading_comments(self.current.trimmed());
+        let code = &code[..trailing_comment_split_limit(code)];
         self.code_is_class_initializer_signature(code.trimmed_end())
     }
 
     pub(crate) fn class_initializer_follows_function_try(&self) -> bool {
-        let code = self.current[..self.current_trailing_comment_split_limit()].trimmed_end();
+        let code = after_leading_comments(self.current.trimmed());
+        let code = code[..trailing_comment_split_limit(code)].trimmed_end();
         if trailing_word(code) == "try" {
             return true;
         }
@@ -1771,7 +1926,8 @@ impl FormatEngine<'_> {
             .iter()
             .rev()
             .find_map(|line| {
-                let code = self.output.code_of(line).trimmed();
+                // Comments leading a line's code take no part in it.
+                let code = after_leading_comments(self.output.code_of(line).trimmed());
                 (!code.is_empty() && !code.starts_with_any(b"#/*")).then_some(code)
             })
             .is_some_and(|code| trailing_word(code) == "try")
@@ -1816,27 +1972,22 @@ impl FormatEngine<'_> {
         if self.is_class_initializer_colon() {
             return true;
         }
-        if !self.current[..self.current_trailing_comment_split_limit()]
-            .trimmed()
-            .is_empty()
+        // Comments leading the colon's line take no part in it.
+        if !after_leading_comments(
+            self.current[..self.current_trailing_comment_split_limit()].trimmed(),
+        )
+        .is_empty()
         {
             return false;
         }
         let Some(line) = self.output.scoped().iter().rev().find(|line| {
             let trimmed = line.trimmed_start();
-            !trimmed.is_empty()
-                && !trimmed.starts_with('#')
-                && !trimmed.starts_with("//")
-                && !trimmed.starts_with("/*")
-                && (!trimmed.starts_with('*')
-                    || trimmed
-                        .split_once("*/")
-                        .is_some_and(|(_, suffix)| !suffix.trimmed().is_empty()))
+            !trimmed.is_empty() && !trimmed.starts_with('#') && !is_bare_comment_line(trimmed)
         }) else {
             return false;
         };
         let code = &self.output.code_of(line);
-        self.code_is_class_initializer_signature(code.trimmed_end())
+        self.code_is_class_initializer_signature(after_leading_comments(code.trimmed()))
     }
 
     fn ternary_owner_role_for_question(&self) -> TernaryOwnerRole {

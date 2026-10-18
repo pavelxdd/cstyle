@@ -632,6 +632,16 @@ impl FormatEngine<'_> {
         &self,
         line: &LineView<'_>,
     ) -> Option<usize> {
+        // A brace giving the header before the group its body in this branch
+        // opens the header's block.
+        if self
+            .output
+            .pending_tokens()
+            .and_then(|span| self.alternative_branch_body_header(span.first))
+            .is_some()
+        {
+            return None;
+        }
         let spaces = is_preprocessor_branch_body(line).then(|| {
             self.preprocessor.branch_stack.last().and_then(|branch| {
                 branch
@@ -648,32 +658,40 @@ impl FormatEngine<'_> {
         })
     }
 
-    /// Whether the line being laid out opens a nested `{ ... }` block in a
-    /// style that sets its brace a level past the body.
-    fn pending_line_opens_indented_plain_block(&self) -> bool {
+    /// Whether the line being laid out opens a nested `{ ... }` block or an
+    /// element's list in a style that sets its brace a level past the body.
+    pub(crate) fn pending_line_opens_indented_plain_block(&self) -> bool {
         self.output
             .pending_tokens()
             .and_then(|span| self.tree.groups.opened_at(span.first))
-            .is_some_and(|group| self.tree.blocks.kind(group) == Some(BlockKind::Block))
-            && self.should_indent_brace_line(BraceType::Command)
+            .is_some_and(|group| match self.tree.blocks.kind(group) {
+                Some(BlockKind::Block) => self.should_indent_brace_line(BraceType::Command),
+                Some(BlockKind::Initializer) => {
+                    self.tree.groups.get(group).parent.is_some_and(|parent| {
+                        self.tree.blocks.kind(parent) == Some(BlockKind::Initializer)
+                    }) && self.should_indent_brace_line(BraceType::Array)
+                }
+                _ => false,
+            })
     }
 
+    /// Records the body column of a conditional's branch from `line`, the
+    /// code of output line `index`.
     pub(crate) fn record_preprocessor_branch_body_indent(
         &mut self,
         line: &str,
+        index: usize,
         emitted_indent_spaces: usize,
     ) {
         if !is_preprocessor_branch_body(line) {
             return;
         }
-        // A style indenting braces sets a `{` a level past its body.
-        let body_indent_spaces = if line.trimmed_start().starts_with('{')
-            && self.should_indent_brace_line(BraceType::Command)
-        {
-            emitted_indent_spaces.saturating_sub(self.options.indent_width)
-        } else {
-            emitted_indent_spaces
-        };
+        let body_indent_spaces =
+            if line.trimmed_start().starts_with('{') && self.line_brace_stands_past_body(index) {
+                emitted_indent_spaces.saturating_sub(self.options.indent_width)
+            } else {
+                emitted_indent_spaces
+            };
         if let Some(branch) = self.preprocessor.branch_stack.last_mut() {
             if branch.first_body_indent_spaces.is_none() {
                 branch.first_body_indent_spaces = Some(body_indent_spaces);
@@ -1147,6 +1165,16 @@ impl FormatEngine<'_> {
                 frame.semantic_kind == BraceSemanticKind::Command
                     && frame.header.as_deref() == Some("else")
             })
+        {
+            return None;
+        }
+        // A brace giving the header before the group its body in this branch
+        // opens the header's block.
+        if self
+            .output
+            .pending_tokens()
+            .and_then(|span| self.alternative_branch_body_header(span.first))
+            .is_some()
         {
             return None;
         }

@@ -12,10 +12,10 @@ use crate::formatter::syntax::language::{
 };
 use crate::formatter::syntax::{OperatorRole, TemplateAngle, function_name_start};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
-use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
     ContainsAnyByte, has_unclosed_delimiter_after, last_unmatched_open_delimiter,
 };
+use crate::formatter::text::line_scan::{has_hash_outside_literals, trailing_comment_split_limit};
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::pointers::{is_pointer_declaration_segment, resolved_pointer_align};
 use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
@@ -42,14 +42,25 @@ pub(crate) fn starts_ternary_arm(line: &str) -> bool {
     line.starts_with('?') || (line.starts_with(':') && !line.starts_with("::"))
 }
 
-pub(crate) fn starts_with_chain_operator(line: &str) -> bool {
-    if ["and", "or"].into_iter().any(|operator| {
-        line.strip_prefix(operator).is_some_and(|tail| {
-            tail.chars()
-                .next()
-                .is_none_or(|ch| !is_identifier_continue(ch))
+/// Whether `text` starts with the word operator `and` or `or`; a message
+/// keyword spelled so, its colon after it, names no operator.
+pub(crate) fn starts_with_word_operator(text: &str) -> bool {
+    ["and", "or"].into_iter().any(|operator| {
+        text.strip_prefix(operator).is_some_and(|tail| {
+            !tail.starts_with(is_identifier_continue) && !leads_keyword_colon(tail)
         })
-    }) {
+    })
+}
+
+/// Whether `tail`, the text after a word, holds the single colon that
+/// makes the word a message keyword.
+pub(crate) fn leads_keyword_colon(tail: &str) -> bool {
+    let tail = tail.trim_start_matches([' ', '\t']);
+    tail.starts_with(':') && !tail.starts_with("::")
+}
+
+pub(crate) fn starts_with_chain_operator(line: &str) -> bool {
+    if starts_with_word_operator(line) {
         return true;
     }
     let bytes = line.as_bytes();
@@ -315,7 +326,11 @@ pub(crate) fn array_bound_operator_column(head: &str) -> Option<usize> {
 }
 
 pub(crate) fn head_ends_binary_operator(head: &str) -> bool {
-    let head = head.trimmed_end();
+    let mut head = head.trimmed_end();
+    // A comment's close is no operator; the code before it may end in one.
+    if head.ends_with("*/") {
+        head = &head[..trailing_comment_split_limit(head)];
+    }
     ["<<", ">>", "+", "-", "*", "/", "%", "|", "&", "^"]
         .iter()
         .any(|operator| head.ends_with(operator))
@@ -325,22 +340,20 @@ pub(crate) fn head_ends_binary_operator(head: &str) -> bool {
 }
 
 pub(crate) fn head_ends_assignment_operator(head: &str) -> bool {
-    let head = head.trimmed_end();
-    let Some((start, operator)) = find_assignment_operator(head) else {
-        return false;
-    };
-    start + operator.len() == head.len()
+    // Chained assignments end with the last of them.
+    let mut rest = head.trimmed_end();
+    while let Some((start, operator)) = find_assignment_operator(rest) {
+        if start + operator.len() == rest.len() {
+            return true;
+        }
+        rest = &rest[start + operator.len()..];
+    }
+    false
 }
 
 pub(crate) fn head_starts_binary_operator(head: &str) -> bool {
     let head = head.trimmed_start();
-    if ["and", "or"].into_iter().any(|operator| {
-        head.strip_prefix(operator).is_some_and(|tail| {
-            tail.chars()
-                .next()
-                .is_none_or(|ch| !is_identifier_continue(ch))
-        })
-    }) {
+    if starts_with_word_operator(head) {
         return true;
     }
     if head.starts_with("++") || head.starts_with("--") {
@@ -394,7 +407,14 @@ impl FormatEngine<'_> {
                 .is_some_and(|alias| alias.contains('='))
             && self.layout.line_state.template_angle_depth == 0
         {
-            self.emit_source_space();
+            if self.layout.previous == PreviousToken::OpenParen && self.options.pad_parens_inside {
+                self.pad_inside_paren_space();
+            } else if self.layout.previous == PreviousToken::OpenParen && self.options.unpad_parens
+            {
+                self.trim_current_end_horizontal_space();
+            } else {
+                self.emit_source_space();
+            }
             self.current.push_str(operator);
             self.emit_trailing_source_space();
             self.layout.command_state.observe_text(operator);
@@ -883,7 +903,8 @@ impl FormatEngine<'_> {
                 self.emit_trailing_source_space();
             }
             "+" | "-" if self.is_objc_method_prefix(next) => {
-                self.trim_current_end();
+                // A comment leading the line keeps its gap before the prefix.
+                self.emit_source_space();
                 self.current.push_str(operator);
                 self.layout.objc.post_prefix = true;
                 if self.options.pad_method_prefix {
@@ -1365,16 +1386,19 @@ impl FormatEngine<'_> {
                 self.emit_trailing_source_space();
             }
         }
-        if language::is_assignment_operator(operator)
-            && (!self.in_initializer_brace() || self.innermost_brace_is_compound_literal())
-            && !self.in_aggregate_declaration_brace()
-        {
+        if language::is_assignment_operator(operator) && !self.in_aggregate_declaration_brace() {
             let rhs_next = if self.comments.next_comment_ends_line {
                 None
             } else {
                 next
             };
-            self.register_current_continuation_indent(rhs_next);
+            // A designator's value continues under it; one on the next
+            // row stands with the list's elements.
+            let value_follows = !matches!(rhs_next, None | Some(Token::Newline));
+            if !self.in_initializer_brace() || self.innermost_brace_is_brace_list() && value_follows
+            {
+                self.register_current_continuation_indent(rhs_next);
+            }
         }
         self.layout.command_state.observe_text(operator);
         self.layout.previous = PreviousToken::Operator;
@@ -1424,6 +1448,15 @@ impl FormatEngine<'_> {
                 | PreviousToken::CloseParen
                 | PreviousToken::CloseBracket
         ) || trailing_word(&self.current) == "return"
+    }
+
+    /// Whether the token being pushed comes right after an operator pushed
+    /// as a binary one, which ends no declarator type.
+    pub(crate) fn follows_binary_operator(&self) -> bool {
+        self.current
+            .active_token()
+            .and_then(|index| self.tree.previous_code_token(index))
+            .is_some_and(|before| self.pointer_run.binary_operator == Some(before))
     }
 
     /// Whether the token being pushed stands between brackets, where only
@@ -1680,8 +1713,8 @@ impl FormatEngine<'_> {
         if !matches!(operator, "<<" | ">>") {
             return;
         }
-        let line_indent_spaces = self.current_line_indent_spaces();
-        let operator_output_column = line_indent_spaces + self.current_visual_width();
+        let (line_indent_spaces, text_start) = self.current_output_indent();
+        let operator_output_column = text_start + self.current_visual_width();
         let chain_anchor_column = self
             .layout
             .frame_stack
@@ -1720,6 +1753,7 @@ impl FormatEngine<'_> {
     }
 
     fn push_binary_operator(&mut self, operator: &str) {
+        self.pointer_run.binary_operator = self.current.active_token();
         if matches!(operator, "<<" | ">>")
             && self.current.trimmed().is_empty()
             && self.stream_line_follows_multiline_braced_operand()

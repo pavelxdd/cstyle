@@ -1,10 +1,11 @@
-use crate::config::{FormatOptions, ObjCColonPad};
+use crate::config::{BraceStyle, FormatOptions, Mode, ObjCColonPad};
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, next_non_whitespace, token_text, tokenize};
 use crate::formatter::state::frame::{BracketFrame, BracketRole};
+use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
-use crate::formatter::text::line_scan::ContainsAnyByte;
+use crate::formatter::text::line_scan::{ContainsAnyByte, after_leading_comments};
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::is_identifier_continue;
@@ -166,6 +167,58 @@ pub(crate) struct ObjCLineAlignment {
 }
 
 impl FormatEngine<'_> {
+    /// The column of the keyword after the receiver of the message `line`
+    /// leaves open, unless the line being laid out starts inside a
+    /// subscript, whose brackets hold an index.
+    pub(crate) fn open_message_keyword_column(&self, line: &str) -> Option<usize> {
+        if self.pending_line_in_subscript() {
+            return None;
+        }
+        objc_message_following_keyword_column(line)
+    }
+
+    fn pending_line_in_block_body(&self) -> bool {
+        let Some(span) = self.output.pending_tokens() else {
+            return false;
+        };
+        let groups = &self.tree.groups;
+        groups
+            .enclosing(span.first)
+            .is_some_and(|group| groups.get(group).delimiter == Delimiter::Brace)
+    }
+
+    /// Whether the pending line stands directly within a message's
+    /// brackets.
+    pub(crate) fn pending_line_in_message(&self) -> bool {
+        let Some(span) = self.output.pending_tokens() else {
+            return false;
+        };
+        let groups = &self.tree.groups;
+        groups
+            .enclosing(span.first)
+            .is_some_and(|group| groups.get(group).delimiter == Delimiter::Bracket)
+            && !self.pending_line_in_subscript()
+    }
+
+    fn pending_line_in_subscript(&self) -> bool {
+        let Some(span) = self.output.pending_tokens() else {
+            return false;
+        };
+        let groups = &self.tree.groups;
+        groups.enclosing(span.first).is_some_and(|group| {
+            groups.get(group).delimiter == Delimiter::Bracket
+                && self
+                    .tree
+                    .previous_code_token(groups.get(group).open)
+                    .is_some_and(|before| match &self.tree.tokens[before] {
+                        Token::Word(word) => word != "return",
+                        Token::Symbol(']') => true,
+                        Token::Symbol(')') => self.options.mode != Mode::ObjC,
+                        _ => false,
+                    })
+        })
+    }
+
     pub(crate) fn objc_dictionary_indent_spaces(
         &self,
         line: &LineView<'_>,
@@ -300,6 +353,15 @@ impl FormatEngine<'_> {
         mut exact_indent_spaces: Option<usize>,
     ) -> ObjCLineAlignment {
         let line_start = line.trimmed_start();
+        // A directive within a message leaves its alignment to the rows
+        // after it.
+        if line_start.starts_with('#') && self.layout.objc.message_active {
+            return ObjCLineAlignment {
+                indent_level,
+                exact_indent_spaces,
+                restore_message_align: None,
+            };
+        }
         if self
             .layout
             .previous_pre_adjust_line
@@ -372,23 +434,12 @@ impl FormatEngine<'_> {
             let base = exact_indent_spaces.unwrap_or_else(|| {
                 ContinuationIndent::Level(indent_level).columns(self.options.indent_width)
             });
-            if self.options.align_method_colon {
-                if let Some(colon) = objc_method_colon_position(line) {
-                    self.layout.objc.colon_align = Some(base + colon);
-                    self.layout.objc.message_pending_align = false;
-                } else if !self.layout.objc.message_active {
-                    self.layout.objc.message_pending_align = false;
-                }
-            } else {
-                self.layout.objc.message_pending_align = false;
-                self.layout.objc.message_align =
-                    objc_message_following_keyword_column(line).map(|column| base + column);
-                if !self.layout.objc.message_active {
-                    self.layout.objc.message_align = None;
-                }
-            }
+            self.begin_objc_message_alignment(line, base);
         } else if let Some(align) = self.layout.objc.message_align
-            && !line_start.starts_with_any(b"{}")
+            // A closer stands at its bracket, not at the message's rows.
+            && !line_start.starts_with_any(b"{}]")
+            // A block's body stands at its statement, as in a call.
+            && !self.pending_line_in_block_body()
         {
             let natural = exact_indent_spaces.unwrap_or_else(|| {
                 ContinuationIndent::Level(indent_level).columns(self.options.indent_width)
@@ -431,6 +482,39 @@ impl FormatEngine<'_> {
             indent_level,
             exact_indent_spaces,
             restore_message_align,
+        }
+    }
+
+    /// The column that sets the colon of the message row starting at token
+    /// `first` under the colons of its message.
+    pub(crate) fn objc_colon_aligned_row_spaces(&self, first: usize) -> Option<usize> {
+        let align = self.layout.objc.colon_align?;
+        let row = self.tree.tokens[first..]
+            .iter()
+            .take_while(|token| !matches!(token, Token::Newline))
+            .map(token_text)
+            .collect::<String>();
+        let colon = objc_method_colon_position(&row)?;
+        align.checked_sub(colon)
+    }
+
+    /// Sets the alignment of a message's rows from the line `line`, set
+    /// at column `base`, that opens it.
+    pub(crate) fn begin_objc_message_alignment(&mut self, line: &str, base: usize) {
+        if self.options.align_method_colon {
+            if let Some(colon) = objc_method_colon_position(line) {
+                self.layout.objc.colon_align = Some(base + colon);
+                self.layout.objc.message_pending_align = false;
+            } else if !self.layout.objc.message_active {
+                self.layout.objc.message_pending_align = false;
+            }
+        } else {
+            self.layout.objc.message_pending_align = false;
+            self.layout.objc.message_align =
+                objc_message_following_keyword_column(line).map(|column| base + column);
+            if !self.layout.objc.message_active {
+                self.layout.objc.message_align = None;
+            }
         }
     }
 
@@ -498,15 +582,51 @@ impl FormatEngine<'_> {
         if line_start != "}" {
             return None;
         }
+        // A block inside the method closes as any other.
+        let groups = &self.tree.groups;
+        let body = self
+            .output
+            .pending_tokens()
+            .filter(|span| matches!(self.tree.tokens[span.first], Token::Symbol('}')))
+            .and_then(|span| groups.closed_at(span.first));
+        if body.is_some_and(|block| groups.get(block).parent.is_some()) {
+            return None;
+        }
         let previous_index = (0..self.output.len())
             .rev()
             .find(|&index| !self.output.trimmed(index).is_empty())?;
-        (self.output.code(previous_index).ends_with("];")
+        if !(self.output.code(previous_index).ends_with("];")
             && (0..self.output.len())
                 .rev()
                 .take(16)
                 .any(|index| self.output.trimmed(index).starts_with("- (")))
-        .then_some(0)
+        {
+            return None;
+        }
+        // The body closes at its brace, or, attached, at its header; Ratliff
+        // closes it a level in.
+        let Some(open) = body.map(|block| groups.get(block).open) else {
+            return Some(0);
+        };
+        let line = self.output.line_with_token(open)?;
+        let attached = self
+            .output
+            .line_tokens(line)
+            .is_some_and(|span| span.first != open);
+        // An attached brace closes at the line its method header starts.
+        let header_line = if attached {
+            (0..=line).rev().take(16).find(|&index| {
+                let trimmed = self.output.trimmed(index);
+                trimmed.starts_with("- (") || trimmed.starts_with("+ (")
+            })?
+        } else {
+            line
+        };
+        Some(
+            self.output.lead_width(header_line, self.options.tab_width)
+                + usize::from(attached && self.options.brace_style == BraceStyle::Ratliff)
+                    * self.options.indent_width,
+        )
     }
 
     pub(crate) fn output_ends_objc_method_header(&self) -> bool {
@@ -549,13 +669,15 @@ impl FormatEngine<'_> {
         if self.layout.nesting.paren_depth > 0 {
             return false;
         }
-        let line = self.current.trimmed_start();
+        // Comments leading the line take no part in the method's head.
+        let line = after_leading_comments(self.current.trimmed_start());
         line.strip_prefix(['-', '+'])
             .is_some_and(|rest| rest.trimmed_start().starts_with('('))
     }
 
     pub(crate) fn is_objc_method_prefix(&self, next: Option<&Token>) -> bool {
-        matches!(next, Some(Token::Symbol('('))) && self.current.trimmed().is_empty()
+        matches!(next, Some(Token::Symbol('(')))
+            && after_leading_comments(self.current.trimmed()).is_empty()
     }
 
     pub(crate) fn compute_objc_method_colon_align(
@@ -634,7 +756,9 @@ impl FormatEngine<'_> {
 
     pub(crate) fn is_objc_standalone_line(&self) -> bool {
         matches!(
-            self.current.split_whitespace().next(),
+            after_leading_comments(&self.current)
+                .split_whitespace()
+                .next(),
             Some(
                 "@interface"
                     | "@implementation"

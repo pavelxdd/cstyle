@@ -2,14 +2,16 @@ use crate::config::{BraceStyle, FormatOptions, IndentStyle};
 use crate::formatter::braces::classification::{
     is_lambda_body_header, is_namespace_or_module_block_header,
 };
+use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::constructs::{labels, switch_cases};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{self, Token};
 use crate::formatter::state::indentation::LineKind;
+use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, line_ends_with_comment, line_paren_imbalance, preprocessor_directive,
-    trailing_comment_split_limit,
+    ContainsAnyByte, is_bare_comment_line, line_ends_with_comment, line_paren_imbalance,
+    preprocessor_directive, trailing_comment_split_limit,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -27,15 +29,68 @@ pub(crate) fn postprocess_brace_style(output: String, options: &FormatOptions) -
             let run_in = run_in_horstmann_opening_braces(&output, options);
             attach_lisp_closing_braces(&run_in, options.line_break())
         }
-        BraceStyle::Lisp => {
-            attach_lisp_closing_braces_aligning_parens(&output, options.line_break())
-        }
+        BraceStyle::Lisp => attach_lisp_closing_braces(&output, options.line_break()),
         BraceStyle::Horstmann => run_in_horstmann_opening_braces(&output, options),
         _ => output,
     }
 }
 
 impl FormatEngine<'_> {
+    /// The padding due before a closer the run-in styles join to the row
+    /// before it goes ahead of that row, and of a lone brace running into it.
+    pub(crate) fn lift_joined_closer_padding(&mut self) {
+        let lines = std::mem::take(&mut self.joined_closer_padding_lines);
+        for blank in lines.into_iter().rev() {
+            let Some(row) = blank.checked_sub(1) else {
+                continue;
+            };
+            let joins = self
+                .output
+                .get(blank)
+                .is_some_and(|line| line.trimmed().is_empty())
+                && self
+                    .output
+                    .get(blank + 1)
+                    .is_some_and(|line| line.trimmed_start().starts_with('}'))
+                && {
+                    let previous = &self.output[row];
+                    !previous.trimmed().is_empty()
+                        && preprocessor_directive(previous.trimmed_start()).is_none()
+                        && !previous.trimmed_end().ends_with('\\')
+                        && !line_ends_with_comment(previous)
+                };
+            if !joins {
+                continue;
+            }
+            let target = if self.options.brace_style == BraceStyle::Pico
+                && row > 0
+                && self.output[row - 1].trimmed() == "{"
+            {
+                row - 1
+            } else {
+                row
+            };
+            // An empty line already before the row pads it.
+            if target > 0 && self.output[target - 1].trimmed().is_empty() {
+                self.output.remove(blank);
+                for line in &mut self.source_run_in_brace_lines {
+                    if *line > blank {
+                        *line -= 1;
+                    }
+                }
+                continue;
+            }
+            for index in (target..blank).rev() {
+                self.output.swap_lines(index, index + 1);
+            }
+            for line in &mut self.source_run_in_brace_lines {
+                if (target..blank).contains(line) {
+                    *line += 1;
+                }
+            }
+        }
+    }
+
     pub(crate) fn merge_source_run_in_braces(&mut self) {
         let mut indices = std::mem::take(&mut self.source_run_in_brace_lines);
         indices.sort_unstable();
@@ -48,7 +103,14 @@ impl FormatEngine<'_> {
                 continue;
             }
             let next_line = self.output.remove(index + 1);
-            let fill = horstmann_run_in_fill(&self.output[index], &next_line, self.options);
+            // The tab pass leaves the fill before a comment alone, so it is
+            // written as the finished output indents.
+            let next_text = next_line.trimmed_start();
+            let fill = if next_text.starts_with("//") || next_text.starts_with("/*") {
+                horstmann_run_in_fill(&self.output[index], &next_line, &self.output_options())
+            } else {
+                horstmann_run_in_fill(&self.output[index], &next_line, self.options)
+            };
             let merged = format!(
                 "{}{}{}",
                 self.output[index],
@@ -215,7 +277,10 @@ impl FormatEngine<'_> {
         };
         // A body that closes on the line was kept whole; splitting the
         // header off would drop it.
-        if !is_lambda_body_header(line[..open].trimmed_end()) || line[open + 1..].contains('}') {
+        if !is_lambda_body_header(line[..open].trimmed_end())
+            || line[open + 1..].contains('}')
+            || self.pending_brace_stands_in_brace_list()
+        {
             return false;
         }
         self.finish_line_text(line[..open].trimmed_end());
@@ -232,6 +297,23 @@ impl FormatEngine<'_> {
             self.finish_line_text("{");
         }
         true
+    }
+
+    /// Whether the `{` ending the pending line stands among a brace list's
+    /// elements, which keep their braces on their rows.
+    fn pending_brace_stands_in_brace_list(&self) -> bool {
+        let groups = &self.tree.groups;
+        self.output
+            .pending_tokens()
+            .and_then(|span| self.tree.previous_code_token(span.last + 1))
+            .filter(|&brace| matches!(self.tree.tokens[brace], Token::Symbol('{')))
+            .and_then(|brace| groups.enclosing(brace))
+            .is_some_and(|list| {
+                matches!(
+                    self.tree.blocks.kind(list),
+                    Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                )
+            })
     }
 
     pub(crate) fn try_split_operator_body(&mut self, line: &LineView<'_>) -> bool {
@@ -323,14 +405,6 @@ fn raw_literal_lines(output: &str, line_break: &str) -> Vec<bool> {
 }
 
 fn attach_lisp_closing_braces(output: &str, line_break: &str) -> String {
-    attach_closing_braces(output, line_break, false)
-}
-
-fn attach_lisp_closing_braces_aligning_parens(output: &str, line_break: &str) -> String {
-    attach_closing_braces(output, line_break, true)
-}
-
-fn attach_closing_braces(output: &str, line_break: &str, align_parens: bool) -> String {
     let raw_lines = raw_literal_lines(output, line_break);
     let mut lines: Vec<String> = Vec::new();
     // The columns rows of a paren a joined closer's line opens move by, and
@@ -367,21 +441,20 @@ fn attach_closing_braces(output: &str, line_break: &str, align_parens: bool) -> 
             && !previous.trimmed_end().ends_with('\\')
             && !line_ends_with_comment(previous)
         {
-            if !previous.trimmed_end().ends_with('{') {
+            // A gap the source left before the closer stays as written.
+            if !previous.trimmed_end().ends_with('{') && !previous.ends_with([' ', '\t']) {
                 previous.push(' ');
             }
             // astyle measures a paren the line leaves open from the joined
             // line's text at the closer's level.
-            if align_parens {
-                let (_, opens) = line_paren_imbalance(trimmed);
-                // A paren that ends the line takes an indent, not its column.
-                if opens.last().is_some_and(|&column| {
-                    !trimmed[column + 1..trailing_comment_split_limit(trimmed).max(column + 1)]
-                        .trim()
-                        .is_empty()
-                }) {
-                    paren_shift = Some((previous.trimmed_start().len(), opens.len()));
-                }
+            let (_, opens) = line_paren_imbalance(trimmed);
+            // A paren that ends the line takes an indent, not its column.
+            if opens.last().is_some_and(|&column| {
+                !trimmed[column + 1..trailing_comment_split_limit(trimmed).max(column + 1)]
+                    .trim()
+                    .is_empty()
+            }) {
+                paren_shift = Some((previous.trimmed_start().len(), opens.len()));
             }
             // The brace moves up a column and its comment follows it.
             let code = trimmed[..trailing_comment_split_limit(trimmed)].trimmed_end();
@@ -421,15 +494,18 @@ fn run_in_horstmann_opening_braces(output: &str, options: &FormatOptions) -> Str
             input[..brace_at]
                 .iter()
                 .rev()
-                .find(|line| !line.trimmed().is_empty())
-                .is_some_and(|line| line.trimmed_end().ends_with_any(b"=,({"))
+                .find(|line| !line.trimmed().is_empty() && !is_bare_comment_line(line.trimmed()))
+                .is_some_and(|line| {
+                    let code = line[..trailing_comment_split_limit(line)].trimmed_end();
+                    code.ends_with_any(b"=,({") || line_ends_compound_literal_cast(code)
+                })
         };
         let runs_in = |brace: &str, at: usize| {
             !raw_lines[at - 1]
                 && brace.trimmed() == "{"
                 && input.get(at).is_some_and(|next| {
                     !next.trimmed().is_empty()
-                        && (next.trimmed() != "{" || opens_aggregate(at - 1))
+                        && (!next.trimmed_start().starts_with('{') || opens_aggregate(at - 1))
                         && !next.trimmed_start().starts_with('#')
                         && !next.trimmed_start().starts_with('}')
                         && !next.starts_with("//")
@@ -522,9 +598,12 @@ fn run_in_next_line_is_access_label(
     next_line: &str,
     options: &FormatOptions,
 ) -> bool {
-    labels::is_access_label(next_line, &options.access_labels)
-        && leading_visual_width(next_line, options.tab_width)
-            <= leading_visual_width(brace_line, options.tab_width)
+    // A comment trailing the label leaves it a label.
+    labels::is_access_label(
+        &next_line[..trailing_comment_split_limit(next_line)],
+        &options.access_labels,
+    ) && leading_visual_width(next_line, options.tab_width)
+        <= leading_visual_width(brace_line, options.tab_width)
 }
 
 fn previous_line_is_namespace_header(input: &[&str], before: usize) -> bool {
@@ -541,13 +620,16 @@ pub(crate) fn horstmann_run_in_fill(
     options: &FormatOptions,
 ) -> String {
     let switch_label = switch_cases::find_case_colon(next_line.trimmed_start()).is_some();
-    if !matches!(options.indent_style, IndentStyle::ForceTabs)
-        && labels::is_access_label(next_line, &options.access_labels)
-    {
+    // An access label runs in at its own column, right after the brace
+    // when that is where it stands.
+    if labels::is_access_label(
+        &next_line[..trailing_comment_split_limit(next_line)],
+        &options.access_labels,
+    ) {
         let tab_width = options.tab_width.max(1);
         let brace_column = leading_visual_width(brace_line, tab_width);
         let target_column = leading_visual_width(next_line, tab_width);
-        if options.indent_style == IndentStyle::Tabs {
+        if options.indent_style != IndentStyle::Spaces {
             let mut fill = String::new();
             let mut column = brace_column + 1;
             while column < target_column {
@@ -559,13 +641,9 @@ pub(crate) fn horstmann_run_in_fill(
                 column = next_stop;
             }
             fill.push_str(&" ".repeat(target_column.saturating_sub(column)));
-            return if fill.is_empty() {
-                " ".to_string()
-            } else {
-                fill
-            };
+            return fill;
         }
-        return " ".repeat(target_column.saturating_sub(brace_column + 1).max(1));
+        return " ".repeat(target_column.saturating_sub(brace_column + 1));
     }
     match options.indent_style {
         IndentStyle::Spaces => {
@@ -581,8 +659,7 @@ pub(crate) fn horstmann_run_in_fill(
                     .max(options.indent_width.saturating_sub(1)),
             )
         }
-        IndentStyle::Tabs => "\t".to_string(),
-        IndentStyle::ForceTabs => {
+        IndentStyle::Tabs | IndentStyle::ForceTabs => {
             let tab_width = options.tab_width.max(1);
             let brace_column = leading_visual_width(brace_line, tab_width);
             let target_column = if switch_label {

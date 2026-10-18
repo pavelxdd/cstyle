@@ -3,6 +3,7 @@ use crate::formatter::constructs::headers::is_header;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::state::BraceType;
+use crate::formatter::text::line_scan::after_leading_comments;
 use crate::formatter::text::trim::Trimmed;
 
 impl FormatEngine<'_> {
@@ -31,6 +32,20 @@ impl FormatEngine<'_> {
     pub(crate) fn should_preserve_input_empty_line(&self) -> bool {
         !self.should_delete_input_empty_line()
             || self.should_keep_empty_line_before_attached_definition_brace()
+    }
+
+    /// Publishes an empty line ahead of the line being laid out, whose
+    /// frames move down with it.
+    pub(crate) fn push_empty_line_before_pending(&mut self) {
+        let line = self.output.len();
+        self.push_empty_line();
+        self.layout.frame_stack.shift_output_lines_from(line);
+        for frame in &mut self.inline_array.frames {
+            if frame.output_line >= line {
+                frame.output_line += 1;
+            }
+        }
+        self.layout.blank_lines_before_pending += 1;
     }
 
     pub(crate) fn push_empty_line(&mut self) {
@@ -63,7 +78,8 @@ impl FormatEngine<'_> {
         if !code.ends_with(')') || code.starts_with('#') {
             return false;
         }
-        let first = code
+        let first = after_leading_comments(code)
+            .trimmed_start()
             .split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
             .next()
             .unwrap_or_default();
@@ -76,10 +92,16 @@ impl FormatEngine<'_> {
             && !self.layout.nesting.brace_type_stack.is_empty()
             && !self.preserve_block_spacing_comment_blank
             && !self.in_empty_line_protected_context()
+            // An empty line after a line splice ends the spliced line.
+            && !self
+                .output
+                .last()
+                .is_some_and(|line| line.trimmed_end().ends_with('\\'))
     }
 
     fn in_empty_line_protected_context(&self) -> bool {
-        // astyle keeps the empty lines of an array, in functions too.
+        // astyle keeps the empty lines of an array, an enum's list or a type's
+        // body, in functions too.
         if matches!(
             self.layout.nesting.brace_type_stack.last(),
             Some(
@@ -87,6 +109,11 @@ impl FormatEngine<'_> {
                     | BraceType::DeferArray
                     | BraceType::Initializer
                     | BraceType::CompoundLiteral
+                    | BraceType::Enum
+                    | BraceType::Struct
+                    | BraceType::Union
+                    | BraceType::Class
+                    | BraceType::Interface
             )
         ) {
             return true;

@@ -138,6 +138,25 @@ impl Groups {
         self.groups.len()
     }
 
+    /// The last brace a later conditional branch opens in place of the
+    /// opener of `id`: left unclosed, in the same parent, before `id`'s
+    /// closer.
+    pub(crate) fn last_branch_alternative(&self, id: GroupId) -> Option<GroupId> {
+        let group = self.get(id);
+        let close = group.close?;
+        self.groups[id.index() + 1..]
+            .iter()
+            .enumerate()
+            .take_while(|(_, other)| other.open < close)
+            .filter(|(_, other)| {
+                other.delimiter == Delimiter::Brace
+                    && other.close.is_none()
+                    && other.parent == group.parent
+            })
+            .last()
+            .map(|(offset, _)| GroupId::new(id.index() + 1 + offset))
+    }
+
     pub(crate) fn ids(&self) -> impl Iterator<Item = GroupId> + '_ {
         (0..self.groups.len()).map(GroupId::new)
     }

@@ -11,12 +11,14 @@ use crate::formatter::state::frame::{
     ColonRole, FrameStack, LogicalOperator, ParenRole, TernaryOwnerRole,
 };
 use crate::formatter::state::indentation::LineKind;
+use crate::formatter::structure::blocks::next_code_token;
 use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::text::columns::column_after;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, is_comment_line, last_unmatched_open_delimiter, trailing_comment_split_limit,
-    unmatched_open_paren_column, unmatched_open_paren_columns,
+    ContainsAnyByte, is_bare_comment_line, is_comment_line, last_unmatched_open_delimiter,
+    leads_with_operator, trailing_comment_split_limit, unmatched_open_paren_column,
+    unmatched_open_paren_columns,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -332,8 +334,8 @@ impl FormatEngine<'_> {
             || current.starts_with_any(b"{}#")
             || current.starts_with("//")
             || current.starts_with("/*")
-            // A compound literal's field continues no operator.
-            || current.starts_with('.') && self.innermost_brace_is_compound_literal()
+            // A brace list's designator continues no operator.
+            || current.starts_with('.') && self.innermost_brace_is_brace_list()
         {
             return None;
         }
@@ -345,10 +347,11 @@ impl FormatEngine<'_> {
             .trimmed_end();
         let previous_trimmed = previous_code.trimmed_start();
         let current_starts_operator = current.starts_with_any(b"<>|&+-*/%=!?:,.");
-        // The ` */` of a block comment does not start with an operator.
+        // The ` */` of a block comment does not start with an operator, nor
+        // does a comment leading the line.
         let previous_starts_operator = self.output.comment_start_index(previous_index)
             == previous_index
-            && previous_trimmed.starts_with_any(b"<>|&+-*/%=!?:,.");
+            && leads_with_operator(previous_trimmed, b"<>|&+-*/%=!?:,.");
         if current_starts_operator && previous_starts_operator {
             if self.preprocessor.split_else.extra_indent
                 && (current.starts_with("&&") || current.starts_with("||"))
@@ -410,11 +413,13 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let previous = self.output.last_line_outside_comment()?;
+        let previous = self.output.last_code_line_past_comments_and_directives()?;
         let previous_trimmed = previous.trimmed_end();
+        // Indenting after parens continues a chain a level in, at no shift.
         if !previous_trimmed.ends_with('}')
             && !((previous_trimmed.contains(" << ") || previous_trimmed.contains(" >> "))
-                && self.open_paren_column_of(previous_trimmed).is_none())
+                && self.open_paren_column_of(previous_trimmed).is_none()
+                && !self.options.indent_after_parens)
         {
             return None;
         }
@@ -447,7 +452,11 @@ impl FormatEngine<'_> {
         previous_code: &str,
         current_spaces: Option<usize>,
     ) -> Option<usize> {
-        if !previous_code.ends_with(',') || !self.previous_statement_is_braceless_ternary() {
+        // Parens that indent after them align no argument.
+        if self.options.indent_after_parens
+            || !previous_code.ends_with(',')
+            || !self.previous_statement_is_braceless_ternary()
+        {
             return None;
         }
         let target = self.open_paren_column_of(previous_code)?
@@ -581,7 +590,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
-        if !is_comment_line(previous.trimmed_start()) {
+        if !is_bare_comment_line(previous.trimmed_start()) {
             return None;
         }
         let before_comment = self
@@ -613,7 +622,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
-        if !is_comment_line(previous.trimmed_start()) {
+        if !is_bare_comment_line(previous.trimmed_start()) {
             return None;
         }
         let before_comment = self
@@ -931,7 +940,7 @@ impl FormatEngine<'_> {
             let raw = &self.output[scan_index];
             let code = self.output.code_before_comment(scan_index).trimmed_end();
             // A macro's body continues no statement after it.
-            if code.ends_with('\\') || raw.trimmed_start().starts_with('#') {
+            if code.ends_with('\\') || self.output.is_directive_line(scan_index) {
                 return None;
             }
             if code.contains('?') {
@@ -958,7 +967,7 @@ impl FormatEngine<'_> {
         }
         let previous = self.output.last_non_empty_scoped()?;
         let previous_code = self.output.code_trimmed_of(previous);
-        if !previous_code.ends_with(':') {
+        if !previous_code.ends_with(':') || self.output.last_non_empty_ends_macro_body() {
             return None;
         }
         let mut branch_indent = Some(leading_visual_width(previous, self.options.tab_width));
@@ -1097,17 +1106,21 @@ impl FormatEngine<'_> {
         {
             return None;
         }
+        // The ternary is one of the statement the row continues.
         let mut saw_colon_argument = false;
-        let has_recent_ternary_argument = (0..self.output.len()).rev().take(16).any(|index| {
+        let mut has_recent_ternary_argument = false;
+        for index in self.output.scoped_range().rev().take(16) {
             let code = self.output.code(index);
             let trimmed_code = self.output.code_trimmed(index);
             if trimmed_code.starts_with(':') && code.ends_with(',') {
                 saw_colon_argument = true;
-                false
-            } else {
-                saw_colon_argument && trimmed_code.contains('?')
+            } else if saw_colon_argument && trimmed_code.contains('?') {
+                has_recent_ternary_argument = true;
+                break;
+            } else if trimmed_code.ends_with_any(b";{}") {
+                break;
             }
-        });
+        }
         has_recent_ternary_argument.then_some(
             leading_visual_width(previous, self.options.tab_width)
                 + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width,
@@ -1926,21 +1939,37 @@ impl FormatEngine<'_> {
             .map(|head| head.line_indent_spaces)
     }
 
+    /// The columns of the paren or bracket enclosing the start of the line
+    /// being laid out, when output line `line` opened it, and of the code
+    /// after it there, which the rows inside align with.
+    fn pending_line_open_delimiter_columns(&self, line: usize) -> Option<(usize, usize)> {
+        let groups = &self.tree.groups;
+        let group = groups.enclosing(self.output.pending_tokens()?.first)?;
+        let open = groups.get(group).open;
+        if groups.get(group).delimiter == Delimiter::Brace
+            || self.output.line_with_token(open) != Some(line)
+        {
+            return None;
+        }
+        let open_column = self.token_column(open)?;
+        let operand_column = next_code_token(&self.tree.tokens, open + 1)
+            .filter(|&next| self.output.line_with_token(next) == Some(line))
+            .and_then(|next| self.token_column(next))
+            .unwrap_or(open_column + 1);
+        Some((open_column, operand_column))
+    }
+
     fn parenthesized_stream_indent_for_line(&self, line: usize) -> Option<usize> {
         let stream = self.layout.frame_stack.first_stream_on_output_line(line)?;
         if !stream.line_has_unmatched_open_paren {
             return None;
         }
-        let delimiter_column = self
-            .layout
-            .frame_stack
-            .first_delimiter_column_after_output_column(line, stream.operator_output_column)?;
+        let (delimiter_column, paren_spaces) = self.pending_line_open_delimiter_columns(line)?;
         if stream.operator_output_column >= delimiter_column {
             return None;
         }
         let line_indent = stream.line_indent_spaces;
         let stream_spaces = stream.operator_output_column;
-        let paren_spaces = delimiter_column + 1;
         let starts_with_operator = stream.operator_output_column == line_indent;
         let spaces = if starts_with_operator
             || paren_spaces.saturating_sub(line_indent) <= self.options.max_continuation_indent
@@ -2579,7 +2608,7 @@ impl FormatEngine<'_> {
     }
 }
 
-fn assignment_value_column(code: &str, tab_width: usize) -> Option<usize> {
+pub(crate) fn assignment_value_column(code: &str, tab_width: usize) -> Option<usize> {
     let (assignment, operator) = find_assignment_operator(code)?;
     let after_operator = assignment + operator.len();
     let value_start = code[after_operator..]

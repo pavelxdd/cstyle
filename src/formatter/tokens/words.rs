@@ -1,6 +1,6 @@
 use crate::config::{BraceStyle, PointerAlign};
 use crate::formatter::braces::classification::contains_one_line_block;
-use crate::formatter::braces::rewrite::is_defer_header;
+use crate::formatter::braces::rewrite::{is_defer_header, removes_braces_of_block};
 use crate::formatter::constructs::headers::{
     is_add_braces_header, is_attachable_closing_header, is_header,
 };
@@ -10,15 +10,16 @@ use crate::formatter::lexer::Token;
 use crate::formatter::state::frame::BracelessHeaderFrame;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
+use crate::formatter::structure::blocks::is_code_token;
 use crate::formatter::text::columns::leading_visual_width;
-use crate::formatter::text::line_scan::ContainsAnyByte;
+use crate::formatter::text::line_scan::{ContainsAnyByte, after_leading_comments};
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::pointers::resolved_pointer_align;
 use crate::source::lex::leading_identifier;
 
 impl FormatEngine<'_> {
     pub(crate) fn push_word(&mut self, word: &str, next: Option<&Token>) {
-        self.break_line_before_word(word);
+        self.break_line_before_word(word, next);
         let previous_non_ws_char = self.layout.command_state.previous_non_ws_char;
         self.record_braceless_header_frames(word, next);
         self.align_else_after_braceless_body(word);
@@ -28,8 +29,41 @@ impl FormatEngine<'_> {
         self.push_word_text(word, next, previous_non_ws_char);
     }
 
-    fn break_line_before_word(&mut self, word: &str) {
+    /// Whether code that stays on its line follows the closing header
+    /// being pushed: no line end, no block brace the style breaks onto a
+    /// line of its own, and no block that removing braces takes away.
+    fn closing_header_goes_on(&self, next: Option<&Token>) -> bool {
+        match next {
+            None | Some(Token::Newline | Token::Comment(..)) => false,
+            Some(Token::Symbol('{')) => {
+                let breaks_brace = matches!(
+                    self.options.brace_style,
+                    BraceStyle::Allman
+                        | BraceStyle::Whitesmith
+                        | BraceStyle::Vtk
+                        | BraceStyle::Gnu
+                        | BraceStyle::Horstmann
+                        | BraceStyle::Pico
+                );
+                let removes_block = self.options.remove_braces
+                    && self.current.active_token().is_some_and(|keyword| {
+                        let tokens = &self.tree.tokens;
+                        (keyword + 1..tokens.len())
+                            .find(|&index| !matches!(tokens[index], Token::Whitespace(_)))
+                            .is_some_and(|open| removes_braces_of_block(tokens, open))
+                    });
+                !breaks_brace && !removes_block
+            }
+            Some(_) => true,
+        }
+    }
+
+    fn break_line_before_word(&mut self, word: &str, next: Option<&Token>) {
+        // Kept one-line statements keep a closing header on their line
+        // with what goes on after it there, unless removing braces takes
+        // that away.
         if self.options.break_one_line_headers
+            && !(self.options.keeps_multi_statement_line() && self.closing_header_goes_on(next))
             && !self.one_line_block_mode
             && matches!(word, "else" | "while")
             && self.current.trimmed_end().ends_with(';')
@@ -42,21 +76,27 @@ impl FormatEngine<'_> {
         }
         if self.options.brace_style == BraceStyle::Whitesmith
             && !self.one_line_block_mode
+            // A colon inside parens, as a range-for's, ends no label.
+            && self.layout.nesting.paren_depth == 0
             && !self.current_line_has_class_initializer_colon
+            && !self.layout.in_class_base_clause
+            && !self.line_colon_ends_class_head()
             && !self.layout.line_state.ternary_colon
             && !self.layout.objc.message_active
-            && !self.current.trimmed_start().starts_with("@interface ")
+            && !after_leading_comments(self.current.trimmed_start()).starts_with("@interface ")
             && !self.current.has_unclosed_bracket()
             && self.current.trimmed_end().ends_with(':')
             && !self.current.trimmed_end().ends_with("::")
             && self.current.last_question().is_none()
-            && switch_cases::find_case_colon(self.current.trimmed_end()).is_none()
+            && switch_cases::find_case_colon(
+                self.current
+                    .trimmed()
+                    .trim_start_matches('}')
+                    .trimmed_start(),
+            )
+            .is_none()
             && !self.current.trimmed_start().starts_with('#')
-            && self
-                .current
-                .trimmed_end()
-                .trim_end_matches(':')
-                .trimmed_end()
+            && after_leading_comments(self.current.trimmed_end().trim_end_matches(':').trimmed_end())
                 .contains(|ch: char| {
                     !(ch.is_ascii_alphanumeric() || ch == '_' || ch.is_whitespace())
                 })
@@ -84,6 +124,23 @@ impl FormatEngine<'_> {
             self.layout.indentation.clear_continuation_indents();
             self.layout.nesting.clear_continuation_indents();
         }
+    }
+
+    /// Whether the colon ending the line opens the base clause of a class
+    /// head that may start lines before.
+    fn line_colon_ends_class_head(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        let Some(colon) = self.current.tokens().map(|span| span.last) else {
+            return false;
+        };
+        if !matches!(tokens.get(colon), Some(Token::Symbol(':'))) {
+            return false;
+        }
+        tokens[..colon]
+            .iter()
+            .rev()
+            .take_while(|token| !matches!(token, Token::Symbol(';' | '{' | '}')))
+            .any(|token| matches!(token, Token::Word(word) if matches!(word.as_str(), "class" | "struct" | "union")))
     }
 
     fn record_braceless_header_frames(&mut self, word: &str, next: Option<&Token>) {
@@ -325,15 +382,36 @@ impl FormatEngine<'_> {
         next: Option<&Token>,
         previous_non_ws_char: Option<char>,
     ) {
+        // A comment between the block and its closing header holds them
+        // on one line.
         if previous_non_ws_char == Some('}')
             && !self.one_line_block_mode
+            && self.current.active_token().is_some_and(|index| {
+                self.tree.tokens[..index]
+                    .iter()
+                    .rev()
+                    .find(|token| !matches!(token, Token::Whitespace(_)))
+                    .is_some_and(|token| matches!(token, Token::Symbol('}')))
+            })
             && (self.options.break_one_line_statements
-                || (self.options.brace_style == BraceStyle::Pico
-                    && !(word == "while" && self.options.attach_closing_while)))
+                || self.options.brace_style == BraceStyle::Pico)
+            // The run-in styles attach a closing `while` even to a block kept
+            // on one line.
+            && !(matches!(
+                self.options.brace_style,
+                BraceStyle::Pico | BraceStyle::Lisp
+            ) && word == "while"
+                && self.options.attach_closing_while)
             && contains_one_line_block(self.current.trimmed())
             && (matches!(word, "else" | "catch" | "@catch" | "__finally" | "__except")
+                // An empty block keeps the closing header its style attaches.
+                && !(self.closes_empty_block_before_word()
+                    && self.options.brace_style != BraceStyle::Lisp
+                    && self.attaches_closing_header(word, true))
                 || (word == "while"
-                    && self.layout.nesting.last_closed_brace_header.as_deref() == Some("do")))
+                    && self.layout.nesting.last_closed_brace_header.as_deref() == Some("do")
+                    && !(self.closes_empty_block_before_word()
+                        && self.attaches_closing_while(true))))
         {
             self.finish_line();
         }
@@ -458,6 +536,22 @@ impl FormatEngine<'_> {
         }
         self.layout.previous = PreviousToken::Word;
         self.previous_was_newline = false;
+    }
+
+    /// Whether the `}` before the word being pushed closes a block holding
+    /// no code.
+    fn closes_empty_block_before_word(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        self.current
+            .active_token()
+            .and_then(|index| self.tree.previous_code_token(index))
+            .filter(|&close| matches!(tokens[close], Token::Symbol('}')))
+            .and_then(|close| self.tree.groups.closed_at(close))
+            .is_some_and(|group| {
+                let open = self.tree.groups.get(group).open;
+                let close = self.tree.groups.get(group).close.unwrap_or(open);
+                !tokens[open + 1..close].iter().any(is_code_token)
+            })
     }
 
     fn update_word_state(&mut self, word: &str, next: Option<&Token>) {

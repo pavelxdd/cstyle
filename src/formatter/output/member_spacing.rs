@@ -69,7 +69,7 @@ impl FormatEngine<'_> {
             .as_deref()
             .is_some_and(|line| !line.trimmed().is_empty())
         {
-            self.push_empty_line();
+            self.push_empty_line_before_pending();
         }
         self.layout.pending_member_spacing = None;
     }

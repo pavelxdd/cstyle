@@ -9,8 +9,9 @@
 
 use crate::config::{BraceStyle, IndentStyle};
 use crate::formatter::braces::postprocess::horstmann_run_in_fill;
+use crate::formatter::constructs::headers::line_is_control_body_header;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::lexer::Token;
+use crate::formatter::lexer::{Token, token_text};
 use crate::formatter::structure::blocks::{BlockKind, is_code_token, next_code_token};
 use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::text::columns::visual_width_from;
@@ -121,7 +122,8 @@ impl FormatEngine<'_> {
                         && !rest.trimmed_start().starts_with("//")
                         && (self.starts_with_block_brace(index)
                             || self.output.line_tokens(index).is_none()
-                            || rest.trimmed_start().starts_with('{')) =>
+                            || rest.trimmed_start().starts_with('{')
+                            || self.brace_runs_in_to_rows_below(index)) =>
                 {
                     let body = rest.trimmed_start();
                     let target = width + 1 + (rest.len() - body.len());
@@ -138,6 +140,32 @@ impl FormatEngine<'_> {
         }
     }
 
+    /// Whether the directive on output line `index` stands among the
+    /// arguments of parens or brackets opened above it, past a control
+    /// header's condition, whose directives keep structural tabs.
+    fn directive_among_arguments(&self, index: usize) -> bool {
+        let groups = &self.tree.groups;
+        let tokens = &self.tree.tokens;
+        (index + 1..self.output.len())
+            .find_map(|row| self.output.line_tokens(row))
+            .and_then(|span| groups.enclosing(span.first))
+            .is_some_and(|group| {
+                let group = groups.get(group);
+                matches!(group.delimiter, Delimiter::Paren | Delimiter::Bracket)
+                    && self
+                        .output
+                        .line_with_token(group.open)
+                        .is_some_and(|line| line < index)
+                    && !self
+                        .tree
+                        .previous_code_token(group.open)
+                        .is_some_and(|before| {
+                            matches!(&tokens[before], Token::Word(word)
+                            if matches!(word.as_str(), "if" | "while" | "for" | "switch"))
+                        })
+            })
+    }
+
     fn starts_with_block_brace(&self, index: usize) -> bool {
         let groups = &self.tree.groups;
         self.output
@@ -149,6 +177,17 @@ impl FormatEngine<'_> {
                     Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
                 )
             })
+    }
+
+    /// Whether output line `index` leads with a brace whose elements go on
+    /// in rows below it: its fill runs the first element in like a block's.
+    fn brace_runs_in_to_rows_below(&self, index: usize) -> bool {
+        let groups = &self.tree.groups;
+        self.output
+            .line_tokens(index)
+            .and_then(|span| groups.opened_at(span.first))
+            .and_then(|group| groups.get(group).close)
+            .is_some_and(|close| self.output.line_with_token(close) != Some(index))
     }
 
     /// Columns of output line `index`'s indent, `width` wide, that tabs
@@ -209,13 +248,45 @@ impl FormatEngine<'_> {
             if opens_block {
                 return None;
             }
+            // A comment at the row of a list before it stands with that row.
+            let tab_width = self.options.tab_width;
+            if let Some(previous) = (0..index)
+                .rev()
+                .find(|&previous| self.output.line_tokens(previous).is_some())
+                && self.output.lead_width(previous, tab_width)
+                    == self.output.lead_width(index, tab_width)
+                && self.output.line_tokens(previous).is_some_and(|span| {
+                    let groups = &self.tree.groups;
+                    let list = match self.tree.tokens[span.first] {
+                        Token::Symbol('}') => groups.closed_at(span.first),
+                        _ => groups.enclosing(span.first),
+                    };
+                    list.is_some_and(|list| {
+                        matches!(
+                            self.tree.blocks.kind(list),
+                            Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                        )
+                    })
+                })
+            {
+                return Some(
+                    self.tab_columns(previous, self.output.lead_width(previous, tab_width)),
+                );
+            }
             // A comment inside a statement continues it.
             let next =
                 (index + 1..self.output.len()).find_map(|next| self.output.line_tokens(next))?;
             return self.token_statement_indent_width(next.first, index);
         }
         if text.starts_with('#') {
-            return None;
+            // A directive among a statement's arguments aligns as their rows
+            // do.
+            if !self.directive_among_arguments(index) {
+                return None;
+            }
+            let next =
+                (index + 1..self.output.len()).find_map(|next| self.output.line_tokens(next))?;
+            return self.token_statement_indent_width(next.first, index);
         }
         if let Some(directive) = self.output.directive_of_continuation(index) {
             return Some(self.macro_row_statement_width(directive, index));
@@ -250,7 +321,14 @@ impl FormatEngine<'_> {
                     .strip_suffix('=')
                     .is_none_or(|before| before.ends_with_any(b"=!<>"))
             });
-            if depth <= 0 && (code.is_empty() || code.ends_with_any(b";}") || opens_block) {
+            // So does a control header for the body after it, once its
+            // parens close.
+            let opens_body = matches!(code.trimmed_start(), "do" | "else")
+                || code.ends_with(')')
+                    && line_is_control_body_header(self.row_code(statement.max(directive + 1)));
+            if depth <= 0
+                && (code.is_empty() || code.ends_with_any(b";}") || opens_block || opens_body)
+            {
                 statement = row + 1;
             }
         }
@@ -270,6 +348,13 @@ impl FormatEngine<'_> {
         } else {
             width
         }
+    }
+
+    /// The code of macro body row `row`, past its indent and before its
+    /// continuation backslash.
+    fn row_code(&self, row: usize) -> &str {
+        let code = self.output.code_before_comment(row).trimmed();
+        code.strip_suffix('\\').unwrap_or(code).trimmed()
     }
 
     /// Whether output line `index` continues a standalone comment that
@@ -294,11 +379,46 @@ impl FormatEngine<'_> {
             Some(Token::Whitespace(whitespace)) => whitespace.as_str(),
             _ => "",
         };
+        // A comment run in after code on its source line opens at a column
+        // its rows' whitespace reaches; only a tab past it indents a row.
+        let line_start = tokens[..comment]
+            .iter()
+            .rposition(|token| matches!(token, Token::Newline))
+            .map_or(0, |newline| newline + 1);
+        let run_in = tokens[line_start..comment]
+            .iter()
+            .any(|token| !matches!(token, Token::Whitespace(_)));
+        let tab_width = self.options.tab_width.max(1);
+        let opener_column = run_in.then(|| {
+            let before: String = tokens[line_start..comment]
+                .iter()
+                .map(|token| token_text(token))
+                .collect();
+            visual_width_from(&before, 0, tab_width)
+        });
         text.split('\n').nth(index - opener).is_some_and(|row| {
             let whitespace = &row[..row.len() - row.trim_start_matches([' ', '\t']).len()];
-            whitespace
-                .strip_prefix(opener_whitespace)
-                .is_some_and(|relative| relative.contains('\t'))
+            let Some(opener_column) = opener_column else {
+                return whitespace
+                    .strip_prefix(opener_whitespace)
+                    .is_some_and(|relative| relative.contains('\t'));
+            };
+            let mut column = 0;
+            let past_opener = whitespace
+                .char_indices()
+                .find_map(|(at, ch)| {
+                    if column >= opener_column {
+                        return Some(at);
+                    }
+                    column = if ch == '\t' {
+                        (column / tab_width + 1) * tab_width
+                    } else {
+                        column + 1
+                    };
+                    None
+                })
+                .map_or("", |at| &whitespace[at..]);
+            past_opener.contains('\t')
         })
     }
 
@@ -421,23 +541,22 @@ impl FormatEngine<'_> {
                     Some(BlockKind::CompoundLiteral | BlockKind::Initializer)
                 )
             });
-        // A brace closing at the column of one opened after code aligns
-        // with it past the statement's indent.
+        // A brace closing a list opened after code continues the statement
+        // past its indent, as its elements run on from that brace do,
+        // unless the list opens with a nested brace that holds its elements
+        // a level in.
         let closes_after_code = closes_compound_literal
             && groups.closed_at(first).is_some_and(|group| {
                 let open = groups.get(group).open;
-                let tab_width = self.options.tab_width;
-                let close_column = self.output.lead_width(index, tab_width);
-                self.output.line_with_token(open).is_some_and(|line| {
-                    let text = &self.output[line];
-                    self.output
-                        .line_tokens(line)
-                        .is_some_and(|span| span.first != open)
-                        && text.char_indices().any(|(at, ch)| {
-                            ch == '{'
-                                && visual_width_from(&text[..at], 0, tab_width) == close_column
-                        })
-                })
+                let next = next_code_token(&self.tree.tokens, open + 1);
+                !next.is_some_and(|next| matches!(self.tree.tokens[next], Token::Symbol('{')))
+                    && self.output.line_with_token(open).is_some_and(|line| {
+                        self.output
+                            .line_tokens(line)
+                            .is_some_and(|span| span.first != open)
+                            && next
+                                .is_some_and(|next| self.output.line_with_token(next) == Some(line))
+                    })
             });
         if matches!(
             self.options.brace_style,
@@ -527,8 +646,20 @@ impl FormatEngine<'_> {
                 ))
             })
             .is_some_and(|token| matches!(token, Token::Word(word) if matches!(word.as_str(), "struct" | "union")));
+        // A class head's continued rows, its base list, stand a level in.
+        let class_head = matches!(&tokens[start], Token::Word(word)
+            if matches!(word.as_str(), "class" | "struct" | "union"))
+            && (first..tokens.len())
+                .filter(|&token| is_code_token(&tokens[token]))
+                .take_while(|&token| !matches!(tokens[token], Token::Symbol(';')))
+                .find(|&token| matches!(tokens[token], Token::Symbol('{')))
+                .and_then(|brace| groups.opened_at(brace))
+                .is_some_and(|body| {
+                    groups.get(body).parent == groups.enclosing(first)
+                        && self.tree.blocks.kind(body) == Some(BlockKind::Aggregate)
+                });
         Some(
-            lead + usize::from(after_head_colon || after_header || record_led)
+            lead + usize::from(after_head_colon || after_header || record_led || class_head)
                 * self.options.indent_width,
         )
     }
@@ -634,7 +765,7 @@ impl FormatEngine<'_> {
     }
 
     /// Whether the token `index` is the `:` of an access label.
-    fn ends_access_label(&self, index: usize) -> bool {
+    pub(crate) fn ends_access_label(&self, index: usize) -> bool {
         let access = |label: usize| {
             matches!(&self.tree.tokens[label], Token::Word(word)
                     if matches!(word.as_str(), "public" | "protected" | "private")

@@ -1,17 +1,21 @@
+use crate::config::PointerAlign;
 use crate::formatter::constructs::headers::is_header;
-use crate::formatter::continuation::ContinuationIndent;
-use crate::formatter::engine::FormatEngine;
+use crate::formatter::continuation::{ContinuationIndent, declaration_comma_continuation_width};
+use crate::formatter::engine::{FormatEngine, SplitLineShift};
 use crate::formatter::lexer::Token;
 use crate::formatter::structure::TokenSpan;
+use crate::formatter::structure::blocks::next_code_token;
 use crate::formatter::structure::functions::{FunctionHead, template_arguments_start};
 use crate::formatter::syntax::function_name_start;
 use crate::formatter::syntax::language::{self, is_non_type_keyword, is_type_like_pointer_word};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, find_outside_quotes, line_ends_with_comment, reverse_scan_skips_block_comment,
+    ContainsAnyByte, find_outside_quotes, line_comment_split_limit,
+    reverse_scan_skips_block_comment, trailing_comment_split_limit,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
+use crate::formatter::tokens::pointers::resolved_pointer_align;
 use crate::source::lex::is_identifier_continue;
 
 impl FormatEngine<'_> {
@@ -246,8 +250,33 @@ impl FormatEngine<'_> {
         head.has_return_type()
             && self.tree.groups.enclosing(head.name) == self.tree.groups.enclosing(head.start)
             && !self.inside_extern_block(head.start)
-            // A conditional inside the head keeps astyle from moving it.
-            && !self.tree.has_directive_in(head.start..head.name_start)
+            && !self.return_type_holds_group(head)
+    }
+
+    /// Whether `head` stands whole as a statement to attach its name to its
+    /// return type: a directive in it, or between it and a macro left
+    /// before it without a semicolon, keeps astyle from joining it.
+    fn head_joins_whole(&self, head: &FunctionHead) -> bool {
+        !self.tree.has_directive_in(head.start..head.name_start)
+            && self
+                .tree
+                .previous_code_token(head.start)
+                .is_none_or(|previous| {
+                    !matches!(self.tree.tokens[previous], Token::Word(_))
+                        || !self.tree.has_directive_in(previous..head.start)
+                })
+    }
+
+    /// Whether a group in parens or a `[[...]]` attribute stands before the
+    /// name of `head`, which then reads as no plain return type.
+    fn return_type_holds_group(&self, head: &FunctionHead) -> bool {
+        let tokens = &self.tree.tokens;
+        (head.start..head.name_start).any(|index| match tokens[index] {
+            Token::Symbol('(') => true,
+            Token::Symbol('[') => next_code_token(tokens, index + 1)
+                .is_some_and(|next| matches!(tokens[next], Token::Symbol('['))),
+            _ => false,
+        })
     }
 
     /// Whether `index` is in the block of an `extern "C"`, where astyle
@@ -279,9 +308,9 @@ impl FormatEngine<'_> {
             .previous_code_token(head.start)
             .is_none_or(|previous| match &tokens[previous] {
                 Token::Symbol(';' | '{' | '}' | ':') => true,
-                // A macro left without a semicolon, with no directive
-                // between.
-                Token::Word(_) => !self.tree.has_directive_in(previous..head.start),
+                // A macro left without a semicolon, directives between or
+                // not.
+                Token::Word(_) => true,
                 // `template<class T>`
                 Token::Operator(operator) if operator == ">" => {
                     template_arguments_start(tokens, previous)
@@ -314,6 +343,7 @@ impl FormatEngine<'_> {
             self.options.attach_return_type,
             self.options.attach_return_type_decl,
         ) || !self.has_movable_return_type(head)
+            || !self.head_joins_whole(head)
             || !self.head_starts_statement(head)
             || self.parameters_hold_directive(head)
         {
@@ -333,8 +363,13 @@ impl FormatEngine<'_> {
                     previous.first >= head.start
                         && self.tree.previous_code_token(head.name_start).is_some_and(
                             |before_name| {
-                                before_name >= previous.last
-                                    && !self.tree.tokens[previous.last..=before_name]
+                                // Comments after the type stay with it.
+                                let last = self
+                                    .tree
+                                    .previous_code_token(previous.last + 1)
+                                    .unwrap_or(previous.last);
+                                before_name >= last
+                                    && !self.tree.tokens[last..=before_name]
                                         .iter()
                                         .any(|token| matches!(token, Token::Newline))
                             },
@@ -342,10 +377,14 @@ impl FormatEngine<'_> {
                 });
         let previous = &self.output[previous_index];
         // AStyle attaches only return types it recognizes as types, and never
-        // a split `struct Type *`.
-        let previous_trimmed = previous.trimmed();
+        // a split `struct Type *`. Block comments after the type go along;
+        // a line comment would take the name.
+        let previous_trimmed = self
+            .output
+            .code_before_comment_trimmed(previous_index)
+            .trimmed();
         previous_is_return_type
-            && !line_ends_with_comment(previous)
+            && line_comment_split_limit(previous) == previous.len()
             && is_attachable_return_type_line(previous_trimmed)
             && !(previous_trimmed.starts_with("struct ") && previous_trimmed.ends_with('*'))
     }
@@ -365,10 +404,19 @@ impl FormatEngine<'_> {
         let previous = self.output.pop().expect("previous line exists");
         let previous_trimmed = previous.trimmed();
         let previous_prefix = &previous[..previous.len() - previous.trimmed_start().len()];
-        let separator = if previous_trimmed.ends_with_any(b"*&^") {
-            ""
-        } else {
-            " "
+        // A pointer ending the return type joins the name as its alignment
+        // sets it apart.
+        let separator = match previous_trimmed.as_bytes().last() {
+            Some(&operator @ (b'*' | b'&'))
+                if matches!(
+                    resolved_pointer_align(self.options, if operator == b'&' { "&" } else { "*" }),
+                    PointerAlign::Type | PointerAlign::Middle
+                ) =>
+            {
+                " "
+            }
+            Some(b'*' | b'&' | b'^') => "",
+            _ => " ",
         };
         self.output.set_pending_tokens(Some(TokenSpan {
             first: head.start,
@@ -490,13 +538,68 @@ impl FormatEngine<'_> {
             self.output.set_pending_tokens(Some(function_span));
             self.push_formatted_line(&function_part, indent);
         }
+        // The columns the head registered past its name moved with it.
+        let function_line = return_type_line + 1;
+        if function_line + 1 == self.output.len() {
+            let lead = self
+                .output
+                .lead_width(return_type_line, self.options.tab_width);
+            let name_column = lead
+                + visual_width_from(
+                    line[..name_offset].trimmed_start(),
+                    lead,
+                    self.options.tab_width,
+                );
+            let new_lead = self
+                .output
+                .lead_width(function_line, self.options.tab_width);
+            let shift = new_lead as isize - name_column as isize;
+            let base = self.continuation_base_indent() * self.options.indent_width;
+            self.layout.nesting.shift_columns_from(
+                name_column,
+                shift,
+                base,
+                self.options.max_continuation_indent,
+            );
+            self.layout.frame_stack.move_split_line_frames(
+                return_type_line,
+                function_line,
+                name_column,
+                shift,
+                new_lead,
+            );
+            // A declaration's comma continues past the first word of the
+            // line it ends, which the split changes.
+            let tab_width = self.options.tab_width;
+            let code = |text: &str| {
+                text[..trailing_comment_split_limit(text)]
+                    .trimmed()
+                    .to_string()
+            };
+            let unsplit = code(line);
+            let function_code = code(&function_part);
+            let declaration_columns = function_code.ends_with(',').then(|| {
+                (
+                    lead + declaration_comma_continuation_width(&unsplit, lead, tab_width),
+                    new_lead
+                        + declaration_comma_continuation_width(&function_code, new_lead, tab_width),
+                )
+            });
+            self.split_line_shift = Some(SplitLineShift {
+                line: function_line,
+                from_column: name_column,
+                shift,
+                declaration_columns,
+                moved_stack: true,
+            });
+        }
         // The return type line opens the body of a directive's branch as
         // a line laid out whole would.
         if return_type_line < self.output.len() {
             let spaces = self
                 .output
                 .lead_width(return_type_line, self.options.tab_width);
-            self.record_preprocessor_branch_body_indent(&return_type, spaces);
+            self.record_preprocessor_branch_body_indent(&return_type, return_type_line, spaces);
         }
         true
     }

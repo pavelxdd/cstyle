@@ -1,3 +1,4 @@
+use crate::config::BraceStyle;
 use crate::formatter::continuation::call_arguments::{
     line_opens_attachable_lambda_block, plain_call_opener_indent_for_closing_line,
 };
@@ -7,7 +8,10 @@ use crate::formatter::output::model::{LineLayout, LineReplayLayout};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::trailing_comment_split_limit;
-use crate::formatter::text::line_scan::{ContainsAnyByte, has_hash_outside_literals};
+use crate::formatter::text::line_scan::unmatched_open_brace_content_offset;
+use crate::formatter::text::line_scan::{
+    ContainsAnyByte, has_hash_outside_literals, has_member_after_paren,
+};
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::literals::starts_string_literal_token;
@@ -23,7 +27,15 @@ impl FormatEngine<'_> {
         let line_start = line.trimmed_start();
         self.insert_member_spacing_before_line(line);
         if self.take_block_spacing_blank(line) {
-            self.push_empty_line();
+            if line_start.starts_with('}')
+                && matches!(
+                    self.options.brace_style,
+                    BraceStyle::Lisp | BraceStyle::Pico
+                )
+            {
+                self.joined_closer_padding_lines.push(self.output.len());
+            }
+            self.push_empty_line_before_pending();
         }
         if line_start.starts_with('|')
             && !line_start.starts_with("||")
@@ -72,8 +84,10 @@ impl FormatEngine<'_> {
         if let Some(spaces) = self.split_else_comment_row_indent_spaces(line) {
             layout.exact_indent_spaces = Some(spaces);
         }
+        // A closer stands at its brace whatever ended the statement before.
         if layout.exact_indent_spaces.is_some()
             && !self.in_aggregate_declaration_brace()
+            && !line.trimmed_start().starts_with('}')
             && let Some(previous) = self.output.last_line_outside_comment()
         {
             let split = trailing_comment_split_limit(previous);
@@ -188,16 +202,15 @@ impl FormatEngine<'_> {
                         * self.options.indent_width,
             );
         }
-        if line_opens_attachable_lambda_block(self.options, line) {
+        // A message's keyword row stands at its keywords whatever it passes.
+        if line_opens_attachable_lambda_block(self.options, line) && !self.pending_line_in_message()
+        {
             if let Some(spaces) = self.lambda_call_argument_after_split_indent_spaces(line) {
                 layout.exact_indent_spaces = Some(spaces);
             } else if !line_start.starts_with("/*") {
                 layout.indent = layout.normal_indent;
                 layout.exact_indent_spaces = None;
             }
-        }
-        if let Some(spaces) = self.argument_after_lambda_call_argument_indent_spaces(line) {
-            layout.exact_indent_spaces = Some(spaces);
         }
         if let Some(spaces) = self.call_argument_sibling_frame_indent_spaces(line) {
             layout.exact_indent_spaces = Some(spaces);
@@ -222,7 +235,7 @@ impl FormatEngine<'_> {
             let current_trimmed = line_start;
             let previous_code = self.output.code_trimmed_of(previous);
             let uses_outer_call_column = previous_code.ends_with(',')
-                && previous_code.contains(").")
+                && has_member_after_paren(previous_code)
                 && self
                     .outer_call_indent_after_closed_previous_line()
                     .is_some_and(|target| *spaces == target);
@@ -301,6 +314,7 @@ impl FormatEngine<'_> {
             }
             if paren_depth < 0
                 && !self.pending_line_starts_initializer_element()
+                && !self.pending_line_opens_function_body()
                 && !previous_code.ends_with(')')
                 && previous_code.chars().any(is_identifier_start)
             {
@@ -599,11 +613,27 @@ impl FormatEngine<'_> {
                     None
                 }
             });
-            if spaces.saturating_sub(base) > self.options.max_continuation_indent {
+            // Past the maximum a stream row stands at its operator; a row of
+            // a list aligned after its brace keeps the list's column.
+            if spaces.saturating_sub(base) > self.options.max_continuation_indent
+                && (stream_indent.is_some() || !self.aligned_list_row())
+            {
                 layout.exact_indent_spaces =
                     stream_indent.or((source_indent > 0).then_some(source_indent));
             }
         }
         layout
+    }
+
+    /// Whether the line is a row of a list whose elements run in after its
+    /// brace and align there.
+    fn aligned_list_row(&self) -> bool {
+        self.current_inline_array_column().is_some()
+            && self
+                .inline_array
+                .frames
+                .last()
+                .and_then(|frame| self.output.get(frame.output_line))
+                .is_some_and(|line| unmatched_open_brace_content_offset(line).is_some())
     }
 }

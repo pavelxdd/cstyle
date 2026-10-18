@@ -1,6 +1,7 @@
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::output::model::{AlignedLineLayout, ContextualLineLayout, LineRoute};
 use crate::formatter::state::indentation::LineKind;
+use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -21,7 +22,11 @@ impl FormatEngine<'_> {
             self.adjuster_before_observed_lone_brace =
                 Some((self.output.len(), self.layout.line_adjuster.clone()));
         }
-        let observed_line_kind = self.layout.line_adjuster.observe_line(line);
+        let observed_line_kind = if self.line_continues_operands() {
+            self.layout.line_adjuster.observe_operand_line(line)
+        } else {
+            self.layout.line_adjuster.observe_line(line)
+        };
         if observed_line_kind == LineKind::Normal
             && line.trimmed_start() == "&else"
             && let Some(previous) = self.output.last_mut()
@@ -32,6 +37,16 @@ impl FormatEngine<'_> {
             return LineRoute::Published;
         }
         LineRoute::Layout(observed_line_kind)
+    }
+
+    /// Whether the line's first token stands among the operands of parens
+    /// or brackets opened before it.
+    pub(crate) fn line_continues_operands(&self) -> bool {
+        let groups = &self.tree.groups;
+        self.output
+            .pending_tokens()
+            .and_then(|span| groups.enclosing(span.first))
+            .is_some_and(|group| groups.get(group).delimiter != Delimiter::Brace)
     }
 
     /// Whether the line starts with a word, no string literal, after a

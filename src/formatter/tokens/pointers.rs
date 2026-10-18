@@ -41,6 +41,8 @@ pub(crate) struct PointerRunState {
     /// The last run of one operator read: the tokens' address, the token
     /// read from, and the run's last token.
     pub(crate) run_end: Option<(usize, usize, usize)>,
+    /// The last operator token pushed as a binary operator.
+    pub(crate) binary_operator: Option<usize>,
 }
 
 pub(crate) fn pointer_next_is_name_like(next: Option<&Token>) -> bool {
@@ -83,7 +85,9 @@ impl FormatEngine<'_> {
     }
 
     pub(super) fn is_rvalue_reference_like(&self, next: Option<&Token>) -> bool {
-        if self.continues_operator_expression()
+        // A parameter list continues no expression of the line before it.
+        if self.tree_declaration_context() != Some(true)
+            && self.continues_operator_expression()
             && matches!(
                 self.layout.previous,
                 PreviousToken::Word
@@ -421,9 +425,10 @@ impl FormatEngine<'_> {
                 .next()
                 .is_some_and(is_identifier_start)
         {
-            // A constant-like name after the operator is an operand.
+            // A constant-like name after the operator is an operand, but in a
+            // declarator group, which only declares.
             if matches!(next, Some(Token::Word(word)) if is_macro_like_word(word)) {
-                return false;
+                return self.in_tree_pointer_declarator();
             }
             if self.looks_like_pointer_declaration_context() {
                 return true;
@@ -488,36 +493,40 @@ impl FormatEngine<'_> {
     }
 
     fn continues_operator_expression(&self) -> bool {
-        self.output.last_line_outside_comment().is_some_and(|line| {
-            let code = self.output.code_trimmed_of(line);
-            if head_ends_assignment_operator(code) {
-                return true;
-            }
-            // `>=` is always a comparison; a trailing `>` whose line has a
-            // `<` is usually a template close, not an expression break.
-            if code.ends_with(">=") {
-                return true;
-            }
-            if code.ends_with('>') && code.contains('<') {
-                return false;
-            }
-            let trimmed = code.trimmed_start();
-            let ends_single_word_label = trimmed.split_once(':').is_some_and(|(label, rest)| {
-                rest.is_empty()
-                    && !label.is_empty()
-                    && label.trimmed_end().chars().all(is_identifier_continue)
-            });
-            let ends_ternary_colon = code.ends_with(':')
-                && !is_case_label_start(trimmed)
-                && !is_default_label_start(trimmed)
-                && (self.layout.frame_stack.last_ternary_with_colon().is_some()
-                    || !ends_single_word_label);
-            head_ends_binary_operator(code)
-                || ["==", "!=", "<=", "<", ">", "&&", "||", "?"]
-                    .iter()
-                    .any(|operator| code.ends_with(operator))
-                || ends_ternary_colon
-        })
+        // Comment lines continue nothing of their own.
+        self.output
+            .last_code_line_past_comments_and_directives()
+            .is_some_and(|line| {
+                let code = self.output.code_trimmed_of(line);
+                if head_ends_assignment_operator(code) {
+                    return true;
+                }
+                // `>=` is always a comparison; a trailing `>` whose line has a
+                // `<` is usually a template close, not an expression break.
+                if code.ends_with(">=") {
+                    return true;
+                }
+                if code.ends_with('>') && code.contains('<') {
+                    return false;
+                }
+                let trimmed = code.trimmed_start();
+                let ends_single_word_label =
+                    trimmed.split_once(':').is_some_and(|(label, rest)| {
+                        rest.is_empty()
+                            && !label.is_empty()
+                            && label.trimmed_end().chars().all(is_identifier_continue)
+                    });
+                let ends_ternary_colon = code.ends_with(':')
+                    && !is_case_label_start(trimmed)
+                    && !is_default_label_start(trimmed)
+                    && (self.layout.frame_stack.last_ternary_with_colon().is_some()
+                        || !ends_single_word_label);
+                head_ends_binary_operator(code)
+                    || ["==", "!=", "<=", "<", ">", "&&", "||", "?"]
+                        .iter()
+                        .any(|operator| code.ends_with(operator))
+                    || ends_ternary_colon
+            })
     }
 
     fn pointer_in_template_type_context(&self, next: Option<&Token>) -> bool {
@@ -697,6 +706,16 @@ impl FormatEngine<'_> {
                 && BlockKind::is_declaration_scope(tree.blocks.kind(parent))
         });
         at_declaration_scope.then_some(false)
+    }
+
+    /// Whether the token being pushed lies in a declarator group such as
+    /// `(WINAPI *callback)`.
+    fn in_tree_pointer_declarator(&self) -> bool {
+        let tree = &self.tree;
+        self.current
+            .active_token()
+            .and_then(|token| tree.groups.enclosing(token))
+            .is_some_and(|group| tree.functions.is_declarator(group))
     }
 
     /// A line continuing parentheses opened on an earlier line inside a
@@ -1776,7 +1795,7 @@ pub(crate) fn is_pointer_declaration_segment(segment: &str) -> bool {
     ) && !language::is_header(first)
 }
 
-pub(super) fn resolved_pointer_align(options: &FormatOptions, operator: &str) -> PointerAlign {
+pub(crate) fn resolved_pointer_align(options: &FormatOptions, operator: &str) -> PointerAlign {
     if operator.starts_with('&') {
         match options.reference_align {
             ReferenceAlign::None => PointerAlign::None,

@@ -341,7 +341,7 @@ fn break_one_line_headers_overrides_added_one_line_braces() {
 }
 
 #[test]
-fn break_one_line_headers_breaks_following_closing_header() {
+fn break_one_line_headers_keeps_a_closing_header_on_its_source_brace() {
     let mut options = FormatOptions::default();
     options.break_one_line_blocks = false;
     options.break_one_line_headers = true;
@@ -355,8 +355,7 @@ fn break_one_line_headers_breaks_following_closing_header() {
             "void run() {",
             "    if(alpha) {",
             "        one();",
-            "    }",
-            "    else {",
+            "    } else {",
             "        two();",
             "    }",
             "}",
@@ -459,7 +458,7 @@ fn allman_detaches_while_after_empty_do_body() {
 }
 
 #[test]
-fn default_style_generated_do_body_detaches_while() {
+fn default_style_keeps_while_on_an_expanded_do_body_brace() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--mode=c".to_owned()]).expect("valid options");
 
@@ -484,8 +483,7 @@ fn default_style_generated_do_body_detaches_while() {
             "    } while (--count);",
             "    do {",
             "        call();",
-            "    }",
-            "    while (--count);",
+            "    } while (--count);",
             "}",
         )
     );
@@ -552,7 +550,7 @@ fn break_one_line_headers_recognizes_if_constexpr_body() {
 }
 
 #[test]
-fn break_one_line_headers_in_pico_splits_only_run_in_switch_header() {
+fn break_one_line_headers_in_pico_splits_the_case_statements_of_the_switch_block_it_breaks() {
     let mut options = FormatOptions::default();
     options.brace_style = BraceStyle::Pico;
     options.break_one_line_blocks = false;
@@ -560,7 +558,8 @@ fn break_one_line_headers_in_pico_splits_only_run_in_switch_header() {
     options.indent_switches = true;
     options.break_one_line_headers = true;
 
-    // Breaking a run-in switch header does not rewrite its case statements.
+    // The switch block a header's line no longer holds parts its
+    // statements as any block does, a label keeping the one after it.
     assert_eq!(
         format_exact(
             "void run(){\nswitch(value){case 1: one(); break;}\n}\n",
@@ -569,7 +568,8 @@ fn break_one_line_headers_in_pico_splits_only_run_in_switch_header() {
         fixture!(
             "void run()",
             "{   switch(value)",
-            "    {   case 1: one(); break;} }",
+            "    {   case 1: one();",
+            "            break; } }",
         )
     );
 }
@@ -744,13 +744,13 @@ fn keep_one_line_statements_splits_members_when_struct_block_expands() {
 }
 
 #[test]
-fn default_style_breaks_else_when_one_line_block_expands() {
+fn default_style_keeps_else_on_an_expanded_one_line_block_brace() {
     assert_eq!(
         format_exact(
             "void f() {\n    if(x){y();}else{v();}\n}\n",
             &FormatOptions::default(),
         ),
-        "void f() {\n    if(x) {\n        y();\n    }\n    else {\n        v();\n    }\n}\n",
+        "void f() {\n    if(x) {\n        y();\n    } else {\n        v();\n    }\n}\n",
     );
 }
 
@@ -1858,4 +1858,24 @@ fn label_between_a_braceless_header_and_its_body_leaves_the_body_level_under_kep
     let expected = "void f(void)\n{\n    if (a)\nlbl:\n        x();\n    y();\n}\n";
 
     assert_eq!(format_exact(input, &options), expected);
+}
+
+#[test]
+fn keep_one_line_blocks_keeps_a_tab_before_a_block_on_its_header_line() {
+    let mut options = FormatOptions::default();
+    options.break_one_line_blocks = false;
+    let input = "void f()\n{\n    if (ready)\t{ value=0; }\n    if (ready)   { value=0; }\n}\n";
+
+    assert_eq!(format_exact(input, &options), input);
+}
+
+#[test]
+fn keep_one_line_blocks_keeps_a_tab_before_an_initializer_once() {
+    let mut options = FormatOptions::default();
+    options.break_one_line_blocks = false;
+    let input = "void f()\n{\n    int list[] =\t{ 1, 2 };\n    struct Item item =\t{ 1 };\n}\n";
+
+    assert_eq!(format_exact(input, &options), input);
+    options.pad_operators = true;
+    assert_eq!(format_exact(input, &options), input);
 }

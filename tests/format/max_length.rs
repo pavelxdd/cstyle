@@ -1601,7 +1601,7 @@ fn max_code_length_vtk_constructor_lambda_body_uses_brace_column() {
         "Item::Item():memberValue(calculate(alphaValue,[](int value){return value+offsetValue;},betaValue,gammaValue)){}",
     );
 
-    // VTK lambda bodies use the brace column at every structural depth.
+    // A VTK lambda brace left at its statement sets the body in from it.
     assert_stable_max_length_format(
         source,
         &options,
@@ -1609,7 +1609,7 @@ fn max_code_length_vtk_constructor_lambda_body_uses_brace_column() {
             "Item::Item():memberValue(calculate(alphaValue,[](",
             "                                       int value)",
             "{",
-            "return value+offsetValue;",
+            "  return value+offsetValue;",
             "},betaValue,gammaValue)) {}",
         ),
     );
@@ -1628,14 +1628,14 @@ fn max_code_length_constructor_lambda_tail_keeps_call_owner() {
         "Item::Item():memberValue(calculate(alphaValue,[](int value){return value+offsetValue;},betaValue,gammaValue)){}",
     );
 
-    // Arguments after an inline lambda remain owned by the enclosing call.
+    // The lambda's body ends the continuation of the rows after it.
     assert_stable_max_length_format(
         source,
         &options,
         fixture!(
             "Item::Item():memberValue(calculate(alphaValue,[](",
             "                                       int value) {return value+offsetValue;},betaValue,",
-            "                                   gammaValue)) {}",
+            "gammaValue)) {}",
         ),
     );
 }

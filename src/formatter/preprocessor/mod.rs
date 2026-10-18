@@ -761,6 +761,9 @@ impl FormatEngine<'_> {
             && !continued_define_contains_directive
             && opaque_literal_line_ranges.is_empty()
         {
+            if self.take_block_spacing_blank(parts[0]) {
+                self.push_empty_line();
+            }
             self.push_multiline_define(&parts);
             self.layout.previous = PreviousToken::Other;
             self.previous_was_newline = false;
@@ -787,18 +790,6 @@ impl FormatEngine<'_> {
                 &mut open_paren_columns,
             );
         }
-        if is_define && !line.trimmed_end().ends_with('\\') {
-            if !(is_define && self.preprocessor_split_else_active()) {
-                self.layout.continuation_indent.clear_next_line();
-                self.layout
-                    .continuation_indent
-                    .next_input_line_continuation_indent = None;
-            }
-            self.layout.nesting.clear_continuation_indents();
-            self.layout.frame_stack.clear_stream_frames();
-            self.layout.frame_stack.clear_logical_frames();
-            self.layout.continuation_indent.logical_chain_indent_spaces = None;
-        }
         if directive == Some("endif")
             && let Some(previous) = self.output.last()
             && has_hash_outside_literals(previous)
@@ -822,14 +813,6 @@ impl FormatEngine<'_> {
             self.mark_preprocessor_split_else_after_chain();
         } else {
             self.preprocessor.split_else.after_line = false;
-        }
-        if line.trimmed_end().ends_with("&&")
-            && let Some(previous) = self.output.last()
-        {
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = Some(
-                leading_visual_width(previous, self.options.tab_width) + self.options.indent_width,
-            );
         }
         self.layout.previous = PreviousToken::Other;
         self.previous_was_newline = false;
@@ -991,10 +974,15 @@ impl FormatEngine<'_> {
             }
         }
         if !line_is_continued_comment && !is_opaque_literal_continuation {
+            let indent_spaces = indent.and_then(|indent| match indent {
+                PreprocessorLineIndent::Exact { spaces, .. } => Some(spaces),
+                PreprocessorLineIndent::Level(_) => None,
+            });
             self.update_preprocessor_state(
                 part,
                 opening_indentable,
                 index == 0 && branch_separator_after_else,
+                indent_spaces,
             );
         }
         let line_ends_with_backslash = part.trimmed_end().ends_with('\\');
@@ -1043,8 +1031,26 @@ impl FormatEngine<'_> {
         if self.layout.line_adjuster.is_in_macro_block() {
             return None;
         }
+        // A conditional opened before the header continues at its opener.
+        let opened_before_header = !matches!(directive, "if" | "ifdef" | "ifndef")
+            && self
+                .layout
+                .indentation
+                .current_preprocessor_indent()
+                .is_some_and(|indent| {
+                    self.layout
+                        .frame_stack
+                        .active_header()
+                        .is_some_and(|header| {
+                            indent
+                                .spaces
+                                .unwrap_or(indent.level * self.options.indent_width)
+                                <= header.line_indent_spaces
+                        })
+                });
         if self.options.indent_preproc_conditional
             && is_conditional_preprocessor(directive)
+            && !opened_before_header
             && self
                 .layout
                 .frame_stack
@@ -1157,23 +1163,68 @@ impl FormatEngine<'_> {
                 spaces,
             };
         }
-        if let Some(spaces) = self.direct_switch_body_indent_spaces() {
+        if opening
+            && let Some(spaces) = self
+                .preprocessor
+                .active_directive
+                .and_then(|directive| self.directive_after_case_block_column(directive))
+        {
             return PreprocessorLineIndent::Exact {
                 structural_level: spaces / self.options.indent_width.max(1),
                 spaces,
             };
         }
-        // In the block a case label opens, directives stand at its body.
+        // A directive closing a conditional opened before the switch body
+        // stands at the one that opened it.
+        let opened_before_block = !opening
+            && self
+                .layout
+                .indentation
+                .current_preprocessor_indent()
+                .is_some_and(|indent| indent.level < self.layout.indentation.indent());
+        let follows_opener = !opening
+            && self
+                .layout
+                .indentation
+                .current_preprocessor_indent()
+                .is_some_and(|indent| indent.spaces.is_some());
+        if !opened_before_block
+            && !follows_opener
+            && let Some(spaces) = self
+                .direct_switch_body_indent_spaces()
+                .map(|spaces| spaces + self.enclosing_case_block_unindent_spaces())
+                .map(|spaces| {
+                    // After statements a case block's close left short of
+                    // the case body, as `break;`, the directive stands with
+                    // them.
+                    opening
+                        .then(|| self.previous_statement_line_column())
+                        .flatten()
+                        .map_or(spaces, |column| column.min(spaces))
+                })
+        {
+            return PreprocessorLineIndent::Exact {
+                structural_level: spaces / self.options.indent_width.max(1),
+                spaces,
+            };
+        }
+        // In the block a case label opens, opening directives stand at its
+        // body, or past a label the block holds at that label's body.
         if let Some(spaces) = self
             .layout
             .frame_stack
             .active_brace()
-            .filter(|frame| frame.case_block)
+            .filter(|frame| opening && frame.case_block && self.directive_between_statements())
             .map(|frame| {
+                let body = self
+                    .active_case_label_indent_spaces()
+                    .filter(|_| frame.nested_case_label)
+                    .map_or(frame.body_indent_column, |label| {
+                        label + self.options.indent_width
+                    });
                 // The line adjuster takes the case unindent of the line off.
-                frame.body_indent_column
-                    + self.layout.line_adjuster.case_unindent_depth_for_line("#")
-                        * self.options.indent_width
+                body + self.layout.line_adjuster.case_unindent_depth_for_line("#")
+                    * self.options.indent_width
             })
         {
             return PreprocessorLineIndent::Exact {
@@ -1181,12 +1232,37 @@ impl FormatEngine<'_> {
                 spaces,
             };
         }
-        if let Some(case_label_column) = self.active_case_label_indent_spaces() {
+        // A directive between a braceless header and its body stands at the
+        // header.
+        if opening
+            && let Some(directive) = self.preprocessor.active_directive
+            && let Some(body) = next_code_token(&self.tree.tokens, directive + 1)
+            && let Some(header) = self.tree.statements.braceless_header(body)
+            && header < directive
+            && let Some(line) = self.output.line_with_token(header)
+        {
+            let spaces = self.output.lead_width(line, self.options.tab_width);
             return PreprocessorLineIndent::Exact {
-                structural_level: self.layout.indentation.indent() + 1,
-                spaces: case_label_column + self.options.indent_width,
+                structural_level: spaces / self.options.indent_width.max(1),
+                spaces,
             };
         }
+        if opening && let Some(spaces) = self.list_row_directive_column() {
+            return PreprocessorLineIndent::Exact {
+                structural_level: spaces / self.options.indent_width.max(1),
+                spaces,
+            };
+        }
+        // One past a label the conditional opened before stands in that
+        // label's body.
+        if !opening && let Some(spaces) = self.label_body_past_opener_column() {
+            return PreprocessorLineIndent::Exact {
+                structural_level: spaces / self.options.indent_width.max(1),
+                spaces,
+            };
+        }
+        // A directive continuing a conditional stands at the one that opened
+        // it, past the case label's body it may have left.
         if let Some(indent) = self
             .layout
             .indentation
@@ -1201,10 +1277,27 @@ impl FormatEngine<'_> {
             }
             return PreprocessorLineIndent::Level(indent.level);
         }
-        if let Some(spaces) = self.preprocessor_continuation_spaces() {
-            PreprocessorLineIndent::Exact {
+        if let Some(spaces) = opening
+            .then(|| self.assigned_value_directive_column())
+            .flatten()
+            .or_else(|| self.preprocessor_continuation_spaces())
+        {
+            return PreprocessorLineIndent::Exact {
                 structural_level: self.layout.indentation.indent(),
                 spaces,
+            };
+        }
+        // Only a directive in braces can follow a case label's body.
+        let in_braces = self
+            .preprocessor
+            .active_directive
+            .is_none_or(|directive| self.tree.groups.enclosing(directive).is_some());
+        if in_braces && let Some(case_label_column) = self.active_case_label_indent_spaces() {
+            PreprocessorLineIndent::Exact {
+                structural_level: self.layout.indentation.indent() + 1,
+                spaces: case_label_column
+                    + self.options.indent_width
+                    + self.enclosing_case_block_unindent_spaces(),
             }
         } else {
             // A block nested in a case body stands past the case's own level.
@@ -1214,6 +1307,65 @@ impl FormatEngine<'_> {
                     + self.split_else_directive_extra(),
             )
         }
+    }
+
+    /// The column, before the line adjuster's case unindent, of the line
+    /// holding the statement the active directive follows, when a `;` or `}`
+    /// ends it.
+    fn previous_statement_line_column(&self) -> Option<usize> {
+        let directive = self.preprocessor.active_directive?;
+        let previous = self.tree.previous_code_token(directive)?;
+        if !matches!(self.tree.tokens[previous], Token::Symbol(';' | '}')) {
+            return None;
+        }
+        let start = (0..=previous)
+            .rev()
+            .find(|&index| self.tree.statements.starts_block_statement(index))?;
+        let line = self.output.line_with_token(start)?;
+        // The line adjuster takes the case unindent the statement's line took
+        // off the directive's line again.
+        (self.output.line_tokens(line)?.first == start).then(|| {
+            self.output.lead_width(line, self.options.tab_width)
+                + self.layout.line_adjuster.case_unindent_depth_for_line("#")
+                    * self.options.indent_width
+        })
+    }
+
+    /// The body column of the label a directive continuing a conditional
+    /// follows, when the label stands between it and the conditional's
+    /// opening directive in the same braces.
+    fn label_body_past_opener_column(&self) -> Option<usize> {
+        let directive = self.preprocessor.active_directive?;
+        let opener = self.preprocessor.branch_stack.last()?.directive?;
+        let groups = &self.tree.groups;
+        let group = groups.enclosing(directive);
+        if opener >= directive || groups.enclosing(opener) != group {
+            return None;
+        }
+        let label_between = (opener + 1..directive).any(|index| {
+            matches!(&self.tree.tokens[index], Token::Word(word) if word == "case" || word == "default")
+                && groups.enclosing(index) == group
+        });
+        let body = label_between.then(|| {
+            self.active_case_label_indent_spaces().map(|label| {
+                label + self.options.indent_width + self.enclosing_case_block_unindent_spaces()
+            })
+        })??;
+        // Statements a case block's close left short of the body hold it.
+        Some(
+            self.previous_statement_line_column()
+                .map_or(body, |column| column.min(body)),
+        )
+    }
+
+    /// The case unindent the line adjuster takes off a directive in a switch
+    /// that case blocks enclose: the switch's labels took it off already.
+    fn enclosing_case_block_unindent_spaces(&self) -> usize {
+        self.layout
+            .line_adjuster
+            .case_unindent_depth_for_line("#")
+            .min(self.layout.frame_stack.open_case_blocks())
+            * self.options.indent_width
     }
 
     /// astyle indents a conditional's continued lines as code: after a paren
@@ -1246,6 +1398,9 @@ impl FormatEngine<'_> {
     /// The column of a directive inside a continued statement: in the
     /// condition of a control header astyle takes the header's level back off.
     fn preprocessor_continuation_spaces(&self) -> Option<usize> {
+        if self.directive_between_statements() {
+            return None;
+        }
         // A paren opened past the pending column holds the next line.
         let spaces = self
             .layout
@@ -1281,11 +1436,14 @@ impl FormatEngine<'_> {
         }
     }
 
+    /// `indent_spaces` is the column the directive took, when it took one
+    /// apart from its level.
     fn update_preprocessor_state(
         &mut self,
         line: &str,
         opening_indentable: Option<bool>,
         branch_separator_after_else: bool,
+        indent_spaces: Option<usize>,
     ) {
         match preprocessor_directive(line) {
             Some("if" | "ifdef" | "ifndef") => {
@@ -1314,12 +1472,13 @@ impl FormatEngine<'_> {
                         *spaces += self.options.indent_width;
                     }
                 }
-                let spaces = self
-                    .options
-                    .indent_preproc_conditional
-                    .then(|| self.break_else_if_directive_column())
-                    .flatten()
-                    .or_else(|| self.preprocessor_continuation_spaces());
+                // The directives going on with the conditional stand at the
+                // column its opening one took.
+                let spaces = if self.options.indent_preproc_conditional {
+                    indent_spaces
+                } else {
+                    self.preprocessor_continuation_spaces()
+                };
                 self.layout.indentation.push_preprocessor_indent(
                     self.layout.indentation.indent()
                         + self.case_body_indent_extra(LineKind::Normal)

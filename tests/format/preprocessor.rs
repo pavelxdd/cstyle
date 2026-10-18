@@ -3691,14 +3691,14 @@ fn preprocessor_branch_after_macro_string_call_keeps_branch_body_indent() {
     let mut input =
         String::from("void f(void) {\n#ifndef OMIT\n  if(a0){ one(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(void) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    }\n    else\n#endif\n\n",
+        "void f(void) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(a{index}){{ one(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}} else\n\n"
         ));
     }
 
@@ -3719,14 +3719,14 @@ fn guarded_nested_condition_after_long_split_else_keeps_preprocessor_body_indent
     let mut input =
         String::from("void f(int c) {\n#ifndef OMIT\n  if(a0){ one(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int c) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    }\n    else\n#endif\n\n",
+        "void f(int c) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(a{index}){{ one(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}} else\n\n"
         ));
     }
 
@@ -3749,14 +3749,14 @@ fn grouped_condition_after_long_split_else_keeps_group_and_body_indent() {
     let mut input =
         String::from("void f(int c) {\n#ifndef OMIT\n  if(a0){ one(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int c) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    }\n    else\n#endif\n\n",
+        "void f(int c) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(a{index}){{ one(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}} else\n\n"
         ));
     }
 
@@ -3778,14 +3778,14 @@ fn else_if_condition_after_long_split_else_aligns_to_condition_paren() {
     let mut input =
         String::from("void f(int nArg) {\n#ifndef OMIT\n  if(a0){ one(); }else\n#endif\n\n");
     let mut expected = String::from(
-        "void f(int nArg) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    }\n    else\n#endif\n\n",
+        "void f(int nArg) {\n#ifndef OMIT\n    if(a0) {\n        one();\n    } else\n#endif\n\n",
     );
 
     for index in 1..depth {
         input.push_str(&format!("  if(a{index}){{ one(); }}else\n\n"));
         let indent = " ".repeat((index + 1) * 4);
         expected.push_str(&format!(
-            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}}\n{indent}else\n\n"
+            "{indent}if(a{index}) {{\n{indent}    one();\n{indent}}} else\n\n"
         ));
     }
 

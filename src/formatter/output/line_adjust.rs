@@ -71,6 +71,15 @@ impl LineAdjuster {
         self.switch_observer.observe_line(line, kind)
     }
 
+    /// Observes a line continuing the operands of open parens or brackets,
+    /// which holds no label.
+    pub fn observe_operand_line(&mut self, line: &LineView<'_>) -> LineKind {
+        if !self.line_observe_enabled {
+            return LineKind::Normal;
+        }
+        self.switch_observer.observe_operand_line(line)
+    }
+
     pub fn adjust_line(&mut self, line: String) -> String {
         self.switch_case_transformer.begin_line();
         let line = self.adjust_macro_block_line(line);
@@ -91,6 +100,13 @@ impl LineAdjuster {
     /// case unindent.
     pub fn last_line_comment_spared_level(&self) -> bool {
         self.case_processing_enabled && self.switch_case_transformer.comment_spared_level()
+    }
+
+    /// Whether a comment on the last adjusted line left it a level past a
+    /// code line: a level spared of its case unindent, or one added at the
+    /// case body.
+    pub fn last_line_comment_kept_level(&self) -> bool {
+        self.case_processing_enabled && self.switch_case_transformer.comment_kept_level()
     }
 
     /// The columns the last adjusted line lost to case unindents.
@@ -153,6 +169,14 @@ impl LineAdjuster {
 
     pub fn total_case_unindent_depth(&self) -> usize {
         self.switch_case_transformer.total_unindent_depth()
+    }
+
+    /// The levels a row continuing a block comment loses, with no code on it.
+    pub fn comment_row_case_unindent_depth(&self) -> usize {
+        if !self.case_processing_enabled {
+            return 0;
+        }
+        self.switch_case_transformer.comment_row_unindent_depth()
     }
 
     pub fn next_line_case_unindent_depth(&self) -> usize {

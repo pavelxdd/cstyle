@@ -326,11 +326,9 @@ fn return_type_options_do_not_split_control_headers() {
             "run() {",
             "    if(ready) {",
             "        one();",
-            "    }",
-            "    else if(other()) {",
+            "    } else if(other()) {",
             "        two();",
-            "    }",
-            "    else call();",
+            "    } else call();",
             "}",
         )
     );
@@ -343,11 +341,9 @@ fn return_type_options_do_not_split_control_headers() {
             "void run() {",
             "    if(ready) {",
             "        one();",
-            "    }",
-            "    else if(other()) {",
+            "    } else if(other()) {",
             "        two();",
-            "    }",
-            "    else call();",
+            "    } else call();",
             "}",
         )
     );
@@ -447,13 +443,13 @@ fn whitesmith_return_type_options_preserve_scope_operators() {
 }
 
 #[test]
-fn break_return_type_supports_leading_cpp_attribute() {
+fn break_return_type_leaves_a_head_led_by_a_cpp_attribute_whole() {
     let mut options = FormatOptions::default();
     options.break_return_type = true;
 
     assert_eq!(
         format_exact("[[nodiscard]] long long value(){return 1;}\n", &options),
-        fixture!("[[nodiscard]] long long", "value() {", "    return 1;", "}",)
+        fixture!("[[nodiscard]] long long value() {", "    return 1;", "}",)
     );
 }
 
@@ -1048,7 +1044,7 @@ fn break_return_type_decl_keeps_do_while_tail() {
 
     assert_eq!(
         format_exact("void f(){do{x++;}while(n<5);}\n", &options),
-        "void f() {\n    do {\n        x++;\n    }\n    while(n<5);\n}\n",
+        "void f() {\n    do {\n        x++;\n    } while(n<5);\n}\n",
     );
 }
 
@@ -1117,4 +1113,57 @@ fn comment_row_in_a_trailing_paren_keeps_its_level_when_the_return_type_attaches
 
     assert_eq!(first, expected);
     assert_eq!(format_exact(&first, &options), first);
+}
+
+#[test]
+fn break_return_type_breaks_a_head_a_comment_leads_as_any() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=allman".to_owned(),
+            "--break-return-type".to_owned(),
+            "--break-return-type-decl".to_owned(),
+        ],
+    )
+    .expect("valid options");
+
+    assert_eq!(
+        format_exact(
+            "/* note */ void f()\n{\n    value = 1;\n}\n/* note */ int *helper(int value);\n",
+            &options,
+        ),
+        "/* note */ void\nf()\n{\n    value = 1;\n}\n/* note */ int *\nhelper(int value);\n",
+    );
+}
+
+#[test]
+fn break_return_type_breaks_a_head_conditionals_part_from_its_body() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_owned(), "--break-return-type".to_owned()],
+    )
+    .expect("valid options");
+
+    assert_eq!(
+        format_exact(
+            "#ifdef FEATURE\nvoid f()\n#endif\n#ifdef FEATURE\n{\n#endif\n    value = 0;\n}\nint g(int a)\n#if A\n{\n#endif\n    return a;\n}\n",
+            &options,
+        ),
+        "#ifdef FEATURE\nvoid\nf()\n#endif\n#ifdef FEATURE\n{\n#endif\n    value = 0;\n}\nint\ng(int a)\n#if A\n{\n#endif\n    return a;\n}\n",
+    );
+}
+
+#[test]
+fn a_definition_head_before_a_directive_breaks_its_return_type_whatever_declarations_do() {
+    let input = "#ifdef FEATURE\nvoid f()\n#endif\n{\n    value = 0;\n}\n";
+    let expected = "#ifdef FEATURE\nvoid\nf()\n#endif\n{\n    value = 0;\n}\n";
+    for extra in [None, Some("--attach-return-type-decl")] {
+        let mut options = FormatOptions::default();
+        let mut args = vec!["--style=kr".to_owned(), "--break-return-type".to_owned()];
+        args.extend(extra.map(str::to_owned));
+        apply_command_line_args(&mut options, &args).expect("valid options");
+        assert_eq!(format_exact(input, &options), expected);
+    }
 }

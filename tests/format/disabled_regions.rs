@@ -367,3 +367,9 @@ fn pico_disabled_region_preserves_body_and_marker_boundaries() {
         "void run()\n{\n// *INDENT-OFF*\nif(alpha){call();}\n// *INDENT-ON*\n    if(beta) {call();} }\n",
     );
 }
+
+#[test]
+fn disabled_region_reads_a_line_ending_colon_without_overflow() {
+    let input = "/* *INDENT-OFF* */\nchar *text = ready ?\n    first(value) :\n    other;\n";
+    assert_eq!(format_exact(input, &FormatOptions::default()), input);
+}

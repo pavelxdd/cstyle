@@ -904,7 +904,7 @@ fn comment_inside_case_if_block_keeps_following_body_indent() {
 }
 
 #[test]
-fn fallthrough_comment_in_case_block_keeps_body_indent() {
+fn fallthrough_comment_after_a_case_block_moves_none_of_its_closer() {
     let source = fixture!(
         "int f(int value) {",
         "  switch (value) {",
@@ -928,7 +928,7 @@ fn fallthrough_comment_in_case_block_keeps_body_indent() {
             "        if (value)",
             "            return value;",
             "        /* else */",
-            "        }  /* fallthrough */",
+            "    }  /* fallthrough */",
             "    default:",
             "        return 0;",
             "    }",
@@ -1292,7 +1292,8 @@ fn whitesmith_indents_case_body_block_brace_to_body_level() {
 }
 
 #[test]
-fn nested_case_label_inside_case_block_uses_the_nested_label_column() {
+fn nested_case_label_inside_case_block_uses_the_nested_label_column_and_the_block_closes_under_its_brace()
+ {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=allman".to_owned()]).expect("valid options");
 
@@ -1301,7 +1302,7 @@ fn nested_case_label_inside_case_block_uses_the_nested_label_column() {
             "void run(int value){\nswitch(value){\ncase 3:{\ncase 4:\ncall();\nbreak;\n}\n}\n}\n",
             &options,
         ),
-        "void run(int value)\n{\n    switch(value)\n    {\n    case 3:\n    {\n        case 4:\n            call();\n            break;\n        }\n    }\n}\n",
+        "void run(int value)\n{\n    switch(value)\n    {\n    case 3:\n    {\n        case 4:\n            call();\n            break;\n    }\n    }\n}\n",
     );
 }
 
@@ -1574,4 +1575,185 @@ fn block_after_a_label_kept_after_the_closing_brace_stands_at_the_case_blocks() 
     let input = "void f(int b)\n{   switch (b)\n    {   case 16:\n        {   h();\n            break; } default:\n        {   k();\n            break; } } }\n";
 
     assert_eq!(format_exact(input, &options), input);
+}
+
+#[test]
+fn keeping_one_line_blocks_parts_a_case_block_from_its_label_in_every_attached_style() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: { value=0; }\n    case 2: {\n        value=0;\n    }\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (kind) {\n    case 1:\n    { value=0; }\n    case 2: {\n        value=0;\n    }\n    }\n}\n";
+    for style in [
+        "--style=kr",
+        "--style=stroustrup",
+        "--style=linux",
+        "--style=mozilla",
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(
+            &mut options,
+            &[style.to_owned(), "--keep-one-line-blocks".to_owned()],
+        )
+        .expect("valid options");
+        let first = format_exact(input, &options);
+
+        assert_eq!(first, expected, "{style}");
+        assert_eq!(format_exact(&first, &options), first, "{style}");
+    }
+}
+
+#[test]
+fn keeping_one_line_statements_keeps_a_one_line_case_block_on_its_label() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: { value=0; }\n    }\n}\n";
+    for style in ["--style=kr", "--style=stroustrup"] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(
+            &mut options,
+            &[
+                style.to_owned(),
+                "--keep-one-line-blocks".to_owned(),
+                "--keep-one-line-statements".to_owned(),
+            ],
+        )
+        .expect("valid options");
+
+        assert_eq!(format_exact(input, &options), input, "{style}");
+    }
+}
+
+#[test]
+fn vtk_kept_one_line_case_block_stands_where_its_expanded_brace_would() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=vtk".to_owned(),
+            "--keep-one-line-blocks".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: { value=0; } break;\n    case 2:\n        result=1;\n        break;\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (kind)\n        {\n        case 1:\n            { value=0; }\n        break;\n        case 2:\n            result=1;\n            break;\n        }\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}
+
+#[test]
+fn a_brace_on_its_case_labels_line_keeps_the_gap_before_it_in_attached_styles() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1:  {\n        value=0;\n        break;\n    }\n    case 2:\t{\n        value=0;\n    }\n    case 3:\n    {\n        value=0;\n    }\n    }\n}\n";
+    let body = "    switch (kind) {\n    case 1:  {\n        value=0;\n        break;\n    }\n    case 2:\t{\n        value=0;\n    }\n    case 3: {\n        value=0;\n    }\n    }\n}\n";
+    for (style, head) in [
+        ("--style=kr", "void f()\n{\n"),
+        ("--style=stroustrup", "void f()\n{\n"),
+        ("--style=java", "void f() {\n"),
+        ("--style=google", "void f() {\n"),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_owned()]).expect("valid options");
+        let expected = format!("{head}{body}");
+
+        assert_eq!(format_exact(input, &options), expected, "{style}");
+        assert_eq!(format_exact(&expected, &options), expected, "{style}");
+    }
+}
+
+#[test]
+fn breaking_one_line_headers_leaves_a_kept_one_line_case_block_whole() {
+    // A case label heads no block: only a header's one-line block breaks.
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: { value=0; } break;\n    default: { value=1; }\n    }\n    if (ready) { value=0; }\n}\n";
+    let expected = "void f()\n{\n    switch (kind) {\n    case 1:\n    { value=0; }\n    break;\n    default:\n    { value=1; }\n    }\n    if (ready) {\n        value=0;\n    }\n}\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--keep-one-line-blocks".to_owned(),
+            "--break-one-line-headers".to_owned(),
+        ],
+    )
+    .expect("valid options");
+
+    assert_eq!(format_exact(input, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn a_brace_on_its_case_labels_line_keeps_the_gap_before_its_comment() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {    // first\n        value=0;\n        break;\n    }\n    case 2:  {\t/* second */\n        value=0;\n    }\n    }\n}\n";
+    let body = "    switch (kind) {\n    case 1: {    // first\n        value=0;\n        break;\n    }\n    case 2:  {\t/* second */\n        value=0;\n    }\n    }\n}\n";
+    for (style, head) in [
+        ("--style=kr", "void f()\n{\n"),
+        ("--style=java", "void f() {\n"),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_owned()]).expect("valid options");
+        let expected = format!("{head}{body}");
+
+        assert_eq!(format_exact(input, &options), expected, "{style}");
+        assert_eq!(format_exact(&expected, &options), expected, "{style}");
+    }
+}
+
+#[test]
+fn a_comment_after_a_case_brace_joined_to_its_label_starts_the_block() {
+    // As after a header, the comment the brace's own line held opens the
+    // body once the brace joins the label.
+    let input = "void f()\n{\n    switch (kind) {\n    case 3:\n    {     // third\n        value=0;\n    }\n    }\n}\n";
+    let body =
+        "    switch (kind) {\n    case 3: {\n        // third\n        value=0;\n    }\n    }\n}\n";
+    for (style, head) in [
+        ("--style=kr", "void f()\n{\n"),
+        ("--style=java", "void f() {\n"),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_owned()]).expect("valid options");
+        let expected = format!("{head}{body}");
+
+        assert_eq!(format_exact(input, &options), expected, "{style}");
+        assert_eq!(format_exact(&expected, &options), expected, "{style}");
+    }
+}
+
+#[test]
+fn a_comment_after_a_case_brace_broken_off_keeps_its_gaps_with_tabs() {
+    // The brace leaves a space between the gaps around it, tabs or not.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=allman".to_owned()]).expect("valid options");
+    let input = "void f()\n{\n    switch (kind) {\n    case 3: {\t/* third */\n        value=0;\n    }\n    case 4:\t{ /* fourth */\n        value=0;\n    }\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (kind)\n    {\n    case 3:  \t/* third */\n    {\n        value=0;\n    }\n    case 4:\t  /* fourth */\n    {\n        value=0;\n    }\n    }\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}
+
+#[test]
+fn pico_comment_after_a_case_brace_broken_off_keeps_a_tab_before_it_once() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=pico".to_owned()]).expect("valid options");
+    let input = "void f()\n{\n    switch (kind) {\n    case 4:\t{ /* fourth */\n        value=0;\n    }\n    }\n}\n";
+    let expected = "void f()\n{   switch (kind)\n    {   case 4:\t  /* fourth */\n        {   value=0; } } }\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
+}
+
+#[test]
+fn vtk_kept_one_line_case_block_with_indented_switches_stands_where_its_expanded_brace_would() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=vtk".to_owned(),
+            "--keep-one-line-blocks".to_owned(),
+            "--indent-switches".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: { value=0; } break;\n    case 2:\n        result=1;\n        break;\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (kind)\n        {\n        case 1:\n            { value=0; }\n        break;\n        case 2:\n            result=1;\n            break;\n        }\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), first);
 }

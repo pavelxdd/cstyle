@@ -2089,3 +2089,17 @@ fn brace_added_after_a_comment_under_an_else_in_an_indented_case_holds_its_body(
 
     assert_eq!(format_exact(input, &options), expected);
 }
+
+#[test]
+fn remove_braces_removes_them_past_a_comment_between_header_and_brace() {
+    // A comment before the brace stays with the header; the braces go as
+    // they do with a comment after the brace.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--remove-braces".to_owned()]).expect("valid options");
+    let source = "void f()\n{\n    if (ready) // why\n    {\n        value=0;\n    }\n    if (ready) /* why */ {\n        value=0;\n    }\n    if (ready)\n    /* own */\n    {\n        value=0;\n    }\n}\n";
+
+    assert_eq!(
+        format_exact(source, &options),
+        "void f()\n{\n    if (ready) // why\n        value=0;\n    if (ready) /* why */\n        value=0;\n    if (ready)\n        /* own */\n        value=0;\n}\n",
+    );
+}

@@ -256,10 +256,10 @@ fn function_head(
         if let Some(operator) = operator_function_name(tokens, groups, before_params) {
             (operator, None)
         } else if let Some(id) = groups.closed_at(before_params) {
-            (
-                sole_word_in_group(tokens, groups, id)?,
-                Some(groups.get(id).open),
-            )
+            let Some(word) = sole_word_in_group(tokens, groups, id) else {
+                return macro_head_parameter_list(tokens, groups, blocks, head_ends, id, params);
+            };
+            (word, Some(groups.get(id).open))
         } else {
             (before_params, None)
         };
@@ -305,6 +305,28 @@ fn function_head(
         params,
         body,
     }))
+}
+
+/// `MACRO(type, name)(params) {`: a macro call standing for a function's
+/// name and return type, whose parameter list opens its body.
+fn macro_head_parameter_list(
+    tokens: &[Token],
+    groups: &Groups,
+    blocks: &Blocks,
+    head_ends: &mut HeadEndWalks,
+    call: GroupId,
+    params: GroupId,
+) -> Option<HeadMatch> {
+    let macro_name = previous_code_token(tokens, groups.get(call).open)?;
+    if !matches!(&tokens[macro_name], Token::Word(word) if !is_non_type_keyword(word)) {
+        return None;
+    }
+    match head_end(tokens, groups, head_ends, params, params)? {
+        HeadEnd::Found(Some(body)) if blocks.kind(body) == Some(BlockKind::FunctionBody) => {
+            Some(HeadMatch::ParameterList)
+        }
+        _ => None,
+    }
 }
 
 /// The `operator` word of an overloaded operator name that ends at `last`:
@@ -643,6 +665,30 @@ fn head_walk_passes(
             ))
 }
 
+/// The depth of template angles open at `end` in a trailing return type
+/// that a `->` at `level` starts between `start` and `end`.
+fn trailing_return_angle_depth(
+    tokens: &[Token],
+    groups: &Groups,
+    level: Option<GroupId>,
+    start: usize,
+    end: usize,
+) -> Option<usize> {
+    let arrow = (start..end)
+        .find(|&index| is_operator(tokens, index, "->") && groups.enclosing(index) == level)?;
+    Some((arrow + 1..end).fold(0usize, |depth, index| {
+        if groups.enclosing(index) != level {
+            return depth;
+        }
+        match &tokens[index] {
+            Token::Operator(operator) if operator == "<" => depth + 1,
+            Token::Operator(operator) if operator == ">" => depth.saturating_sub(1),
+            Token::Operator(operator) if operator == ">>" => depth.saturating_sub(2),
+            _ => depth,
+        }
+    }))
+}
+
 fn head_end(
     tokens: &[Token],
     groups: &Groups,
@@ -684,12 +730,29 @@ fn head_end(
         Some(knr_semicolon.map_or(HeadEnd::Unterminated, |_| HeadEnd::Found(None)))
     };
     while let Some(next) = next_code_token(tokens, index) {
-        // A directive ends what the tree can see of the head.
+        // A directive ends what the tree can see of the head, unless the
+        // conditionals before its body only close or open around it, with
+        // no other branch.
         if tokens[index..next]
             .iter()
             .any(|token| matches!(token, Token::Preprocessor(_)))
         {
-            return unterminated(knr_semicolon);
+            let closes_conditionals = tokens[index..next].iter().all(|token| match token {
+                Token::Preprocessor(directive) => preprocessor_directive(&directive.text)
+                    .is_some_and(|name| matches!(name, "endif" | "if" | "ifdef" | "ifndef")),
+                _ => true,
+            });
+            if closes_conditionals
+                && tokens[next] == Token::Symbol('{')
+                && groups.enclosing(next) == level
+                && knr_semicolon.is_none()
+            {
+                return Some(HeadEnd::Found(groups.opened_at(next)));
+            }
+            // Parameter declarations go on past such conditionals.
+            if !(closes_conditionals && (knr_semicolon.is_some() || knr_parameters)) {
+                return unterminated(knr_semicolon);
+            }
         }
         if groups.enclosing(next) != level {
             return None;
@@ -705,6 +768,18 @@ fn head_end(
                 || previous_head_token(tokens, next)
                     .and_then(|before| groups.closed_at(before))
                     .is_some());
+        // A trailing return type holds groups, as `decltype(x)`, and the
+        // commas of its template arguments.
+        if matches!(tokens[next], Token::Symbol('(' | ','))
+            && trailing_return_angle_depth(tokens, groups, level, group.close? + 1, next)
+                .is_some_and(|depth| depth > 0 || tokens[next] == Token::Symbol('('))
+        {
+            index = match groups.opened_at(next) {
+                Some(id) => groups.get(id).close? + 1,
+                None => next + 1,
+            };
+            continue;
+        }
         if tokens[next] == Token::Symbol('(')
             && !knr_declarator
             && !constructor_initializers

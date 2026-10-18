@@ -140,8 +140,7 @@ fn label_in_split_else_block_keeps_following_statement_indent() {
             "#ifndef OMIT",
             "    if(a) {",
             "        x();",
-            "    }",
-            "    else",
+            "    } else",
             "#endif",
             "",
             "        if( c ) {",
@@ -190,8 +189,7 @@ fn label_in_braceless_split_else_body_keeps_following_statement_indent() {
             "#ifndef OMIT",
             "    if(a) {",
             "        x();",
-            "    }",
-            "    else",
+            "    } else",
             "#endif",
             "",
             "        if( c ) {",
@@ -586,4 +584,79 @@ fn method_after_an_access_label_keeps_its_indent_below_a_directive() {
 
     assert_eq!(first, expected);
     assert_eq!(format_exact(&first, &options), first);
+}
+
+fn format_args(source: &str, args: &[&str]) -> String {
+    let mut options = FormatOptions::default();
+    let args: Vec<String> = args.iter().map(|arg| (*arg).to_owned()).collect();
+    apply_command_line_args(&mut options, &args).expect("valid options");
+    format_exact(source, &options)
+}
+
+#[test]
+fn a_goto_label_leads_its_line_whatever_statement_follows_it() {
+    // A kept statement after a label leaves the label at the label column,
+    // also when it opens a block or continues on the next line.
+    for (input, expected) in [
+        (
+            "void f()\n{\n    done: if (ready) {\n        value=0;\n    }\n}\n",
+            "void f()\n{\ndone: if (ready) {\n        value=0;\n    }\n}\n",
+        ),
+        (
+            "void f()\n{\n    done: do {\n        value=0;\n    } while (ready);\n}\n",
+            "void f()\n{\ndone: do {\n        value=0;\n    } while (ready);\n}\n",
+        ),
+        (
+            "void f()\n{\n    done: result = helper(value,\n                          other);\n}\n",
+            "void f()\n{\ndone: result = helper(value,\n                          other);\n}\n",
+        ),
+    ] {
+        assert_eq!(format_args(input, &["-o"]), expected);
+    }
+    assert_eq!(
+        format_args(
+            "void f()\n{\n    done: if (ready) { value=0; }\n}\n",
+            &["--style=lisp"],
+        ),
+        "void f() {\ndone: if (ready) {\n        value=0; } }\n",
+    );
+}
+
+#[test]
+fn a_label_first_in_an_indented_block_is_broken_from_its_statement() {
+    // A label right after a block's `{` starts a statement as anywhere else;
+    // it continues none.
+    assert_eq!(
+        format_args(
+            "void f()\n{\n    done: value=0;\n}\n",
+            &["--style=whitesmith"]
+        ),
+        "void f()\n    {\ndone:\n    value=0;\n    }\n",
+    );
+    for (style, expected) in [
+        (
+            "--style=whitesmith",
+            "void f()\n    {\n    if (ready)\n        {\ndone:\n        value=0;\n        }\n    }\n",
+        ),
+        (
+            "--style=vtk",
+            "void f()\n{\n    if (ready)\n        {\ndone:\n        value=0;\n        }\n}\n",
+        ),
+    ] {
+        assert_eq!(
+            format_args(
+                "void f()\n{\n    if (ready)\n    {\n        done: value=0;\n    }\n}\n",
+                &[style],
+            ),
+            expected,
+        );
+    }
+}
+
+#[test]
+fn a_header_after_a_label_owns_the_block_it_opens() {
+    // `again: switch (c) {` opens the switch's block, not a block of the
+    // label: its case labels and body keep the switch's levels.
+    let input = "void f()\n{\n    while (x) {\nagain:  switch (c) {\n        case 1:\n            x();\n            break;\n        }\n    }\n}\n";
+    assert_eq!(format_args(input, &["--style=kr", "-o"]), input);
 }

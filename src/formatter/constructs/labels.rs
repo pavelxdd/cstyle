@@ -4,17 +4,18 @@ use crate::formatter::constructs::headers::{is_header, starts_header_word};
 use crate::formatter::constructs::switch_cases::{find_case_colon, is_case_label_start};
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::lexer::raw_strings;
+use crate::formatter::lexer::{Token, raw_strings};
 use crate::formatter::output::LineDelimiters;
 use crate::formatter::output::buffer::OpenBraceShape;
 use crate::formatter::state::BraceType;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::language;
 use crate::formatter::text::columns::leading_visual_width;
-use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
+use crate::formatter::text::line_scan::{ContainsAnyByte, after_leading_comments};
 use crate::formatter::text::line_scan::{
-    find_byte, is_comment_line, trailing_comment_split_limit, unmatched_open_paren_column,
+    find_byte, is_comment_line, line_paren_imbalance, trailing_comment_split_limit,
+    unmatched_open_paren_column,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -178,8 +179,9 @@ pub(crate) fn access_label_body_indent_spaces(
     }
     let modifier_indent_applies =
         matches!(enclosing_brace, Some(BraceType::Class | BraceType::Struct));
+    // A label half a level in leaves the members the rest of the level.
     let delta = if options.indent_modifiers && !options.indent_classes && modifier_indent_applies {
-        options.indent_width / 2
+        options.indent_width - options.indent_width / 2
     } else {
         options.indent_width
     };
@@ -262,7 +264,17 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
         current_indent_spaces: Option<usize>,
     ) -> Option<usize> {
-        let line_trimmed = line.trimmed();
+        // The label's own line stands outside the block it opens.
+        if self
+            .layout
+            .frame_stack
+            .active_brace()
+            .is_some_and(|frame| frame.label_block && frame.open_output_line == self.output.len())
+        {
+            return None;
+        }
+        // A comment after a closer leaves it the closer of its row.
+        let line_trimmed = self.output.code_of(line).trimmed();
         let body_spaces = self.enclosing_label_block_body_indent_spaces()?;
         if line_trimmed == "}" && self.current_closes_label_block() {
             return Some(
@@ -341,11 +353,7 @@ impl FormatEngine<'_> {
         } else {
             frame.body_indent_column
         };
-        Some(
-            target
-                + self.layout.line_adjuster.case_unindent_depth_for_line(line)
-                    * self.options.indent_width,
-        )
+        Some(target)
     }
 
     pub(crate) fn closed_label_block_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {
@@ -357,11 +365,7 @@ impl FormatEngine<'_> {
             .frame_stack
             .last_closed_brace()
             .filter(|frame| frame.label_block)?;
-        Some(
-            frame.sibling_indent_column
-                + self.layout.line_adjuster.case_unindent_depth_for_line(line)
-                    * self.options.indent_width,
-        )
+        Some(frame.sibling_indent_column)
     }
 
     pub(crate) fn observe_emitted_label_body_indent(
@@ -379,8 +383,13 @@ impl FormatEngine<'_> {
         {
             return;
         }
+        // The members after an access label stand at the class body, which
+        // an indented label leaves.
+        if starts_access_label(line, &self.options.access_labels) {
+            return;
+        }
         let mut next_spaces = line_indent_spaces + self.options.indent_width;
-        if kind == LineKind::Label && !starts_access_label(line, &self.options.access_labels) {
+        if kind == LineKind::Label {
             next_spaces = next_spaces.max(
                 (self
                     .layout
@@ -471,8 +480,24 @@ impl FormatEngine<'_> {
     }
 }
 
+/// Whether `tokens`, after a word, go on with the single colon ending a
+/// label.
+pub(crate) fn starts_label(tokens: &[Token]) -> bool {
+    let mut code = tokens
+        .iter()
+        .filter(|token| !matches!(token, Token::Whitespace(_) | Token::Comment(..)));
+    matches!(code.next(), Some(Token::Symbol(':')))
+        && !matches!(code.next(), Some(Token::Symbol(':')))
+}
+
 pub(crate) fn is_label_start(line: &str, access_labels: &[String]) -> bool {
-    is_case_label_start(line) || line == "default" || is_plain_label_start(line, access_labels)
+    is_case_label_start(line)
+        || line == "default"
+        || is_plain_label_start(line, access_labels)
+        || line
+            .strip_prefix("default")
+            .and_then(|rest| rest.trimmed_start().strip_prefix(':'))
+            .is_some_and(|rest| is_label_start(rest.trimmed_start(), access_labels))
 }
 
 pub(crate) fn is_access_label_start(line: &str, access_labels: &[String]) -> bool {
@@ -501,7 +526,8 @@ fn starts_access_label(line: &str, access_labels: &[String]) -> bool {
 }
 
 /// Whether the line starts with a goto label that a statement follows on
-/// the line, as `next: x(); }` where the style keeps one-line statements.
+/// the line, as `next: x(); }` or `next: if (x) {` where the style keeps
+/// one-line statements.
 fn leads_with_goto_label(line: &str) -> bool {
     let trimmed = line.trimmed_start();
     let Some((label, rest)) = trimmed.split_once(':') else {
@@ -515,25 +541,62 @@ fn leads_with_goto_label(line: &str) -> bool {
         )
         && !label.starts_with(|ch: char| ch.is_ascii_digit())
         && rest.starts_with_any(b" \t;")
-        && !rest.trimmed_start().starts_with_any(b"{:/")
+        // Comments after the label leave the statement after them.
+        && leads_statement_after_label(after_leading_comments(rest))
+}
+
+fn leads_statement_after_label(rest: &str) -> bool {
+    !rest.starts_with_any(b"{:/")
         // A statement follows; message arguments and base lists do not.
         && !rest.contains_any_byte(b"][")
         && !matches!(
-            leading_identifier(rest.trimmed_start()),
+            leading_identifier(rest),
             "public" | "protected" | "private" | "virtual"
         )
-        && strip_trailing_comment(rest).trimmed_end().ends_with_any(b";}")
-        // A bit-field width is a constant; a statement calls, assigns or
-        // jumps.
+        // A statement closes no paren opened before the label, as the rest
+        // of a range `for` header would.
+        && line_paren_imbalance(strip_trailing_comment(rest)).0 == 0
         && {
-            let statement = rest.trimmed_start();
-            statement.starts_with(';')
-                || statement.contains_any_byte(b"(=")
-                || matches!(
-                    leading_identifier(statement),
-                    "return" | "break" | "continue" | "goto"
-                )
+            let opens_header = matches!(
+                leading_identifier(rest),
+                "if" | "while" | "for" | "switch" | "do" | "try"
+            );
+            // A statement ends on the line unless a header or an assignment
+            // goes on past it; a method parameter row does neither.
+            (opens_header
+                || rest.contains('=')
+                || strip_trailing_comment(rest).trimmed_end().ends_with_any(b";}"))
+                // A bit-field width is a constant; a statement calls, assigns,
+                // jumps or opens a control header.
+                && (opens_header
+                    || rest.starts_with(';')
+                    || rest.contains_any_byte(b"(=")
+                    || matches!(
+                        leading_identifier(rest),
+                        "return" | "break" | "continue" | "goto"
+                    ))
         }
+}
+
+/// `line` past a user label that leads it, as `done:` in `done: if (x)`.
+pub(crate) fn after_user_label(line: &str) -> &str {
+    let trimmed = line.trimmed_start();
+    let Some(colon) = find_byte(trimmed.as_bytes(), b':') else {
+        return trimmed;
+    };
+    let (label, rest) = (&trimmed[..colon], &trimmed[colon + 1..]);
+    if label.is_empty()
+        || rest.starts_with(':')
+        || matches!(
+            label,
+            "case" | "default" | "public" | "protected" | "private"
+        )
+        || label.contains(|ch: char| !is_identifier_continue(ch))
+        || !label.starts_with(is_identifier_start)
+    {
+        return trimmed;
+    }
+    rest.trimmed_start()
 }
 
 pub(crate) fn is_attached_user_label(line: &str) -> bool {

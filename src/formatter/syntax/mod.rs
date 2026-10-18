@@ -6,6 +6,7 @@ use crate::formatter::lexer::{
     next_non_whitespace, previous_non_layout_token_index,
 };
 use crate::formatter::structure::SourceTree;
+use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::syntax::language::{
     is_macro_like_word, is_non_type_keyword, is_pointer_type_word, is_type_like_pointer_word,
 };
@@ -201,7 +202,11 @@ pub(crate) fn template_openers(tokens: &[Token]) -> Vec<bool> {
     let mut paren_depth = 0isize;
     for (cursor, token) in tokens.iter().enumerate() {
         match token {
-            Token::Whitespace(_) | Token::Newline | Token::Comment(_, _) => {}
+            // A directive between the parameters leaves them one list.
+            Token::Whitespace(_)
+            | Token::Newline
+            | Token::Comment(_, _)
+            | Token::Preprocessor(_) => {}
             Token::Word(_) | Token::Number(_) => {}
             Token::Operator(operator) if operator == "<" => {
                 let first_after_open =
@@ -236,6 +241,7 @@ pub(crate) fn template_openers(tokens: &[Token]) -> Vec<bool> {
                 paren_depth -= 1;
             }
             Token::Symbol(',' | ':' | '[' | ']') => {}
+            Token::Symbol('.') if in_ellipsis(tokens, cursor) => {}
             _ => open.clear(),
         }
     }
@@ -266,6 +272,16 @@ pub(crate) fn known_template_angle_role(
         }
         _ => TemplateAngle::None,
     }
+}
+
+/// Whether the `.` at `index` is one of the three of a `...`, as a pack
+/// expansion among template arguments has.
+fn in_ellipsis(tokens: &[Token], index: usize) -> bool {
+    (index.saturating_sub(2)..=index).any(|start| {
+        tokens
+            .get(start..start + 3)
+            .is_some_and(|run| run.iter().all(|token| *token == Token::Symbol('.')))
+    })
 }
 
 fn looks_like_template_opener(tokens: &[Token], index: usize, end: usize) -> bool {
@@ -317,6 +333,7 @@ fn looks_like_template_opener(tokens: &[Token], index: usize, end: usize) -> boo
                 paren_depth -= 1;
             }
             Token::Symbol(',' | ':' | '[' | ']') => {}
+            Token::Symbol('.') if in_ellipsis(tokens, cursor) => {}
             _ => return false,
         }
     }
@@ -437,24 +454,108 @@ pub(crate) fn access_modified_brace_indices(tokens: &[Token]) -> IndexSet<usize>
     indices
 }
 
-pub(crate) fn nested_brace_array_indices(tokens: &[Token]) -> IndexSet<usize> {
-    let mut indices = IndexSet::default();
+/// How brace lists lay out their element rows.
+#[derive(Debug, Default, Clone, Eq, PartialEq)]
+pub(crate) struct BraceListRows {
+    /// Lists that stand their rows a level in: a brace among their elements
+    /// begins or ends its source line or stands first after theirs.
+    pub(crate) nested: IndexSet<usize>,
+    /// Nested lists with a brace among their elements that begins its
+    /// source line or stands first after theirs.
+    pub(crate) brace_rows: IndexSet<usize>,
+    /// Braces past an element on a row of a list whose elements run in
+    /// after its brace and align there; their own elements align to them in
+    /// turn.
+    pub(crate) aligned_children: IndexSet<usize>,
+    /// The aligned lists holding such braces.
+    pub(crate) aligned_parents: IndexSet<usize>,
+}
+
+/// With `runs_in`, a `{` leading its line has its first row run in by the
+/// style and counts as ending its line.
+pub(crate) fn brace_list_rows(tokens: &[Token], tree: &SourceTree, runs_in: bool) -> BraceListRows {
+    let mut rows = BraceListRows::default();
+    let mut run_in = IndexSet::default();
+    let mut children = Vec::new();
+    let mut rows_of_nested = IndexSet::default();
     let mut stack: Vec<usize> = Vec::new();
+    let mut begins_line = true;
+    let mut previous = None;
+    let mut open_on_line = None;
     for (index, token) in tokens.iter().enumerate() {
+        match token {
+            Token::Whitespace(_) => continue,
+            Token::Newline => {
+                // A brace among elements that ends its line opens rows in
+                // the lists around it.
+                if let Some(open) = open_on_line.take()
+                    && let Some((_, around)) = stack.split_last()
+                    && stack.last() == Some(&open)
+                {
+                    rows.nested.extend(around.iter().copied());
+                }
+                begins_line = true;
+                continue;
+            }
+            Token::Comment(..) => {}
+            Token::Symbol('}') => open_on_line = None,
+            _ => {
+                if let Some(open) = open_on_line.take() {
+                    run_in.insert(open);
+                }
+            }
+        }
         match token {
             Token::Symbol('{') => {
                 if let Some(&parent) = stack.last() {
-                    indices.insert(parent);
+                    if begins_line || previous == Some(parent) {
+                        rows.nested.insert(parent);
+                        rows.brace_rows.insert(parent);
+                        rows_of_nested.insert(index);
+                    } else {
+                        children.push((index, parent));
+                    }
                 }
                 stack.push(index);
+                if runs_in && begins_line {
+                    if let Some((_, around)) = stack.split_last() {
+                        rows.nested.extend(around.iter().copied());
+                    }
+                    begins_line = true;
+                    previous = Some(index);
+                    continue;
+                }
+                open_on_line = Some(index);
             }
             Token::Symbol('}') => {
                 stack.pop();
             }
             _ => {}
         }
+        begins_line = false;
+        previous = Some(index);
     }
-    indices
+    // An element brace follows a separator or a designator's `=`; one after
+    // a capture list or a cast opens a lambda body or a compound literal. A
+    // row of a nested list stands as a block does.
+    for (child, parent) in children {
+        if run_in.contains(&parent)
+            && !rows.nested.contains(&parent)
+            && !rows_of_nested.contains(&parent)
+            && tree
+                .groups
+                .opened_at(parent)
+                .is_some_and(|group| tree.blocks.kind(group) == Some(BlockKind::Initializer))
+            && tree.previous_code_token(child).is_some_and(|before| {
+                matches!(&tokens[before], Token::Symbol(','))
+                    || matches!(&tokens[before], Token::Operator(operator) if operator == "=")
+            })
+        {
+            rows.aligned_children.insert(child);
+            rows.aligned_parents.insert(parent);
+        }
+    }
+    rows
 }
 
 pub(crate) fn classify_syntax(tokens: &[Token], tree: &SourceTree) -> SyntaxRoles {

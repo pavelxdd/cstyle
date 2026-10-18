@@ -3,15 +3,17 @@ use crate::formatter::braces::classification::is_lambda_capture_header;
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
-use crate::formatter::output::buffer::LineFilter;
+use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::{ConstructorInitializerFrame, ConstructorInitializerLayout};
 use crate::formatter::structure::blocks::is_code_token;
+use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::{language, scoped_name_is_constructor};
 use crate::formatter::text::columns::column_after;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
-    has_unmatched_open_brace, inline_brace_pair_range, is_comment_only_line,
+    after_leading_comments, has_unmatched_open_brace, inline_brace_pair_range,
+    is_comment_only_line, line_paren_imbalance, preprocessor_directive,
     trailing_comment_split_limit, unmatched_open_paren_columns,
 };
 use crate::formatter::text::line_view::LineView;
@@ -26,6 +28,11 @@ pub(crate) struct MaxLengthConstructorReplay {
 }
 
 impl MaxLengthConstructorReplay {
+    /// Whether the replayed line holds a constructor initializer list.
+    pub(crate) fn has_constructor_initializer(&self) -> bool {
+        self.has_constructor_initializer
+    }
+
     fn head_enters_constructor_initializer(&self, head: &str) -> bool {
         self.has_constructor_initializer
             && head.match_indices(')').any(|(close, _)| {
@@ -186,6 +193,22 @@ impl FormatEngine<'_> {
         (target == self.token_input.input_source_indent).then_some(target)
     }
 
+    /// Whether the last constructor's initializers may still be read: its
+    /// frame stays recorded past the body, which opens outside any
+    /// function.
+    pub(crate) fn in_constructor_initializer(&self) -> bool {
+        self.layout
+            .frame_stack
+            .active_constructor_initializer()
+            .is_some()
+            && !self
+                .layout
+                .nesting
+                .brace_type_stack
+                .iter()
+                .any(|brace_type| matches!(brace_type, BraceType::Command | BraceType::Definition))
+    }
+
     pub(crate) fn record_constructor_initializer_frame(&mut self, function_try: bool) {
         let layout = if self.current.trimmed().is_empty() {
             ConstructorInitializerLayout::Split
@@ -225,7 +248,8 @@ impl FormatEngine<'_> {
 
     fn scan_output_constructor_initializer_colon(&self) -> bool {
         for index in (0..self.output.len()).rev().take(64) {
-            let trimmed = self.output.code_trimmed(index);
+            // Comments leading a line take no part in it.
+            let trimmed = after_leading_comments(self.output.code_trimmed(index));
             if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
                 return false;
             }
@@ -270,7 +294,9 @@ impl FormatEngine<'_> {
             let trimmed = self.output.code_trimmed(index);
             if trimmed.contains(" : ") && trimmed.contains('(') && !trimmed.starts_with("case ") {
                 return Some(
-                    leading_visual_width(raw, self.options.tab_width) + self.options.indent_width,
+                    leading_visual_width(raw, self.options.tab_width)
+                        + self.options.indent_width
+                        + self.case_unindent_spaces(),
                 );
             }
             if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
@@ -497,7 +523,15 @@ impl FormatEngine<'_> {
         if trimmed.is_empty() || trimmed.starts_with_any(b"#:,{}") {
             return None;
         }
-        let previous = &self.output[self.output.last_lines_where(LineFilter::NoLineComment)[0]?];
+        // Directives between the members leave the member before them.
+        let previous_index = self.output.scoped_range().rev().find(|&index| {
+            let head = self.output.trimmed(index);
+            !head.is_empty()
+                && !head.starts_with("//")
+                && !head.starts_with('#')
+                && self.output.directive_of_continuation(index).is_none()
+        })?;
+        let previous = &self.output[previous_index];
         let previous_code = self.output.code_trimmed_of(previous);
         if !previous_code.ends_with(',') && previous_code.trimmed() != ":" {
             return None;
@@ -511,7 +545,16 @@ impl FormatEngine<'_> {
             return None;
         }
         let base_indent = self.constructor_initializer_base_indent_spaces()?;
-        if self.layout.nesting.paren_depth > 0
+        // A row that closes the parens it starts in is still an argument.
+        let starts_in_parens = match self.output.pending_tokens() {
+            Some(span) => self
+                .tree
+                .groups
+                .enclosing(span.first)
+                .is_some_and(|group| self.tree.groups.get(group).delimiter == Delimiter::Paren),
+            None => self.layout.nesting.paren_depth > 0,
+        };
+        if starts_in_parens
             && previous_code.ends_with(',')
             && self.paren_closes_of(previous_code) == 0
         {
@@ -589,10 +632,41 @@ impl FormatEngine<'_> {
             (_, Some((hard, true))) => Some(hard),
             _ => None,
         }?;
+        // Parens a later line leaves open hold the row as any call's.
+        let mut depth = 0usize;
+        for index in decided + 1..self.output.len() {
+            let (closes, opens) = line_paren_imbalance(self.output.code_before_comment(index));
+            depth = depth.saturating_sub(closes) + opens.len();
+        }
+        if depth > 0 {
+            return None;
+        }
         let code = self.output.code_before_comment_trimmed(decided);
+        self.arguments_after_open_paren_spaces(code)
+    }
+
+    /// Whether the last line in scope starts inside parens an earlier line
+    /// opened: an argument row, not an initializer's.
+    fn last_line_starts_in_parens(&self) -> bool {
+        self.output
+            .last_non_empty_index()
+            .and_then(|index| self.output.line_tokens(index))
+            .and_then(|span| self.tree.groups.enclosing(span.first))
+            .is_some_and(|group| self.tree.groups.get(group).delimiter == Delimiter::Paren)
+    }
+
+    /// Where the arguments of the call the line `code` leaves open stand:
+    /// past the last paren its text follows, a level further for a paren
+    /// nested in it that ends the line.
+    fn arguments_after_open_paren_spaces(&self, code: &str) -> Option<usize> {
         let open = self.open_paren_column_of(code)?;
         let spaces_after_open = code[open + 1..].len() - code[open + 1..].trimmed_start().len();
-        Some(visual_width_from(&code[..open + 1], 0, self.options.tab_width) + spaces_after_open)
+        let nested_at_end = code.ends_with('(') && open + 1 < code.len();
+        Some(
+            visual_width_from(&code[..open + 1], 0, self.options.tab_width)
+                + spaces_after_open
+                + usize::from(nested_at_end) * self.options.indent_width,
+        )
     }
 
     /// The nearest lines from `floor` on that decide the look back of
@@ -643,7 +717,9 @@ impl FormatEngine<'_> {
         }
         let code = self.output.code_before_comment_trimmed(index);
         let body = self.output.code_body(index);
-        let colon = body.starts_with(':') && !body.starts_with("::");
+        // A member a leading comma starts opens its arguments as the first
+        // one does.
+        let colon = body.starts_with(':') && !body.starts_with("::") || body.starts_with(',');
         let comma = body.ends_with(',');
         let opens = (colon || comma) && self.open_paren_column_of(code).is_some();
         let stops = body.starts_with(')')
@@ -671,11 +747,14 @@ impl FormatEngine<'_> {
         }
         let previous = self.output.last_non_empty_scoped()?;
         let previous_code = self.output.code_trimmed_of(previous);
-        if !previous_code.ends_with('(') {
+        if !previous_code.ends_with('(') || self.last_line_starts_in_parens() {
             return None;
         }
-        self.constructor_initializer_base_indent_spaces()
-            .map(|spaces| spaces + self.options.indent_width)
+        let base = self.constructor_initializer_base_indent_spaces()?;
+        Some(
+            self.arguments_after_open_paren_spaces(previous_code)
+                .unwrap_or(base + self.options.indent_width),
+        )
     }
 
     pub(crate) fn constructor_initializer_closing_paren_indent_spaces(
@@ -752,11 +831,23 @@ impl FormatEngine<'_> {
         let mut initializer = None;
         let len = self.output.len();
         let floor = len.saturating_sub(32);
+        // A macro's body continues nothing after it.
+        let after_macro = len
+            .checked_sub(1)
+            .is_none_or(|last| !self.output.trimmed(last).ends_with('\\'));
         let stops = |index: usize| {
             let trimmed = self.output.code_trimmed(index);
             trimmed == "{"
                 || trimmed == "}"
                 || trimmed.ends_with(';')
+                || after_macro && preprocessor_directive(trimmed) == Some("define")
+                || after_macro
+                    && self
+                        .output
+                        .directive_of_continuation(index)
+                        .is_some_and(|directive| {
+                            preprocessor_directive(self.output.trimmed(directive)) == Some("define")
+                        })
                 || trimmed.starts_with("*/")
                 || trimmed.ends_with("*/")
                 || self.output.code_has(index, b'{')

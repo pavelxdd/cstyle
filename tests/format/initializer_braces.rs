@@ -1807,7 +1807,7 @@ fn compound_literal_nested_operator_continuation_does_not_leak() {
 }
 
 #[test]
-fn initializer_operator_continuation_sits_at_member_level() {
+fn initializer_operator_continuation_aligns_under_the_value() {
     let mut options = FormatOptions::default();
     options.brace_style = BraceStyle::OneTrueBrace;
     options.pad_operators = true;
@@ -1831,8 +1831,8 @@ fn initializer_operator_continuation_sits_at_member_level() {
             "{",
             "    struct Config result = {",
             "        .value = ((unsigned)alpha) |",
-            "        ((unsigned)beta << 8) |",
-            "        ((unsigned)gamma << 16),",
+            "                 ((unsigned)beta << 8) |",
+            "                 ((unsigned)gamma << 16),",
             "    };",
             "}",
         )
@@ -4071,7 +4071,7 @@ fn vtk_rows_after_a_comment_on_their_line_keep_the_row_column() {
 }
 
 #[test]
-fn whitesmith_rows_led_by_a_comment_stay_at_the_brace() {
+fn whitesmith_rows_led_by_a_comment_stand_a_level_past_the_brace() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=whitesmith".to_owned()])
         .expect("valid options");
@@ -4081,8 +4081,8 @@ fn whitesmith_rows_led_by_a_comment_stay_at_the_brace() {
         "    static const u8 trans[2][2] =",
         "        {",
         "        /* State: */",
-        "        /* 0 */ { 1, 0, },",
-        "        /* 1 */ { 1, 1, },",
+        "            /* 0 */ { 1, 0, },",
+        "            /* 1 */ { 1, 1, },",
         "        };",
         "    }",
     );
@@ -4451,4 +4451,15 @@ fn whitesmith_array_brace_after_a_struct_closer_stands_at_the_closer() {
 
     assert_eq!(first, expected);
     assert_eq!(format_exact(&first, &options), first);
+}
+
+#[test]
+fn an_initializer_a_directive_splits_from_its_assignment_stays_on_one_line() {
+    let input = "void f()\n{\n#ifdef FEATURE\n    struct Item item =\n#endif\n    { 1, 2 };\n}\n";
+    for style in ["kr", "allman", "gnu"] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[format!("--style={style}")])
+            .expect("valid options");
+        assert_eq!(format_exact(input, &options), input, "{style}");
+    }
 }

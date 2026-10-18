@@ -250,7 +250,7 @@ impl FormatEngine<'_> {
             }
         }
         let string_continuation = quote.is_some().then(|| {
-            let line_indent_spaces = self.current_line_indent_spaces();
+            let (line_indent_spaces, text_start) = self.current_output_indent();
             let has_stream_context = self.layout.frame_stack.active_stream().is_some()
                 || self
                     .layout
@@ -260,7 +260,7 @@ impl FormatEngine<'_> {
             StringContinuationFrame {
                 output_line: self.output.len(),
                 line_indent_spaces,
-                literal_start_column: line_indent_spaces + self.current_visual_width(),
+                literal_start_column: text_start + self.current_visual_width(),
                 line_starts_with_chain_operator: starts_with_chain_operator(
                     self.current.trimmed_start(),
                 ),

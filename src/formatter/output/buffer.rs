@@ -2,7 +2,8 @@ use crate::formatter::lexer::{Token, line_comments, token_text, tokenize};
 use crate::formatter::structure::{LineComments, TokenSpan};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, find_byte, line_brace_imbalance, line_paren_imbalance, preprocessor_directive,
+    ContainsAnyByte, find_byte, holds_code_after_leading_comments, is_bare_comment_line,
+    line_brace_imbalance, line_paren_imbalance, preprocessor_directive,
     trailing_comment_split_limit,
 };
 use crate::formatter::text::trim::Trimmed;
@@ -207,7 +208,8 @@ fn compute_line_brace_meta(
             (scanned.0, scanned.1.as_slice())
         }
     };
-    let open_shape = if trimmed == "{" {
+    // A brace after a comment leading its line stands past the line's lead.
+    let open_shape = if trimmed == "{" && line_start.starts_with('{') {
         OpenBraceShape::Isolated
     } else if code.ends_with('{')
         && trimmed.split_once(':').is_some_and(|(label, _)| {
@@ -382,6 +384,9 @@ pub(crate) struct OutputBuffer {
     verbatim: Vec<bool>,
     /// Continued lines of a directive that the formatter indented itself.
     indented_directive_continuation: Vec<bool>,
+    /// Lines that a comment on them left a level past a code line in a
+    /// case body.
+    comment_kept_case_level: Vec<bool>,
     /// Comments of the current line just taken, for the next pushed line.
     pending_comments: Option<LineComments>,
     /// Block comment token being pushed; lines pushed without a current line
@@ -526,13 +531,7 @@ impl LineFilter {
 
 /// Whether trimmed `text` is a comment line or a block comment row.
 fn is_comment_row(text: &str) -> bool {
-    text.starts_with("//")
-        || text.starts_with("/*")
-        || text.starts_with("*/")
-        || text == "*"
-        || text.starts_with("* ")
-        || text.starts_with("*\t")
-        || text.starts_with("**")
+    is_bare_comment_line(text) || text.starts_with("**")
 }
 
 /// An entry of [`OpenBraceLines`]: a line with `{`s still open, and how
@@ -848,6 +847,21 @@ impl OutputBuffer {
         }
     }
 
+    pub(crate) fn mark_comment_kept_case_level(&mut self, index: usize) {
+        if let Some(line) = self.comment_kept_case_level.get_mut(index) {
+            *line = true;
+        }
+    }
+
+    /// Whether a comment on line `index` left it a level past a code line
+    /// in a case body.
+    pub(crate) fn comment_kept_case_level(&self, index: usize) -> bool {
+        self.comment_kept_case_level
+            .get(index)
+            .copied()
+            .unwrap_or(false)
+    }
+
     pub(crate) fn is_indented_directive_continuation(&self, index: usize) -> bool {
         self.indented_directive_continuation
             .get(index)
@@ -866,6 +880,7 @@ impl OutputBuffer {
         self.comments.reserve(lines);
         self.verbatim.reserve(lines);
         self.indented_directive_continuation.reserve(lines);
+        self.comment_kept_case_level.reserve(lines);
     }
 
     fn push_pending_sources(&mut self, blank: bool) {
@@ -877,6 +892,7 @@ impl OutputBuffer {
         }
         self.verbatim.push(false);
         self.indented_directive_continuation.push(false);
+        self.comment_kept_case_level.push(false);
         if blank {
             self.tokens.push(PackedSpan::NONE);
             self.comments
@@ -914,6 +930,7 @@ impl OutputBuffer {
         self.comments.pop();
         self.verbatim.pop();
         self.indented_directive_continuation.pop();
+        self.comment_kept_case_level.pop();
         let line = self.lines.pop();
         if line.is_some() {
             self.last_non_empty_dirty.set(true);
@@ -960,6 +977,20 @@ impl OutputBuffer {
         self.lines.get_mut(index)
     }
 
+    /// Exchanges lines `a` and `b` with the tables kept about them.
+    pub(crate) fn swap_lines(&mut self, a: usize, b: usize) {
+        self.lines.swap(a, b);
+        self.meta.swap(a, b);
+        self.parens.swap(a, b);
+        self.tokens.swap(a, b);
+        self.comments.swap(a, b);
+        self.verbatim.swap(a, b);
+        self.indented_directive_continuation.swap(a, b);
+        self.comment_kept_case_level.swap(a, b);
+        self.last_non_empty_dirty.set(true);
+        self.record_change(a.min(b));
+    }
+
     pub(crate) fn remove(&mut self, index: usize) -> String {
         self.meta.remove(index);
         self.parens.remove(index);
@@ -967,6 +998,7 @@ impl OutputBuffer {
         self.comments.remove(index);
         self.verbatim.remove(index);
         self.indented_directive_continuation.remove(index);
+        self.comment_kept_case_level.remove(index);
         self.last_non_empty_dirty.set(true);
         self.record_change(index);
         self.lines.remove(index)
@@ -1088,8 +1120,13 @@ impl OutputBuffer {
     pub(crate) fn brace_meta(&self, index: usize) -> &LineBraceMeta {
         self.meta[index].get_or_init(|| {
             let line = &self.lines[index];
-            // A row of a block comment holds no code.
-            if self.tokens[index].get().is_none() && self.comments[index].get().lead.is_some() {
+            // A row of a block comment holds no code; a brace the formatter
+            // added after a comment opened on the line is code of its own.
+            if self.tokens[index].get().is_none()
+                && self.comments[index].get().lead.is_some()
+                && !(self.comment_start_index(index) == index
+                    && holds_code_after_leading_comments(line))
+            {
                 let (comment_split_limit, comment_code_end) = comment_split(line);
                 LineBraceMeta {
                     code_starts_with_hash: false,
@@ -1725,6 +1762,21 @@ impl OutputBuffer {
             .map(|index| (&self.lines[index], self.code_before_comment_trimmed(index)))
     }
 
+    /// The last line holding code, past comment rows and directive lines,
+    /// which take no part in the layout of the statement rows around them.
+    pub(crate) fn last_code_line_past_comments_and_directives(&self) -> Option<&String> {
+        self.last_code_line_index_past_comments_and_directives()
+            .map(|index| &self.lines[index])
+    }
+
+    pub(crate) fn last_code_line_index_past_comments_and_directives(&self) -> Option<usize> {
+        (0..self.lines.len()).rev().find(|&index| {
+            !self.is_directive_line(index)
+                && self.comment_start_index(index) == index
+                && !self.code_before_comment_trimmed(index).is_empty()
+        })
+    }
+
     /// The last non-blank line of the scope when no comment holds it.
     pub(crate) fn last_code_line_scoped(&self) -> Option<&String> {
         let index = self
@@ -1734,7 +1786,7 @@ impl OutputBuffer {
     }
 
     #[inline]
-    fn last_line_outside_comment_index(&self) -> Option<usize> {
+    pub(crate) fn last_line_outside_comment_index(&self) -> Option<usize> {
         match self.last_outside_comment_cache.get() {
             Some((len, version, index)) if len == self.lines.len() && version == self.version => {
                 index
@@ -1795,10 +1847,22 @@ impl OutputBuffer {
         None
     }
 
+    /// Whether the last non-empty line ends a macro's backslash-continued
+    /// body, which continues no statement after it.
+    pub(crate) fn last_non_empty_ends_macro_body(&self) -> bool {
+        self.last_non_empty_index()
+            .is_some_and(|index| self.directive_of_continuation(index).is_some())
+    }
+
     /// Whether line `index` belongs to a directive, on its first line or on
     /// a backslash-continued one.
     pub(crate) fn is_directive_line(&self, index: usize) -> bool {
         self.trimmed(index).starts_with('#') || self.directive_of_continuation(index).is_some()
+    }
+
+    /// The comment whose text starts line `index`.
+    pub(crate) fn lead_comment(&self, index: usize) -> Option<usize> {
+        self.comments.get(index)?.get().lead
     }
 
     /// The first comment token recorded on line `index`.

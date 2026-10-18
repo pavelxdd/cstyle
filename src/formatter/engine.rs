@@ -32,18 +32,22 @@ use crate::formatter::state::{
     CommandState, LineState, NestingState, PreviousToken, RunInState, TokenInputState, next_line,
 };
 use crate::formatter::structure::SourceTree;
-use crate::formatter::structure::blocks::is_code_token;
+use crate::formatter::structure::blocks::{BlockKind, is_code_token, next_code_token};
 use crate::formatter::syntax::language::{
-    is_numeric_variable_word, is_type_like_pointer_word, is_unpad_kept_type_word,
+    is_non_type_keyword, is_numeric_variable_word, is_type_like_pointer_word,
+    is_unpad_kept_type_word,
 };
 use crate::formatter::syntax::{
     OperatorRole, SyntaxRoles, TemplateAngle, classify_syntax, known_template_angle_role,
     template_openers,
 };
 use crate::formatter::text::columns;
-use crate::formatter::text::line_scan::ContainsAnyByte;
+use crate::formatter::text::line_scan::{
+    ContainsAnyByte, after_leading_comments, holds_code_after_leading_comments,
+};
 use crate::formatter::text::line_scan::{
     line_ends_with_comment, line_paren_imbalance, unmatched_open_paren_column,
+    unmatched_open_paren_columns,
 };
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::comments::{CommentState, trailing_comment_columns};
@@ -147,6 +151,15 @@ pub(crate) struct LayoutState {
     pub(crate) else_if_break_depths: Vec<usize>,
     /// The else-if chain ends once the line that closed its block ends.
     pub(crate) unwind_else_if_after_line: bool,
+    /// A closing brace that begins a line still open ends its braceless
+    /// body once that line ends.
+    pub(crate) exit_braceless_block_after_line: bool,
+    /// The column a closer the formatter added stood at before a closing
+    /// header joined its line.
+    pub(crate) joined_added_closer_spaces: Option<usize>,
+    /// Empty lines published while laying out the pending line, ahead of
+    /// it.
+    pub(crate) blank_lines_before_pending: usize,
     pub(crate) compound_literal: compound_literals::CompoundLiteralState,
     pub(crate) pending_braceless_block_bias: Option<usize>,
     pub(crate) inline_nested_header_braceless_bias: Option<usize>,
@@ -164,6 +177,20 @@ pub(crate) type OpenParenLine = (usize, usize);
 /// The address and length of a token slice, the start of a line of it,
 /// and the index of that line's first line comment.
 pub(crate) type LineCommentCache = (usize, usize, usize, Option<usize>);
+
+/// The columns a split moved: those at or past `from_column` of the part
+/// that ends output line `line` moved `shift` columns, and the column a
+/// declaration's comma ending the line continues at moved from the first
+/// of `declaration_columns` to the second. A split that `moved_stack`
+/// moved the continuation stack with them.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct SplitLineShift {
+    pub(crate) line: usize,
+    pub(crate) from_column: usize,
+    pub(crate) shift: isize,
+    pub(crate) declaration_columns: Option<(usize, usize)>,
+    pub(crate) moved_stack: bool,
+}
 
 pub(crate) struct FormatEngine<'a> {
     pub(crate) options: &'a FormatOptions,
@@ -240,6 +267,9 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) line_comment_cache: std::cell::Cell<Option<LineCommentCache>>,
     /// Which tokens of the tree open a template.
     template_openers: std::cell::OnceCell<Vec<bool>>,
+    /// Which groups of the tree are parens holding a compound literal that
+    /// spans lines.
+    pub(crate) multiline_literal_parens: std::cell::OnceCell<Vec<bool>>,
     /// The last chain of subscripts read for an initializer designator.
     designator_chain_cache: std::cell::RefCell<Option<DesignatorChain>>,
     /// Each matched `[` of the tree with its `]`, in token order.
@@ -283,6 +313,9 @@ pub(crate) struct FormatEngine<'a> {
         std::cell::Cell<Option<crate::formatter::continuation::operator_chains::AssignmentRhsWalk>>,
     /// The looks back for the line opening an initializer's rows.
     pub(crate) row_openers: std::cell::RefCell<crate::formatter::braces::initializers::RowOpeners>,
+    /// The last look back over a run of a class's base rows.
+    pub(crate) colon_run_cache:
+        std::cell::Cell<Option<crate::formatter::output::layout::initial::ColonRunWalk>>,
     /// The last look back from a leading operator for its statement's
     /// assignment: the tokens' address, the operator, its group, and the
     /// farthest `=` found, or `None` when the look gave up.
@@ -292,7 +325,6 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) stacked_assignment_cache: std::cell::Cell<Option<ForwardFind>>,
     /// The last look for a token registering an indent before a
     /// declarator's `,`.
-    pub(crate) declarator_registers_cache: std::cell::Cell<Option<ForwardFind>>,
     /// The last statement start a declarator's `,` looked back to: the
     /// tokens' address, the `,`, and the start.
     pub(crate) declarator_start_cache: std::cell::Cell<Option<(usize, usize, usize)>>,
@@ -326,12 +358,27 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) block_spacing: BlockSpacingState,
     pub(crate) comments: CommentState,
     pub(crate) source_run_in_brace_lines: Vec<usize>,
+    /// Padding lines before closers the run-in styles join to the row
+    /// before them.
+    pub(crate) joined_closer_padding_lines: Vec<usize>,
+    /// Lines of closers of bodies empty in the source whose brace line ends
+    /// with the comments the brace moved before.
+    pub(crate) empty_body_closer_lines: Vec<usize>,
+    /// The columns the last published line moved past its laid-out indent.
+    pub(crate) published_line_shift: isize,
     /// A brace frame opened while its case label or header still stood on
     /// the current line, placed from structural columns.
     pub(crate) brace_frame_awaits_line: bool,
-    /// How far splitting a statement off its case label moved the
-    /// statement's columns.
-    pub(crate) label_split_shift: Option<(usize, isize)>,
+    /// Braceless bodies a statement ended before the comments closing its
+    /// line, left once that line is laid out.
+    pub(crate) braceless_exit_after_line: bool,
+    /// How far splitting a line moved the columns of the part ending it,
+    /// as a statement split off its case label or a head off its return
+    /// type.
+    pub(crate) split_line_shift: Option<SplitLineShift>,
+    /// A label broke its line before comments; the statement after them
+    /// starts a line of its own.
+    pub(crate) statement_after_label_pending: bool,
     pub(crate) disabled_formatting: Option<DisabledFormattingState<'a>>,
     pub(crate) current_is_preindented: bool,
     /// The current line is a comment row astyle writes as it stands.
@@ -428,9 +475,9 @@ impl<'a> FormatEngine<'a> {
             case_label_cache: std::cell::Cell::new(None),
             assignment_rhs_cache: std::cell::Cell::new(None),
             row_openers: std::cell::RefCell::default(),
+            colon_run_cache: std::cell::Cell::new(None),
             operand_assign_cache: std::cell::Cell::new(None),
             stacked_assignment_cache: std::cell::Cell::new(None),
-            declarator_registers_cache: std::cell::Cell::new(None),
             declarator_start_cache: std::cell::Cell::new(None),
             member_declarator_cache: std::cell::Cell::new(None),
             header_braces_cache: std::cell::Cell::new(None),
@@ -438,6 +485,7 @@ impl<'a> FormatEngine<'a> {
             token_column_cache: std::cell::Cell::new(None),
             astyle_replay_cache: std::cell::Cell::new(None),
             template_openers: std::cell::OnceCell::new(),
+            multiline_literal_parens: std::cell::OnceCell::new(),
             bracket_closes: std::cell::OnceCell::new(),
             designator_chain_cache: std::cell::RefCell::new(None),
             case_labels: std::cell::OnceCell::new(),
@@ -463,6 +511,9 @@ impl<'a> FormatEngine<'a> {
                 template_declaration: TemplateDeclarationState::default(),
                 else_if_break_depths: Vec::new(),
                 unwind_else_if_after_line: false,
+                exit_braceless_block_after_line: false,
+                joined_added_closer_spaces: None,
+                blank_lines_before_pending: 0,
                 compound_literal: compound_literals::CompoundLiteralState::default(),
                 pending_braceless_block_bias: None,
                 inline_nested_header_braceless_bias: None,
@@ -479,8 +530,13 @@ impl<'a> FormatEngine<'a> {
             block_spacing: BlockSpacingState::default(),
             comments: CommentState::default(),
             source_run_in_brace_lines: Vec::new(),
+            joined_closer_padding_lines: Vec::new(),
+            empty_body_closer_lines: Vec::new(),
+            published_line_shift: 0,
             brace_frame_awaits_line: false,
-            label_split_shift: None,
+            braceless_exit_after_line: false,
+            split_line_shift: None,
+            statement_after_label_pending: false,
             disabled_formatting: None,
             current_is_preindented: false,
             current_is_verbatim: false,
@@ -591,6 +647,9 @@ impl<'a> FormatEngine<'a> {
         self.current_line_has_class_initializer_colon = false;
         self.layout.previous = PreviousToken::None;
         self.previous_was_newline = false;
+        if std::mem::take(&mut self.braceless_exit_after_line) {
+            self.exit_ended_braceless_blocks(None);
+        }
     }
 
     #[cfg(test)]
@@ -621,6 +680,7 @@ impl<'a> FormatEngine<'a> {
                     self.options.brace_style,
                     BraceStyle::Pico | BraceStyle::Lisp
                 ),
+                !self.options.break_one_line_blocks && !self.options.break_one_line_headers,
                 self.options.indent_width,
             );
             self.added_closing_braces = added.closers;
@@ -643,7 +703,14 @@ impl<'a> FormatEngine<'a> {
         );
         self.preprocessor.indentable_blocks = preprocessor_block_indentability(tokens);
         self.access_modified_braces = syntax::access_modified_brace_indices(tokens);
-        self.inline_array.nested_brace_arrays = syntax::nested_brace_array_indices(tokens);
+        self.inline_array.list_rows = syntax::brace_list_rows(
+            tokens,
+            &self.tree,
+            matches!(
+                self.options.brace_style,
+                BraceStyle::Horstmann | BraceStyle::Pico
+            ),
+        );
         let mut cursor = TokenLineCursor::new(tokens);
         while let Some(line) = cursor.next_line() {
             self.format_line(tokens, line);
@@ -763,14 +830,17 @@ impl<'a> FormatEngine<'a> {
             let context = self.token_push_context(tokens, index, line, &line_columns);
             self.current
                 .set_active_token(is_code_token(&tokens[index]).then_some(index));
+            let comment = matches!(tokens[index], Token::Comment(..)).then_some(index);
             let block_comment =
-                matches!(tokens[index], Token::Comment(CommentKind::Block, _)).then_some(index);
+                comment.filter(|_| matches!(tokens[index], Token::Comment(CommentKind::Block, _)));
+            self.comments.pushed_comment = comment;
             self.current.set_active_comment(block_comment);
             self.output.set_active_comment(block_comment);
             self.preprocessor.active_directive =
                 matches!(tokens[index], Token::Preprocessor(_)).then_some(index);
             self.push_token(&tokens[index], context);
             self.current.set_active_token(None);
+            self.comments.pushed_comment = None;
             self.current.set_active_comment(None);
             self.output.set_active_comment(None);
             if let Some((colon_index, has_action)) = multiline_case_colon
@@ -784,14 +854,43 @@ impl<'a> FormatEngine<'a> {
     }
 
     /// Records how the next source line starts, before the newline token is pushed.
+    /// Whether the `{` at `brace` opens a braced initializer right after
+    /// its declarator, as in `Item value { 1, 2 };`, which stands as a
+    /// list after `=` does.
+    pub(crate) fn opens_declarator_list(&self, brace: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        matches!(tokens.get(brace), Some(Token::Symbol('{')))
+            && self
+                .tree
+                .groups
+                .opened_at(brace)
+                .is_some_and(|list| self.tree.blocks.kind(list) == Some(BlockKind::Initializer))
+            && self
+                .tree
+                .previous_code_token(brace)
+                .is_some_and(|before| match &tokens[before] {
+                    Token::Word(word) => {
+                        !is_non_type_keyword(word)
+                            && !matches!(
+                                word.as_str(),
+                                "break" | "continue" | "co_return" | "co_yield" | "co_await"
+                            )
+                    }
+                    Token::Symbol(']') => true,
+                    Token::Operator(operator) => operator == ">",
+                    _ => false,
+                })
+    }
+
     fn observe_next_line_lead(&mut self, tokens: &[Token], index: usize, line_start: usize) {
         let following_index = self.next_non_layout_token_index(0, tokens, index + 1);
         let following = following_index.map(|i| &tokens[i]);
         let after_following = following_index
             .and_then(|i| self.next_non_layout_token_index(1, tokens, i + 1))
             .map(|i| &tokens[i]);
-        // Only a removed brace leaves a gap at a line end; astyle drops the
-        // source's own trailing whitespace.
+        // Only a removed brace leaves a gap at a line end, and the closer
+        // joining the line adds its space; astyle drops the source's own
+        // trailing whitespace.
         if self.options.remove_braces
             && matches!(
                 self.options.brace_style,
@@ -807,10 +906,12 @@ impl<'a> FormatEngine<'a> {
                 {
                     previous.truncate(previous.trimmed_end().len());
                     previous.push_str(whitespace);
+                    previous.push(' ');
                 }
             } else {
                 self.trim_current_end_horizontal_space();
                 self.current.push_str(whitespace);
+                self.current.push(' ');
                 self.preserve_run_in_join_space = true;
             }
         }
@@ -825,13 +926,26 @@ impl<'a> FormatEngine<'a> {
             && self.colon_leads_class_base_clause();
         self.next_line.leads_with_comma = matches!(following, Some(Token::Symbol(',')));
         self.next_line.leads_with_open_brace = matches!(following, Some(Token::Symbol('{')));
+        self.next_line.leads_with_declarator_list =
+            following_index.is_some_and(|brace| self.opens_declarator_list(brace));
         self.next_line.leads_with_close_brace = matches!(following, Some(Token::Symbol('}')));
         self.next_line.leads_with_else =
             matches!(following, Some(Token::Word(word)) if word == "else");
         self.next_line.leads_with_open_paren = matches!(following, Some(Token::Symbol('(')));
         self.next_line.leads_with_comment = matches!(following, Some(Token::Comment(..)));
+        // Comments before the next line's code leave its shape to the code.
+        let (code_following, code_after_following) =
+            if matches!(following, Some(Token::Comment(..))) {
+                let first = next_code_token(tokens, index + 1);
+                let second = first.and_then(|first| next_code_token(tokens, first + 1));
+                (first.map(|i| &tokens[i]), second.map(|i| &tokens[i]))
+            } else {
+                (following, after_following)
+            };
+        self.next_line.code_leads_with_close_brace =
+            matches!(code_following, Some(Token::Symbol('}')));
         self.next_line.word_followed_by_open_paren = matches!(
-            (following, after_following),
+            (code_following, code_after_following),
             (Some(Token::Word(_)), Some(Token::Symbol('(')))
         );
         self.next_line.leads_with_noexcept = matches!(
@@ -914,6 +1028,33 @@ impl<'a> FormatEngine<'a> {
         );
         *cache = Some(DesignatorChain { key, opens, answer });
         answer
+    }
+
+    /// Whether the `>` or `>>` at `index` closes template arguments.
+    pub(crate) fn closes_template_at(&self, index: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        let mut depth = match tokens.get(index) {
+            Some(Token::Operator(operator)) if operator == ">" => 1usize,
+            Some(Token::Operator(operator)) if operator == ">>" => 2,
+            _ => return false,
+        };
+        let mut cursor = index;
+        while let Some(before) = self.tree.previous_code_token(cursor) {
+            match &tokens[before] {
+                Token::Operator(operator) if operator == ">" => depth += 1,
+                Token::Operator(operator) if operator == ">>" => depth += 2,
+                Token::Operator(operator) if operator == "<" && self.template_opener_at(before) => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return true;
+                    }
+                }
+                Token::Symbol(';' | '{' | '}') => return false,
+                _ => {}
+            }
+            cursor = before;
+        }
+        false
     }
 
     fn template_opener_at(&self, index: usize) -> bool {
@@ -1045,10 +1186,13 @@ impl<'a> FormatEngine<'a> {
         {
             template_angle = TemplateAngle::Open;
         }
+        // Comments alone up to the line's end leave the token ending it.
         self.comments.next_comment_ends_line = next_index.is_some_and(|comment_index| {
             matches!(tokens.get(comment_index), Some(Token::Comment(_, _)))
-                && next_non_whitespace(tokens, comment_index + 1, line.end)
-                    .is_none_or(|after| matches!(tokens.get(after), Some(Token::Newline)))
+                && tokens[comment_index..line.end]
+                    .iter()
+                    .take_while(|token| !matches!(token, Token::Newline))
+                    .all(|token| matches!(token, Token::Comment(..) | Token::Whitespace(_)))
         });
         let starts_initializer_designator = matches!(tokens[index], Token::Symbol('['))
             && self.bracket_chain_designator(tokens, index, line.end);
@@ -1174,8 +1318,14 @@ impl<'a> FormatEngine<'a> {
         {
             return false;
         }
+        // The block after the directive stands in the case body, as a plain
+        // block there does.
+        let brace_levels = 1 + usize::from(matches!(
+            self.options.brace_style,
+            BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Ratliff
+        ));
         let case_body_spaces = columns::leading_visual_width(case_line, self.options.tab_width)
-            + self.options.indent_width * 2;
+            + brace_levels * self.options.indent_width;
         self.finish_line();
         self.push_output_line_spaces(trimmed, self.layout.indentation.indent(), case_body_spaces);
         self.layout.previous = PreviousToken::None;
@@ -1184,19 +1334,49 @@ impl<'a> FormatEngine<'a> {
     }
 
     fn observe_input_line(&mut self, tokens: &[Token]) {
+        // A directive after a statement's continued line leaves its
+        // continuation to the line after it.
+        let directive = tokens
+            .iter()
+            .find(|token| !matches!(token, Token::Whitespace(_)))
+            .is_some_and(|token| matches!(token, Token::Preprocessor(_)))
+            && (0..self.output.len())
+                .rev()
+                .find(|&index| !self.output.is_directive_line(index))
+                .is_some_and(|index| {
+                    self.output.comment_start_index(index) == index
+                        && !self.output.code_before_comment_trimmed(index).is_empty()
+                });
+        // So does an empty line.
+        let empty = tokens
+            .iter()
+            .all(|token| matches!(token, Token::Whitespace(_) | Token::Newline));
         self.layout
             .continuation_indent
-            .input_line_continuation_indent = self
-            .layout
+            .input_line_continuation_indent = if directive || empty {
+            None
+        } else {
+            self.layout
+                .continuation_indent
+                .next_input_line_continuation_indent
+                .take()
+        };
+        self.layout
             .continuation_indent
-            .next_input_line_continuation_indent
-            .take();
+            .input_line_follows_lambda_body = !(directive || empty)
+            && std::mem::take(
+                &mut self
+                    .layout
+                    .continuation_indent
+                    .next_input_line_follows_lambda_body,
+            );
         self.layout.line_state.passed_semicolon = false;
         self.layout.line_state.passed_colon = false;
         self.layout.line_state.ternary_colon = false;
         self.layout.line_state.bit_field_colon = false;
         self.layout.line_state.is_multi_statement_line = false;
         self.layout.line_state.is_one_line_block = false;
+        self.layout.line_state.added_block_semicolons.clear();
         self.layout.line_state.column1_line_comment = {
             let mut iter = tokens.iter();
             match iter.next() {
@@ -1265,12 +1445,29 @@ impl<'a> FormatEngine<'a> {
         if has_semicolon {
             let mut statement_count = 0usize;
             let mut paren_depth = 0i32;
+            // Code after a statement starts another.
+            let mut after_statement = false;
             for token in tokens {
                 match token {
                     Token::Symbol('(') => paren_depth += 1,
                     Token::Symbol(')') => paren_depth -= 1,
-                    Token::Symbol(';') if paren_depth <= 0 => statement_count += 1,
+                    Token::Symbol(';') if paren_depth <= 0 => {
+                        statement_count += 1;
+                        after_statement = true;
+                        continue;
+                    }
+                    token
+                        if after_statement
+                            && paren_depth <= 0
+                            && is_code_token(token)
+                            && !matches!(token, Token::Symbol('}' | ')' | '\\')) =>
+                    {
+                        statement_count += 1;
+                    }
                     _ => {}
+                }
+                if is_code_token(token) {
+                    after_statement = false;
                 }
             }
             if statement_count > 1 {
@@ -1322,6 +1519,10 @@ impl<'a> FormatEngine<'a> {
 
         if self.comments.skip_next_attached_comment && matches!(token, Token::Comment(_, _)) {
             self.comments.skip_next_attached_comment = false;
+            return;
+        }
+        if self.comments.attached_comment_run > 0 && matches!(token, Token::Comment(_, _)) {
+            self.comments.attached_comment_run -= 1;
             return;
         }
         if !matches!(token, Token::Whitespace(_) | Token::Newline) {
@@ -1377,6 +1578,21 @@ impl<'a> FormatEngine<'a> {
 
         self.track_extern_c_guard(token);
 
+        // A directive ends the label's reach; a brace attaches to the label.
+        if self.statement_after_label_pending
+            && (is_code_token(token) || matches!(token, Token::Preprocessor(_)))
+        {
+            self.statement_after_label_pending = false;
+            // A brace a line comment follows takes the comments before it
+            // with the line comment, as any brace does.
+            let brace = matches!(token, Token::Symbol('{'));
+            let keeps_line = matches!(token, Token::Preprocessor(_) | Token::RawLine(_))
+                || brace && self.token_input.token_followed_by_line_comment_on_line;
+            if !keeps_line && self.current_holds_comments_after_label(brace) {
+                self.finish_line();
+            }
+        }
+
         match token {
             Token::Word(word) => self.push_word(word, next),
             Token::Number(number) => self.push_literal(number, None),
@@ -1387,7 +1603,7 @@ impl<'a> FormatEngine<'a> {
                     .layout
                     .previous_before_comment
                     .unwrap_or(self.layout.previous);
-                self.push_comment(*kind, comment);
+                self.push_comment(*kind, comment, context.token_index);
                 if self.layout.previous == PreviousToken::Other {
                     self.layout.previous_before_comment = Some(before);
                 }
@@ -1533,6 +1749,24 @@ impl<'a> FormatEngine<'a> {
         }
     }
 
+    /// The column past the `(` a call leaves open on the line whose code
+    /// `text` is, when the line ends an argument after braces it closed in
+    /// the call.
+    pub(crate) fn paren_column_past_closed_braces(&self, text: &str) -> Option<usize> {
+        if !text.ends_with(',') {
+            return None;
+        }
+        let open = self.open_paren_column_of(text)?;
+        // A list the line leaves open holds the next row itself.
+        unmatched_open_paren_columns(text)
+            .last()
+            .is_some_and(|&paren| {
+                let after = &text[paren..];
+                after.contains('}') && after.matches('{').count() <= after.matches('}').count()
+            })
+            .then_some(open + 1)
+    }
+
     /// `self.paren_imbalance_of(text)`, read from the cache of the output line
     /// whose code `text` is.
     pub(crate) fn paren_imbalance_of(&self, text: &str) -> (usize, Vec<usize>) {
@@ -1576,6 +1810,17 @@ impl<'a> FormatEngine<'a> {
     }
 
     /// The current line's code before its trailing comment, trimmed.
+    /// Whether the current line holds comments and, before them, nothing
+    /// or a label unless `comments_only`.
+    pub(crate) fn current_holds_comments_after_label(&self, comments_only: bool) -> bool {
+        if !self.current.holds_comment_opener() {
+            return false;
+        }
+        let code = self.current_code_before_trailing_comment();
+        after_leading_comments(code.trimmed_start()).is_empty()
+            || !comments_only && code.ends_with(':')
+    }
+
     pub(crate) fn current_code_before_trailing_comment(&self) -> &str {
         let current = self.current.trimmed_end();
         if self.current.holds_comment_opener() {
@@ -1914,7 +2159,13 @@ impl<'a> FormatEngine<'a> {
             self.layout.continuation_indent.next_line_indent = None;
             self.layout.continuation_indent.next_line_indent_spaces = column;
             self.previous_was_newline = true;
-        } else if self.is_complete_template_declaration_line() || self.is_objc_standalone_line() {
+        } else if self.is_complete_template_declaration_line() {
+            // The declaration the head introduces continues nothing of it.
+            self.finish_line();
+            self.layout.nesting.clear_continuation_indents();
+            self.layout.indentation.clear_continuation_indents();
+            self.previous_was_newline = true;
+        } else if self.is_objc_standalone_line() {
             self.finish_line();
             self.previous_was_newline = true;
         } else if (self.is_objc_method_line() || self.layout.objc.method_continuation)
@@ -1996,7 +2247,10 @@ impl<'a> FormatEngine<'a> {
             self.layout.continuation_indent.logical_chain_indent_spaces = None;
             self.previous_was_newline = true;
         } else if self.is_continuation_break()
-            && !(self.current_is_preindented && self.current.trimmed_end().ends_with("*/"))
+            // A comment line continues nothing; code a comment leads does.
+            && !(self.current_is_preindented
+                && self.current.trimmed_end().ends_with("*/")
+                && !holds_code_after_leading_comments(after_comment_tail(&self.current)))
         {
             self.finish_continuation_line_at_newline();
         } else if self.current.trimmed_end().ends_with(';')
@@ -2007,6 +2261,7 @@ impl<'a> FormatEngine<'a> {
             self.layout.objc.method_continuation = false;
             self.previous_was_newline = true;
         } else if self.next_line.leads_with_open_brace && self.current.trimmed_end().ends_with('[')
+            || self.next_line.leads_with_declarator_list
         {
             self.finish_line();
             self.previous_was_newline = true;
@@ -2020,11 +2275,10 @@ impl<'a> FormatEngine<'a> {
                     | BraceStyle::Horstmann
                     | BraceStyle::Pico
             )
-            && (self.current.trimmed_start().starts_with('}')
-                || self
-                    .current
-                    .trimmed_start()
-                    .starts_with_any(b"<>|&+-*/%=!?:,.~"))
+            && {
+                let code = after_leading_comments(self.current.trimmed_start());
+                code.starts_with('}') || code.starts_with_any(b"<>|&+-*/%=!?:,.~")
+            }
         {
             self.finish_line();
             self.layout.continuation_indent.clear_next_line();
@@ -2080,7 +2334,10 @@ impl<'a> FormatEngine<'a> {
                 self.layout.continuation_indent.set_next_line_spaces(spaces);
             }
             self.previous_was_newline = true;
-        } else if self.next_line.leads_with_else {
+        } else if self.next_line.leads_with_else
+            // A backslash continues the line only past its own break.
+            || self.current.trimmed_end().ends_with('\\')
+        {
             // A body without `;`, as a macro call, still ends before `else`.
             self.finish_line();
             self.previous_was_newline = true;
@@ -2101,6 +2358,42 @@ impl<'a> FormatEngine<'a> {
             self.layout.command_state.current_header = None;
             self.layout.command_state.preprocessor_after_header = false;
             self.layout.frame_stack.clear_header();
+        }
+    }
+
+    /// The continuation `indent` worked out for the line just finished,
+    /// moved with the columns a split of that line moved; the stack's top
+    /// before the line finished was `stacked_before_line`.
+    pub(crate) fn continuation_after_split(
+        &mut self,
+        indent: ContinuationIndent,
+        stacked_before_line: Option<usize>,
+    ) -> ContinuationIndent {
+        let split = self
+            .split_line_shift
+            .take()
+            .filter(|split| split.line + 1 == self.output.len());
+        let stacked_after_line = self.layout.nesting.current_continuation_indent_spaces();
+        match (indent, split, stacked_after_line) {
+            (ContinuationIndent::Spaces(spaces), Some(split), _)
+                if split
+                    .declaration_columns
+                    .is_some_and(|(unsplit, _)| unsplit == spaces) =>
+            {
+                ContinuationIndent::Spaces(
+                    split.declaration_columns.map_or(spaces, |(_, moved)| moved),
+                )
+            }
+            // The column the line took from the stack moved as the stack did.
+            (ContinuationIndent::Spaces(spaces), Some(split), Some(moved))
+                if split.moved_stack && Some(spaces) == stacked_before_line =>
+            {
+                ContinuationIndent::Spaces(moved)
+            }
+            (ContinuationIndent::Spaces(spaces), Some(split), _) if spaces >= split.from_column => {
+                ContinuationIndent::Spaces(spaces.saturating_add_signed(split.shift))
+            }
+            (indent, ..) => indent,
         }
     }
 
@@ -2136,6 +2429,8 @@ impl<'a> FormatEngine<'a> {
                 saved_indent
             };
         let indent = saved_indent.unwrap_or_else(|| self.next_continuation_indent());
+        let follows_lambda_body =
+            saved_indent.is_none() && self.continues_arguments_after_lambda_body();
         let one_shot_indent = saved_indent
             .is_none()
             .then(|| {
@@ -2158,6 +2453,8 @@ impl<'a> FormatEngine<'a> {
             .is_some();
         let case_label_with_comment =
             switch_cases::case_label_with_trailing_comment(self.current.trimmed());
+        let case_label_continues = self.current_case_label_continues();
+        let stacked_before_line = self.layout.nesting.current_continuation_indent_spaces();
         self.finish_line();
         if matches!(
             previous_before_line,
@@ -2168,17 +2465,16 @@ impl<'a> FormatEngine<'a> {
         ) {
             self.layout.previous = previous_before_line;
         }
-        // The columns of a statement split off its case label moved with it.
-        let shift = self
-            .label_split_shift
-            .take()
-            .filter(|&(line, _)| line + 1 == self.output.len())
-            .map(|(_, shift)| shift);
-        let indent = match (indent, shift) {
-            (ContinuationIndent::Spaces(spaces), Some(shift)) => {
-                ContinuationIndent::Spaces(spaces.saturating_add_signed(shift))
-            }
-            (indent, _) => indent,
+        let indent = self.continuation_after_split(indent, stacked_before_line);
+        // The label's own column, wherever its style set it, anchors the
+        // rest of the label.
+        let indent = match self.output.len().checked_sub(1) {
+            Some(label) if case_label_continues => ContinuationIndent::Spaces(
+                self.output.lead_width(label, self.options.tab_width)
+                    + self.case_unindent_spaces()
+                    + 2 * self.options.indent_width,
+            ),
+            _ => indent,
         };
         if !clear_continuation_after_line {
             if let Some(spaces) = one_shot_indent {
@@ -2188,6 +2484,9 @@ impl<'a> FormatEngine<'a> {
                 self.set_next_continuation_indent(ContinuationIndent::Spaces(spaces));
             } else {
                 self.set_next_continuation_indent(indent);
+                self.layout
+                    .continuation_indent
+                    .next_input_line_follows_lambda_body = follows_lambda_body;
             }
         }
         if case_label_with_comment && let Some(previous) = self.output.last() {
@@ -2201,7 +2500,7 @@ impl<'a> FormatEngine<'a> {
     }
 
     pub(crate) fn current_initializer_member_before_closing_brace(&self) -> bool {
-        if !self.next_line.leads_with_close_brace
+        if !self.next_line.code_leads_with_close_brace
             || !(self.in_initializer_brace()
                 || self.innermost_init_block_brace()
                 || self.current_inline_array_column().is_some())
@@ -2461,5 +2760,13 @@ fn shared_whitespace(whitespace: &str) -> std::borrow::Cow<'static, str> {
         std::borrow::Cow::Borrowed(&SPACES[..whitespace.len()])
     } else {
         std::borrow::Cow::Owned(whitespace.to_owned())
+    }
+}
+
+/// `line` past the tail of a block comment an earlier line opened.
+fn after_comment_tail(line: &str) -> &str {
+    match (line.find("/*"), line.find("*/")) {
+        (open, Some(close)) if open.is_none_or(|open| close < open) => &line[close + 2..],
+        _ => line,
     }
 }

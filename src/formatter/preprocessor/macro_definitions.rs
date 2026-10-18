@@ -3,7 +3,9 @@ use crate::formatter::continuation::{min_conditional_indent_spaces, operator_cha
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::text::columns::{leading_visual_width, visual_column_at, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
-use crate::formatter::text::line_scan::{advance_quoted_literal, unmatched_open_paren_columns};
+use crate::formatter::text::line_scan::{
+    advance_quoted_literal, after_leading_comments, unmatched_open_paren_columns,
+};
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{
@@ -40,12 +42,13 @@ struct DefineBodyLineInfo {
 
 fn is_define_header_keyword(line: &str) -> bool {
     matches!(
-        leading_identifier(line),
+        leading_identifier(after_leading_comments(line)),
         "if" | "else" | "for" | "while" | "do" | "switch"
     )
 }
 
 fn is_define_case_label(line: &str) -> bool {
+    let line = after_leading_comments(line);
     let word = leading_identifier(line);
     if word != "case" && word != "default" {
         return false;

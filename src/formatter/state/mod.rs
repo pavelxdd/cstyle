@@ -72,23 +72,34 @@ pub(crate) struct NestingState {
     inline_brace_call_paren_stack: Vec<bool>,
     semicolonless_macro_call_paren_stack: Vec<Option<usize>>,
     continuation_indent_spaces_stack: Vec<usize>,
+    /// How the continuation columns that are no column of their line came
+    /// about, by their index in the continuation stack.
+    continuation_column_origins: Vec<(usize, ColumnOrigin)>,
     continuation_indent_checkpoint_stack: Vec<usize>,
     brace_scope_depth_stack: Vec<ScopeDepth>,
     pub(crate) brace_header_stack: Vec<Option<String>>,
     pub(crate) brace_type_stack: Vec<BraceType>,
     brace_extra_indent_stack: Vec<usize>,
-    brace_break_before_call_stack: Vec<bool>,
     pub(crate) question_depth: usize,
     pub(crate) last_closed_brace_header: Option<String>,
     pub(crate) last_closed_brace_type: Option<BraceType>,
     pub(crate) last_closed_brace_extra_indent: usize,
-    pub(crate) last_closed_brace_breaks_before_call: bool,
+}
+
+/// How a continuation column that is no column of its line came about.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum ColumnOrigin {
+    /// The maximum continuation indent set it in place of this column.
+    Capped(usize),
+    /// It continues `offset` past the column at stack index `base`.
+    Derived { base: usize, offset: usize },
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 struct ScopeDepth {
     parens: usize,
     questions: usize,
+    continuations: usize,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -143,10 +154,91 @@ impl NestingState {
         let spaces = self
             .current_continuation_indent_spaces()
             .map_or(spaces, |previous| spaces.max(previous));
-        self.continuation_indent_spaces_stack.push(spaces);
+        self.push_continuation_column(spaces);
+    }
+
+    /// Moves the columns registered at or past `from` by `shift`, as a
+    /// line split there moves the part after it. A column the maximum
+    /// capped stands at its moved column once that is within `max` of
+    /// `base`; one derived from a column below it follows that column.
+    pub(crate) fn shift_columns_from(
+        &mut self,
+        from: usize,
+        shift: isize,
+        base: usize,
+        max: usize,
+    ) {
+        let len = self.continuation_indent_spaces_stack.len();
+        self.continuation_column_origins
+            .retain(|&(index, _)| index < len);
+        for index in 0..len {
+            let origin = self
+                .continuation_column_origins
+                .iter_mut()
+                .find(|(origin, _)| *origin == index)
+                .map(|(_, origin)| origin);
+            let column = self.continuation_indent_spaces_stack[index];
+            self.continuation_indent_spaces_stack[index] = match origin {
+                Some(ColumnOrigin::Capped(aligned)) if *aligned >= from => {
+                    *aligned = aligned.saturating_add_signed(shift);
+                    if aligned.saturating_sub(base) <= max {
+                        *aligned
+                    } else {
+                        column
+                    }
+                }
+                Some(ColumnOrigin::Capped(_)) => column,
+                Some(&mut ColumnOrigin::Derived { base, offset }) => {
+                    self.continuation_indent_spaces_stack[base] + offset
+                }
+                None if column >= from => column.saturating_add_signed(shift),
+                None => column,
+            };
+        }
+        for column in self
+            .paren_indent_spaces_stack
+            .iter_mut()
+            .filter(|column| **column >= from)
+        {
+            *column = column.saturating_add_signed(shift);
+        }
     }
 
     pub(crate) fn push_continuation_indent_spaces_raw(&mut self, spaces: usize) {
+        self.push_continuation_column(spaces);
+    }
+
+    /// Pushes `spaces`, the column the maximum continuation indent set in
+    /// place of `aligned`.
+    pub(crate) fn push_capped_continuation_indent_spaces(&mut self, spaces: usize, aligned: usize) {
+        self.push_continuation_column(spaces);
+        self.continuation_column_origins.push((
+            self.continuation_indent_spaces_stack.len() - 1,
+            ColumnOrigin::Capped(aligned),
+        ));
+    }
+
+    /// Registers `spaces`, `offset` past the top of the stack when it
+    /// stands there.
+    pub(crate) fn register_derived_continuation_indent_spaces(
+        &mut self,
+        spaces: usize,
+        offset: usize,
+    ) {
+        let base = self.continuation_indent_spaces_stack.len().checked_sub(1);
+        self.register_continuation_indent_spaces(spaces);
+        if let Some(base) = base
+            && self.continuation_indent_spaces_stack[base] + offset == spaces
+        {
+            self.continuation_column_origins
+                .push((base + 1, ColumnOrigin::Derived { base, offset }));
+        }
+    }
+
+    fn push_continuation_column(&mut self, spaces: usize) {
+        let index = self.continuation_indent_spaces_stack.len();
+        self.continuation_column_origins
+            .retain(|&(origin, _)| origin < index);
         self.continuation_indent_spaces_stack.push(spaces);
     }
 
@@ -173,7 +265,30 @@ impl NestingState {
         self.continuation_indent_spaces_stack.truncate(target_size);
     }
 
+    /// Drops the continuations an element of the innermost brace list
+    /// registered, as the comma ending it at the list's own depth does.
+    pub(crate) fn trim_to_brace_element_continuation(&mut self) {
+        if let Some(depth) = self.brace_scope_depth_stack.last()
+            && depth.parens == self.paren_depth
+        {
+            self.continuation_indent_spaces_stack
+                .truncate(depth.continuations);
+        }
+    }
+
     pub(crate) fn current_continuation_indent_spaces(&self) -> Option<usize> {
+        // A brace list's elements continue nothing of the expression
+        // around it.
+        if matches!(
+            self.brace_type_stack.last(),
+            Some(BraceType::Array | BraceType::CompoundLiteral)
+        ) && self
+            .brace_scope_depth_stack
+            .last()
+            .is_some_and(|depth| self.continuation_indent_spaces_stack.len() <= depth.continuations)
+        {
+            return None;
+        }
         self.continuation_indent_spaces_stack.last().copied()
     }
 
@@ -204,25 +319,17 @@ impl NestingState {
         self.brace_scope_depth_stack.push(ScopeDepth {
             parens: self.paren_depth,
             questions: self.question_depth,
+            continuations: self.continuation_indent_spaces_stack.len(),
         });
         self.brace_header_stack.push(header);
         self.brace_type_stack.push(brace_type);
         self.brace_extra_indent_stack.push(extra_indent);
-        self.brace_break_before_call_stack.push(false);
-    }
-
-    pub(crate) fn mark_current_brace_break_before_call(&mut self) {
-        if let Some(breaks_before_call) = self.brace_break_before_call_stack.last_mut() {
-            *breaks_before_call = true;
-        }
     }
 
     pub(crate) fn exit_brace(&mut self) -> ScopeRecovery {
         self.last_closed_brace_header = self.brace_header_stack.pop().flatten();
         self.last_closed_brace_type = self.brace_type_stack.pop();
         self.last_closed_brace_extra_indent = self.brace_extra_indent_stack.pop().unwrap_or(0);
-        self.last_closed_brace_breaks_before_call =
-            self.brace_break_before_call_stack.pop().unwrap_or(false);
         let mut recovery = ScopeRecovery {
             parens: 0,
             questions: 0,
@@ -230,6 +337,7 @@ impl NestingState {
         let depth = self.brace_scope_depth_stack.pop().unwrap_or(ScopeDepth {
             parens: 0,
             questions: 0,
+            continuations: 0,
         });
         if self.paren_depth > depth.parens {
             recovery.parens = self.paren_depth - depth.parens;
@@ -290,6 +398,8 @@ pub(crate) struct LineState {
     /// Whether the line's last colon gives a bit-field width.
     pub(crate) bit_field_colon: bool,
     pub(crate) template_angle_depth: usize,
+    /// The `;` of each statement on the line braces were added around.
+    pub(crate) added_block_semicolons: Vec<usize>,
 }
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]

@@ -3202,8 +3202,7 @@ fn force_tab_x_braceless_else_comment_uses_structural_tabs() {
         ),
         fixture!(
             "void f() {",
-            "\tif(a) {}",
-            "\telse",
+            "\tif(a) {} else",
             "\t\t/* note */",
             "\t\tif(b) {}",
             "}",
@@ -3225,8 +3224,7 @@ fn tab_indent_braceless_else_comment_uses_body_tabs() {
         ),
         fixture!(
             "void f() {",
-            "\tif(a) {}",
-            "\telse",
+            "\tif(a) {} else",
             "\t\t/* note */",
             "\t\tif(b) {}",
             "}",
@@ -3325,6 +3323,113 @@ fn trailing_comment_after_split_multi_statement_line_keeps_compact_gap() {
             &FormatOptions::default(),
         ),
         "\nstruct Item {\n    unsigned long bcc;\n    long fill_00[3]; /* Backup Cache Control */\n    unsigned long bcce;\n    long fill_01[3]; /* Backup Cache Error */\n};\n",
+    );
+}
+
+fn format_args(source: &str, args: &[&str]) -> String {
+    let mut options = FormatOptions::default();
+    let args: Vec<String> = args.iter().map(|arg| (*arg).to_owned()).collect();
+    apply_command_line_args(&mut options, &args).expect("valid options");
+    format_exact(source, &options)
+}
+
+#[test]
+fn padding_a_statement_split_off_its_line_shrinks_the_line_comment_gap() {
+    // Only the padding on the comment's own output line comes out of the
+    // gap; a block comment and a line comment move alike.
+    for (comment, gap) in [("// done", "        "), ("/* done */", "        ")] {
+        assert_eq!(
+            format_args(
+                &format!("void f()\n{{\n    value=0; result=0;          {comment}\n}}\n"),
+                &["-p"],
+            ),
+            format!("void f()\n{{\n    value = 0;\n    result = 0;{gap}{comment}\n}}\n"),
+        );
+    }
+    assert_eq!(
+        format_args(
+            "void f()\n{\n    value = ( 0 ); result = ( 1 );          // done\n}\n",
+            &["-U"],
+        ),
+        "void f()\n{\n    value = (0);\n    result = (1);            // done\n}\n",
+    );
+}
+
+#[test]
+fn padding_a_multi_statement_line_kept_whole_shrinks_its_comment_gap() {
+    assert_eq!(
+        format_args(
+            "void f()\n{\n    value=0; result=0;          // done\n}\n",
+            &["-p", "-o"],
+        ),
+        "void f()\n{\n    value = 0; result = 0;      // done\n}\n",
+    );
+    assert_eq!(
+        format_args(
+            "void f()\n{\n    value=0; result=0;  // done\n}\n",
+            &["-p", "-o"],
+        ),
+        "void f()\n{\n    value = 0; result = 0; // done\n}\n",
+    );
+    assert_eq!(
+        format_args(
+            "void f()\n{\n    value = ( 0 ); result = ( 1 );          // done\n}\n",
+            &["-U", "-o"],
+        ),
+        "void f()\n{\n    value = (0); result = (1);              // done\n}\n",
+    );
+    assert_eq!(
+        format_args(
+            "void f()\n{\n    value=0;\tresult=0;     // done\n}\n",
+            &["-p", "-o"],
+        ),
+        "void f()\n{\n    value = 0;\tresult = 0; // done\n}\n",
+    );
+    assert_eq!(
+        format_args(
+            "void f()\n{\n    value=0; result=0;     /* done */ // note\n}\n",
+            &["-p", "-o"],
+        ),
+        "void f()\n{\n    value = 0; result = 0; /* done */ // note\n}\n",
+    );
+    // A block comment that code follows is no trailing comment to move.
+    let inline = "void f()\n{\n    value=0; /* done */ result=0;\n}\n";
+    assert_eq!(
+        format_args(inline, &["-p", "-o"]),
+        "void f()\n{\n    value = 0; /* done */ result = 0;\n}\n",
+    );
+}
+
+#[test]
+fn padding_moves_no_block_comment_that_code_follows_on_its_source_line() {
+    assert_eq!(
+        format_args(
+            "void f()\n{\n    value=0; result=0;     /* done */ other=1;\n}\n",
+            &["-p"],
+        ),
+        "void f()\n{\n    value = 0;\n    result = 0;     /* done */ other = 1;\n}\n",
+    );
+}
+
+#[test]
+fn padding_a_statement_split_off_a_do_while_shrinks_the_line_comment_gap() {
+    assert_eq!(
+        format_args(
+            "void f()\n{\n    do { value=0; } while (ready); result=0;     // done\n}\n",
+            &["-p"],
+        ),
+        "void f()\n{\n    do {\n        value = 0;\n    } while (ready);\n    result = 0;   // done\n}\n",
+    );
+}
+
+#[test]
+fn padding_a_statement_broken_off_its_header_shrinks_the_line_comment_gap() {
+    assert_eq!(
+        format_args(
+            "void f()\n{\n    if (ready) value=0;          // done\n}\n",
+            &["-p", "--break-one-line-headers"],
+        ),
+        "void f()\n{\n    if (ready)\n        value = 0;        // done\n}\n",
     );
 }
 
@@ -4570,15 +4675,16 @@ fn comment_trailing_a_broken_switch_brace_stands_at_the_labels() {
 }
 
 #[test]
-fn comment_left_after_an_attached_switch_brace_stands_in_the_case_bodies() {
+fn comment_left_after_an_attached_switch_brace_stands_at_the_case_labels() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=allman".to_owned()]).expect("valid options");
     let input =
         "void f(void)\n{\n\tswitch (c) { /* blk\n\t ** more */\n\tcase 1:\n\t\tbreak;\n\t}\n}\n";
-    let expected = "void f(void)\n{\n    switch (c)\n    {\n        /* blk\n         ** more */\n    case 1:\n        break;\n    }\n}\n";
-    // astyle moves the comment to the labels on a second run, as it places
-    // a comment written on a line of its own there.
+    let expected = "void f(void)\n{\n    switch (c)\n    {\n    /* blk\n     ** more */\n    case 1:\n        break;\n    }\n}\n";
+    // The comment stands where one written on a line of its own does, so
+    // the output formats to itself.
     assert_eq!(format_exact(input, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
 }
 
 #[test]

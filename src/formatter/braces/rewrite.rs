@@ -2,9 +2,9 @@ use crate::config::{BraceStyle, FormatOptions};
 use crate::formatter::braces::classification::{
     is_class_like_brace_type, is_lambda_body_header, is_lambda_capture_header,
 };
-use crate::formatter::braces::closing::is_attached_closing_header_style;
 use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::braces::initializers::bracket_starts_initializer_designator;
+use crate::formatter::braces::postprocess::horstmann_run_in_fill;
 use crate::formatter::constructs::assembly::is_asm_block_header;
 use crate::formatter::constructs::headers::is_header;
 use crate::formatter::constructs::headers::line_is_control_body_header;
@@ -17,20 +17,21 @@ use crate::formatter::lexer::{
 use crate::formatter::preprocessor::{
     is_conditional_preprocessor, is_known_preprocessor_directive,
 };
-use crate::formatter::state::frame::BraceSemanticKind;
+use crate::formatter::state::frame::{BraceSemanticKind, LambdaBodySpan};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::structure::SourceTree;
-use crate::formatter::structure::blocks::next_code_token;
+use crate::formatter::structure::blocks::{BlockKind, next_code_token};
 use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::syntax::{TemplateAngle, classify_syntax, language, template_angle_role};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, has_hash_outside_literals, has_unmatched_open_brace, line_ends_with_comment,
-    preprocessor_directive, unmatched_open_paren_column,
+    ContainsAnyByte, after_leading_comments, has_hash_outside_literals, has_unmatched_open_brace,
+    is_bare_comment_line, is_comment_line, line_ends_with_comment, preprocessor_directive,
+    unmatched_open_paren_column,
 };
 use crate::formatter::text::trim::Trimmed;
-use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
+use crate::source::lex::{is_identifier_continue, is_word_char, leading_identifier, trailing_word};
 use std::collections::BTreeMap;
 
 impl FormatEngine<'_> {
@@ -78,9 +79,12 @@ impl FormatEngine<'_> {
                 .indent()
                 .max(self.layout.pending_braceless_block_bias.unwrap_or(0))
                 + 1;
-            self.layout
-                .continuation_indent
-                .set_next_line_level(body_indent);
+            // A comment leading the body's line already set its indent.
+            if self.current_is_blank() {
+                self.layout
+                    .continuation_indent
+                    .set_next_line_level(body_indent);
+            }
             self.layout.pending_braceless_block_bias = Some(body_indent);
             self.layout.command_state.current_header = None;
             self.layout.command_state.preprocessor_after_header = false;
@@ -194,8 +198,11 @@ impl FormatEngine<'_> {
                     if let Some(line) = self.output.last() {
                         let code = line.trimmed();
                         let code = code.strip_prefix('}').map_or(code, str::trim_start);
-                        if code.starts_with("else")
-                            && line_is_control_body_header(code)
+                        // So does a header a comment leads.
+                        let comment_led = self.output.lead_comment(self.output.len() - 1).is_some()
+                            && line_is_control_body_header(after_leading_comments(code));
+                        if (code.starts_with("else") && line_is_control_body_header(code)
+                            || comment_led)
                             && self.preprocessor.split_else.extra_levels == 0
                         {
                             // The line counts the levels broken else-ifs add,
@@ -265,6 +272,11 @@ impl FormatEngine<'_> {
                 false,
                 None,
             );
+            self.comments.added_block_semicolon = Some(semicolon);
+            self.layout
+                .line_state
+                .added_block_semicolons
+                .push(semicolon);
             self.layout.command_state.current_header = None;
             self.layout.command_state.preprocessor_after_header = false;
             let header_body_bias = self.layout.pending_braceless_block_bias.take();
@@ -293,7 +305,9 @@ impl FormatEngine<'_> {
                 self.comments.follows_added_one_line_block = true;
             } else if (next_is_else
                 && attach_closing_header
-                && (nested_header_level.is_none() || !self.options.break_one_line_statements))
+                // Breaking one-line statements parts an else from the
+                // one-line block before it, as from a written one.
+                && !self.options.break_one_line_statements)
                 || keep_following_statement
             {
                 self.ensure_space();
@@ -302,8 +316,10 @@ impl FormatEngine<'_> {
             }
             if self.current_is_blank() {
                 // An else-chain goes on in the braceless body holding it.
-                if let Some(level) = nested_header_level.or(header_body_bias
-                    .filter(|_| next_is_else && self.preprocessor.split_else.extra_levels == 0))
+                if let Some(level) = nested_header_level
+                    .filter(|_| next_is_closing_header)
+                    .or(header_body_bias
+                        .filter(|_| next_is_else && self.preprocessor.split_else.extra_levels == 0))
                 {
                     let delta = level.saturating_sub(self.layout.indentation.indent());
                     if delta > 0 {
@@ -389,6 +405,11 @@ impl FormatEngine<'_> {
             self.comments.closing_broken_added_block = true;
             self.push_close_brace(next, false);
             self.comments.closing_broken_added_block = false;
+            self.comments.added_block_semicolon = Some(semicolon);
+            self.layout
+                .line_state
+                .added_block_semicolons
+                .push(semicolon);
             self.comments.follows_added_one_line_block = tokens[semicolon + 1..]
                 .iter()
                 .find(|token| !matches!(token, Token::Whitespace(_)))
@@ -441,7 +462,12 @@ impl FormatEngine<'_> {
                 }
                 gap
             });
-        if self.options.break_one_line_blocks || block_starts_line {
+        // Breaking one-line headers parts the header from the statement its
+        // braces held, as from any body on its line.
+        let breaks_header = self.options.break_one_line_headers
+            && (self.options.break_one_line_statements
+                || !self.header_block_shares_line_with_statements(tokens, start, true));
+        if self.options.break_one_line_blocks || block_starts_line || breaks_header {
             self.finish_line();
             self.layout
                 .continuation_indent
@@ -495,14 +521,17 @@ impl FormatEngine<'_> {
                     _ => None,
                 })
                 .collect::<String>();
+            // The closer joining the line adds its space past the gap.
             if self.current_is_blank() {
                 if let Some(previous) = self.output.last_mut() {
                     previous.truncate(previous.trimmed_end().len());
                     previous.push_str(&closing_gap);
+                    previous.push(' ');
                 }
             } else {
                 self.trim_current_end_horizontal_space();
                 self.current.push_str(&closing_gap);
+                self.current.push(' ');
                 self.preserve_run_in_join_space = true;
             }
         }
@@ -562,6 +591,34 @@ impl FormatEngine<'_> {
         {
             return false;
         }
+        // After directives that split a header from its body, the body
+        // starts on the line a comment leads: no header stands there to
+        // break off.
+        if (split_else_after_preprocessor || self.layout.command_state.preprocessor_after_header)
+            && !self.current_is_blank()
+            && after_leading_comments(&self.current).trimmed().is_empty()
+            && !matches!(
+                next_non_whitespace(tokens, start, line_end).and_then(|index| tokens.get(index)),
+                Some(Token::Symbol('{'))
+            )
+        {
+            if split_else_after_preprocessor {
+                self.preprocessor.split_else.pending_body = false;
+                self.preprocessor.split_else.trigger_output_len = Some(self.output.len());
+                self.preprocessor.split_else.body_braceless = true;
+            } else {
+                let body_indent = self
+                    .layout
+                    .indentation
+                    .indent()
+                    .max(self.layout.pending_braceless_block_bias.unwrap_or(0))
+                    + 1;
+                self.layout.pending_braceless_block_bias = Some(body_indent);
+            }
+            self.layout.command_state.current_header = None;
+            self.layout.command_state.preprocessor_after_header = false;
+            return false;
+        }
         let Some(statement_start) = next_non_whitespace(tokens, start, line_end) else {
             return false;
         };
@@ -610,17 +667,44 @@ impl FormatEngine<'_> {
                 _ => false,
             })
         };
-        // A case label before the header leads the line as a statement does.
-        let preceding_case_label = tokens[line_start..start]
-            .iter()
-            .find(|token| crate::formatter::structure::blocks::is_code_token(token))
-            .is_some_and(
-                |token| matches!(token, Token::Word(word) if word == "case" || word == "default"),
-            );
+        // A label before the header leads the line as a statement does.
+        let preceding_label = {
+            let mut code = tokens[line_start..start]
+                .iter()
+                .filter(|token| crate::formatter::structure::blocks::is_code_token(token));
+            match code.next() {
+                Some(Token::Word(word)) if word == "case" || word == "default" => true,
+                Some(Token::Word(_)) => matches!(code.next(), Some(Token::Symbol(':'))),
+                _ => false,
+            }
+        };
+        // A statement before the header counts while it stays on the
+        // output line: added braces may have taken it off.
+        let preceding_top_level_statement =
+            preceding_top_level_statement && self.current.trimmed_end().contains(';');
+        // A block, or a list going on past the line, further on the line
+        // parts the header from the statement it keeps there.
+        let brace_goes_on = !matches!(&tokens[statement_start], Token::Word(word) if is_header(self.options, word))
+            && !matches!(tokens[statement_start], Token::Symbol('{'))
+            && (statement_start..line_end).any(|index| {
+                matches!(tokens[index], Token::Symbol('{'))
+                    && self.tree.groups.opened_at(index).is_some_and(|group| {
+                        !matches!(
+                            self.tree.blocks.kind(group),
+                            Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                        ) || self
+                            .tree
+                            .groups
+                            .get(group)
+                            .close
+                            .is_none_or(|close| close > line_end)
+                    })
+            });
         let keeps_multi_statement_line = self.options.keeps_multi_statement_line()
+            && !brace_goes_on
             && !self.in_broken_one_line_block(start)
             && (preceding_top_level_statement
-                || preceding_case_label
+                || preceding_label
                 || find_statement_semicolon(tokens, statement_start, line_end)
                     .and_then(|semicolon| {
                         next_statement_token(tokens, semicolon + 1, line_end, false)
@@ -736,11 +820,20 @@ impl FormatEngine<'_> {
                             + self.case_body_indent_extra(LineKind::Normal),
                     )
                     .max(self.layout.pending_braceless_block_bias.unwrap_or(0));
+                // Comments leading the body's own line already stand at its
+                // level; the header ended the line before.
+                let body_indent = if !self.current_is_blank()
+                    && after_leading_comments(&self.current).trimmed().is_empty()
+                {
+                    header_indent
+                } else {
+                    header_indent + 1
+                };
                 self.finish_line();
                 self.layout
                     .continuation_indent
-                    .set_next_line_level(header_indent + 1);
-                self.layout.pending_braceless_block_bias = Some(header_indent + 1);
+                    .set_next_line_level(body_indent);
+                self.layout.pending_braceless_block_bias = Some(body_indent);
                 self.layout.command_state.current_header = None;
                 self.previous_was_newline = true;
                 return true;
@@ -941,7 +1034,17 @@ impl FormatEngine<'_> {
                     None,
                 )
             };
+        // A header line its trailing comment ended is out already; a newline
+        // that ends an empty line after it keeps that line as any other.
+        let ends_empty_line = self.current.trimmed().is_empty()
+            && tokens[..newline_index]
+                .iter()
+                .rfind(|token| !matches!(token, Token::Whitespace(_)))
+                .is_some_and(|token| matches!(token, Token::Newline));
         self.finish_line();
+        if ends_empty_line && self.should_preserve_input_empty_line() {
+            self.push_empty_line();
+        }
         if let Some(spaces) = exact_body_indent {
             self.layout.continuation_indent.set_next_line_spaces(spaces);
             self.layout.pending_braceless_block_bias = Some(spaces / self.options.indent_width);
@@ -977,8 +1080,17 @@ impl FormatEngine<'_> {
                         .previous_code_token(self.tree.groups.get(group).open)
                 })
                 .is_none_or(|keyword| {
-                    matches!(&tokens[keyword], Token::Word(word)
-                        if word == header || matches!(word.as_str(), "constexpr" | "consteval"))
+                    let is_header = |index: usize| {
+                        matches!(&tokens[index], Token::Word(word)
+                            if word == header || matches!(word.as_str(), "constexpr" | "consteval"))
+                    };
+                    // A macro call may stand for the condition.
+                    is_header(keyword)
+                        || matches!(tokens[keyword], Token::Word(_))
+                            && self
+                                .tree
+                                .previous_code_token(keyword)
+                                .is_some_and(is_header)
                 }),
             _ => true,
         }
@@ -993,6 +1105,17 @@ impl FormatEngine<'_> {
                 .iter()
                 .rfind(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
                 .is_some_and(|token| matches!(token, Token::Comment(_, _)))
+        {
+            return false;
+        }
+        // Kept one-line statements keep an `else if` after a statement on
+        // their line.
+        if self.options.keeps_multi_statement_line()
+            && self
+                .current
+                .trimmed_end()
+                .strip_suffix("else")
+                .is_some_and(|before| before.trimmed_end().ends_with(';'))
         {
             return false;
         }
@@ -1099,11 +1222,47 @@ impl FormatEngine<'_> {
         kept.then_some(BraceType::Array)
     }
 
-    fn previous_output_code_ends_assignment(&self) -> bool {
-        self.output.last().is_some_and(|line| {
-            let code = self.output.code_trimmed_of(line);
-            code.ends_with('=')
-        })
+    /// Whether the last output line of code ends with the `=`, or the
+    /// declarator, that the brace at `brace` opens the list of.
+    /// Whether the brace at `brace` opens the range a range-for's `:`
+    /// leads.
+    fn brace_ranges_a_range_for(&self, brace: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        self.tree
+            .previous_code_token(brace)
+            .filter(|&colon| matches!(tokens[colon], Token::Symbol(':')))
+            .and_then(|colon| self.tree.groups.enclosing(colon))
+            .and_then(|header| {
+                self.tree
+                    .previous_code_token(self.tree.groups.get(header).open)
+            })
+            .is_some_and(|keyword| matches!(&tokens[keyword], Token::Word(word) if word == "for"))
+    }
+
+    fn previous_output_code_ends_list_head(&self, brace: usize) -> bool {
+        // Blank lines, comment lines and directives between the `=` and the
+        // brace leave the assignment.
+        self.output
+            .scoped_range()
+            .rev()
+            .find(|&index| {
+                let trimmed = self.output.trimmed(index);
+                !trimmed.is_empty()
+                    && !trimmed.starts_with('#')
+                    && !is_bare_comment_line(trimmed)
+                    && self.output.directive_of_continuation(index).is_none()
+            })
+            .is_some_and(|index| {
+                self.output
+                    .code_trimmed_of(&self.output[index])
+                    .ends_with('=')
+                    || self.opens_declarator_list(brace)
+                        && self
+                            .tree
+                            .previous_code_token(brace)
+                            .and_then(|before| self.output.line_with_token(before))
+                            == Some(index)
+            })
     }
 
     fn current_or_previous_is_lambda_capture_header(&self) -> bool {
@@ -1150,6 +1309,35 @@ impl FormatEngine<'_> {
             && self.inferred_definition_brace(tokens, brace_index)
     }
 
+    /// Whether the brace at `start` opens the body of a type whose head
+    /// holds a base clause, as `struct Item : Base {`.
+    fn opens_body_after_base_clause(&self, start: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let Some(body) = groups.opened_at(start) else {
+            return false;
+        };
+        if self.tree.blocks.kind(body) != Some(BlockKind::Aggregate) {
+            return false;
+        }
+        let Some(owner) = self.tree.blocks.owner(body) else {
+            return false;
+        };
+        // The head may open with its template parameters.
+        let level = groups.enclosing(start);
+        (owner..start)
+            .find(|&index| {
+                groups.enclosing(index) == level
+                    && matches!(&tokens[index], Token::Word(word)
+                        if matches!(word.as_str(), "struct" | "class" | "union"))
+            })
+            .is_some_and(|keyword| {
+                (keyword + 1..start).any(|index| {
+                    matches!(tokens[index], Token::Symbol(':')) && groups.enclosing(index) == level
+                })
+            })
+    }
+
     pub(crate) fn try_push_one_line_initializer_block(
         &mut self,
         tokens: &[Token],
@@ -1170,6 +1358,7 @@ impl FormatEngine<'_> {
                     matches!(header, "autoreleasepool" | "@try" | "@catch" | "@finally")
                 })
             || self.inferred_definition_brace(tokens, start)
+            || tokens.len() == self.tree.tokens.len() && self.opens_body_after_base_clause(start)
         {
             return None;
         }
@@ -1185,8 +1374,10 @@ impl FormatEngine<'_> {
                 .then_some(BraceType::Array)
             })
             .or_else(|| {
-                (self.current_is_blank() && self.previous_output_code_ends_assignment())
-                    .then_some(BraceType::Initializer)
+                // Comments leading the brace's line take no part in it.
+                (after_leading_comments(self.current.trimmed()).is_empty()
+                    && self.previous_output_code_ends_list_head(start))
+                .then_some(BraceType::Initializer)
             })
             .or_else(|| {
                 let previous_code = self
@@ -1213,7 +1404,10 @@ impl FormatEngine<'_> {
                     .brace_type_stack
                     .last()
                     .is_some_and(|brace_type| {
-                        matches!(brace_type, BraceType::Array | BraceType::CompoundLiteral)
+                        matches!(
+                            brace_type,
+                            BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
+                        )
                     })
                     .then_some(BraceType::Array)
             })
@@ -1225,8 +1419,11 @@ impl FormatEngine<'_> {
             && self
                 .output
                 .last_non_empty_scoped()
-                .is_some_and(|line| is_lambda_body_header(line.trimmed_end()));
+                .is_some_and(|line| is_lambda_body_header(self.output.code_trimmed_of(line)));
+        // Specifiers after the parameters keep a block on its line, as a
+        // trailing return type does.
         let lambda_header = self.current_is_lambda_body_header()
+            && !self.current_lambda_head_has_specifiers()
             || previous_line_lambda_header
             || (self.current.trimmed_end().ends_with(')')
                 && self.current.contains('[')
@@ -1279,12 +1476,26 @@ impl FormatEngine<'_> {
             .flatten();
         if token_begins_line(tokens, start)
             && self.current_is_blank()
-            && self.previous_output_code_ends_assignment()
+            && self.previous_output_code_ends_list_head(start)
         {
             self.layout
                 .continuation_indent
                 .set_next_line_level(self.statement_level());
         }
+        // A compound literal among a call's arguments whose first element
+        // runs in after its brace keeps its rows under that element.
+        let in_paren_list_column = (token_begins_line(tokens, start)
+            && self.current_is_blank()
+            && self.layout.nesting.paren_depth > 0
+            && self.innermost_brace_is_compound_literal()
+            && self.tree.groups.enclosing(start).is_some_and(|list| {
+                let open = self.tree.groups.get(list).open;
+                next_code_token(tokens, open + 1).is_some_and(|first| {
+                    self.output.line_with_token(first) == self.output.line_with_token(open)
+                })
+            }))
+        .then(|| self.current_inline_array_column())
+        .flatten();
         if token_begins_line(tokens, start)
             && self.current_is_blank()
             && let Some(previous) = self.output.last()
@@ -1292,15 +1503,17 @@ impl FormatEngine<'_> {
             let previous_code = self.output.code_trimmed_of(previous);
             if previous_code.ends_with(',') && has_unmatched_open_brace(previous_code) {
                 self.layout.continuation_indent.next_line_indent = None;
-                self.layout.continuation_indent.next_line_indent_spaces = Some(
-                    leading_visual_width(previous, self.options.tab_width)
-                        + self.options.indent_width,
-                );
+                self.layout.continuation_indent.next_line_indent_spaces =
+                    Some(in_paren_list_column.unwrap_or_else(|| {
+                        leading_visual_width(previous, self.options.tab_width)
+                            + self.options.indent_width
+                    }));
             }
         }
         if token_begins_line(tokens, start)
             && self.current_is_blank()
             && self.options.indent_braces
+            && in_paren_list_column.is_none()
             && matches!(
                 brace_type,
                 BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
@@ -1317,6 +1530,7 @@ impl FormatEngine<'_> {
         if token_begins_line(tokens, start)
             && self.current_is_blank()
             && self.layout.nesting.paren_depth > 0
+            && !(tokens.len() == self.tree.tokens.len() && self.brace_ranges_a_range_for(start))
             && !(self
                 .layout
                 .continuation_indent
@@ -1387,14 +1601,26 @@ impl FormatEngine<'_> {
             self.finish_line();
             self.layout.continuation_indent.set_next_line_level(indent);
         }
+        // Pico runs the body of a lambda below its parameters in as it
+        // does a function's.
+        let opening_body_gap = (self.options.brace_style == BraceStyle::Pico
+            && previous_line_lambda_header
+            && self
+                .output
+                .last_non_empty_scoped()
+                .is_some_and(|line| self.output.code_trimmed_of(line).ends_with(')')))
+        .then(|| self.opening_body_fill(tokens, start, self.options.indent_width - 1));
+        let opens_line = self.current_is_blank();
         self.push_attached_one_line_block(
             &tokens[start..=close_index],
             brace_type,
             None::<&str>,
             source_gap,
             false,
-            None,
+            opening_body_gap,
         );
+        self.current.record_token_range(start, close_index);
+        self.record_one_line_lambda_body(start, opens_line);
         if brace_type == BraceType::CompoundLiteral {
             self.layout.compound_literal.just_closed = true;
         }
@@ -1408,6 +1634,78 @@ impl FormatEngine<'_> {
         Some(close_index + 1)
     }
 
+    /// Whether the header owning the block that opens at `open` shares its
+    /// line with other statements: one kept on its output line ends right
+    /// before the header, or more than one ends outside the parens and
+    /// blocks its source line opens.
+    fn header_block_shares_line_with_statements(
+        &self,
+        tokens: &[Token],
+        open: usize,
+        braces_removed: bool,
+    ) -> bool {
+        let line_start = tokens[..open]
+            .iter()
+            .rposition(|token| matches!(token, Token::Newline))
+            .map_or(0, |newline| newline + 1);
+        let line_end = tokens[open..]
+            .iter()
+            .position(|token| matches!(token, Token::Newline))
+            .map_or(tokens.len(), |offset| open + offset);
+        let mut header = self.tree.previous_code_token(open);
+        if let Some(close) = header.filter(|&index| matches!(tokens[index], Token::Symbol(')'))) {
+            header = self.tree.groups.closed_at(close).and_then(|group| {
+                self.tree
+                    .previous_code_token(self.tree.groups.get(group).open)
+            });
+        }
+        // A closer removed with its block leaves the statement it held right
+        // before the header.
+        let mut before = header.and_then(|header| self.tree.previous_code_token(header));
+        if braces_removed
+            && let Some(close) = before.filter(|&index| matches!(tokens[index], Token::Symbol('}')))
+            && self.tree.groups.closed_at(close).is_some_and(|group| {
+                let block_open = self.tree.groups.get(group).open;
+                is_remove_braces_opening(tokens, block_open)
+                    && removable_statement_brace_range(tokens, block_open, close + 1, false)
+                        .is_some()
+            })
+        {
+            before = self.tree.previous_code_token(close);
+        }
+        // The statement must stay on the header's output line, not be
+        // broken off before it.
+        let follows_statement = before.is_some_and(|before| {
+            before >= line_start
+                && matches!(tokens[before], Token::Symbol(';' | ':'))
+                && self
+                    .current
+                    .tokens()
+                    .is_some_and(|span| span.first <= before)
+        });
+        if follows_statement {
+            return true;
+        }
+        // A removed opening brace leaves its statements on the line's own
+        // level, its closer still counted.
+        let (mut parens, mut braces, mut statements) = (0isize, 0isize, 0usize);
+        for (index, token) in tokens.iter().enumerate().take(line_end).skip(line_start) {
+            if braces_removed && index == open {
+                continue;
+            }
+            match token {
+                Token::Symbol('(') => parens += 1,
+                Token::Symbol(')') => parens -= 1,
+                _ if parens > 0 => {}
+                Token::Symbol('{') => braces += 1,
+                Token::Symbol('}') => braces -= 1,
+                Token::Symbol(';') if braces <= 0 => statements += 1,
+                _ => {}
+            }
+        }
+        statements > 1
+    }
+
     pub(crate) fn try_push_kept_one_line_block(
         &mut self,
         tokens: &[Token],
@@ -1418,16 +1716,23 @@ impl FormatEngine<'_> {
             return None;
         }
         let close_index = self.matching_brace_on_current_line(start)?;
+        // A case label heads no block.
+        let follows_header = self
+            .layout
+            .command_state
+            .current_header
+            .as_deref()
+            .is_some_and(|header| !matches!(header, "case" | "default"));
         let break_one_line_blocks = self.options.break_one_line_blocks
             || self.options.lisp_add_one_line_braces_breaks_blocks()
             || (self.options.break_one_line_headers
-                && !(self.options.brace_style == BraceStyle::Pico
-                    && self.layout.command_state.current_header.as_deref() == Some("switch"))
-                && self.layout.command_state.current_header.is_some()
+                && follows_header
                 // A block on a line of its own already leaves its header.
-                && !token_begins_line(tokens, start));
+                && !token_begins_line(tokens, start)
+                && (self.options.break_one_line_statements
+                    || !self.header_block_shares_line_with_statements(tokens, start, false)));
         if self.options.break_one_line_headers
-            && self.layout.command_state.current_header.is_some()
+            && follows_header
             && tokens[start + 1..close_index]
                 .iter()
                 .any(|token| matches!(token, Token::Word(word) if is_standard_add_braces_header(word) || word == "switch"))
@@ -1501,10 +1806,10 @@ impl FormatEngine<'_> {
             && self
                 .output
                 .last_non_empty_scoped()
-                .is_some_and(|line| is_lambda_body_header(line.trimmed_end()));
+                .is_some_and(|line| is_lambda_body_header(self.output.code_trimmed_of(line)));
         let previous_line_trailing_return_lambda_header = self.current_is_blank()
             && self.output.last_non_empty_scoped().is_some_and(|line| {
-                let line = line.trimmed_end();
+                let line = self.output.code_trimmed_of(line);
                 is_lambda_body_header(line) && line.contains("->")
             });
         // A control header's condition indexing an array opens no lambda.
@@ -1524,13 +1829,15 @@ impl FormatEngine<'_> {
                         .trimmed_start()
                         .starts_with(header)
             });
-        let lambda_header = self.current_is_lambda_body_header()
+        let plain_lambda_header =
+            self.current_is_lambda_body_header() && !self.current_lambda_head_has_specifiers();
+        let lambda_header = plain_lambda_header
             || previous_line_lambda_header
             || (!control_header_line
                 && self.current.trimmed_end().ends_with(')')
                 && self.current.contains('[')
                 && self.current.contains(']'));
-        let parameterized_lambda_header = self.current_is_lambda_body_header()
+        let parameterized_lambda_header = plain_lambda_header
             || (self.current.trimmed_end().ends_with(')')
                 && self.current.contains('[')
                 && self.current.contains(']'));
@@ -1598,7 +1905,12 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        if self.previous_was_newline || source_separate_macro_block {
+        // A block kept on its line stands as a statement after a label.
+        let after_label = std::mem::take(&mut self.statement_after_label_pending);
+        if self.previous_was_newline
+            || source_separate_macro_block
+            || after_label && self.current_holds_comments_after_label(false)
+        {
             self.finish_line();
         }
         // A statement other than a label in a switch stands in a case body.
@@ -1607,12 +1919,24 @@ impl FormatEngine<'_> {
             && next_code_token(tokens, start + 1).is_some_and(|first| {
                 !matches!(&tokens[first], Token::Word(word) if word == "case" || word == "default")
             });
+        let statement_block = self
+            .tree
+            .groups
+            .opened_at(start)
+            .is_some_and(|group| self.tree.blocks.kind(group) == Some(BlockKind::Block));
         let opening_body_gap = (self.options.brace_style == BraceStyle::Pico
             && self.current_is_blank()
             && (self.layout.command_state.current_header.is_some()
+                || statement_block
                 || self.current_ends_definition_header()
                 || self.output_ends_objc_method_header()))
-        .then(|| " ".repeat((usize::from(switch_statement) + 1) * self.options.indent_width - 1));
+        .then(|| {
+            self.opening_body_fill(
+                tokens,
+                start,
+                (usize::from(switch_statement) + 1) * self.options.indent_width - 1,
+            )
+        });
         let empty_block_after_operator =
             is_empty_block && self.layout.previous == PreviousToken::Operator;
         let brace_header = is_asm_block.then_some("_asm");
@@ -1659,6 +1983,7 @@ impl FormatEngine<'_> {
             _ => None,
         };
         let leading_gap = is_asm_block.then(|| source_gap.unwrap_or(""));
+        let opens_line = self.current_is_blank();
         self.push_attached_one_line_block(
             &tokens[start..=close_index],
             brace_type,
@@ -1667,31 +1992,27 @@ impl FormatEngine<'_> {
             source_separate_macro_block,
             opening_body_gap,
         );
+        self.current.record_token_range(start, close_index);
+        self.record_one_line_lambda_body(start, opens_line);
+        let closes_do = self.layout.command_state.current_header.as_deref() == Some("do");
+        if closes_do {
+            self.layout.nesting.last_closed_brace_header = Some("do".to_string());
+        }
         if is_empty_block
-            && (self.options.brace_style == BraceStyle::None
-                || is_attached_closing_header_style(self.options))
-            && self.layout.command_state.current_header.as_deref() == Some("do")
+            && closes_do
             && let Some(while_index) = next_non_whitespace(tokens, close_index + 1, line_end)
             && matches!(tokens.get(while_index), Some(Token::Word(word)) if word == "while")
-            && let Some(semi_index) = (while_index..line_end)
-                .find(|index| matches!(tokens.get(*index), Some(Token::Symbol(';'))))
+            && self.attaches_closing_while(true)
+            && (while_index..line_end)
+                .any(|index| matches!(tokens.get(index), Some(Token::Symbol(';'))))
         {
-            for token in &tokens[close_index + 1..=semi_index] {
-                self.current.push_str(&token_text(token));
-            }
+            // The `while` and its condition go on after the block as after
+            // any closer the style attaches it to.
             self.layout.command_state.current_header = None;
             self.layout.command_state.preprocessor_after_header = false;
-            self.layout.command_state.previous_command_char = Some(';');
-            self.layout.command_state.previous_non_ws_char = Some(';');
-            let trailing = next_non_whitespace(tokens, semi_index + 1, line_end)
-                .and_then(|index| tokens.get(index));
-            if !matches!(trailing, Some(Token::Comment(_, _))) {
-                self.finish_line();
-            }
-            return Some(semi_index + 1);
-        }
-        if self.layout.command_state.current_header.as_deref() == Some("do") {
-            self.layout.nesting.last_closed_brace_header = Some("do".to_string());
+            self.set_input_whitespace(tokens, close_index, 0);
+            self.emit_trailing_source_space_or_ensure();
+            return Some(close_index + 1);
         }
         self.layout.command_state.current_header = None;
         self.layout.command_state.preprocessor_after_header = false;
@@ -1716,19 +2037,39 @@ impl FormatEngine<'_> {
             Some(Token::Word(word))
                 if matches!(word.as_str(), "else" | "catch" | "@catch" | "__finally" | "__except" | "while")
         );
+        // The run-in styles attach a closing `while` even to a block kept on
+        // one line.
+        let run_in_attached_closing_while = matches!(
+            self.options.brace_style,
+            BraceStyle::Pico | BraceStyle::Lisp
+        ) && self.options.attach_closing_while
+            && matches!(next, Some(Token::Word(word)) if word == "while")
+            && self.layout.nesting.last_closed_brace_header.as_deref() == Some("do");
+        // An empty block ends no line: the code after it stays there, and a
+        // closing header too where the style attaches it.
+        let empty_block_keeps_line = is_empty_block
+            && brace_type == BraceType::Command
+            && next_on_source_line
+            && (!next_is_closing_header
+                || self.options.brace_style != BraceStyle::Lisp
+                    && matches!(next, Some(Token::Word(word)) if self.attaches_closing_header(word, true)));
         if !init_block_continues_expression
+            && !empty_block_keeps_line
             && !empty_value_block_continues_expression
             && !lambda_block_continues_expression
             && !aggregate_trailing_declarator
             && !((word_headed_block
                 || self.options.brace_style == BraceStyle::Pico
+                // A block ends its statement, so the code after it on the
+                // line is another.
                 || self.options.keeps_multi_statement_line()
-                    && self.layout.line_state.is_multi_statement_line)
+                    && (self.layout.line_state.is_multi_statement_line
+                        || brace_type == BraceType::Command))
                 && next_on_source_line
                 && !next_is_closing_header)
             && (!next_is_closing_header
-                || self.options.break_one_line_statements
-                || self.options.brace_style == BraceStyle::Lisp
+                || self.options.break_one_line_statements && !run_in_attached_closing_while
+                || self.options.brace_style == BraceStyle::Lisp && !run_in_attached_closing_while
                 || !self.should_attach_closing_header(next))
             && !matches!(next, Some(Token::Symbol(';' | ',')))
             && !matches!(next, Some(Token::Comment(_, _)))
@@ -1756,10 +2097,8 @@ impl FormatEngine<'_> {
                 })
                 .is_some_and(|token| matches!(token, Token::Word(word) if word == "else"));
             if !else_follows {
-                if brace_type == BraceType::Command {
-                    self.layout.pending_braceless_block_bias = None;
-                    self.layout.inline_nested_header_braceless_bias = None;
-                }
+                self.layout.pending_braceless_block_bias = None;
+                self.layout.inline_nested_header_braceless_bias = None;
                 self.unwind_else_if_break_depths();
                 if let Some((base, delta)) = self.layout.indentation.last_braceless_block()
                     && self.layout.indentation.indent() == base + delta
@@ -1841,6 +2180,41 @@ impl FormatEngine<'_> {
         false
     }
 
+    /// The fill, `width` columns, a pico brace runs its body in with. The
+    /// tab pass leaves the fill before a comment alone, so a comment's is
+    /// written as the finished output indents.
+    fn opening_body_fill(&self, tokens: &[Token], start: usize, width: usize) -> String {
+        let comment_first = next_non_whitespace(tokens, start + 1, tokens.len())
+            .is_some_and(|first| matches!(tokens[first], Token::Comment(..)));
+        if !comment_first {
+            return " ".repeat(width);
+        }
+        let brace_column = self.current_line_indent_spaces();
+        horstmann_run_in_fill(
+            &format!("{}{{", " ".repeat(brace_column)),
+            &format!("{}{{", " ".repeat(brace_column + 1 + width)),
+            &self.output_options(),
+        )
+    }
+
+    /// Records a lambda's body kept on the line its `{` at `open` stands
+    /// on, which `opens_line` when the brace begins it.
+    fn record_one_line_lambda_body(&mut self, open: usize, opens_line: bool) {
+        if self
+            .tree
+            .groups
+            .opened_at(open)
+            .is_some_and(|group| self.tree.blocks.kind(group) == Some(BlockKind::Lambda))
+        {
+            let line = self.output.len();
+            self.layout.frame_stack.record_lambda_body(LambdaBodySpan {
+                open_output_line: line,
+                close_output_line: line,
+                opens_output_line: opens_line,
+            });
+        }
+    }
+
     fn push_attached_one_line_block(
         &mut self,
         tokens: &[Token],
@@ -1850,8 +2224,18 @@ impl FormatEngine<'_> {
         preserve_raw: bool,
         opening_body_gap: Option<String>,
     ) {
-        let block = if preserve_raw || is_comment_only_one_line_block_tokens(tokens) {
+        let block = if preserve_raw {
             tokens.iter().map(token_text).collect::<String>()
+        } else if is_comment_only_one_line_block_tokens(tokens) {
+            let gapped = opening_body_gap
+                .as_deref()
+                .and_then(|gap| with_opening_body_gap(tokens, gap));
+            gapped
+                .as_deref()
+                .unwrap_or(tokens)
+                .iter()
+                .map(token_text)
+                .collect::<String>()
         } else {
             format_one_line_block_tokens(
                 tokens,
@@ -1889,15 +2273,16 @@ impl FormatEngine<'_> {
         match leading_gap {
             Some(gap) => self.current.push_str(gap),
             None if after_comma => {}
+            // A typed initializer's element keeps its gap after the brace.
+            None if array_element_after_brace
+                && run_in_array_gap_after_brace
+                && self.layout.nesting.brace_type_stack.last() == Some(&BraceType::Initializer) => {
+            }
             None if array_element_after_brace && run_in_array_gap_after_brace => {
-                let target_column = if self.current.trimmed_end() == "{" {
-                    Some(
-                        leading_visual_width(&self.current, self.options.tab_width)
-                            + self.options.indent_width,
-                    )
-                } else {
-                    self.current_inline_array_column()
-                };
+                let target_column = (self.current.trimmed_end() == "{").then(|| {
+                    leading_visual_width(&self.current, self.options.tab_width)
+                        + self.options.indent_width
+                });
                 if let Some(column) = target_column {
                     let current_column = self.current_visual_width();
                     if current_column < column {
@@ -1932,13 +2317,18 @@ impl FormatEngine<'_> {
                 self.current.push_str(source_gap.unwrap_or_default());
             }
             None if self.should_space_before_one_line_block(brace_type) => match source_gap {
-                Some(gap) if gap.len() > 1 => self.current.push_str(gap),
+                Some(gap) if gap.len() > 1 || gap.contains('\t') => {
+                    self.trim_current_end_horizontal_space();
+                    self.current.push_str(gap);
+                }
                 _ => self.ensure_space(),
             },
+            // A typed initializer right after a directive line takes the
+            // space; an empty line between them leaves the source gap.
             None if braced_init
                 && self
                     .output
-                    .last_non_empty_scoped()
+                    .last()
                     .is_some_and(|line| line.trimmed_start().starts_with("#if")) =>
             {
                 self.ensure_space();
@@ -1954,7 +2344,7 @@ impl FormatEngine<'_> {
                         || !self.preprocessor.branch_stack.is_empty()))
                     || self
                         .output
-                        .last_non_empty_scoped()
+                        .last()
                         .is_some_and(|line| line.trimmed_start().starts_with("#endif"))) =>
             {
                 self.ensure_space();
@@ -1965,8 +2355,8 @@ impl FormatEngine<'_> {
             {
                 // A wider gap the source left after `=` stays.
                 match source_gap {
-                    Some(gap) if gap.len() > 1 => {
-                        self.trim_current_end();
+                    Some(gap) if gap.len() > 1 || gap.contains('\t') => {
+                        self.trim_current_end_horizontal_space();
                         self.current.push_str(gap);
                     }
                     _ => self.ensure_space(),
@@ -1974,6 +2364,11 @@ impl FormatEngine<'_> {
             }
             None if braced_init => self.current.push_str(source_gap.unwrap_or_default()),
             None => {}
+        }
+        // A block after a comment leading its line takes the line the
+        // comment kept for the code after it.
+        if self.current_is_preindented && is_comment_line(&self.current) {
+            self.layout.continuation_indent.clear_next_line();
         }
         let collapsed_non_empty_command_block = brace_type == BraceType::Command
             && block == "{}"
@@ -2090,12 +2485,22 @@ impl FormatEngine<'_> {
         if self.current.trimmed_end().ends_with('@') {
             return true;
         }
+
         match self.inline_array.aggregate_braces.last() {
             Some(true) => true,
             Some(false) => match self.layout.command_state.previous_command_char {
                 Some('=') => true,
                 Some(')') => self.current_ends_compound_literal_type(),
-                _ => false,
+                // A type's braces among arguments or in a returned value, as
+                // `Type{value}`, open no block.
+                Some(ch) => {
+                    is_word_char(ch)
+                        && (self.layout.nesting.paren_depth > 0
+                            || leading_identifier(
+                                self.current[self.current.statement_start()..].trimmed_start(),
+                            ) == "return")
+                }
+                None => false,
             },
             None => matches!(
                 self.layout.nesting.brace_type_stack.last(),
@@ -2245,6 +2650,7 @@ pub(crate) fn add_marked_cross_line_statement_braces(
     owned_tokens: Vec<Token>,
     attach_added_braces: bool,
     attach_closing_brace: bool,
+    keep_one_line_blocks: bool,
     comment_gap: usize,
 ) -> AddedBraces {
     let tokens = owned_tokens.as_slice();
@@ -2283,25 +2689,43 @@ pub(crate) fn add_marked_cross_line_statement_braces(
         if open_insert >= close_insert {
             continue;
         }
+        // A statement a comment leads on its line takes braces on that line,
+        // which a kept one-line block keeps there.
+        if keep_one_line_blocks
+            && tokens[line_bounds(tokens, open_insert).0..open_insert]
+                .iter()
+                .any(|token| matches!(token, Token::Comment(..)))
+        {
+            continue;
+        }
+        // The brace goes before the comments after the header, but for a
+        // line comment ending more than one.
+        let comments = (header_end + 1..open_insert.saturating_sub(1))
+            .filter(|&index| matches!(tokens[index], Token::Comment(_, _)))
+            .collect::<Vec<_>>();
+        let comment_run_ends_in_line_comment = comments.len() > 1
+            && comments
+                .last()
+                .is_some_and(|&last| matches!(tokens[last], Token::Comment(CommentKind::Line, _)));
         if attach_added_braces
+            && !comment_run_ends_in_line_comment
             && open_brace_attaches_to_header_line(tokens, header_end, open_insert)
         {
-            let comment = (header_end + 1..open_insert - 1)
-                .find(|&index| matches!(tokens[index], Token::Comment(_, _)));
-            match comment {
-                Some(comment) => {
+            match comments.first() {
+                Some(&comment) => {
+                    let gap_start = header_end + 1;
                     insert_before
-                        .entry(header_end + 1)
+                        .entry(gap_start)
                         .or_default()
                         .push(Token::Whitespace(" ".to_owned().into()));
                     insert_before
-                        .entry(header_end + 1)
+                        .entry(gap_start)
                         .or_default()
                         .push(Token::Symbol('{'));
                     // The brace takes its two columns out of the start of the
                     // gap, a tab freeing both.
-                    if comment == header_end + 2
-                        && let Token::Whitespace(gap) = &tokens[header_end + 1]
+                    if comment == gap_start + 1
+                        && let Token::Whitespace(gap) = &tokens[gap_start]
                     {
                         let mut kept = gap.as_str();
                         let mut freed = 0;
@@ -2310,10 +2734,10 @@ pub(crate) fn add_marked_cross_line_statement_braces(
                             kept = &kept[1..];
                         }
                         if freed < 2 {
-                            opener_overruns.insert(header_end + 1, 2 - freed);
+                            opener_overruns.insert(gap_start, 2 - freed);
                         }
-                        replace.insert(header_end + 1, Token::Whitespace(kept.to_owned().into()));
-                    } else if comment == header_end + 1 {
+                        replace.insert(gap_start, Token::Whitespace(kept.to_owned().into()));
+                    } else if comment == gap_start {
                         insert_before
                             .entry(comment)
                             .or_default()
@@ -2510,6 +2934,10 @@ fn header_condition_open_paren(
     {
         open_paren = next_statement_token(tokens, open_paren + 1, end, true)?;
     }
+    // A macro call may stand for the condition.
+    if matches!(tokens.get(open_paren), Some(Token::Word(_))) {
+        open_paren = next_statement_token(tokens, open_paren + 1, end, true)?;
+    }
     matches!(tokens.get(open_paren), Some(Token::Symbol('('))).then_some(open_paren)
 }
 
@@ -2588,11 +3016,32 @@ fn add_braces_insertion_range(
         return None;
     }
     let (_, statement_line_end) = line_bounds(tokens, semicolon);
-    Some((
-        header_end,
-        line_bounds(tokens, statement_start).0,
-        statement_line_end,
-    ))
+    // Code going on after the statement on its line, as an `else`, stays
+    // past the added closer.
+    let close_insert = if tokens[semicolon + 1..statement_line_end]
+        .iter()
+        .any(|token| {
+            !matches!(
+                token,
+                Token::Whitespace(_) | Token::Newline | Token::Comment(..)
+            )
+        }) {
+        semicolon + 1
+    } else {
+        statement_line_end
+    };
+    // A comment leading the statement's line stays before the brace, as a
+    // comment line does.
+    let line_start = line_bounds(tokens, statement_start).0;
+    let open_insert = if tokens[line_start..statement_start]
+        .iter()
+        .any(|token| matches!(token, Token::Comment(..)))
+    {
+        statement_start
+    } else {
+        line_start
+    };
+    Some((header_end, open_insert, close_insert))
 }
 
 fn next_add_braces_statement_token(tokens: &[Token], start: usize) -> Option<usize> {
@@ -2743,8 +3192,22 @@ fn opening_brace_has_line_comment(tokens: &[Token], open_index: usize) -> bool {
     }
 }
 
+/// Whether removing braces takes away the `{` at `open_index` and the `}`
+/// of its single-statement block.
+pub(crate) fn removes_braces_of_block(tokens: &[Token], open_index: usize) -> bool {
+    matches!(tokens.get(open_index), Some(Token::Symbol('{')))
+        && is_remove_braces_opening(tokens, open_index)
+        && removable_statement_brace_range(tokens, open_index, tokens.len(), true).is_some()
+}
+
 fn is_remove_braces_opening(tokens: &[Token], open_index: usize) -> bool {
-    let Some(previous) = previous_non_layout_token_index(tokens, open_index) else {
+    // A comment between the header and its brace stays with the header.
+    let Some(previous) = (0..open_index).rev().find(|&index| {
+        !matches!(
+            tokens[index],
+            Token::Whitespace(_) | Token::Newline | Token::Comment(..)
+        )
+    }) else {
         return false;
     };
     match tokens.get(previous) {
@@ -2853,6 +3316,8 @@ fn find_statement_semicolon(tokens: &[Token], start: usize, line_end: usize) -> 
     let mut bracket_depth = 0usize;
     for (index, token) in tokens.iter().enumerate().take(line_end).skip(start) {
         match token {
+            // A block comment within the statement's line is part of it.
+            Token::Comment(CommentKind::Block, text) if !text.contains('\n') => {}
             Token::Symbol('{') | Token::Comment(_, _) | Token::Preprocessor(_) => return None,
             Token::Symbol('(') => paren_depth += 1,
             Token::Symbol(')') => paren_depth = paren_depth.saturating_sub(1),
@@ -3064,7 +3529,7 @@ fn initializer_brace_type(
     }
     match tokens.get(previous)? {
         Token::Operator(operator) if operator == "=" => Some(BraceType::Array),
-        Token::Operator(operator) if operator == ">" && !has_block_word => {
+        Token::Operator(operator) if operator == ">" && !has_block_word || operator == "^" => {
             Some(BraceType::Initializer)
         }
         Token::Symbol(',') | Token::Symbol('@') => Some(BraceType::Array),
@@ -3230,6 +3695,18 @@ fn matching_open_paren(tokens: &[Token], close_paren: usize, line_start: usize) 
     None
 }
 
+/// The block's tokens with `gap` between the brace and its first body
+/// token; an empty block takes none.
+fn with_opening_body_gap(tokens: &[Token], gap: &str) -> Option<Vec<Token>> {
+    let first_body = next_non_whitespace(tokens, 1, tokens.len())?;
+    if matches!(tokens.get(first_body), Some(Token::Symbol('}'))) {
+        return None;
+    }
+    let mut adjusted = tokens.to_vec();
+    adjusted.splice(1..first_body, [Token::Whitespace(gap.to_string().into())]);
+    Some(adjusted)
+}
+
 fn format_one_line_block_tokens(
     tokens: &[Token],
     options: &FormatOptions,
@@ -3237,6 +3714,8 @@ fn format_one_line_block_tokens(
     opening_body_gap: Option<&str>,
     after_directive: bool,
 ) -> String {
+    let adjusted_tokens = opening_body_gap.and_then(|gap| with_opening_body_gap(tokens, gap));
+    let tokens = adjusted_tokens.as_deref().unwrap_or(tokens);
     if is_semicolon_only_one_line_block_tokens(tokens) {
         return tokens
             .iter()
@@ -3245,16 +3724,6 @@ fn format_one_line_block_tokens(
             .trimmed_end()
             .to_string();
     }
-    let adjusted_tokens = opening_body_gap.and_then(|gap| {
-        let first_body = next_non_whitespace(tokens, 1, tokens.len())?;
-        if matches!(tokens.get(first_body), Some(Token::Symbol('}'))) {
-            return None;
-        }
-        let mut adjusted = tokens.to_vec();
-        adjusted.splice(1..first_body, [Token::Whitespace(gap.to_string().into())]);
-        Some(adjusted)
-    });
-    let tokens = adjusted_tokens.as_deref().unwrap_or(tokens);
     let mut formatter = FormatEngine::new(options);
     formatter.one_line_block_mode = true;
     formatter.one_line_block_after_directive = after_directive;
@@ -3319,7 +3788,7 @@ fn format_one_line_block_tokens(
     formatter.current.trimmed_end().to_string()
 }
 
-fn token_begins_line(tokens: &[Token], index: usize) -> bool {
+pub(crate) fn token_begins_line(tokens: &[Token], index: usize) -> bool {
     tokens[..index]
         .iter()
         .rev()
@@ -3429,7 +3898,7 @@ mod tests {
         );
 
         assert_eq!(
-            add_marked_cross_line_statement_braces(tokens.clone(), true, false, 4).tokens,
+            add_marked_cross_line_statement_braces(tokens.clone(), true, false, false, 4).tokens,
             tokens
         );
     }

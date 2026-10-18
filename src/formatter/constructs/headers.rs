@@ -13,7 +13,8 @@ use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::language;
 use crate::formatter::text::columns::{leading_visual_width, visual_column_at};
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, is_comment_line, is_comment_only_line, line_brace_imbalance,
+    ContainsAnyByte, after_leading_comments, holds_code_after_leading_comments,
+    is_bare_comment_line, is_comment_line, is_comment_only_line, line_brace_imbalance,
     preprocessor_directive, unmatched_open_paren_column, unmatched_open_paren_columns,
 };
 use crate::formatter::text::line_view::LineView;
@@ -78,16 +79,33 @@ pub(crate) fn line_is_control_body_header(line: &str) -> bool {
 
 pub(crate) fn same_line_nested_header_extra(line: &str) -> usize {
     let code = line.trimmed_end().trim_end_matches('{').trimmed_end();
-    let else_header = code.starts_with("else while")
-        || code.starts_with("else for")
-        || code.starts_with("else do")
-        || code.starts_with("else switch");
     // Only a second header counts; candidates bound the headers from above.
-    if nested_header_word_candidates(code) + usize::from(else_header) <= 1 {
+    if nested_header_word_candidates(code) + usize::from(code.contains("else")) <= 1 {
         return 0;
     }
-    // Words in literals and comments are no headers.
-    let count = tokenize(code)
+    // Words in literals and comments are no headers, and a statement the
+    // line ends leaves the headers before it behind, unless a `do` there
+    // still waits for its `while`.
+    let tokens = tokenize(code);
+    let mut depth = 0usize;
+    let mut tail_start = 0;
+    for (index, token) in tokens.iter().enumerate() {
+        match token {
+            Token::Symbol('(') => depth += 1,
+            Token::Symbol(')') => depth = depth.saturating_sub(1),
+            Token::Symbol(';') if depth == 0 => tail_start = index + 1,
+            Token::Word(word) if word == "do" => break,
+            _ => {}
+        }
+    }
+    let mut words = tokens[tail_start..].iter().filter_map(|token| match token {
+        Token::Word(word) => Some(word.as_str()),
+        Token::Whitespace(_) | Token::Comment(..) => None,
+        _ => Some(""),
+    });
+    let else_header = words.next() == Some("else")
+        && matches!(words.next(), Some("while" | "for" | "do" | "switch"));
+    let count = tokens[tail_start..]
         .iter()
         .filter(|token| {
             matches!(token, Token::Word(word)
@@ -830,7 +848,9 @@ impl FormatEngine<'_> {
             return None;
         }
         let comment = self.output.last_line_outside_comment()?;
-        if !comment.trimmed_start().starts_with("/*") {
+        if !comment.trimmed_start().starts_with("/*")
+            || !is_bare_comment_line(comment.trimmed_start())
+        {
             return None;
         }
         let scoped = self.output.scoped();
@@ -1207,7 +1227,10 @@ impl FormatEngine<'_> {
         self.output.scoped().iter().rev().find_map(|line| {
             let code = &self.output.code_of(line);
             let trimmed = code.trimmed();
-            if trimmed.is_empty() || trimmed.starts_with('#') || is_comment_line(line) {
+            if trimmed.is_empty()
+                || trimmed.starts_with('#')
+                || is_comment_line(line) && !holds_code_after_leading_comments(line)
+            {
                 return None;
             }
             Some(trimmed == "else" || trimmed.ends_with("} else"))
@@ -1225,7 +1248,18 @@ impl FormatEngine<'_> {
                     .and_then(|_| self.layout.frame_stack.active_braceless_header())
                     .filter(|frame| frame.can_match_else)
                     .map(|frame| frame.header_indent_spaces)
-                    .or_else(|| closed.map(|frame| frame.sibling_indent_column))
+                    .or_else(|| {
+                        closed.map(|frame| {
+                            if matches!(
+                                self.options.brace_style,
+                                BraceStyle::Gnu | BraceStyle::Whitesmith | BraceStyle::Vtk
+                            ) {
+                                frame.header_indent_column
+                            } else {
+                                frame.sibling_indent_column
+                            }
+                        })
+                    })
                     .unwrap_or_else(|| self.current_line_indent_spaces())
             });
         // Only an `else` right after the closing brace pairs with that block.
@@ -1340,7 +1374,14 @@ impl FormatEngine<'_> {
                         * self.options.indent_width
                 }) + self.options.indent_width
             });
-        let line_indent_spaces = attached_closing_indent
+        // A label after the comments leading its line stands where it would
+        // without them; the comments took its output column.
+        let comment_led_label_indent = (matches!(word, "case" | "default")
+            && !self.current_is_blank()
+            && after_leading_comments(&self.current).trimmed().is_empty())
+        .then(|| self.continuation_base_indent() * self.options.indent_width);
+        let line_indent_spaces = comment_led_label_indent
+            .or(attached_closing_indent)
             .or(closed_if_indent)
             .or(open_if_indent)
             .or(inline_header_indent)
@@ -1434,7 +1475,8 @@ impl FormatEngine<'_> {
             return false;
         }
         if word == "if" {
-            let before = current.trimmed();
+            // Comments leading the line hold no code before the header.
+            let before = after_leading_comments(current).trimmed();
             let before = before.strip_prefix('}').map_or(before, str::trim_start);
             // A statement or a label may precede it on its line.
             let follows_statement = before.ends_with(';')
@@ -1463,6 +1505,13 @@ impl FormatEngine<'_> {
         if word == "else" && matches!(next, Some(Token::Symbol(','))) {
             return false;
         }
+        // Among the operands of parens or brackets, as a generic
+        // selection's associations, `default` labels nothing.
+        if matches!(word, "case" | "default")
+            && (self.layout.nesting.paren_depth > 0 || self.layout.frame_stack.bracket_depth() > 0)
+        {
+            return false;
+        }
         // After the type of a declaration a `foreach` names a function.
         if matches!(word, "foreach" | "Q_FOREACH")
             && current
@@ -1475,9 +1524,10 @@ impl FormatEngine<'_> {
             return false;
         }
         if matches!(word, "for" | "while" | "switch") {
+            // A macro may stand for the parenthesized condition.
             return matches!(
                 next,
-                Some(Token::Symbol('(') | Token::Newline | Token::Comment(_, _))
+                Some(Token::Symbol('(') | Token::Newline | Token::Comment(_, _) | Token::Word(_))
             );
         }
         if word == "catch" {
@@ -1512,6 +1562,10 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn push_pre_brace_header(&mut self) -> Option<String> {
+        // A directive between a label and the brace leaves the brace a plain
+        // block among the case's statements, comments leading it or not.
+        let after_directive = after_leading_comments(self.current.trimmed()).is_empty()
+            && self.follows_plain_directive();
         let header = self
             .layout
             .command_state
@@ -1520,6 +1574,9 @@ impl FormatEngine<'_> {
             .filter(|header| {
                 if !matches!(header.as_str(), "case" | "default") {
                     return true;
+                }
+                if after_directive {
+                    return false;
                 }
                 let current = self.current.trimmed();
                 is_case_label_start(current)
@@ -1548,7 +1605,15 @@ impl FormatEngine<'_> {
                 {
                     return None;
                 }
-                let header = self.layout.frame_stack.active_header()?.header.clone();
+                let header = self
+                    .layout
+                    .frame_stack
+                    .active_header()
+                    .filter(|header| {
+                        !after_directive || !matches!(header.header.as_str(), "case" | "default")
+                    })?
+                    .header
+                    .clone();
                 let line = self
                     .output
                     .scoped()
@@ -1611,7 +1676,9 @@ impl FormatEngine<'_> {
             self.layout.frame_stack.active_brace()
         }?;
         let natural = indent * self.options.indent_width;
+        // Only a header's body is one a directive interrupts.
         if frame.semantic_kind != BraceSemanticKind::Command
+            || frame.header.is_none()
             || frame.sibling_indent_column < natural
         {
             return None;

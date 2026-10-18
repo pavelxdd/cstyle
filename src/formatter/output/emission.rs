@@ -153,10 +153,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn adjust_and_publish_line(&mut self, line: String) {
         // A line the tree anchors keeps its place.
-        let line = match self.comment_led_statement_line(&line) {
-            Some(anchored) => anchored,
-            None => self.align_adjacent_block_comments_before_adjustment(line),
-        };
+        let line = self.comment_led_statement_line(&line).unwrap_or(line);
         let line = self.macro_block_body_line_before_adjustment(line);
         self.observe_raw_output_comment_frame(&line);
         // The line before keeps its buffer.
@@ -176,7 +173,11 @@ impl FormatEngine<'_> {
         self.shift_run_in_brace_for_spared_level(&line);
         let line = self.align_allman_control_brace_to_header(line);
         let line = self.align_else_opening_brace_after_adjustment(line);
+        let index = self.output.len();
         self.publish_ready_line(line);
+        if self.layout.line_adjuster.last_line_comment_kept_level() {
+            self.output.mark_comment_kept_case_level(index);
+        }
     }
 
     /// astyle unindents a case block's lines as joined, where a comment
@@ -322,16 +323,20 @@ impl FormatEngine<'_> {
         let view = tail.as_deref().map_or(view, LineView::new);
         let split = self.postprocess_ready_operator_chain_line(output_line_index, &view);
         drop(view);
+        self.published_line_shift = 0;
         if let Some((colon, tail)) = split {
             self.output.push(colon);
             self.output.push(tail);
         } else {
+            let laid_out = leading_visual_width(&line, self.options.tab_width);
             let line = tail
                 .or(embedded)
                 .or(header)
                 .or(closing)
                 .or(normalized)
                 .unwrap_or(line);
+            self.published_line_shift =
+                leading_visual_width(&line, self.options.tab_width) as isize - laid_out as isize;
             self.output.push_with_hints(line, output_line_hints);
         }
     }
@@ -362,7 +367,11 @@ impl FormatEngine<'_> {
     ) {
         let line_kind = layout.line_kind;
         self.restore_objc_message_alignment(post_emission.restore_objc_message_align);
-        self.record_preprocessor_branch_body_indent(line, emitted_indent_spaces);
+        self.record_preprocessor_branch_body_indent(
+            line,
+            self.output.len().saturating_sub(1),
+            emitted_indent_spaces,
+        );
         if let Some(spaces) = post_emission.split_condition_body_indent_spaces {
             self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
         }
