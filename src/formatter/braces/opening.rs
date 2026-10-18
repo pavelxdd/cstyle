@@ -427,6 +427,12 @@ impl FormatEngine<'_> {
         &self,
         line: &LineView<'_>,
     ) -> Option<usize> {
+        // Only a row in a lambda's body is placed here.
+        let frame = self
+            .layout
+            .frame_stack
+            .active_brace()
+            .filter(|frame| frame.semantic_kind == BraceSemanticKind::Lambda)?;
         // A comment after the code takes no part in the row.
         let line_code = line[..trailing_comment_split_limit(line)].trimmed_end();
         let line_start = line_code.trimmed_start();
@@ -452,27 +458,23 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        self.layout
-            .frame_stack
-            .active_brace()
-            // Only a row after a lambda's brace is its body's.
-            .filter(|frame| {
-                frame.semantic_kind == BraceSemanticKind::Lambda
-                    && !frame.open_token.is_some_and(|brace| {
-                        self.output
-                            .pending_tokens()
-                            .is_some_and(|span| span.first <= brace)
-                    })
-            })
-            .map(|frame| {
-                // A brace VTK leaves at its statement sets the body in from
-                // it, as a function's.
-                if self.options.brace_style == BraceStyle::Vtk && frame.header_indent_column == 0 {
-                    frame.sibling_indent_column + self.options.indent_width
-                } else {
-                    frame.body_indent_column
-                }
-            })
+        // Only a row after a lambda's brace is its body's.
+        if frame.open_token.is_some_and(|brace| {
+            self.output
+                .pending_tokens()
+                .is_some_and(|span| span.first <= brace)
+        }) {
+            return None;
+        }
+        // A brace VTK leaves at its statement sets the body in from it, as a
+        // function's.
+        Some(
+            if self.options.brace_style == BraceStyle::Vtk && frame.header_indent_column == 0 {
+                frame.sibling_indent_column + self.options.indent_width
+            } else {
+                frame.body_indent_column
+            },
+        )
     }
 
     pub(crate) fn embedded_capture_lambda_indent_spaces(

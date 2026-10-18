@@ -2394,6 +2394,10 @@ impl FormatEngine<'_> {
 }
 
 pub(crate) fn line_opens_attachable_lambda_block(options: &FormatOptions, line: &str) -> bool {
+    // A lambda's head holds its capture list, a block literal's its caret.
+    if !line.contains_any_byte(b"]^") {
+        return false;
+    }
     // A comment after the code takes no part in the head.
     let line = &line[..trailing_comment_split_limit(line)];
     let trimmed = line.trimmed_end();

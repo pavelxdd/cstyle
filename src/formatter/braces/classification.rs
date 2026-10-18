@@ -17,6 +17,10 @@ use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{is_word_char, trailing_word};
 
 pub(crate) fn line_opens_lambda_block(line: &str) -> bool {
+    // A lambda's head holds its capture list, a block literal's its caret.
+    if !line.contains_any_byte(b"]^") {
+        return false;
+    }
     // A comment after the brace takes no part in the head.
     let trimmed = line[..trailing_comment_split_limit(line)].trimmed();
     let Some(head) = trimmed.strip_suffix('{') else {
@@ -106,6 +110,9 @@ fn opens_capture_list_after(before: &str) -> bool {
 }
 
 pub(crate) fn is_lambda_capture_header(head: &str) -> bool {
+    if !head.as_bytes().contains(&b']') {
+        return false;
+    }
     let head = without_lambda_specifiers(head);
     if !head.ends_with(']') {
         return false;
@@ -157,6 +164,9 @@ fn is_namespace_block_header(line: &str) -> bool {
 }
 
 pub(crate) fn current_ends_block_literal_header(head: &str) -> bool {
+    if !head.as_bytes().contains(&b'^') {
+        return false;
+    }
     let before = if head.ends_with('^') {
         head
     } else {

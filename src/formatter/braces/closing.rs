@@ -311,7 +311,10 @@ impl FormatEngine<'_> {
     pub(crate) fn push_close_brace(&mut self, next: Option<&Token>, next_is_adjacent: bool) {
         let closing_lambda_body = self.current_open_brace_is_lambda_body();
         // A `}` that only comments precede leads its row.
-        if self.current_is_blank() || is_bare_comment_line(self.current.trimmed()) {
+        if self.current_is_blank()
+            || self.current.trimmed_start().starts_with('/')
+                && is_bare_comment_line(self.current.trimmed())
+        {
             self.layout.frame_stack.clear_closed_braces();
         }
         if self.one_line_block_mode {
