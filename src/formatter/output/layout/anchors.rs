@@ -798,6 +798,39 @@ impl FormatEngine<'_> {
             };
             return Some(lead + levels * self.options.indent_width + self.case_unindent_spaces());
         }
+        // A row after the first one a nested list runs into its brace
+        // stands where it would below that brace ending its row, as the
+        // brace of a first element or of one after a closer ends it.
+        if matches!(tokens[comma], Token::Symbol(','))
+            && groups.enclosing(comma) == Some(group)
+            && groups
+                .get(group)
+                .parent
+                .is_some_and(|parent| self.tree.blocks.kind(parent) == Some(BlockKind::Initializer))
+            && self.output.line_with_token(comma)
+                == self.output.line_with_token(groups.get(group).open)
+            && self
+                .tree
+                .previous_code_token(groups.get(group).open)
+                .is_some_and(|before| match tokens[before] {
+                    Token::Symbol('{') => true,
+                    Token::Symbol(',') => self
+                        .tree
+                        .previous_code_token(before)
+                        .is_some_and(|closer| matches!(tokens[closer], Token::Symbol('}'))),
+                    _ => false,
+                })
+            && let Some((lead, levels, _)) = self
+                .brace_row_levels_through(groups.get(group).open)
+                .filter(|_| {
+                    matches!(
+                        self.options.brace_style,
+                        BraceStyle::Horstmann | BraceStyle::Pico
+                    )
+                })
+        {
+            return Some(lead + levels * self.options.indent_width + self.case_unindent_spaces());
+        }
         let branch_row = self.opens_branch_row(group, comma, first);
         if !branch_row && groups.enclosing(comma) != Some(group) {
             return None;
@@ -1614,10 +1647,17 @@ impl FormatEngine<'_> {
         let tokens = &self.tree.tokens;
         let line = self.output.line_with_token(open)?;
         let span = self.output.line_tokens(line)?;
+        // Styles running a first row into its brace lay the row out as
+        // though the brace ended it.
+        let run_in_row = matches!(
+            self.options.brace_style,
+            BraceStyle::Horstmann | BraceStyle::Pico
+        );
         if span.first == open
             || !tokens[open + 1..=span.last.max(open)]
                 .iter()
                 .filter(|&token| is_code_token(token))
+                .take_while(|token| !run_in_row || matches!(token, Token::Symbol('{')))
                 .all(|token| matches!(token, Token::Symbol('{')))
         {
             return None;

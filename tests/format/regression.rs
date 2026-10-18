@@ -16133,3 +16133,41 @@ fn lisp_rows_of_a_list_a_joined_closer_line_opens_move_with_it() {
         check(expected, &["--style=lisp"], expected);
     }
 }
+
+#[test]
+fn run_in_styles_lay_out_a_nested_first_list_as_its_broken_form() {
+    let cases = [
+        (
+            "--style=horstmann",
+            "int list[2][2] = {{1,\n                   2}, {3,\n                   4}};\n",
+            "int list[2][2] = {{1,\n        2\n    }, {3,\n        4\n    }\n};\n",
+        ),
+        (
+            "--style=pico",
+            "int list[2][2] = {{1,\n                   2}, {3,\n                   4}};\n",
+            "int list[2][2] = {{1,\n        2 }, {3,\n        4 } };\n",
+        ),
+        (
+            "--style=horstmann",
+            "void run()\n{\n    int list[2][2] = {{1,\n                       2}, {3,\n                       4}};\n}\n",
+            "void run()\n{   int list[2][2] = {{1,\n            2\n        }, {3,\n            4\n        }\n    };\n}\n",
+        ),
+        (
+            "--style=pico",
+            "int list[2][3] = {{1,\n                   2,\n                   3}, {4,\n                   5,\n                   6}};\n",
+            "int list[2][3] = {{1,\n        2,\n        3 }, {4,\n        5,\n        6 } };\n",
+        ),
+    ];
+    for (style, input, expected) in cases {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn horstmann_closes_a_list_in_a_run_in_case_body_as_outside_a_switch() {
+    let input = "void run()\n{\n    switch (kind) {\n    case 1:\n        call({1,\n              2}, {3,\n                   4});\n    }\n}\n";
+    let expected = "void run()\n{   switch (kind)\n    {   case 1:\n            call({1,\n                  2}, {3,\n                       4\n                      });\n    }\n}\n";
+    check(input, &["--style=horstmann"], expected);
+    check(expected, &["--style=horstmann"], expected);
+}
