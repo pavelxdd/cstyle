@@ -9027,6 +9027,18 @@ fn a_lambda_with_template_parameters_opens_its_body_as_any_lambda() {
 }
 
 #[test]
+fn a_comment_before_a_braced_initializer_closer_leaves_it_as_after_an_assignment() {
+    // With or without `=`, the list's closer takes its own row after the
+    // comment that led it.
+    for head in ["std::vector<int> values{", "std::vector<int> values = {"] {
+        let input = format!("void f()\n{{\n    {head}\n        1,\n        /* note */ }};\n}}\n");
+        let expected =
+            format!("void f()\n{{\n    {head}\n        1,\n        /* note */\n    }};\n}}\n");
+        check(&input, &["--style=kr"], &expected);
+    }
+}
+
+#[test]
 fn vtk_sets_a_function_try_block_at_the_function_body() {
     let input = "void helper()\ntry {\n    go();\n} catch (...) {\n    stop();\n}\n";
     let expected = "void helper()\ntry\n{\n    go();\n}\ncatch (...)\n{\n    stop();\n}\n";
