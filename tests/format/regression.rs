@@ -9326,6 +9326,15 @@ fn a_constructor_body_after_a_template_base_initializer_breaks_as_any_body() {
 }
 
 #[test]
+fn a_macro_word_heads_the_block_its_brace_opens_on_its_line() {
+    // As with the brace on a line of its own, the block is the word's.
+    let input = "void f() {\n  APPLY {\n    std::visit(\n        [&](const auto& v) {\n          go(v);\n        },\n        value);\n  }\n}\n";
+    let expected = "void f()\n{\n    APPLY\n    {\n        std::visit(\n            [&](const auto& v)\n        {\n            go(v);\n        },\n        value);\n    }\n}\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+}
+
+#[test]
 fn whitesmith_keeps_the_base_of_a_class_head_over_lines_on_its_line() {
     let input = "template <typename It>\nstruct is_inserter<\n    It, enable_if<is_same<\n            typename It::type, int>::value>> : std::true_type {};\n";
     let expected = "template <typename It>\nstruct is_inserter<\n    It, enable_if<is_same<\ntypename It::type, int>::value>> : std::true_type {};\n";

@@ -421,7 +421,8 @@ impl FormatEngine<'_> {
         {
             // A macro standing for a function head at file scope.
             BraceType::Definition
-        } else if self.token_input.token_begins_source_line
+        } else if (self.token_input.token_begins_source_line
+            || is_macro_like_word(self.current.trimmed()))
             && matches!(
                 self.layout.nesting.brace_type_stack.last(),
                 Some(BraceType::Command | BraceType::Definition)
