@@ -9275,6 +9275,14 @@ fn rows_of_a_define_in_a_case_block_stand_as_written() {
 }
 
 #[test]
+fn a_comment_led_row_closing_a_continued_call_in_a_conditional_ends_its_statement() {
+    let input = "#ifndef GUARD_H\nPUSH_WARNINGS(4251 \\\n/* note */)\nnamespace testing {\nint value;\n}\n#endif\n";
+    let expected = "#ifndef GUARD_H\nPUSH_WARNINGS(4251 \\\n              /* note */)\nnamespace testing\n{\nint value;\n}\n#endif\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
 fn a_line_comment_after_a_block_argument_brace_opens_its_body() {
     // The brace joins the call's line; the comment after it opens the body
     // at the body column, not at the column set for the brace's own line.

@@ -477,7 +477,11 @@ impl FormatEngine<'_> {
         let leads_code = trimmed.trimmed_start().starts_with("/*")
             && holds_code_after_leading_comments(trimmed.trimmed_start());
         let continuation = &mut self.layout.continuation_indent;
-        if leads_code && continuation.next_line_indent_spaces == Some(placed_width) {
+        if leads_code
+            && continuation
+                .next_line_indent_spaces
+                .is_some_and(|spaces| spaces == placed_width || spaces == moved_width)
+        {
             // The code after the comment took the column set for its line.
             continuation.next_line_indent_spaces = None;
         } else if continuation.next_line_indent_spaces == Some(placed_width) {
