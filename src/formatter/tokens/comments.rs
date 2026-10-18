@@ -474,8 +474,13 @@ impl FormatEngine<'_> {
         // A row set to follow the comment follows it where it moved, unless
         // its code closed the delimiters the comment stood in.
         let moved_width = leading_visual_width(&trimmed, self.options.tab_width);
+        let leads_code = trimmed.trimmed_start().starts_with("/*")
+            && holds_code_after_leading_comments(trimmed.trimmed_start());
         let continuation = &mut self.layout.continuation_indent;
-        if continuation.next_line_indent_spaces == Some(placed_width) {
+        if leads_code && continuation.next_line_indent_spaces == Some(placed_width) {
+            // The code after the comment took the column set for its line.
+            continuation.next_line_indent_spaces = None;
+        } else if continuation.next_line_indent_spaces == Some(placed_width) {
             continuation.next_line_indent_spaces =
                 (!closes_delimiters || self.layout.nesting.paren_depth > 0).then_some(moved_width);
         }

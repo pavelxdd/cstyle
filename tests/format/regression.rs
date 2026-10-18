@@ -9170,6 +9170,22 @@ fn rows_of_a_trailing_comment_in_a_case_block_stand_as_written() {
 }
 
 #[test]
+fn rows_of_an_element_a_comment_leads_after_a_run_in_brace_stand_in_the_element() {
+    for (style, expected) in [
+        (
+            "--style=horstmann",
+            "void f()\n{   static const struct Item items[] =\n    {   /* note */ { name(\"a\"), NULL, first,\n            0, 0\n        },\n    };\n}\n",
+        ),
+        (
+            "--style=pico",
+            "void f()\n{   static const struct Item items[] =\n    {   /* note */ { name(\"a\"), NULL, first,\n            0, 0 }, }; }\n",
+        ),
+    ] {
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
 fn rows_of_a_comment_run_in_after_nested_element_braces_keep_their_offset() {
     let input = "void f()\n{\n  struct Item items[] = {\n    {\n      /* first row\n         second row */\n      \"first\", \"second\"\n    },\n  };\n}\n";
     for (style, expected) in [
