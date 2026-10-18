@@ -995,9 +995,14 @@ impl FrameStack {
             .iter_mut()
             .chain(&mut self.closed_brace_frames)
         {
+            shift(&mut frame.open_output_line);
             if let Some(close) = frame.close_output_line.as_mut() {
                 shift(close);
             }
+        }
+        if let Some(span) = self.last_lambda_body.as_mut() {
+            shift(&mut span.open_output_line);
+            shift(&mut span.close_output_line);
         }
         if let Some((call_line, _)) = self.line_closed_call_logical_operand_indent.as_mut() {
             shift(call_line);

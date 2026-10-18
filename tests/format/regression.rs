@@ -17139,3 +17139,10 @@ fn arguments_after_a_lambda_body_past_an_inline_constructor_stand_at_the_stateme
     let expected = "class Item\n{   Item() : value(0) {}\n};\nvoid f()\n{   call(first,\n         []\n    {   go();\n    },\n    other,\n    more);\n}\n";
     check(input, &["--style=horstmann"], expected);
 }
+
+#[test]
+fn arguments_after_a_lambda_body_stand_at_the_statement_after_an_inserted_blank_line() {
+    let input = "void f()\n{\n    if (a) {\n        first();\n    }\n    call([&](int value) {\n        go(value);\n    },\n    other,\n    more);\n}\n";
+    let expected = "void f()\n{\n    if (a) {\n        first();\n    }\n\n    call([&](int value) {\n        go(value);\n    },\n    other,\n    more);\n}\n";
+    check(input, &["--break-blocks=all"], expected);
+}
