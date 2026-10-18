@@ -665,6 +665,30 @@ fn head_walk_passes(
             ))
 }
 
+/// The depth of template angles open at `end` in a trailing return type
+/// that a `->` at `level` starts between `start` and `end`.
+fn trailing_return_angle_depth(
+    tokens: &[Token],
+    groups: &Groups,
+    level: Option<GroupId>,
+    start: usize,
+    end: usize,
+) -> Option<usize> {
+    let arrow = (start..end)
+        .find(|&index| is_operator(tokens, index, "->") && groups.enclosing(index) == level)?;
+    Some((arrow + 1..end).fold(0usize, |depth, index| {
+        if groups.enclosing(index) != level {
+            return depth;
+        }
+        match &tokens[index] {
+            Token::Operator(operator) if operator == "<" => depth + 1,
+            Token::Operator(operator) if operator == ">" => depth.saturating_sub(1),
+            Token::Operator(operator) if operator == ">>" => depth.saturating_sub(2),
+            _ => depth,
+        }
+    }))
+}
+
 fn head_end(
     tokens: &[Token],
     groups: &Groups,
@@ -744,6 +768,18 @@ fn head_end(
                 || previous_head_token(tokens, next)
                     .and_then(|before| groups.closed_at(before))
                     .is_some());
+        // A trailing return type holds groups, as `decltype(x)`, and the
+        // commas of its template arguments.
+        if matches!(tokens[next], Token::Symbol('(' | ','))
+            && trailing_return_angle_depth(tokens, groups, level, group.close? + 1, next)
+                .is_some_and(|depth| depth > 0 || tokens[next] == Token::Symbol('('))
+        {
+            index = match groups.opened_at(next) {
+                Some(id) => groups.get(id).close? + 1,
+                None => next + 1,
+            };
+            continue;
+        }
         if tokens[next] == Token::Symbol('(')
             && !knr_declarator
             && !constructor_initializers

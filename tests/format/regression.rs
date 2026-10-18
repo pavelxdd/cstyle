@@ -18227,3 +18227,30 @@ fn a_template_head_closing_before_code_on_its_row_ends_there() {
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
+
+#[test]
+fn break_return_type_reads_a_head_with_a_trailing_return_type_as_any_head() {
+    let input = "auto get(int x) -> decltype(x) {\n  return x;\n}\nauto pair_of(int x) -> pair<int, int> {\n  return x;\n}\nauto find(int x) -> decltype(x);\n";
+    let expected = "auto\nget(int x) -> decltype(x)\n{\n    return x;\n}\nauto\npair_of(int x) -> pair<int, int>\n{\n    return x;\n}\nauto\nfind(int x) -> decltype(x);\n";
+    check(
+        input,
+        &[
+            "--style=kr",
+            "--break-return-type",
+            "--break-return-type-decl",
+        ],
+        expected,
+    );
+    check(
+        expected,
+        &[
+            "--style=kr",
+            "--break-return-type",
+            "--break-return-type-decl",
+        ],
+        expected,
+    );
+    // A declaration's head stays whole under the definition option alone.
+    let expected = "auto\nget(int x) -> decltype(x)\n{\n    return x;\n}\nauto\npair_of(int x) -> pair<int, int>\n{\n    return x;\n}\nauto find(int x) -> decltype(x);\n";
+    check(input, &["--style=kr", "--break-return-type"], expected);
+}
