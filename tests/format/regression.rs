@@ -17484,3 +17484,10 @@ fn a_returned_capture_only_lambda_keeps_its_broken_brace_on_a_second_pass() {
     check(input, &["--style=vtk"], expected);
     check(expected, &["--style=vtk"], expected);
 }
+
+#[test]
+fn a_comment_after_an_inner_lambda_brace_leaves_its_head_row_in_the_outer_body() {
+    let input = "void f()\n{\n    outer([&] {\n        inner([] { /* c */\n            go();\n        });\n    });\n}\n";
+    let expected = "void f()\n{\n    outer([&]\n    {\n        inner([]   /* c */\n        {\n            go();\n        });\n    });\n}\n";
+    check(input, &["--style=allman"], expected);
+}

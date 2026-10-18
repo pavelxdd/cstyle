@@ -455,13 +455,13 @@ impl FormatEngine<'_> {
         self.layout
             .frame_stack
             .active_brace()
-            // A lambda whose brace follows the row has its body below it.
+            // Only a row after a lambda's brace is its body's.
             .filter(|frame| {
                 frame.semantic_kind == BraceSemanticKind::Lambda
                     && !frame.open_token.is_some_and(|brace| {
                         self.output
                             .pending_tokens()
-                            .is_some_and(|span| brace > span.last)
+                            .is_some_and(|span| span.first <= brace)
                     })
             })
             .map(|frame| {
