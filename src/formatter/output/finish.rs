@@ -238,6 +238,7 @@ impl FormatEngine<'_> {
                         shift: leading_visual_width(published, self.options.tab_width) as isize
                             - source_column as isize,
                         declaration_columns: None,
+                        moved_stack: false,
                     });
                 }
             } else {

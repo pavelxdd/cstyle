@@ -18338,3 +18338,17 @@ fn arguments_after_a_paren_ending_a_split_head_continue_from_the_stack_below_it(
         expected,
     );
 }
+
+#[test]
+fn arguments_after_a_paren_ending_a_split_head_keep_a_capped_column_below_it() {
+    // The column below stays capped after the split, and the arguments
+    // continue a level past it.
+    let input = "class Check {\n  template <size_t... Is>\n  static auto check(index_sequence<Is...>) -> decltype(all_true(\n      index_sequence<Is...>{},\n      second));\n};\n";
+    let expected = "class Check\n{\n    template <size_t... Is>\n    static auto\n    check(index_sequence<Is...>) -> decltype(all_true(\n                index_sequence<Is...> {},\n                second));\n};\n";
+    check(input, &["--style=kr", "--break-return-type-decl"], expected);
+    check(
+        expected,
+        &["--style=kr", "--break-return-type-decl"],
+        expected,
+    );
+}

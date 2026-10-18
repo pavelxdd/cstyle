@@ -181,13 +181,15 @@ pub(crate) type LineCommentCache = (usize, usize, usize, Option<usize>);
 /// The columns a split moved: those at or past `from_column` of the part
 /// that ends output line `line` moved `shift` columns, and the column a
 /// declaration's comma ending the line continues at moved from the first
-/// of `declaration_columns` to the second.
+/// of `declaration_columns` to the second. A split that `moved_stack`
+/// moved the continuation stack with them.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct SplitLineShift {
     pub(crate) line: usize,
     pub(crate) from_column: usize,
     pub(crate) shift: isize,
     pub(crate) declaration_columns: Option<(usize, usize)>,
+    pub(crate) moved_stack: bool,
 }
 
 pub(crate) struct FormatEngine<'a> {
@@ -2356,9 +2358,8 @@ impl<'a> FormatEngine<'a> {
                 )
             }
             // The column the line took from the stack moved as the stack did.
-            (ContinuationIndent::Spaces(spaces), Some(_), Some(moved))
-                if Some(spaces) == stacked_before_line
-                    && stacked_after_line != stacked_before_line =>
+            (ContinuationIndent::Spaces(spaces), Some(split), Some(moved))
+                if split.moved_stack && Some(spaces) == stacked_before_line =>
             {
                 ContinuationIndent::Spaces(moved)
             }

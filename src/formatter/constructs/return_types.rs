@@ -590,6 +590,7 @@ impl FormatEngine<'_> {
                 from_column: name_column,
                 shift,
                 declaration_columns,
+                moved_stack: true,
             });
         }
         // The return type line opens the body of a directive's branch as
