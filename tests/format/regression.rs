@@ -9267,6 +9267,16 @@ fn rows_of_a_define_in_a_case_block_stand_as_written() {
 }
 
 #[test]
+fn rows_of_a_comment_a_brace_takes_back_follow_it_to_the_body() {
+    // With no brace style the comment after a block brace runs in at the
+    // body, its rows keeping their offset from the opener.
+    let input = "void f()\n{\n    {/* first row\n        second row */\n        int t = 1;\n    }\n    {  /* first\n       ** second */\n        go();\n    }\n}\n";
+    let expected = "void f()\n{\n    {   /* first row\n           second row */\n        int t = 1;\n    }\n    {   /* first\n        ** second */\n        go();\n    }\n}\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+}
+
+#[test]
 fn rows_of_a_comment_run_in_after_a_block_brace_follow_its_opener() {
     // Rows past the `/*` keep their offset from it wherever the brace line
     // moves; rows at or left of it stand at the body column.

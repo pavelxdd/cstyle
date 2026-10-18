@@ -3554,6 +3554,23 @@ impl FormatEngine<'_> {
                         trim_amount,
                     )
                 }
+            } else if index == 0
+                && !opener_on_own_line
+                && !run_in_opener
+                && self.token_input.token_line_opens_with_brace
+                && let Some(frame) = self.layout.frame_stack.active_brace()
+            {
+                // An opener the brace takes back onto its line stands where
+                // its rows are laid, at the body or past it.
+                let column = frame.body_indent_column.max(opener_output_column);
+                format!(
+                    "{}{}",
+                    self.options.continuation_indent_prefix(
+                        column / self.options.indent_width.max(1),
+                        column,
+                    ),
+                    line.trimmed_end()
+                )
             } else if index == 0 {
                 format!("{opener_prefix}{}", line.trimmed_end())
             } else {
