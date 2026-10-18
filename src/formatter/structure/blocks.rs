@@ -193,6 +193,9 @@ fn classify(tokens: &[Token], groups: &Groups, blocks: &Blocks, id: GroupId) -> 
     {
         return classify_after_paren(tokens, groups, paren, parent_block);
     }
+    if ends_with_value_capture(tokens, groups, &head) {
+        return BlockKind::Lambda;
+    }
     match &tokens[previous] {
         Token::Operator(operator) if operator == "=" => return BlockKind::Initializer,
         Token::Word(word) if word == "return" => return BlockKind::Initializer,
@@ -276,15 +279,48 @@ fn opens_block_literal(tokens: &[Token], groups: &Groups, previous: usize) -> bo
     })
 }
 
+fn is_lambda_specifier(token: &Token) -> bool {
+    matches!(token, Token::Word(word) if matches!(
+        word.as_str(),
+        "mutable" | "constexpr" | "consteval" | "static" | "noexcept"
+    ))
+}
+
+/// Whether `head` ends with a capture list, and its specifiers, where a value
+/// begins: leading the head, or after an operator or a `return`. An array
+/// declarator's bounds follow its name, an attribute's list holds a list.
+fn ends_with_value_capture(tokens: &[Token], groups: &Groups, head: &[usize]) -> bool {
+    let Some(capture) = head
+        .iter()
+        .rposition(|&index| matches!(tokens[index], Token::Symbol('[')))
+    else {
+        return false;
+    };
+    let open = head[capture];
+    head[capture + 1..]
+        .iter()
+        .all(|&index| is_lambda_specifier(&tokens[index]))
+        && groups
+            .opened_at(open)
+            .and_then(|id| groups.get(id).close)
+            .is_some()
+        && next_code_token(tokens, open + 1)
+            .is_some_and(|inner| !matches!(tokens[inner], Token::Symbol('[')))
+        && capture
+            .checked_sub(1)
+            .is_none_or(|before| match &tokens[head[before]] {
+                Token::Operator(_) => true,
+                Token::Word(word) => {
+                    matches!(word.as_str(), "return" | "co_return" | "co_yield" | "throw")
+                }
+                _ => false,
+            })
+}
+
 /// Whether `head` ends with a lambda's capture list, or a capture list and
 /// its parameters.
 fn has_lambda_capture(tokens: &[Token], groups: &Groups, head: &[usize]) -> bool {
-    let specifier = |index: usize| {
-        matches!(&tokens[index], Token::Word(word) if matches!(
-            word.as_str(),
-            "mutable" | "constexpr" | "consteval" | "static" | "noexcept"
-        ))
-    };
+    let specifier = |index: usize| is_lambda_specifier(&tokens[index]);
     head.windows(2).any(|pair| {
         matches!(tokens[pair[0]], Token::Symbol('['))
             && groups
@@ -610,6 +646,12 @@ mod tests {
                 "void f() {\n    auto g = [&](int x) {\n    };\n    std::vector<int> v{1, 2};\n}\n"
             ),
             [FunctionBody, Lambda, Initializer]
+        );
+        assert_eq!(
+            kinds(
+                "void f() {\n    auto g = [&] {\n    };\n    return [value] mutable {\n    };\n    int values[2] {1, 2};\n}\n"
+            ),
+            [FunctionBody, Lambda, Lambda, Initializer]
         );
     }
 }
