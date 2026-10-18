@@ -2261,6 +2261,16 @@ impl FormatEngine<'_> {
             .or_else(|| self.argument_after_comma_column(code))
             .or_else(|| self.declarator_after_comma_indent(code))
             .or_else(|| {
+                // An initializer after one whose lambda body closes above.
+                let in_delimiters =
+                    self.tree.groups.enclosing(code).is_some_and(|group| {
+                        self.tree.groups.get(group).delimiter != Delimiter::Brace
+                    });
+                (!in_delimiters)
+                    .then(|| self.initializer_after_lambda_initializer_indent(code))
+                    .flatten()
+            })
+            .or_else(|| {
                 // Otherwise an element's brace the style sets past the
                 // elements stands past the comment, set at them.
                 self.element_brace_stands_past_rows(code).then(|| {

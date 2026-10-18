@@ -9093,6 +9093,14 @@ fn a_comment_split_off_a_method_closer_after_a_message_block_stands_in_the_body(
 }
 
 #[test]
+fn a_comment_led_initializer_after_a_run_in_lambda_body_stands_as_without_the_comment() {
+    let input = "Item::Item()\n    : value([] {\n        return 1;\n    }()),\n      /* note */ other(0)\n{\n}\n";
+    let expected = "Item::Item()\n    : value([]\n{   return 1; }()),\n/* note */ other(0)\n{}\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+}
+
+#[test]
 fn vtk_sets_a_function_try_block_at_the_function_body() {
     let input = "void helper()\ntry {\n    go();\n} catch (...) {\n    stop();\n}\n";
     let expected = "void helper()\ntry\n{\n    go();\n}\ncatch (...)\n{\n    stop();\n}\n";
