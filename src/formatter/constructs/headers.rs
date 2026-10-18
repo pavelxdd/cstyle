@@ -1505,6 +1505,13 @@ impl FormatEngine<'_> {
         if word == "else" && matches!(next, Some(Token::Symbol(','))) {
             return false;
         }
+        // Among the operands of parens or brackets, as a generic
+        // selection's associations, `default` labels nothing.
+        if matches!(word, "case" | "default")
+            && (self.layout.nesting.paren_depth > 0 || self.layout.frame_stack.bracket_depth() > 0)
+        {
+            return false;
+        }
         // After the type of a declaration a `foreach` names a function.
         if matches!(word, "foreach" | "Q_FOREACH")
             && current

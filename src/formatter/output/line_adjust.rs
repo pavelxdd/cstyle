@@ -71,6 +71,15 @@ impl LineAdjuster {
         self.switch_observer.observe_line(line, kind)
     }
 
+    /// Observes a line continuing the operands of open parens or brackets,
+    /// which holds no label.
+    pub fn observe_operand_line(&mut self, line: &LineView<'_>) -> LineKind {
+        if !self.line_observe_enabled {
+            return LineKind::Normal;
+        }
+        self.switch_observer.observe_operand_line(line)
+    }
+
     pub fn adjust_line(&mut self, line: String) -> String {
         self.switch_case_transformer.begin_line();
         let line = self.adjust_macro_block_line(line);

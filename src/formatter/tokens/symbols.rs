@@ -1388,6 +1388,13 @@ impl FormatEngine<'_> {
         }
         let pad_off =
             !self.options.pad_operators || self.layout.line_state.operator_padding_disabled;
+        // A colon no rule places, as a generic selection's, keeps the
+        // source's spacing; a case label's has its own.
+        let source_spaced = colon_role == ColonRole::Other
+            && !matches!(
+                self.layout.command_state.current_header.as_deref(),
+                Some("case" | "default")
+            );
         let colon_mode = self.options.pad_method_colon;
         let next_is_close_paren = matches!(next, Some(Token::Symbol(')')));
         if is_objc_interface_colon {
@@ -1413,6 +1420,7 @@ impl FormatEngine<'_> {
             || is_asm_operand_colon
             || aligned_continuation_colon
             || (is_ternary && pad_off)
+            || source_spaced
         {
             self.emit_source_space();
         } else {
@@ -1477,7 +1485,9 @@ impl FormatEngine<'_> {
                 .is_empty()
         {
             self.ensure_space();
-        } else if aligned_continuation_colon && !is_asm_operand_colon && !is_objc_colon {
+        } else if aligned_continuation_colon && !is_asm_operand_colon && !is_objc_colon
+            || source_spaced
+        {
             self.emit_trailing_source_space();
         }
         self.layout.objc.post_method_colon = is_objc_method_def_colon;
@@ -1674,16 +1684,23 @@ impl FormatEngine<'_> {
                     })
                 || self.in_initializer_brace()
                 || self.current_inline_array_column().is_some());
-        // A message's keyword after a block closing on the line is no label.
-        let in_brackets = token_index < self.tree.tokens.len()
+        // A message's keyword after a block closing on the line is no label,
+        // nor is a word before a colon among parenthesized operands, as a
+        // generic selection's `default:`.
+        let in_delimiters = token_index < self.tree.tokens.len()
             && self
                 .tree
                 .groups
                 .enclosing(token_index)
-                .is_some_and(|group| self.tree.groups.get(group).delimiter == Delimiter::Bracket);
+                .is_some_and(|group| {
+                    matches!(
+                        self.tree.groups.get(group).delimiter,
+                        Delimiter::Bracket | Delimiter::Paren
+                    )
+                });
         let is_label = !has_question
             && !is_objc_colon
-            && !in_brackets
+            && !in_delimiters
             && !is_bit_field
             && !is_class_base
             && !is_enum_underlying_type

@@ -187,6 +187,7 @@ impl FormatEngine<'_> {
 
             let case_label_with_comment = case_label_with_trailing_comment(line);
             if self.options.break_one_line_statements
+                && !self.line_continues_operands()
                 && let Some((label, mut statement)) = split_switch_label_statement(line)
             {
                 let line_indent = if leading_visual_width(line, self.options.tab_width) == 0 {

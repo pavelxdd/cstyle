@@ -356,6 +356,17 @@ impl SwitchCaseObserver {
         {
             kind = LineKind::SwitchLabel;
         }
+        self.observe_line_of_kind(line, kind)
+    }
+
+    /// Observes a line that continues the operands of open parens or
+    /// brackets, where a word before a colon labels nothing.
+    pub(crate) fn observe_operand_line(&mut self, line: &str) -> LineKind {
+        self.observe_line_of_kind(line, LineKind::Normal)
+    }
+
+    fn observe_line_of_kind(&mut self, line: &str, kind: LineKind) -> LineKind {
+        let trimmed = line.trimmed_start();
 
         if kind == LineKind::SwitchLabel {
             self.looking_for_case_brace = true;
