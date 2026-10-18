@@ -17403,3 +17403,19 @@ fn a_lambda_call_opening_an_outer_lambda_body_stands_at_that_body_when_braces_br
     check(input, &["--style=allman"], expected);
     check(expected, &["--style=allman"], expected);
 }
+
+#[test]
+fn an_initializer_after_an_invoked_lambda_initializer_stands_at_the_constructor() {
+    let input =
+        "Item::Item()\n    : value([] {\n        return 1;\n    }()),\n      other(0)\n{\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "Item::Item()\n    : value([]\n    {\n    return 1;\n    }()),\nother(0)\n    {\n    }\n",
+    );
+    check(
+        input,
+        &["--style=kr"],
+        "Item::Item()\n    : value([]\n{\n    return 1;\n}()),\nother(0)\n{\n}\n",
+    );
+}

@@ -895,18 +895,34 @@ impl FormatEngine<'_> {
         let Some(lambda) = self.layout.frame_stack.last_lambda_body() else {
             return false;
         };
+        let groups = &self.tree.groups;
+        let spans_lines =
+            lambda.open_output_line < lambda.close_output_line || lambda.opens_output_line;
+        // Comments after the line's comma take no part in it.
+        let comma = self
+            .current
+            .tokens()
+            .and_then(|span| self.tree.previous_code_token(span.last + 1))
+            .filter(|&comma| matches!(self.tree.tokens[comma], Token::Symbol(',')));
+        // A constructor's initializer whose lambda body closes on the line
+        // leaves the next initializer at the statement too.
+        if spans_lines
+            && lambda.close_output_line == self.output.len()
+            && self.in_constructor_initializer()
+            && comma.is_some_and(|comma| {
+                groups
+                    .enclosing(comma)
+                    .is_none_or(|group| groups.get(group).delimiter == Delimiter::Brace)
+            })
+        {
+            return true;
+        }
         let Some(call) = self.layout.frame_stack.active_delimiter() else {
             return false;
         };
-        let groups = &self.tree.groups;
-        // Comments after the line's comma take no part in it.
-        (lambda.open_output_line < lambda.close_output_line || lambda.opens_output_line)
+        spans_lines
             && call.opener_output_line <= lambda.open_output_line
-            && self
-                .current
-                .tokens()
-                .and_then(|span| self.tree.previous_code_token(span.last + 1))
-                .filter(|&comma| matches!(self.tree.tokens[comma], Token::Symbol(',')))
+            && comma
                 .and_then(|comma| groups.enclosing(comma))
                 .is_some_and(|group| groups.get(group).delimiter == Delimiter::Paren)
     }
