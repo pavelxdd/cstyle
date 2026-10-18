@@ -16501,3 +16501,21 @@ fn a_comment_led_declarator_after_a_split_type_stands_as_without_the_comment() {
         check(input, &["--style=kr"], expected);
     }
 }
+
+#[test]
+fn indent_preproc_cond_sets_a_directive_among_arguments_at_them_in_a_braceless_body() {
+    // astyle sets it a level out from the arguments in a braceless body
+    // only.
+    for (input, expected) in [
+        (
+            "void f()\n{\n    if (!ready)\n        call(first,\n#ifdef FEATURE\n             value);\n#endif\n}\n",
+            "void f()\n{\n    if (!ready)\n        call(first,\n             #ifdef FEATURE\n             value);\n             #endif\n}\n",
+        ),
+        (
+            "void f()\n{\n    call(first,\n#ifdef FEATURE\n         value);\n#endif\n}\n",
+            "void f()\n{\n    call(first,\n         #ifdef FEATURE\n         value);\n         #endif\n}\n",
+        ),
+    ] {
+        check(input, &["--style=kr", "--indent-preproc-cond"], expected);
+    }
+}
