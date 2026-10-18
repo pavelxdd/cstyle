@@ -17,6 +17,7 @@ use crate::formatter::output::buffer::OutputBuffer;
 use crate::formatter::state::frame::{BraceSemanticKind, ColonRole, LogicalOperator};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
+use crate::formatter::structure::functions::FunctionHead;
 use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::language::{is_leading_continuation_operator, is_macro_like_word};
 use crate::formatter::syntax::{
@@ -1713,7 +1714,11 @@ impl FormatEngine<'_> {
         let mut index = comma;
         while let Some(before) = self.tree.previous_code_token(index) {
             if let Some(group) = groups.closed_at(before) {
-                return self.tree.functions.by_params(group).is_some();
+                return self
+                    .tree
+                    .functions
+                    .by_params(group)
+                    .is_some_and(FunctionHead::has_return_type);
             }
             if groups.enclosing(before) != level
                 || matches!(tokens[before], Token::Symbol(';' | '{' | '}' | ','))

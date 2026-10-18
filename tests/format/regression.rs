@@ -18411,3 +18411,11 @@ fn a_comment_after_a_closer_of_a_block_opened_above_stays_with_the_closer() {
     check(input, &["--style=lisp"], expected);
     check(expected, &["--style=lisp"], expected);
 }
+
+#[test]
+fn a_member_initializer_row_with_a_run_in_body_continues_the_list() {
+    let input = "class Options {\n  Options() :\n    word_boundary_(false),\n    one_line_(false) {\n  }\n};\n";
+    let expected = "class Options {\n    Options() :\n        word_boundary_(false),\n        one_line_(false) {} };\n";
+    check(input, &["--style=lisp"], expected);
+    check(expected, &["--style=lisp"], expected);
+}
