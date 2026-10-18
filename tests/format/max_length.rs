@@ -1628,14 +1628,14 @@ fn max_code_length_constructor_lambda_tail_keeps_call_owner() {
         "Item::Item():memberValue(calculate(alphaValue,[](int value){return value+offsetValue;},betaValue,gammaValue)){}",
     );
 
-    // Arguments after an inline lambda remain owned by the enclosing call.
+    // The lambda's body ends the continuation of the rows after it.
     assert_stable_max_length_format(
         source,
         &options,
         fixture!(
             "Item::Item():memberValue(calculate(alphaValue,[](",
             "                                       int value) {return value+offsetValue;},betaValue,",
-            "                                   gammaValue)) {}",
+            "gammaValue)) {}",
         ),
     );
 }

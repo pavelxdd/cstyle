@@ -16764,3 +16764,37 @@ fn ratliff_last_brace_row_of_a_call_argument_list_stands_at_the_row_before() {
     let input = "void f() {\n    call(value, {\n            {2, 3},\n            {4, 5}\n        });\n    }\n";
     check(input, &["--style=ratliff"], input);
 }
+
+#[test]
+fn a_kept_one_line_lambda_body_ends_the_continuation_as_a_broken_one_does() {
+    let input = "void f()\n{\n    call(first,\n         [&]() { go(); },\n         last);\n    value = call(\n        [&]() { go(); });\n    call([&]() { go(); },\n         last);\n}\n";
+    let expected = "void f()\n{\n    call(first,\n    [&]() { go(); },\n    last);\n    value = call(\n    [&]() { go(); });\n    call([&]() { go(); },\n    last);\n}\n";
+    check(input, &["--style=kr", "--keep-one-line-blocks"], expected);
+    check(
+        expected,
+        &["--style=kr", "--keep-one-line-blocks"],
+        expected,
+    );
+    let broken = "void f()\n{\n    call(first,\n    [&]() {\n        go();\n    },\n    last);\n    value = call(\n    [&]() {\n        go();\n    });\n    call([&]() {\n        go();\n    },\n    last);\n}\n";
+    check(input, &["--style=kr"], broken);
+    // A body after a trailing return type, `mutable` or no parameters
+    // continues it.
+    for head in ["[]", "[]() mutable", "[]() -> int"] {
+        let input = format!(
+            "void f()\n{{\n    call(first,\n         {head} {{ go(); }},\n         last);\n}}\n"
+        );
+        check(&input, &["--style=kr", "--keep-one-line-blocks"], &input);
+    }
+    for head in ["[](int a)", "[]() const", "[]() noexcept"] {
+        let input = format!(
+            "void f()\n{{\n    call(first,\n         {head} {{ go(); }},\n         last);\n}}\n"
+        );
+        let expected =
+            format!("void f()\n{{\n    call(first,\n    {head} {{ go(); }},\n    last);\n}}\n");
+        check(&input, &["--style=kr", "--keep-one-line-blocks"], &expected);
+    }
+    // Among a constructor's initializers the body's own row keeps its place.
+    let input = "Box::Box()\n    : one(call(first,\n               [this]() { return go(); },\n               last))\n{\n}\n";
+    let expected = "Box::Box()\n    : one(call(first,\n               [this]() { return go(); },\nlast))\n{\n}\n";
+    check(input, &["--style=kr", "--keep-one-line-blocks"], expected);
+}

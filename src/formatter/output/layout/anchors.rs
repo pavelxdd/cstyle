@@ -130,6 +130,7 @@ impl FormatEngine<'_> {
             self.else_matching_if_indent(first)
         })
         .or_else(|| when(in_parens, || self.literal_argument_indent(first)))
+        .or_else(|| when(in_parens, || self.row_around_kept_lambda_body_indent(first)))
         .or_else(|| self.braceless_body_indent(first))
         .or_else(|| {
             when(opens_brace, || {
@@ -2597,6 +2598,66 @@ impl FormatEngine<'_> {
                 + level
                 + self.case_unindent_spaces(),
         )
+    }
+
+    /// astyle ends a statement's continuation at a lambda's body after its
+    /// parameters or a qualifier of them: a row of the parens around such a
+    /// body kept on its line, on or past that line, stands at the
+    /// statement, as one after a broken body does.
+    #[inline(never)]
+    fn row_around_kept_lambda_body_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let pending = self.output.pending_tokens()?;
+        let outer = groups
+            .ancestors(groups.enclosing(first)?)
+            .take_while(|&id| groups.get(id).delimiter == Delimiter::Paren)
+            .last()?;
+        let open = groups.get(outer).open;
+        let kept_body = |brace: usize| {
+            groups
+                .opened_at(brace)
+                .filter(|&body| self.tree.blocks.kind(body) == Some(BlockKind::Lambda))
+                .filter(|_| {
+                    self.tree.previous_code_token(brace).is_some_and(|before| {
+                        matches!(&tokens[before], Token::Symbol(')'))
+                            || matches!(&tokens[before], Token::Word(word) if word == "const" || word == "noexcept")
+                    })
+                })
+                .and_then(|body| groups.get(body).close)
+                .is_some_and(|close| {
+                    if brace >= pending.first {
+                        // A row inside the lambda's parameters keeps its
+                        // place.
+                        let parameters = (pending.first..brace)
+                            .rev()
+                            .find(|&index| matches!(tokens[index], Token::Symbol(')')))
+                            .and_then(|paren| groups.closed_at(paren));
+                        // In a constructor's initializers astyle reads the
+                        // body as the constructor's, past the row's place.
+                        close <= pending.last
+                            && parameters.is_none_or(|parameters| {
+                                groups.get(parameters).open >= first
+                            })
+                            && self
+                                .layout
+                                .frame_stack
+                                .active_constructor_initializer()
+                                .is_none()
+                    } else {
+                        self.output.line_with_token(brace).is_some()
+                            && self.output.line_with_token(brace)
+                                == self.output.line_with_token(close)
+                    }
+                })
+        };
+        if !(open + 1..=pending.last)
+            .any(|index| matches!(tokens[index], Token::Symbol('{')) && kept_body(index))
+        {
+            return None;
+        }
+        let line = self.statement_start_line(self.output.line_with_token(open)?);
+        Some(self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces())
     }
 
     /// The output line on which the statement continued on output line
