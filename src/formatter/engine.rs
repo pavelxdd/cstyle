@@ -41,7 +41,9 @@ use crate::formatter::syntax::{
     template_openers,
 };
 use crate::formatter::text::columns;
-use crate::formatter::text::line_scan::{ContainsAnyByte, after_leading_comments};
+use crate::formatter::text::line_scan::{
+    ContainsAnyByte, after_leading_comments, holds_code_after_leading_comments,
+};
 use crate::formatter::text::line_scan::{
     line_ends_with_comment, line_paren_imbalance, unmatched_open_paren_column,
     unmatched_open_paren_columns,
@@ -2150,7 +2152,10 @@ impl<'a> FormatEngine<'a> {
             self.layout.continuation_indent.logical_chain_indent_spaces = None;
             self.previous_was_newline = true;
         } else if self.is_continuation_break()
-            && !(self.current_is_preindented && self.current.trimmed_end().ends_with("*/"))
+            // A comment line continues nothing; code a comment leads does.
+            && !(self.current_is_preindented
+                && self.current.trimmed_end().ends_with("*/")
+                && !holds_code_after_leading_comments(&self.current))
         {
             self.finish_continuation_line_at_newline();
         } else if self.current.trimmed_end().ends_with(';')

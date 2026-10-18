@@ -16592,3 +16592,11 @@ fn a_nested_list_spanning_rows_breaks_after_its_brace_whatever_its_first_element
         check(&input, &["--style=kr"], &expected);
     }
 }
+
+#[test]
+fn a_row_past_a_directive_continues_a_statement_a_trailing_block_comment_ends() {
+    let input = "void f()\n{\n    /* note */ result = ready   /* first */\n#ifdef FEATURE\n                        ? first(value)\n#endif\n                        : second(value);\n}\n";
+    check(input, &["--style=linux"], input);
+    let line_comment = input.replace("/* first */", "// first");
+    check(&line_comment, &["--style=linux"], &line_comment);
+}
