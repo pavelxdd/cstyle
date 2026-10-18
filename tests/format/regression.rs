@@ -9170,6 +9170,24 @@ fn rows_of_a_trailing_comment_in_a_case_block_stand_as_written() {
 }
 
 #[test]
+fn rows_of_a_comment_run_in_after_nested_element_braces_keep_their_offset() {
+    let input = "void f()\n{\n  struct Item items[] = {\n    {\n      /* first row\n         second row */\n      \"first\", \"second\"\n    },\n  };\n}\n";
+    for (style, expected) in [
+        (
+            "--style=horstmann",
+            "void f()\n{   struct Item items[] =\n    {   {   /* first row\n               second row */\n            \"first\", \"second\"\n        },\n    };\n}\n",
+        ),
+        (
+            "--style=pico",
+            "void f()\n{   struct Item items[] =\n    {   {   /* first row\n               second row */\n            \"first\", \"second\" }, }; }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
 fn an_argument_after_a_lambda_body_stands_at_the_statement_under_any_conditional_indent() {
     let input = "void f()\n{\n    return call([] {\n        go();\n    }, value,\n                other);\n}\n";
     let expected =

@@ -3312,6 +3312,7 @@ impl FormatEngine<'_> {
             self.token_input.token_source_column + self.options.indent_width.saturating_sub(1)
         } else if self.token_input.token_begins_source_line
             || self.token_input.token_line_opens_with_brace
+            || self.comment_follows_braces_only()
         {
             self.token_input.token_source_column
         } else {
@@ -3678,6 +3679,20 @@ impl FormatEngine<'_> {
                 }
             }
         }
+    }
+
+    /// Whether only opening braces stand before the active comment on its
+    /// source line, which the comment's rows follow as they follow one.
+    fn comment_follows_braces_only(&self) -> bool {
+        self.current.active_comment().is_some_and(|opener| {
+            let mut before = self.tree.tokens[..opener]
+                .iter()
+                .rev()
+                .take_while(|token| !matches!(token, Token::Newline))
+                .filter(|token| !matches!(token, Token::Whitespace(_)))
+                .peekable();
+            before.peek().is_some() && before.all(|token| matches!(token, Token::Symbol('{')))
+        })
     }
 
     /// The lead of a comment row at `column`: astyle indents it as the
