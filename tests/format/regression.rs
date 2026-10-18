@@ -9018,6 +9018,15 @@ fn a_label_kept_after_a_case_block_closer_leaves_the_block_at_its_label() {
 }
 
 #[test]
+fn a_lambda_with_template_parameters_opens_its_body_as_any_lambda() {
+    let input = "void f()\n{\n    auto add = []<typename T>(T a, T b) {\n        return a + b;\n    };\n    call([]<class T>(T a) {\n        go(a);\n    });\n}\n";
+    let expected = "void f()\n{\tauto add = []<typename T>(T a, T b)\n\t{\treturn a + b; };\n\tcall([]<class T>(T a)\n\t{\tgo(a); }); }\n";
+    let args = ["--style=pico", "--indent=tab=4"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
+
+#[test]
 fn vtk_sets_a_function_try_block_at_the_function_body() {
     let input = "void helper()\ntry {\n    go();\n} catch (...) {\n    stop();\n}\n";
     let expected = "void helper()\ntry\n{\n    go();\n}\ncatch (...)\n{\n    stop();\n}\n";

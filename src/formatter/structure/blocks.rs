@@ -321,17 +321,71 @@ fn ends_with_value_capture(tokens: &[Token], groups: &Groups, head: &[usize]) ->
 /// its parameters.
 fn has_lambda_capture(tokens: &[Token], groups: &Groups, head: &[usize]) -> bool {
     let specifier = |index: usize| is_lambda_specifier(&tokens[index]);
-    head.windows(2).any(|pair| {
-        matches!(tokens[pair[0]], Token::Symbol('['))
+    head.iter().enumerate().any(|(position, &index)| {
+        matches!(tokens[index], Token::Symbol('['))
             && groups
-                .opened_at(pair[0])
+                .opened_at(index)
                 .and_then(|id| groups.get(id).close)
                 .is_some()
-            && matches!(tokens[pair[1]], Token::Symbol('('))
+            && after_template_parameters(tokens, &head[position + 1..])
+                .first()
+                .is_some_and(|&next| matches!(tokens[next], Token::Symbol('(')))
     }) || head
         .iter()
         .rposition(|&index| matches!(tokens[index], Token::Symbol('[')))
         .is_some_and(|capture| head[capture + 1..].iter().all(|&index| specifier(index)))
+}
+
+/// The code token before the template parameter list that the `>` at
+/// `close` ends.
+fn before_template_parameters(tokens: &[Token], close: usize) -> Option<usize> {
+    if !matches!(&tokens[close], Token::Operator(operator) if operator == ">") {
+        return None;
+    }
+    let mut depth = 0usize;
+    let mut index = close;
+    loop {
+        if let Token::Operator(operator) = &tokens[index] {
+            match operator.as_str() {
+                ">" => depth += 1,
+                ">>" => depth += 2,
+                "<" => depth = depth.saturating_sub(1),
+                _ => {}
+            }
+            if depth == 0 {
+                return previous_code_token(tokens, index);
+            }
+        }
+        if matches!(tokens[index], Token::Symbol(';' | '{' | '}')) {
+            return None;
+        }
+        index = previous_code_token(tokens, index)?;
+    }
+}
+
+/// `head` past a template parameter list leading it, as a lambda's
+/// `<typename T>` after its capture list.
+fn after_template_parameters<'a>(tokens: &[Token], head: &'a [usize]) -> &'a [usize] {
+    if !head.first().is_some_and(
+        |&first| matches!(&tokens[first], Token::Operator(operator) if operator == "<"),
+    ) {
+        return head;
+    }
+    let mut depth = 0usize;
+    for (position, &index) in head.iter().enumerate() {
+        if let Token::Operator(operator) = &tokens[index] {
+            match operator.as_str() {
+                "<" => depth += 1,
+                ">" => depth = depth.saturating_sub(1),
+                ">>" => depth = depth.saturating_sub(2),
+                _ => {}
+            }
+            if depth == 0 {
+                return &head[position + 1..];
+            }
+        }
+    }
+    head
 }
 
 /// A brace inside an expression: a lambda body after a capture list, a
@@ -386,6 +440,13 @@ fn classify_after_paren(
     let Some(before) = previous_code_token(tokens, open) else {
         return BlockKind::CompoundLiteral;
     };
+    // A lambda's template parameters stand between its captures and its
+    // parameters, as in `[]<typename T>(T value) {`.
+    if before_template_parameters(tokens, before)
+        .is_some_and(|index| matches!(tokens[index], Token::Symbol(']')))
+    {
+        return BlockKind::Lambda;
+    }
     match &tokens[before] {
         Token::Word(word) if is_control_keyword(word) && !follows_type(tokens, before) => {
             BlockKind::Control
@@ -652,6 +713,12 @@ mod tests {
                 "void f() {\n    auto g = [&] {\n    };\n    return [value] mutable {\n    };\n    int values[2] {1, 2};\n}\n"
             ),
             [FunctionBody, Lambda, Lambda, Initializer]
+        );
+        assert_eq!(
+            kinds(
+                "void f() {\n    auto add = []<typename T>(T a, T b) {\n    };\n    call([]<class T>(T a) {\n    });\n}\n"
+            ),
+            [FunctionBody, Lambda, Lambda]
         );
     }
 }
