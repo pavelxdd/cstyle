@@ -977,9 +977,6 @@ impl FormatEngine<'_> {
             && matches!(tokens[element], Token::Symbol('{'))
             && let Some(line) = self.output.line_with_token(element)
             && self.output.line_tokens(line)?.first == element
-            // A comment leading that row stands at the comments' column.
-            && !(self.output.trimmed(line).starts_with("/*")
-                && self.should_indent_brace_line(BraceType::Initializer))
         {
             // At file scope only: within a block the rows already stand at
             // the indented brace.

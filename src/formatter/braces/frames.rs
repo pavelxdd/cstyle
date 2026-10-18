@@ -607,7 +607,8 @@ impl FormatEngine<'_> {
             .frame_stack
             .active_constructor_initializer()
             .is_some();
-        let body_uses_brace_column = code == "{"
+        // Comments leading the brace's line take no part in it.
+        let body_uses_brace_column = after_leading_comments(code) == "{"
             && self.layout.frame_stack.active_brace().is_some_and(|frame| {
                 self.options.brace_style == BraceStyle::Whitesmith
                     || self.options.brace_style == BraceStyle::Vtk

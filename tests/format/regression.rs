@@ -17451,3 +17451,19 @@ fn a_comment_led_lambda_closer_after_an_inner_lambda_closes_at_its_own_head() {
     let expected = "void f()\n{\n    outer([&] {\n        inner([] {\n            go();\n        },\n        first);\n        /* note */\n    },\n    second);\n}\n";
     check(input, &["--style=linux"], expected);
 }
+
+#[test]
+fn rows_inside_and_after_a_comment_led_multi_line_brace_row_stand_as_without_the_comment() {
+    let input = "void f()\n{\n    Handler handlers[] = {\n        /* note */ {\n            1, [] {\n                go();\n            }\n        },\n        { 2, nullptr },\n    };\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    Handler handlers[] =\n        {\n            /* note */ {\n            1, [] {\n                go();\n                }\n            },\n            { 2, nullptr },\n        };\n    }\n",
+    );
+    let input = "static const Item items[2] = {\n    /* 0 */ {\n        1,\n        2\n    },\n    { 3, 4 },\n};\n";
+    check(
+        input,
+        &["--style=vtk"],
+        "static const Item items[2] = {\n        /* 0 */ {\n        1,\n        2\n        },\n    { 3, 4 },\n};\n",
+    );
+}
