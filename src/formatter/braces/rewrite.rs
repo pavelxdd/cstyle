@@ -31,7 +31,7 @@ use crate::formatter::text::line_scan::{
     unmatched_open_paren_column,
 };
 use crate::formatter::text::trim::Trimmed;
-use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
+use crate::source::lex::{is_identifier_continue, is_word_char, leading_identifier, trailing_word};
 use std::collections::BTreeMap;
 
 impl FormatEngine<'_> {
@@ -2445,9 +2445,15 @@ impl FormatEngine<'_> {
             Some(false) => match self.layout.command_state.previous_command_char {
                 Some('=') => true,
                 Some(')') => self.current_ends_compound_literal_type(),
-                // A type's braces among arguments, as `Type{value}`, open no
-                // block.
-                Some(ch) => is_word_char(ch) && self.layout.nesting.paren_depth > 0,
+                // A type's braces among arguments or in a returned value, as
+                // `Type{value}`, open no block.
+                Some(ch) => {
+                    is_word_char(ch)
+                        && (self.layout.nesting.paren_depth > 0
+                            || leading_identifier(
+                                self.current[self.current.statement_start()..].trimmed_start(),
+                            ) == "return")
+                }
                 None => false,
             },
             None => matches!(

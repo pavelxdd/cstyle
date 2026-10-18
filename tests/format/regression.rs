@@ -18383,4 +18383,8 @@ fn a_braced_initializer_in_a_kept_one_line_body_keeps_its_brace_on_its_type() {
     check(expected, &["--style=pico"], expected);
     let input = "int run() { return visit(formatter{out}); }\n";
     check(input, &["--style=allman", "--keep-one-line-blocks"], input);
+    let input = "Item begin() {\n  return Item{stream};\n}\n";
+    let expected = "Item begin()\n{   return Item{stream }; }\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
 }
