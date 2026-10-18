@@ -5,13 +5,15 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::state::frame::{ConstructorInitializerFrame, ConstructorInitializerLayout};
 use crate::formatter::structure::blocks::is_code_token;
+use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::{language, scoped_name_is_constructor};
 use crate::formatter::text::columns::column_after;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
     after_leading_comments, has_unmatched_open_brace, inline_brace_pair_range,
-    is_comment_only_line, trailing_comment_split_limit, unmatched_open_paren_columns,
+    is_comment_only_line, line_paren_imbalance, trailing_comment_split_limit,
+    unmatched_open_paren_columns,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -526,7 +528,16 @@ impl FormatEngine<'_> {
             return None;
         }
         let base_indent = self.constructor_initializer_base_indent_spaces()?;
-        if self.layout.nesting.paren_depth > 0
+        // A row that closes the parens it starts in is still an argument.
+        let starts_in_parens = match self.output.pending_tokens() {
+            Some(span) => self
+                .tree
+                .groups
+                .enclosing(span.first)
+                .is_some_and(|group| self.tree.groups.get(group).delimiter == Delimiter::Paren),
+            None => self.layout.nesting.paren_depth > 0,
+        };
+        if starts_in_parens
             && previous_code.ends_with(',')
             && self.paren_closes_of(previous_code) == 0
         {
@@ -604,8 +615,27 @@ impl FormatEngine<'_> {
             (_, Some((hard, true))) => Some(hard),
             _ => None,
         }?;
+        // Parens a later line leaves open hold the row as any call's.
+        let mut depth = 0usize;
+        for index in decided + 1..self.output.len() {
+            let (closes, opens) = line_paren_imbalance(self.output.code_before_comment(index));
+            depth = depth.saturating_sub(closes) + opens.len();
+        }
+        if depth > 0 {
+            return None;
+        }
         let code = self.output.code_before_comment_trimmed(decided);
         self.arguments_after_open_paren_spaces(code)
+    }
+
+    /// Whether the last line in scope starts inside parens an earlier line
+    /// opened: an argument row, not an initializer's.
+    fn last_line_starts_in_parens(&self) -> bool {
+        self.output
+            .last_non_empty_index()
+            .and_then(|index| self.output.line_tokens(index))
+            .and_then(|span| self.tree.groups.enclosing(span.first))
+            .is_some_and(|group| self.tree.groups.get(group).delimiter == Delimiter::Paren)
     }
 
     /// Where the arguments of the call the line `code` leaves open stand:
@@ -700,7 +730,7 @@ impl FormatEngine<'_> {
         }
         let previous = self.output.last_non_empty_scoped()?;
         let previous_code = self.output.code_trimmed_of(previous);
-        if !previous_code.ends_with('(') {
+        if !previous_code.ends_with('(') || self.last_line_starts_in_parens() {
             return None;
         }
         let base = self.constructor_initializer_base_indent_spaces()?;

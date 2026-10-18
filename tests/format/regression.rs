@@ -16796,4 +16796,9 @@ fn arguments_of_a_call_a_constructor_initializer_line_ends_in_indent_past_the_en
     check(expected, &["--style=kr"], expected);
     let input = "Box::Box()\n    : one(\n          first),\n      two(make(first,\n               second))\n{\n}\n";
     check(input, &["--style=kr"], input);
+    // A call an argument row ends in sets its arguments as in any call.
+    let input = "Box::Box()\n    : two(make(first,\n               other(\n                   second,\n                   third),\n               last))\n{\n}\n";
+    check(input, &["--style=kr"], input);
+    let input = "Box::Box()\n    : two(make(first,\n               other(\n                   second,\n                   third)))\n{\n}\n";
+    check(input, &["--style=kr"], input);
 }
