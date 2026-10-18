@@ -16890,3 +16890,14 @@ fn allman_and_horstmann_break_a_range_for_list_brace_at_the_header_continuation(
     check(input, &["--style=horstmann"], expected);
     check(expected, &["--style=horstmann"], expected);
 }
+
+#[test]
+fn attach_styles_attach_a_constructor_body_after_an_initializer_list_closer() {
+    let input = "Holder::Holder()\n    : value_(1),\n      items_{\n          1,\n          2\n      }\n{\n}\n";
+    let expected = "Holder::Holder()\n    : value_(1),\n      items_{\n    1,\n    2\n} {\n}\n";
+    check(input, &["--style=java"], expected);
+    check(expected, &["--style=java"], expected);
+    // Styles breaking a function's brace keep it apart.
+    let expected = "Holder::Holder()\n    : value_(1),\n      items_{\n    1,\n    2\n}\n{\n}\n";
+    check(input, &["--style=kr"], expected);
+}

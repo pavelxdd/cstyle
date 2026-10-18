@@ -3695,6 +3695,24 @@ impl FormatEngine<'_> {
         }
         let objc_method_header =
             brace_type == BraceType::Definition && self.output_ends_objc_method_header();
+        // A constructor's body after the closer of its last initializer's
+        // list attaches to it.
+        let after_initializer_list =
+            matches!(brace_type, BraceType::Command | BraceType::Definition)
+                && matches!(
+                    self.options.brace_style,
+                    BraceStyle::Attach | BraceStyle::Ratliff | BraceStyle::Lisp
+                )
+                && self
+                    .layout
+                    .frame_stack
+                    .active_constructor_initializer()
+                    .is_some()
+                && self
+                    .output
+                    .last_non_empty_index()
+                    .and_then(|index| self.output.line_tokens(index))
+                    .is_some_and(|span| matches!(self.tree.tokens[span.last], Token::Symbol('}')));
         self.output.last().is_some_and(|last| {
             let line_comment_start = line_comment_split_limit(last);
             let comment_start = if line_comment_start < last.len() {
@@ -3710,7 +3728,8 @@ impl FormatEngine<'_> {
             if comment_start == last.len() {
                 return trimmed.ends_with(')')
                     || is_lambda_body_header(trimmed)
-                    || objc_method_header;
+                    || objc_method_header
+                    || after_initializer_list;
             }
             let comment = last[comment_start..].trimmed();
             if brace_type != BraceType::Command {
