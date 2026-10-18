@@ -3342,7 +3342,9 @@ impl FormatEngine<'_> {
             }
             return;
         }
+        // A brace the style brings up from a line of its own takes a space.
         let init_after_declarator = brace_type == BraceType::Initializer
+            && !self.token_input.token_begins_source_line
             && (self
                 .layout
                 .command_state
@@ -3629,6 +3631,10 @@ impl FormatEngine<'_> {
                 );
         if list_brace
             && (last.ends_with('=')
+                || self
+                    .current
+                    .active_token()
+                    .is_some_and(|brace| self.opens_declarator_list(brace))
                 || trailing_word(last) == language::RETURN
                 || last.ends_with_any(b",(") && self.layout.nesting.paren_depth > 0)
             && matches!(

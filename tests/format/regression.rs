@@ -9018,6 +9018,32 @@ fn a_label_kept_after_a_case_block_closer_leaves_the_block_at_its_label() {
 }
 
 #[test]
+fn a_braced_initializer_below_its_declarator_stands_as_one_after_an_assignment() {
+    let input = "void f()\n{\n    Item other\n    {   .first = 1,\n        .second = 2,\n    };\n    Item more\n    { .first = 1, .second = 2 };\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void f()\n{\n    Item other {\n        .first = 1,\n        .second = 2,\n    };\n    Item more\n    { .first = 1, .second = 2 };\n}\n",
+        ),
+        (
+            "--style=allman",
+            "void f()\n{\n    Item other\n    {\n        .first = 1,\n        .second = 2,\n    };\n    Item more\n    { .first = 1, .second = 2 };\n}\n",
+        ),
+        (
+            "--style=horstmann",
+            "void f()\n{   Item other\n    {   .first = 1,\n        .second = 2,\n    };\n    Item more\n    { .first = 1, .second = 2 };\n}\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void f()\n    {\n    Item other\n        {\n        .first = 1,\n        .second = 2,\n        };\n    Item more\n        { .first = 1, .second = 2 };\n    }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
 fn generic_selection_associations_keep_their_colons_and_rows() {
     // `default:` among a generic selection's associations labels nothing.
     for input in [

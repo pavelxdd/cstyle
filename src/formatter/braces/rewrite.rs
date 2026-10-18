@@ -1222,7 +1222,9 @@ impl FormatEngine<'_> {
         kept.then_some(BraceType::Array)
     }
 
-    fn previous_output_code_ends_assignment(&self) -> bool {
+    /// Whether the last output line of code ends with the `=`, or the
+    /// declarator, that the brace at `brace` opens the list of.
+    fn previous_output_code_ends_list_head(&self, brace: usize) -> bool {
         // Blank lines, comment lines and directives between the `=` and the
         // brace leave the assignment.
         self.output
@@ -1239,6 +1241,12 @@ impl FormatEngine<'_> {
                 self.output
                     .code_trimmed_of(&self.output[index])
                     .ends_with('=')
+                    || self.opens_declarator_list(brace)
+                        && self
+                            .tree
+                            .previous_code_token(brace)
+                            .and_then(|before| self.output.line_with_token(before))
+                            == Some(index)
             })
     }
 
@@ -1323,7 +1331,7 @@ impl FormatEngine<'_> {
             .or_else(|| {
                 // Comments leading the brace's line take no part in it.
                 (after_leading_comments(self.current.trimmed()).is_empty()
-                    && self.previous_output_code_ends_assignment())
+                    && self.previous_output_code_ends_list_head(start))
                 .then_some(BraceType::Initializer)
             })
             .or_else(|| {
@@ -1423,7 +1431,7 @@ impl FormatEngine<'_> {
             .flatten();
         if token_begins_line(tokens, start)
             && self.current_is_blank()
-            && self.previous_output_code_ends_assignment()
+            && self.previous_output_code_ends_list_head(start)
         {
             self.layout
                 .continuation_indent

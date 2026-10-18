@@ -2385,20 +2385,22 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let assign = self.tree.previous_code_token(first)?;
-        if !matches!(&tokens[assign], Token::Operator(operator) if operator == "=") {
+        // The list's head is its `=`, or its declarator for a braced
+        // initializer.
+        let head = self.tree.previous_code_token(first)?;
+        if !matches!(&tokens[head], Token::Operator(operator) if operator == "=")
+            && !self.opens_declarator_list(first)
+        {
             return None;
         }
-        let assign_line = self.output.line_with_token(assign)?;
+        let head_line = self.output.line_with_token(head)?;
         // A comment that followed the brace stays on the line it leaves.
-        let last = self.output.line_tokens(assign_line)?.last;
-        if (assign + 1..=last).any(|index| index != first && is_code_token(&tokens[index])) {
+        let last = self.output.line_tokens(head_line)?.last;
+        if (head + 1..=last).any(|index| index != first && is_code_token(&tokens[index])) {
             return None;
         }
         // The brace stands a level past the statement's first line.
-        let line = self
-            .output
-            .line_with_token(self.declaration_start(assign))?;
+        let line = self.output.line_with_token(self.declaration_start(head))?;
         Some(
             self.output.lead_width(line, self.options.tab_width)
                 + self.options.indent_width

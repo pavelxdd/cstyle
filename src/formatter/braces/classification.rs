@@ -442,6 +442,11 @@ impl FormatEngine<'_> {
             // An argument's brace after the line its `,` ended.
             || self.layout.command_state.previous_command_char == Some(',')
                 && self.layout.nesting.paren_depth > 0
+            // A braced initializer below its declarator's line.
+            || self
+                .current
+                .active_token()
+                .is_some_and(|brace| self.opens_declarator_list(brace))
         {
             BraceType::Initializer
         } else {

@@ -32,9 +32,10 @@ use crate::formatter::state::{
     CommandState, LineState, NestingState, PreviousToken, RunInState, TokenInputState, next_line,
 };
 use crate::formatter::structure::SourceTree;
-use crate::formatter::structure::blocks::{is_code_token, next_code_token};
+use crate::formatter::structure::blocks::{BlockKind, is_code_token, next_code_token};
 use crate::formatter::syntax::language::{
-    is_numeric_variable_word, is_type_like_pointer_word, is_unpad_kept_type_word,
+    is_non_type_keyword, is_numeric_variable_word, is_type_like_pointer_word,
+    is_unpad_kept_type_word,
 };
 use crate::formatter::syntax::{
     OperatorRole, SyntaxRoles, TemplateAngle, classify_syntax, known_template_angle_role,
@@ -831,6 +832,34 @@ impl<'a> FormatEngine<'a> {
     }
 
     /// Records how the next source line starts, before the newline token is pushed.
+    /// Whether the `{` at `brace` opens a braced initializer right after
+    /// its declarator, as in `Item value { 1, 2 };`, which stands as a
+    /// list after `=` does.
+    pub(crate) fn opens_declarator_list(&self, brace: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        matches!(tokens.get(brace), Some(Token::Symbol('{')))
+            && self
+                .tree
+                .groups
+                .opened_at(brace)
+                .is_some_and(|list| self.tree.blocks.kind(list) == Some(BlockKind::Initializer))
+            && self
+                .tree
+                .previous_code_token(brace)
+                .is_some_and(|before| match &tokens[before] {
+                    Token::Word(word) => {
+                        !is_non_type_keyword(word)
+                            && !matches!(
+                                word.as_str(),
+                                "break" | "continue" | "co_return" | "co_yield" | "co_await"
+                            )
+                    }
+                    Token::Symbol(']') => true,
+                    Token::Operator(operator) => operator == ">",
+                    _ => false,
+                })
+    }
+
     fn observe_next_line_lead(&mut self, tokens: &[Token], index: usize, line_start: usize) {
         let following_index = self.next_non_layout_token_index(0, tokens, index + 1);
         let following = following_index.map(|i| &tokens[i]);
@@ -875,6 +904,8 @@ impl<'a> FormatEngine<'a> {
             && self.colon_leads_class_base_clause();
         self.next_line.leads_with_comma = matches!(following, Some(Token::Symbol(',')));
         self.next_line.leads_with_open_brace = matches!(following, Some(Token::Symbol('{')));
+        self.next_line.leads_with_declarator_list =
+            following_index.is_some_and(|brace| self.opens_declarator_list(brace));
         self.next_line.leads_with_close_brace = matches!(following, Some(Token::Symbol('}')));
         self.next_line.leads_with_else =
             matches!(following, Some(Token::Word(word)) if word == "else");
@@ -2175,6 +2206,7 @@ impl<'a> FormatEngine<'a> {
             self.layout.objc.method_continuation = false;
             self.previous_was_newline = true;
         } else if self.next_line.leads_with_open_brace && self.current.trimmed_end().ends_with('[')
+            || self.next_line.leads_with_declarator_list
         {
             self.finish_line();
             self.previous_was_newline = true;
