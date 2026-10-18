@@ -17249,3 +17249,11 @@ fn a_lambda_closer_in_a_call_brace_list_stands_alike_after_any_earlier_list() {
     let expected = "void f()\n{\n    Handler h[] = {\n        { 2, 3 },\n    };\n    call({ [] {\n            go();\n        } });\n}\n";
     check(input, &["--style=kr"], expected);
 }
+
+#[test]
+fn a_lambda_head_ending_in_specifiers_keeps_its_brace_and_one_line_body_as_a_trailing_return_does()
+{
+    let input = "void f()\n{\n    auto a = []() constexpr -> int {\n        return 1;\n    };\n    auto b = [=]() mutable { return 1; };\n    auto c = [=]() -> int { return 1; };\n}\n";
+    check(input, &["--style=kr"], input);
+    check(input, &[], input);
+}

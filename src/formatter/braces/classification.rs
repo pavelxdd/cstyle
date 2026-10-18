@@ -472,6 +472,17 @@ impl FormatEngine<'_> {
             })
     }
 
+    /// Whether the line's lambda head carries specifiers such as `mutable`
+    /// after its parameters, before any trailing return type.
+    pub(super) fn current_lambda_head_has_specifiers(&self) -> bool {
+        let head = self.current.trimmed_end();
+        let head = self
+            .current
+            .last_arrow()
+            .map_or(head, |arrow| head[..arrow].trimmed_end());
+        without_lambda_specifiers(head).len() != head.len()
+    }
+
     pub(super) fn current_ends_trailing_return_definition(&self) -> bool {
         let mut lines = Vec::new();
         for line in self

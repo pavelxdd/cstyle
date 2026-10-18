@@ -1367,7 +1367,10 @@ impl FormatEngine<'_> {
                 .output
                 .last_non_empty_scoped()
                 .is_some_and(|line| is_lambda_body_header(self.output.code_trimmed_of(line)));
+        // Specifiers after the parameters keep a block on its line, as a
+        // trailing return type does.
         let lambda_header = self.current_is_lambda_body_header()
+            && !self.current_lambda_head_has_specifiers()
             || previous_line_lambda_header
             || (self.current.trimmed_end().ends_with(')')
                 && self.current.contains('[')
@@ -1772,13 +1775,15 @@ impl FormatEngine<'_> {
                         .trimmed_start()
                         .starts_with(header)
             });
-        let lambda_header = self.current_is_lambda_body_header()
+        let plain_lambda_header =
+            self.current_is_lambda_body_header() && !self.current_lambda_head_has_specifiers();
+        let lambda_header = plain_lambda_header
             || previous_line_lambda_header
             || (!control_header_line
                 && self.current.trimmed_end().ends_with(')')
                 && self.current.contains('[')
                 && self.current.contains(']'));
-        let parameterized_lambda_header = self.current_is_lambda_body_header()
+        let parameterized_lambda_header = plain_lambda_header
             || (self.current.trimmed_end().ends_with(')')
                 && self.current.contains('[')
                 && self.current.contains(']'));
