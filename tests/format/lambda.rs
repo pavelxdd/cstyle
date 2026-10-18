@@ -326,13 +326,13 @@ fn lambda_in_braced_initializer_preserves_source_brace_gap() {
 }
 
 #[test]
-fn parameterized_lambda_in_braced_initializer_uses_lambda_block_indent() {
+fn parameterized_lambda_in_braced_initializer_opens_its_body_from_the_list() {
     let source = fixture!(
         "void f()",
         "{",
         "    Handler observer {[&]() {",
-        "        ++count;",
-        "    }};",
+        "            ++count;",
+        "        }};",
         "}",
     );
 
@@ -355,8 +355,8 @@ fn one_line_parameterized_lambda_in_braced_initializer_breaks_body() {
             "void f()",
             "{",
             "    Handler observer {[&]() {",
-            "        ++count;",
-            "    }};",
+            "            ++count;",
+            "        }};",
             "}",
         )
     );

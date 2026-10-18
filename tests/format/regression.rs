@@ -17234,3 +17234,18 @@ fn comment_led_brace_rows_stand_where_the_rows_stand_without_the_comments() {
         "void f(void)\n{\n    static const int table[2][2] =\n        {\n            /* first */ { 1, 0 },\n            /* second */ { 1, 1 },\n        };\n    static const struct Item items[] =\n        {\n            { 0, 0 },\n#if FEATURE\n            { 1, 2 },\n            /* note */ { 3, 4 },\n#endif\n        };\n}\n",
     );
 }
+
+#[test]
+fn lambdas_in_a_call_brace_list_open_their_bodies_alike_whatever_their_heads() {
+    let input = "void f()\n{\n    call({ [] {\n        go();\n    } });\n    call({ [](int x) {\n        go(x);\n    } });\n    call({ []() mutable {\n        go();\n    } });\n    call({ [x]() noexcept {\n        go();\n    } });\n    call({ [] mutable {\n        go();\n    } });\n}\n";
+    let expected = "void f()\n{\n    call({ [] {\n            go();\n        } });\n    call({ [](int x) {\n            go(x);\n        } });\n    call({ []() mutable {\n            go();\n        } });\n    call({ [x]() noexcept {\n            go();\n        } });\n    call({ [] mutable {\n            go();\n        } });\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(input, &[], expected);
+}
+
+#[test]
+fn a_lambda_closer_in_a_call_brace_list_stands_alike_after_any_earlier_list() {
+    let input = "void f()\n{\n    Handler h[] = {\n        { 2, 3 },\n    };\n    call({ [] {\n        go();\n    } });\n}\n";
+    let expected = "void f()\n{\n    Handler h[] = {\n        { 2, 3 },\n    };\n    call({ [] {\n            go();\n        } });\n}\n";
+    check(input, &["--style=kr"], expected);
+}

@@ -273,6 +273,12 @@ fn opens_block_literal(tokens: &[Token], groups: &Groups, previous: usize) -> bo
 /// Whether `head` ends with a lambda's capture list, or a capture list and
 /// its parameters.
 fn has_lambda_capture(tokens: &[Token], groups: &Groups, head: &[usize]) -> bool {
+    let specifier = |index: usize| {
+        matches!(&tokens[index], Token::Word(word) if matches!(
+            word.as_str(),
+            "mutable" | "constexpr" | "consteval" | "static" | "noexcept"
+        ))
+    };
     head.windows(2).any(|pair| {
         matches!(tokens[pair[0]], Token::Symbol('['))
             && groups
@@ -281,8 +287,9 @@ fn has_lambda_capture(tokens: &[Token], groups: &Groups, head: &[usize]) -> bool
                 .is_some()
             && matches!(tokens[pair[1]], Token::Symbol('('))
     }) || head
-        .last()
-        .is_some_and(|&last| matches!(tokens[last], Token::Symbol('[')))
+        .iter()
+        .rposition(|&index| matches!(tokens[index], Token::Symbol('[')))
+        .is_some_and(|capture| head[capture + 1..].iter().all(|&index| specifier(index)))
 }
 
 /// A brace inside an expression: a lambda body after a capture list, a

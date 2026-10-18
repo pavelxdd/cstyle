@@ -38,15 +38,42 @@ pub(crate) fn is_lambda_body_header(head: &str) -> bool {
     is_lambda_body_header_with_arrow(head, head.rfind("->"))
 }
 
+/// `head` without the specifiers a lambda's declarator may end with.
+pub(crate) fn without_lambda_specifiers(head: &str) -> &str {
+    let mut head = head.trimmed_end();
+    loop {
+        let (rest, word) = match matching_open_index(head, '(', ')') {
+            Some(open) => {
+                let before = head[..open].trimmed_end();
+                (before, trailing_word(before))
+            }
+            None => (head, trailing_word(head)),
+        };
+        let specifier = if rest.len() == head.len() {
+            matches!(
+                word,
+                "mutable" | "constexpr" | "consteval" | "static" | "noexcept"
+            )
+        } else {
+            matches!(word, "noexcept" | "throw")
+        };
+        if !specifier {
+            return head;
+        }
+        head = rest[..rest.len() - word.len()].trimmed_end();
+    }
+}
+
 /// `is_lambda_body_header` of `head`, whose last `->` is at `arrow`.
 fn is_lambda_body_header_with_arrow(head: &str, arrow: Option<usize>) -> bool {
     let mut head = head.trimmed_end();
     if let Some(arrow) = arrow {
-        let before = head[..arrow].trimmed_end();
+        let before = without_lambda_specifiers(&head[..arrow]);
         if before.ends_with(')') {
             head = before;
         }
     }
+    let head = without_lambda_specifiers(head);
     if !head.ends_with(')') {
         return false;
     }
@@ -67,7 +94,7 @@ fn is_lambda_body_header_with_arrow(head: &str, arrow: Option<usize>) -> bool {
 }
 
 pub(crate) fn is_lambda_capture_header(head: &str) -> bool {
-    let head = head.trimmed_end();
+    let head = without_lambda_specifiers(head);
     if !head.ends_with(']') {
         return false;
     }

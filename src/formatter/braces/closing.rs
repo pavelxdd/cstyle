@@ -286,9 +286,10 @@ impl FormatEngine<'_> {
         if !line.trimmed_start().starts_with('}') {
             return None;
         }
+        // The line's leading `}` closes the body, whatever closes after it.
         self.layout
             .frame_stack
-            .last_closed_brace()
+            .first_closed_brace()
             .filter(|frame| frame.semantic_kind == BraceSemanticKind::Lambda)
             .map(|frame| {
                 // Styles indenting their closers close a body at its column.

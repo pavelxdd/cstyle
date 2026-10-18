@@ -1469,22 +1469,18 @@ impl FormatEngine<'_> {
         let opens_lambda_body = line_opens_lambda_body || previous_line_opens_lambda_body;
         let lambda_header_indent = if line_opens_lambda_body {
             let structural_indent = self.continuation_base_indent() * self.options.indent_width;
+            // A lambda among a list's elements opens from the list's body.
             Some(
-                capture_only_lambda
-                    .then(|| {
-                        self.layout
-                            .frame_stack
-                            .active_brace()
-                            .filter(|frame| {
-                                matches!(
-                                    frame.semantic_kind,
-                                    BraceSemanticKind::Array | BraceSemanticKind::Initializer
-                                )
-                            })
-                            .map(|frame| frame.body_indent_column)
+                self.layout
+                    .frame_stack
+                    .active_brace()
+                    .filter(|frame| {
+                        matches!(
+                            frame.semantic_kind,
+                            BraceSemanticKind::Array | BraceSemanticKind::Initializer
+                        )
                     })
-                    .flatten()
-                    .unwrap_or(structural_indent),
+                    .map_or(structural_indent, |frame| frame.body_indent_column),
             )
         } else {
             previous_lambda_header.as_ref().map(|(_, indent)| *indent)
