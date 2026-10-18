@@ -189,6 +189,8 @@ struct OpenBraceLambda {
     previous_line_opens_body: bool,
     opens_body: bool,
     header_indent: Option<usize>,
+    /// The column of the line whose lambda head the brace ends.
+    line_indent: Option<usize>,
 }
 
 /// A single-line comment token that directly follows the brace on its line.
@@ -1478,8 +1480,8 @@ impl FormatEngine<'_> {
             .flatten();
         let previous_line_opens_lambda_body = previous_lambda_header.is_some();
         let opens_lambda_body = line_opens_lambda_body || previous_line_opens_lambda_body;
+        let structural_indent = self.continuation_base_indent() * self.options.indent_width;
         let lambda_header_indent = if line_opens_lambda_body {
-            let structural_indent = self.continuation_base_indent() * self.options.indent_width;
             // A lambda among a list's elements opens from the list's body.
             Some(
                 self.layout
@@ -1516,6 +1518,7 @@ impl FormatEngine<'_> {
             previous_line_opens_body: previous_line_opens_lambda_body,
             opens_body: opens_lambda_body,
             header_indent: lambda_header_indent,
+            line_indent: line_opens_lambda_body.then_some(structural_indent),
         }
     }
 
@@ -2423,15 +2426,13 @@ impl FormatEngine<'_> {
             if line_opens_lambda_body
                 && self.current_is_preindented
                 && is_comment_line(&self.current)
-                && let Some(spaces) = lambda.header_indent
+                && let Some(spaces) = lambda.line_indent
             {
                 let prefix = self
                     .options
                     .continuation_indent_prefix(spaces / self.options.indent_width.max(1), spaces);
-                let code = self.current.trimmed_start().to_string();
-                self.clear_current();
-                self.current.push_str(&prefix);
-                self.current.push_str(&code);
+                let line = format!("{prefix}{}", self.current.trimmed_start());
+                self.current.replace(line);
                 self.current_is_preindented = true;
                 self.comments.comment_keeps_line_column = true;
             }
