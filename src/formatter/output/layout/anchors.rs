@@ -2170,6 +2170,7 @@ impl FormatEngine<'_> {
         }
         let spaces = self
             .braceless_body_indent(code)
+            .or_else(|| self.lambda_body_indent_spaces_after_opening_brace(&LineView::new(trimmed)))
             .or_else(|| {
                 self.tree
                     .statements

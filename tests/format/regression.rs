@@ -17347,3 +17347,11 @@ fn vtk_keeps_comment_led_rows_of_a_flush_file_scope_list_at_its_rows() {
         "static const Item items[2] = {\n    /* 0 */ { 1, 0 },\n    /* 1 */ { 1, 1 },\n};\n";
     check(input, &["--style=vtk"], input);
 }
+
+#[test]
+fn a_lambda_body_row_in_a_call_brace_list_stands_at_the_body_after_a_comment_or_directive() {
+    let input = "void f()\n{\n    call({ [x]() {\n        /* note */ go();\n    } });\n#ifdef FEATURE\n    call({ [x]() {\n#endif\n        go();\n    } });\n}\n";
+    let expected = "void f()\n{\n    call({ [x]() {\n            /* note */ go();\n        } });\n#ifdef FEATURE\n    call({ [x]() {\n#endif\n            go();\n        } });\n}\n";
+    check(input, &["--style=allman"], expected);
+    check(input, &["--style=kr"], expected);
+}

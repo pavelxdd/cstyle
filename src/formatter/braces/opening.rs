@@ -426,14 +426,25 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
     ) -> Option<usize> {
         let line_start = line.trimmed_start();
+        // The body's first row follows the brace, whatever directives
+        // stand between them.
+        let follows_lambda_brace = || {
+            self.output
+                .pending_tokens()
+                .and_then(|span| self.tree.previous_code_token(span.first))
+                .filter(|&brace| matches!(self.tree.tokens[brace], Token::Symbol('{')))
+                .and_then(|brace| self.tree.groups.opened_at(brace))
+                .is_some_and(|body| self.tree.blocks.kind(body) == Some(BlockKind::Lambda))
+        };
         if line_start.starts_with_any(b"{}")
             || line.trimmed_end().ends_with('{')
             || is_lambda_body_header(line_start)
             || current_ends_block_literal_header(line.trimmed_end())
-            || !self
+            || !(self
                 .output
                 .last_line_outside_comment()
                 .is_some_and(|previous| self.output.code_trimmed_of(previous).ends_with('{'))
+                || follows_lambda_brace())
         {
             return None;
         }
