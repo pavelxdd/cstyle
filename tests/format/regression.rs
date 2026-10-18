@@ -16970,7 +16970,7 @@ fn a_designator_row_after_a_ternary_designator_of_an_earlier_list_stands_at_the_
 
 #[test]
 fn a_message_keyword_after_a_block_closer_is_no_label() {
-    let input = "- (void)run\n{\n    [view animate:^ {\n          go();\n    } completion:^(BOOL finished) {\n        stop();\n    }];\n}\n";
+    let input = "- (void)run\n{\n    [view animate:^ {\n        go();\n    } completion:^(BOOL finished) {\n        stop();\n    }];\n}\n";
     check(input, &["--style=kr"], input);
     check(input, &[], input);
 }
@@ -16986,4 +16986,21 @@ fn a_parameterless_block_literal_kept_on_one_line_stays_whole() {
     let expected = "- (void)run\n{\n    [view animate:^ { go(); }];\n    [view animate:[^ { go(); } copy]];\n}\n";
     check(input, &["--style=kr"], expected);
     check(input, &["--style=allman"], expected);
+}
+
+#[test]
+fn a_block_literal_in_a_message_lays_out_as_in_a_call() {
+    let input = "- (void)run\n{\n    dispatch_async(q, ^{\n        go();\n    });\n    [view animate:^{\n        go();\n    }];\n    x = [view animate:^{\n        go();\n    }];\n    [view animate:nil\n          completion:^{\n        go();\n    }];\n    [view animate:^{\n        if (a) {\n            go();\n        }\n    }];\n}\n";
+    let expected = "- (void)run\n{\n    dispatch_async(q, ^ {\n        go();\n    });\n    [view animate:^ {\n        go();\n    }];\n    x = [view animate:^ {\n        go();\n    }];\n    [view animate:nil\n          completion:^ {\n        go();\n    }];\n    [view animate:^ {\n        if (a) {\n            go();\n        }\n    }];\n}\n";
+    check(input, &["--style=kr"], expected);
+    let expected = "- (void)run\n{\n    dispatch_async(q, ^\n    {\n        go();\n    });\n    [view animate:^\n    {\n        go();\n    }];\n}\n";
+    let input = "- (void)run\n{\n    dispatch_async(q, ^{\n        go();\n    });\n    [view animate:^{\n        go();\n    }];\n}\n";
+    check(input, &["--style=allman"], expected);
+}
+
+#[test]
+fn arguments_after_a_closure_closer_stand_at_the_closer() {
+    let input = "void run()\n{\n    call(a,\n         b, [] {\n        go();\n    },\n    other,\n    more);\n    call(a,\n         b, ^{\n        go();\n    },\n    other,\n    more);\n}\n";
+    let expected = "void run()\n{\n    call(a,\n    b, [] {\n        go();\n    },\n    other,\n    more);\n    call(a,\n    b, ^ {\n        go();\n    },\n    other,\n    more);\n}\n";
+    check(input, &["--style=kr"], expected);
 }

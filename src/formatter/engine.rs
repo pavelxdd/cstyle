@@ -1281,6 +1281,15 @@ impl<'a> FormatEngine<'a> {
                 .next_input_line_continuation_indent
                 .take()
         };
+        self.layout
+            .continuation_indent
+            .input_line_follows_lambda_body = !(directive || empty)
+            && std::mem::take(
+                &mut self
+                    .layout
+                    .continuation_indent
+                    .next_input_line_follows_lambda_body,
+            );
         self.layout.line_state.passed_semicolon = false;
         self.layout.line_state.passed_colon = false;
         self.layout.line_state.ternary_colon = false;
@@ -2297,6 +2306,8 @@ impl<'a> FormatEngine<'a> {
                 saved_indent
             };
         let indent = saved_indent.unwrap_or_else(|| self.next_continuation_indent());
+        let follows_lambda_body =
+            saved_indent.is_none() && self.continues_arguments_after_lambda_body();
         let one_shot_indent = saved_indent
             .is_none()
             .then(|| {
@@ -2360,6 +2371,9 @@ impl<'a> FormatEngine<'a> {
                 self.set_next_continuation_indent(ContinuationIndent::Spaces(spaces));
             } else {
                 self.set_next_continuation_indent(indent);
+                self.layout
+                    .continuation_indent
+                    .next_input_line_follows_lambda_body = follows_lambda_body;
             }
         }
         if case_label_with_comment && let Some(previous) = self.output.last() {

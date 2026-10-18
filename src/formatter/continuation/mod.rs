@@ -17,6 +17,7 @@ use crate::formatter::output::buffer::OutputBuffer;
 use crate::formatter::state::frame::{BraceSemanticKind, ColonRole, LogicalOperator};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
+use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::language::{is_leading_continuation_operator, is_macro_like_word};
 use crate::formatter::syntax::{
     assignment_declarator_offset, function_head_has_assignment, function_name_start, language,
@@ -49,6 +50,10 @@ pub(crate) struct ContinuationIndentState {
     pub(crate) logical_chain_indent_spaces: Option<usize>,
     pub(crate) after_one_shot_continuation_indent: Option<ContinuationIndent>,
     pub(crate) clear_continuation_after_line: Option<usize>,
+    /// The next input line goes on with a call's arguments after a lambda's
+    /// body.
+    pub(crate) next_input_line_follows_lambda_body: bool,
+    pub(crate) input_line_follows_lambda_body: bool,
 }
 
 impl ContinuationIndentState {
@@ -883,20 +888,40 @@ impl FormatEngine<'_> {
             && self.layout.nesting.paren_depth == 0
     }
 
-    pub(crate) fn next_continuation_indent(&self) -> ContinuationIndent {
-        // An argument after the closer of a lambda's body a style indents
-        // stands at the statement, as after a closer at the statement.
-        if matches!(
-            self.options.brace_style,
-            BraceStyle::Whitesmith | BraceStyle::Vtk
-        ) && self.current.trimmed_start().starts_with('}')
-            && self.current.trimmed_end().ends_with(',')
+    /// Whether the current line goes on with the arguments of a call
+    /// that a lambda's body spanning lines has passed: those stand at the
+    /// statement, as the body's closer does.
+    pub(crate) fn continues_arguments_after_lambda_body(&self) -> bool {
+        if !self.current.trimmed_end().ends_with(',') {
+            return false;
+        }
+        let Some(lambda) = self
+            .layout
+            .frame_stack
+            .last_closed_brace()
+            .filter(|frame| frame.semantic_kind == BraceSemanticKind::Lambda)
+        else {
+            return false;
+        };
+        let Some(close_line) = lambda.close_output_line else {
+            return false;
+        };
+        let Some(call) = self.layout.frame_stack.active_delimiter() else {
+            return false;
+        };
+        let groups = &self.tree.groups;
+        lambda.open_output_line < close_line
+            && call.opener_output_line <= lambda.open_output_line
             && self
-                .layout
-                .frame_stack
-                .last_closed_brace()
-                .is_some_and(|frame| frame.semantic_kind == BraceSemanticKind::Lambda)
-        {
+                .current
+                .tokens()
+                .and_then(|span| self.tree.previous_code_token(span.last + 1))
+                .and_then(|comma| groups.enclosing(comma))
+                .is_some_and(|group| groups.get(group).delimiter == Delimiter::Paren)
+    }
+
+    pub(crate) fn next_continuation_indent(&self) -> ContinuationIndent {
+        if self.continues_arguments_after_lambda_body() {
             return ContinuationIndent::Level(self.statement_level());
         }
         if self.current_case_label_continues() {
@@ -2075,6 +2100,9 @@ impl FormatEngine<'_> {
         self.layout
             .continuation_indent
             .next_input_line_continuation_indent = Some(indent);
+        self.layout
+            .continuation_indent
+            .next_input_line_follows_lambda_body = false;
         let level = match indent {
             ContinuationIndent::Level(level) => {
                 self.layout.continuation_indent.set_next_line_level(level);

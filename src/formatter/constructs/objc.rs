@@ -177,6 +177,29 @@ impl FormatEngine<'_> {
         objc_message_following_keyword_column(line)
     }
 
+    fn pending_line_in_block_body(&self) -> bool {
+        let Some(span) = self.output.pending_tokens() else {
+            return false;
+        };
+        let groups = &self.tree.groups;
+        groups
+            .enclosing(span.first)
+            .is_some_and(|group| groups.get(group).delimiter == Delimiter::Brace)
+    }
+
+    /// Whether the pending line stands directly within a message's
+    /// brackets.
+    pub(crate) fn pending_line_in_message(&self) -> bool {
+        let Some(span) = self.output.pending_tokens() else {
+            return false;
+        };
+        let groups = &self.tree.groups;
+        groups
+            .enclosing(span.first)
+            .is_some_and(|group| groups.get(group).delimiter == Delimiter::Bracket)
+            && !self.pending_line_in_subscript()
+    }
+
     fn pending_line_in_subscript(&self) -> bool {
         let Some(span) = self.output.pending_tokens() else {
             return false;
@@ -415,6 +438,8 @@ impl FormatEngine<'_> {
         } else if let Some(align) = self.layout.objc.message_align
             // A closer stands at its bracket, not at the message's rows.
             && !line_start.starts_with_any(b"{}]")
+            // A block's body stands at its statement, as in a call.
+            && !self.pending_line_in_block_body()
         {
             let natural = exact_indent_spaces.unwrap_or_else(|| {
                 ContinuationIndent::Level(indent_level).columns(self.options.indent_width)

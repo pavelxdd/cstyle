@@ -1203,11 +1203,6 @@ impl FormatEngine<'_> {
             || previous_opens_paren
             || current.starts_with_any(b"<>/.&")
         {
-            if previous_comment_code.ends_with(',')
-                && let Some(spaces) = self.argument_after_lambda_call_argument_indent_spaces(line)
-            {
-                return Some(spaces);
-            }
             if last_code_ends_with_comma
                 && let Some(spaces) = self.closed_call_sibling_indent_spaces(line)
             {

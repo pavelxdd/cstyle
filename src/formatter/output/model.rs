@@ -11,6 +11,7 @@ pub(crate) struct LineReplayLayout {
     pub(crate) closed_lambda_parameter_list: bool,
     pub(crate) closed_split_lambda_parameter_list: bool,
     pub(crate) lambda_parameter_indent_spaces: Option<usize>,
+    pub(crate) follows_lambda_body: bool,
 }
 
 pub(crate) struct LineLayout {

@@ -173,6 +173,9 @@ fn classify(tokens: &[Token], groups: &Groups, blocks: &Blocks, id: GroupId) -> 
     let Some(previous) = previous_code_token(tokens, group.open) else {
         return BlockKind::Block;
     };
+    if opens_block_literal(tokens, groups, previous) {
+        return BlockKind::Lambda;
+    }
     let head = statement_head(tokens, groups, group.open);
     // Inside parentheses or brackets a brace belongs to an expression.
     if parent.is_some_and(|parent| groups.get(parent).delimiter != Delimiter::Brace) {
@@ -225,6 +228,39 @@ fn classify(tokens: &[Token], groups: &Groups, blocks: &Blocks, id: GroupId) -> 
         Token::Word(_) if !BlockKind::is_declaration_scope(parent_block) => BlockKind::Control,
         _ => BlockKind::Unknown,
     }
+}
+
+/// Whether a brace after the token at `previous` opens a block literal's
+/// body: `^{`, `^(int value) {` or `^Type *(int value) {`.
+fn opens_block_literal(tokens: &[Token], groups: &Groups, previous: usize) -> bool {
+    let mut index = previous;
+    if matches!(tokens[index], Token::Symbol(')')) {
+        let Some(paren) = groups.closed_at(index) else {
+            return false;
+        };
+        let Some(before) = previous_code_token(tokens, groups.get(paren).open) else {
+            return false;
+        };
+        index = before;
+        while matches!(&tokens[index], Token::Word(_))
+            || matches!(&tokens[index], Token::Operator(operator) if matches!(operator.as_str(), "*" | "&"))
+        {
+            let Some(before) = previous_code_token(tokens, index) else {
+                return false;
+            };
+            index = before;
+        }
+    }
+    if !matches!(&tokens[index], Token::Operator(operator) if operator == "^") {
+        return false;
+    }
+    previous_code_token(tokens, index).is_none_or(|before| {
+        matches!(
+            &tokens[before],
+            Token::Symbol('(' | ',' | '[' | ':' | '{' | ';' | '}')
+        ) || matches!(&tokens[before], Token::Operator(operator) if operator == "=")
+            || matches!(&tokens[before], Token::Word(word) if word == "return")
+    })
 }
 
 /// A brace inside an expression: a lambda body after a capture list, a

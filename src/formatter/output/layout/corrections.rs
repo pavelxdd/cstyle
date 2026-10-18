@@ -364,9 +364,7 @@ impl FormatEngine<'_> {
             && line_kind == LineKind::Normal
             && let Some(spaces) = replay.closed_delimiter_continuation_indent
             && !line_start.starts_with_any(b"#(){}")
-            && self
-                .argument_after_lambda_call_argument_indent_spaces(line)
-                .is_none()
+            && !replay.follows_lambda_body
             && !self.has_over_max_new_call_context()
             && self
                 .output

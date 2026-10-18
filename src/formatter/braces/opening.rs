@@ -1,7 +1,7 @@
 use crate::config::{BraceStyle, LineEnding};
 use crate::formatter::braces::classification::{
-    ExternCGuard, block_indent_extra, brace_indent_applies, is_lambda_body_header,
-    is_lambda_capture_header, is_namespace_or_module_block_header,
+    ExternCGuard, block_indent_extra, brace_indent_applies, current_ends_block_literal_header,
+    is_lambda_body_header, is_lambda_capture_header, is_namespace_or_module_block_header,
     lambda_header_has_trailing_return, line_ends_lambda_parameter_list,
     line_opens_lambda_or_capture_only_block, line_opens_parameterized_lambda_block,
 };
@@ -431,6 +431,7 @@ impl FormatEngine<'_> {
         if line_start.starts_with_any(b"{}")
             || line.trimmed_end().ends_with('{')
             || is_lambda_body_header(line_start)
+            || current_ends_block_literal_header(line.trimmed_end())
             || !self
                 .output
                 .last_line_outside_comment()
@@ -1448,7 +1449,9 @@ impl FormatEngine<'_> {
 
     fn open_brace_lambda_context(&mut self) -> OpenBraceLambda {
         let capture_only_lambda = is_lambda_capture_header(self.current.trimmed_end());
-        let line_opens_lambda_body = self.current_is_lambda_body_header() || capture_only_lambda;
+        let line_opens_lambda_body = self.current_is_lambda_body_header()
+            || capture_only_lambda
+            || current_ends_block_literal_header(self.current.trimmed_end());
         let previous_lambda_header = (!line_opens_lambda_body)
             .then(|| self.current_split_lambda_body_header())
             .flatten();

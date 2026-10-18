@@ -66,6 +66,12 @@ impl FormatEngine<'_> {
             closed_lambda_parameter_list,
             closed_split_lambda_parameter_list,
             lambda_parameter_indent_spaces,
+            follows_lambda_body: std::mem::take(
+                &mut self
+                    .layout
+                    .continuation_indent
+                    .input_line_follows_lambda_body,
+            ),
         }
     }
 }

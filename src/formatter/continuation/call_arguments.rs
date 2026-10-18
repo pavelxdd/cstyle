@@ -2391,55 +2391,6 @@ impl FormatEngine<'_> {
         }
         None
     }
-
-    pub(crate) fn argument_after_lambda_call_argument_indent_spaces(
-        &self,
-        line: &LineView<'_>,
-    ) -> Option<usize> {
-        let trimmed = line.trimmed_start();
-        if trimmed.is_empty() || trimmed.starts_with_any(b"#(){}") {
-            return None;
-        }
-        let previous = self.output.last_non_empty_scoped()?;
-        let previous_code = self.output.code_trimmed_of(previous);
-        if previous_code.ends_with(',') && self.previous_output_line_closes_lambda_body() {
-            return Some(leading_visual_width(previous, self.options.tab_width));
-        }
-        None
-    }
-
-    fn previous_output_line_closes_lambda_body(&self) -> bool {
-        let mut depth = 0usize;
-        for raw in self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .filter(|line| !line.trimmed().is_empty())
-        {
-            let code = self.output.code_trimmed_of(raw);
-            if depth == 0 && !code.trimmed_start().starts_with('}') {
-                return false;
-            }
-            for (index, ch) in code.char_indices().rev() {
-                match ch {
-                    '}' => depth += 1,
-                    '{' if depth > 0 => {
-                        depth -= 1;
-                        if depth == 0 {
-                            let head = code[..=index].trimmed_end();
-                            return line_opens_lambda_block(head)
-                                || head.trimmed().strip_suffix('{').is_some_and(|head| {
-                                    is_lambda_capture_header(head.trimmed_end())
-                                });
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-        false
-    }
 }
 
 pub(crate) fn line_opens_attachable_lambda_block(options: &FormatOptions, line: &str) -> bool {

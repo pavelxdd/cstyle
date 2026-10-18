@@ -202,16 +202,15 @@ impl FormatEngine<'_> {
                         * self.options.indent_width,
             );
         }
-        if line_opens_attachable_lambda_block(self.options, line) {
+        // A message's keyword row stands at its keywords whatever it passes.
+        if line_opens_attachable_lambda_block(self.options, line) && !self.pending_line_in_message()
+        {
             if let Some(spaces) = self.lambda_call_argument_after_split_indent_spaces(line) {
                 layout.exact_indent_spaces = Some(spaces);
             } else if !line_start.starts_with("/*") {
                 layout.indent = layout.normal_indent;
                 layout.exact_indent_spaces = None;
             }
-        }
-        if let Some(spaces) = self.argument_after_lambda_call_argument_indent_spaces(line) {
-            layout.exact_indent_spaces = Some(spaces);
         }
         if let Some(spaces) = self.call_argument_sibling_frame_indent_spaces(line) {
             layout.exact_indent_spaces = Some(spaces);

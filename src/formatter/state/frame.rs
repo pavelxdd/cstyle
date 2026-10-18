@@ -204,6 +204,7 @@ pub(crate) struct BraceFrame {
     pub(crate) body_indent_column: usize,
     pub(crate) sibling_indent_column: usize,
     pub(crate) split_header: bool,
+    pub(crate) open_output_line: usize,
     pub(crate) close_output_line: Option<usize>,
     pub(crate) close_ends_output_line: bool,
 }
@@ -1508,6 +1509,7 @@ mod tests {
             body_indent_column: 11,
             sibling_indent_column: 7,
             split_header: false,
+            open_output_line: 0,
             close_output_line: None,
             close_ends_output_line: false,
         });

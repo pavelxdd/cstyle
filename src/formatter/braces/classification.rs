@@ -27,6 +27,7 @@ pub(crate) fn line_opens_lambda_block(line: &str) -> bool {
         || head
             .rfind('[')
             .is_some_and(|index| is_lambda_body_header(head[index..].trimmed_start()))
+        || current_ends_block_literal_header(head)
 }
 
 pub(crate) fn is_lambda_body_header(head: &str) -> bool {
@@ -122,7 +123,7 @@ fn is_namespace_block_header(line: &str) -> bool {
         || trimmed.starts_with("inline namespace ")
 }
 
-fn current_ends_block_literal_header(head: &str) -> bool {
+pub(crate) fn current_ends_block_literal_header(head: &str) -> bool {
     let before = if head.ends_with('^') {
         head
     } else {

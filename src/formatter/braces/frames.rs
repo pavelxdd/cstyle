@@ -432,6 +432,7 @@ impl FormatEngine<'_> {
             body_indent_column,
             sibling_indent_column,
             split_header,
+            open_output_line: self.output.len(),
             close_output_line: None,
             close_ends_output_line: false,
         });
