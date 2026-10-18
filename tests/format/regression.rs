@@ -16863,3 +16863,18 @@ fn a_list_brace_broken_off_a_return_stands_as_one_broken_off_an_assignment() {
     let broken = "Item make()\n{\n    return\n    {\n        1,\n        2\n    };\n}\n";
     check(broken, &["--style=kr"], input);
 }
+
+#[test]
+fn run_in_and_ratliff_styles_set_a_range_for_list_at_the_header_continuation() {
+    let input = "void f()\n{\n    for (auto value : {\n             1, 2, 3\n         }) {\n        go(value);\n    }\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    for (auto value : {\n                1, 2, 3\n            }) {\n        go(value);\n        }\n    }\n",
+    );
+    check(
+        input,
+        &["--style=lisp"],
+        "void f() {\n    for (auto value : {\n                1, 2, 3 }) {\n        go(value); } }\n",
+    );
+}

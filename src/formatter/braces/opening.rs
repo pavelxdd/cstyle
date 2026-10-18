@@ -3368,7 +3368,10 @@ impl FormatEngine<'_> {
         if self.layout.nesting.paren_depth == 0
             || !matches!(
                 self.options.brace_style,
-                BraceStyle::OneTrueBrace | BraceStyle::Attach
+                BraceStyle::OneTrueBrace
+                    | BraceStyle::Attach
+                    | BraceStyle::Ratliff
+                    | BraceStyle::Lisp
             )
         {
             return None;
@@ -3382,7 +3385,7 @@ impl FormatEngine<'_> {
     ) -> bool {
         matches!(
             self.options.brace_style,
-            BraceStyle::OneTrueBrace | BraceStyle::Attach
+            BraceStyle::OneTrueBrace | BraceStyle::Attach | BraceStyle::Ratliff | BraceStyle::Lisp
         ) && matches!(
             brace_type,
             BraceType::Array
