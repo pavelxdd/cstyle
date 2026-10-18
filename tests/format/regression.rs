@@ -16600,3 +16600,13 @@ fn a_row_past_a_directive_continues_a_statement_a_trailing_block_comment_ends() 
     let line_comment = input.replace("/* first */", "// first");
     check(&line_comment, &["--style=linux"], &line_comment);
 }
+
+#[test]
+fn vtk_indents_the_braces_of_a_method_of_a_type_inside_a_function_like_its_type() {
+    let input = "void f()\n{\n    struct Local\n    {\n        void run()\n        {\n            go();\n        }\n        int value;\n    };\n    use();\n}\n";
+    let expected = "void f()\n{\n    struct Local\n        {\n        void run()\n            {\n            go();\n            }\n        int value;\n        };\n    use();\n}\n";
+    check(input, &["--style=vtk"], expected);
+    let input = "void f()\n{\n    if (ready)\n    {\n        class Local\n        {\n            struct Inner\n            {\n                int run() const\n                {\n                    return 1;\n                }\n            };\n            Local()\n            {\n                go();\n            }\n        };\n    }\n}\n";
+    let expected = "void f()\n{\n    if (ready)\n        {\n        class Local\n            {\n            struct Inner\n                {\n                int run() const\n                    {\n                    return 1;\n                    }\n                };\n            Local()\n                {\n                go();\n                }\n            };\n        }\n}\n";
+    check(input, &["--style=vtk"], expected);
+}

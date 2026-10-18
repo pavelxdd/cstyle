@@ -361,19 +361,23 @@ impl FormatEngine<'_> {
         );
         let vtk_indented_brace = self.options.brace_style == BraceStyle::Vtk
             && opening_indent > 0
-            && self.layout.frame_stack.active_brace().is_some_and(|frame| {
-                self.layout.nesting.brace_type_stack.last() == Some(&frame.brace_type)
-                    && !matches!(
-                        frame.semantic_kind,
-                        BraceSemanticKind::Definition | BraceSemanticKind::Aggregate
-                    )
-                    && !(frame.semantic_kind == BraceSemanticKind::Namespace
-                        && self.options.indent_namespaces)
-                    || matches!(
-                        frame.semantic_kind,
-                        BraceSemanticKind::Definition | BraceSemanticKind::Aggregate
-                    ) && self.should_indent_brace_line(frame.brace_type)
-            });
+            && self
+                .layout
+                .frame_stack
+                .brace_at_depth(self.layout.nesting.brace_type_stack.len())
+                .is_some_and(|frame| {
+                    self.layout.nesting.brace_type_stack.last() == Some(&frame.brace_type)
+                        && !matches!(
+                            frame.semantic_kind,
+                            BraceSemanticKind::Definition | BraceSemanticKind::Aggregate
+                        )
+                        && !(frame.semantic_kind == BraceSemanticKind::Namespace
+                            && self.options.indent_namespaces)
+                        || matches!(
+                            frame.semantic_kind,
+                            BraceSemanticKind::Definition | BraceSemanticKind::Aggregate
+                        ) && self.should_indent_brace_line(frame.brace_type)
+                });
         // The brace stands at its output column, which the case unindent
         // already moved; a type's members take it back as members.
         let case_unindent =
@@ -3429,28 +3433,13 @@ impl FormatEngine<'_> {
             return false;
         }
         match self.options.brace_style {
-            // astyle indents the braces of a type inside a function or an
-            // `extern "C"` block, and of a function inside the latter, like
-            // a statement block's.
             BraceStyle::Vtk => {
-                let enclosed_by = |types: &[BraceType]| {
-                    self.layout
-                        .nesting
-                        .brace_type_stack
-                        .iter()
-                        .any(|enclosing| types.contains(enclosing))
-                };
                 brace_type == BraceType::Command
                     || (brace_type == BraceType::Array && self.layout.indentation.indent() > 0)
-                    || matches!(
+                    || vtk_indents_declaration_brace(
                         brace_type,
-                        BraceType::Class | BraceType::Struct | BraceType::Union | BraceType::Enum
-                    ) && enclosed_by(&[
-                        BraceType::Definition,
-                        BraceType::Command,
-                        BraceType::Extern,
-                    ])
-                    || brace_type == BraceType::Definition && enclosed_by(&[BraceType::Extern])
+                        &self.layout.nesting.brace_type_stack,
+                    )
             }
             BraceStyle::Whitesmith => {
                 brace_type != BraceType::Namespace || self.options.indent_namespaces
@@ -3907,5 +3896,40 @@ impl FormatEngine<'_> {
             | BraceStyle::Horstmann
             | BraceStyle::Pico => false,
         }
+    }
+}
+
+/// astyle indents the braces of a type inside a function or an `extern "C"`
+/// block like a statement block's, and of a function inside such a type or
+/// the latter. `enclosing` may hold the brace itself.
+fn vtk_indents_declaration_brace(brace_type: BraceType, enclosing: &[BraceType]) -> bool {
+    let in_code = |types: &[BraceType]| {
+        types.iter().any(|enclosing| {
+            matches!(
+                enclosing,
+                BraceType::Definition | BraceType::Command | BraceType::Extern
+            )
+        })
+    };
+    match brace_type {
+        BraceType::Class | BraceType::Struct | BraceType::Union | BraceType::Enum => {
+            in_code(enclosing)
+        }
+        BraceType::Definition => {
+            enclosing.contains(&BraceType::Extern)
+                || enclosing
+                    .iter()
+                    .rposition(|enclosing| {
+                        matches!(
+                            enclosing,
+                            BraceType::Class
+                                | BraceType::Interface
+                                | BraceType::Struct
+                                | BraceType::Union
+                        )
+                    })
+                    .is_some_and(|type_index| in_code(&enclosing[..type_index]))
+        }
+        _ => false,
     }
 }

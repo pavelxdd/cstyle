@@ -1137,6 +1137,12 @@ impl FrameStack {
         self.brace_frames.last()
     }
 
+    /// The frame of the brace opened at `depth`, counting the outermost as
+    /// one; a header line may already hold the frame of the brace after it.
+    pub(crate) fn brace_at_depth(&self, depth: usize) -> Option<&BraceFrame> {
+        self.brace_frames.get(depth.checked_sub(1)?)
+    }
+
     /// The case blocks open around the innermost brace.
     pub(crate) fn open_case_blocks(&self) -> usize {
         self.brace_frames
