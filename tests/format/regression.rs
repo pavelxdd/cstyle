@@ -17257,3 +17257,18 @@ fn a_lambda_head_ending_in_specifiers_keeps_its_brace_and_one_line_body_as_a_tra
     check(input, &["--style=kr"], input);
     check(input, &[], input);
 }
+
+#[test]
+fn lambda_rows_of_a_call_brace_list_keep_their_braces_as_in_a_declaration_list() {
+    let input = "void f()\n{\n    run({\n        [] {\n            go();\n        },\n        [](int x) {\n            go(x);\n        },\n    });\n}\n";
+    check(
+        input,
+        &["--style=allman"],
+        "void f()\n{\n    run(\n    {\n        [] {\n            go();\n        },\n        [](int x) {\n            go(x);\n        },\n    });\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    run(\n        {\n        [] {\n            go();\n            },\n        [](int x) {\n            go(x);\n            },\n        });\n    }\n",
+    );
+}

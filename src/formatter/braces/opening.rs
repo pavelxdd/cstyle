@@ -3807,13 +3807,23 @@ impl FormatEngine<'_> {
         if self.options.attach_namespace && brace_type == BraceType::Namespace {
             return true;
         }
-        // A lambda's brace in a brace list stays with the list's elements.
+        // A lambda's brace in a brace list stays with the list's elements,
+        // whatever opened the list.
         if brace_type == BraceType::Command
-            && matches!(
+            && self.pushed_brace_kind() == Some(BlockKind::Lambda)
+            && (matches!(
                 self.layout.nesting.brace_type_stack.last(),
                 Some(BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral)
-            )
-            && self.pushed_brace_kind() == Some(BlockKind::Lambda)
+            ) || self
+                .current
+                .active_token()
+                .and_then(|brace| self.tree.groups.enclosing(brace))
+                .is_some_and(|list| {
+                    matches!(
+                        self.tree.blocks.kind(list),
+                        Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                    )
+                }))
         {
             return true;
         }
