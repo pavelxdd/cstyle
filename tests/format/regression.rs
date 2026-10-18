@@ -16828,3 +16828,13 @@ fn ratliff_rows_of_a_nested_list_run_into_its_brace_stand_at_the_first() {
     let expected = "const char table[2][2][2] = {\n        {   { 1,1 }, /* 0 */\n            { 1,0 }\n        },\n        {   { 0,1 }, /* 1 */\n            { 0,1 }\n        },\n    };\n";
     check(input, &["--style=ratliff"], expected);
 }
+
+#[test]
+fn vtk_keeps_a_file_scope_row_a_mid_row_list_breaks_at_the_rows() {
+    // astyle sets that row and the broken list a level past the other
+    // rows of the same list.
+    let input = "int table[][2] = {\n    {1, 2}, {3,\n             4},\n    {5, 6}\n};\n";
+    let expected =
+        "int table[][2] = {\n    {1, 2}, {\n        3,\n        4\n    },\n    {5, 6}\n};\n";
+    check(input, &["--style=vtk"], expected);
+}
