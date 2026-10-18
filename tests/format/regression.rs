@@ -9267,6 +9267,27 @@ fn rows_of_a_define_in_a_case_block_stand_as_written() {
 }
 
 #[test]
+fn the_method_prefix_options_set_the_gap_before_a_return_type_over_paren_padding() {
+    let input = "@implementation Item\n- (int)total {\n    return 1;\n}\n@end\n";
+    for (options, expected) in [
+        (
+            &["--pad-first-paren-out", "--unpad-method-prefix"][..],
+            "@implementation Item\n-(int)total {\n    return 1;\n}\n@end\n",
+        ),
+        (
+            &["--pad-paren-out", "--unpad-method-prefix"][..],
+            "@implementation Item\n-(int) total {\n    return 1;\n}\n@end\n",
+        ),
+        (
+            &["--pad-method-prefix", "--unpad-paren"][..],
+            "@implementation Item\n- (int)total {\n    return 1;\n}\n@end\n",
+        ),
+    ] {
+        check(input, options, expected);
+    }
+}
+
+#[test]
 fn rows_of_a_comment_a_brace_takes_back_follow_it_to_the_body() {
     // With no brace style the comment after a block brace runs in at the
     // body, its rows keeping their offset from the opener.

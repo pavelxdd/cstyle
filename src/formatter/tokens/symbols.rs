@@ -319,7 +319,9 @@ impl FormatEngine<'_> {
             }
         }
         let next_is_close = matches!(next, Some(Token::Symbol(')')));
-        let outside_pad = !next_is_close
+        // The method prefix options set the gap before a return type.
+        let prefix_sets_gap = handled_objc_return_paren && self.options.unpad_method_prefix;
+        let outside_pad = !(next_is_close || prefix_sets_gap)
             && (self.options.pad_parens_outside
                 || (self.options.pad_first_paren_outside
                     && self.layout.previous != PreviousToken::OpenParen));
