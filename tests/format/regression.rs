@@ -9275,6 +9275,16 @@ fn rows_of_a_define_in_a_case_block_stand_as_written() {
 }
 
 #[test]
+fn a_line_comment_after_a_block_argument_brace_opens_its_body() {
+    // The brace joins the call's line; the comment after it opens the body
+    // at the body column, not at the column set for the brace's own line.
+    let input = "void f() {\n  CHECK(EXPECT(\n      {  // note\n        a_++;\n        go();\n      },\n      value), other);\n}\n";
+    let expected = "void f()\n{\n    CHECK(EXPECT( {\n        // note\n        a_++;\n        go();\n    },\n          value), other);\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
 fn a_constructor_body_after_a_template_base_initializer_breaks_as_any_body() {
     // astyle takes the template arguments for no function head and keeps
     // the brace attached, unlike after `Base(grow)`.

@@ -902,6 +902,15 @@ impl FormatEngine<'_> {
             kind == CommentKind::Line && self.comments.line_comment_starts_reordered_brace_body;
         if line_comment_starts_reordered_brace_body {
             self.comments.line_comment_starts_reordered_brace_body = false;
+            // The comment opens the body of the brace that joined the line
+            // before, among arguments too.
+            if self.layout.nesting.paren_depth > 0
+                && self.current_is_blank()
+                && let Some(frame) = self.layout.frame_stack.active_brace()
+            {
+                let column = frame.body_indent_column;
+                self.layout.continuation_indent.set_next_line_spaces(column);
+            }
         }
         let reordered_brace_line_comment_gap = if kind == CommentKind::Line {
             self.comments.reordered_brace_line_comment_gap.take()
