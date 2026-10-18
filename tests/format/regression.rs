@@ -16406,3 +16406,21 @@ fn whitesmith_member_constructor_brace_after_same_line_initializers_stands_past_
         check(expected, &["--style=whitesmith"], expected);
     }
 }
+
+#[test]
+fn same_line_initializer_rows_of_a_constructor_in_a_case_block_stand_past_its_head() {
+    let input = "void f()\n{\n    switch (kind)\n    {\n    case 1:\n        {\n            struct Local\n            {\n                Local() : value(1),\n                    other(2)\n                {\n                }\n            };\n        }\n    }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=gnu",
+            "void f()\n{\n    switch (kind)\n        {\n        case 1:\n        {\n            struct Local\n            {\n                Local() : value(1),\n                    other(2)\n                {\n                }\n            };\n        }\n        }\n}\n",
+        ),
+        (
+            "--style=horstmann",
+            "void f()\n{   switch (kind)\n    {   case 1:\n        {   struct Local\n            {   Local() : value(1),\n                    other(2)\n                {\n                }\n            };\n        }\n    }\n}\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}

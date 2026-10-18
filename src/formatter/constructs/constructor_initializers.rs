@@ -275,7 +275,9 @@ impl FormatEngine<'_> {
             let trimmed = self.output.code_trimmed(index);
             if trimmed.contains(" : ") && trimmed.contains('(') && !trimmed.starts_with("case ") {
                 return Some(
-                    leading_visual_width(raw, self.options.tab_width) + self.options.indent_width,
+                    leading_visual_width(raw, self.options.tab_width)
+                        + self.options.indent_width
+                        + self.case_unindent_spaces(),
                 );
             }
             if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
