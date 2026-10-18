@@ -16529,3 +16529,14 @@ fn break_blocks_all_sets_no_blank_line_inside_a_comment_led_else_header() {
     check(input, &["--style=kr", "--break-blocks=all"], expected);
     check(expected, &["--style=kr", "--break-blocks=all"], expected);
 }
+
+#[test]
+fn indent_preproc_block_indents_a_block_after_an_interface_head_with_a_superclass() {
+    // astyle leaves the block unindented right after a head naming a
+    // superclass only.
+    for head in ["@interface Item : NSObject", "@interface Item"] {
+        let input = format!("{head}\n#ifdef FEATURE\n- (void)update;\n#endif\n@end\n");
+        let expected = format!("{head}\n#ifdef FEATURE\n    - (void)update;\n#endif\n@end\n");
+        check(&input, &["--style=kr", "--indent-preproc-block"], &expected);
+    }
+}
