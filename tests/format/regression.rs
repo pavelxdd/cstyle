@@ -17419,3 +17419,11 @@ fn an_initializer_after_an_invoked_lambda_initializer_stands_at_the_constructor(
         "Item::Item()\n    : value([]\n{\n    return 1;\n}()),\nother(0)\n{\n}\n",
     );
 }
+
+#[test]
+fn a_lambda_row_of_a_list_run_into_a_call_list_opens_its_body_past_the_row() {
+    let input = "void f()\n{\n    call({ { [x] {\n        go();\n        run();\n    } } });\n}\n";
+    let expected = "void f()\n{\n    call({ {\n            [x] {\n                go();\n                run();\n            }\n        } });\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}

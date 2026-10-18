@@ -412,6 +412,24 @@ impl FormatEngine<'_> {
                 (line_indent + self.options.indent_width, line_indent),
                 |frame| (frame.body_indent_spaces, frame.line_indent_spaces),
             )
+        } else if let Some(list_body) = matches!(
+            semantic_kind,
+            BraceSemanticKind::Array | BraceSemanticKind::Initializer
+        )
+        .then(|| self.layout.frame_stack.active_brace())
+        .flatten()
+        .filter(|list| {
+            matches!(
+                list.semantic_kind,
+                BraceSemanticKind::Array | BraceSemanticKind::Initializer
+            ) && list.open_output_line == self.output.len()
+                && !self.current_is_blank()
+        })
+        .map(|list| list.body_indent_column)
+        {
+            // A list opened on the line of the list around it nests in that
+            // list's body.
+            (list_body + self.options.indent_width, list_body)
         } else {
             (line_indent + self.options.indent_width, line_indent)
         };
@@ -550,6 +568,23 @@ impl FormatEngine<'_> {
             .frame_stack
             .active_brace()
             .is_some_and(|frame| frame.label_block || frame.case_block)
+        {
+            return;
+        }
+        // A list nested in a list opened on its line keeps that list's body.
+        let is_list = |kind: BraceSemanticKind| {
+            matches!(
+                kind,
+                BraceSemanticKind::Array | BraceSemanticKind::Initializer
+            )
+        };
+        if let (Some(frame), Some(outer)) = (
+            self.layout.frame_stack.active_brace(),
+            self.layout.frame_stack.enclosing_brace(),
+        ) && is_list(frame.semantic_kind)
+            && is_list(outer.semantic_kind)
+            && !frame.opens_output_line
+            && outer.open_output_line == frame.open_output_line
         {
             return;
         }
