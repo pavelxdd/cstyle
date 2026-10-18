@@ -17505,3 +17505,13 @@ fn a_comment_after_a_comment_running_over_lines_keeps_its_gap() {
     let expected = "void f()\n{\n    switch (k)\n    {\n        /* a\n              b */ /* c */\n    case 1:\n        break;\n    }\n}\n";
     check(input, &["--style=allman"], expected);
 }
+
+#[test]
+fn vtk_closes_a_flush_lambda_brace_at_its_statement_before_a_comment() {
+    let input = "auto handler = [&](int value) { return value + 1; }; /* note */\n";
+    check(
+        input,
+        &["--style=vtk"],
+        "auto handler = [&](int value)\n{\n    return value + 1;\n}; /* note */\n",
+    );
+}

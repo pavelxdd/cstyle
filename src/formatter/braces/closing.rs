@@ -292,11 +292,15 @@ impl FormatEngine<'_> {
             .first_closed_brace()
             .filter(|frame| frame.semantic_kind == BraceSemanticKind::Lambda)
             .map(|frame| {
-                // Styles indenting their closers close a body at its column.
+                // Styles indenting their closers close a body at its column;
+                // a brace VTK leaves at its statement closes there.
+                let vtk_flush_brace =
+                    self.options.brace_style == BraceStyle::Vtk && frame.header_indent_column == 0;
                 if matches!(
                     self.options.brace_style,
                     BraceStyle::Ratliff | BraceStyle::Whitesmith | BraceStyle::Vtk
-                ) {
+                ) && !vtk_flush_brace
+                {
                     frame.body_indent_column
                 } else {
                     frame.sibling_indent_column
