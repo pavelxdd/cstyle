@@ -16802,3 +16802,13 @@ fn arguments_of_a_call_a_constructor_initializer_line_ends_in_indent_past_the_en
     let input = "Box::Box()\n    : two(make(first,\n               other(\n                   second,\n                   third)))\n{\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn an_argument_after_an_indented_lambda_closer_stands_at_the_statement() {
+    let input =
+        "void f()\n{\n    call(first,\n         [this]() { return call(); },\n         last);\n}\n";
+    let expected = "void f()\n    {\n    call(first,\n         [this]()\n        {\n        return call();\n        },\n    last);\n    }\n";
+    check(input, &["--style=whitesmith"], expected);
+    let expected = "void f()\n{\n    call(first,\n         [this]()\n        {\n        return call();\n        },\n    last);\n}\n";
+    check(input, &["--style=vtk"], expected);
+}

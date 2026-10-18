@@ -880,6 +880,21 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn next_continuation_indent(&self) -> ContinuationIndent {
+        // An argument after the closer of a lambda's body a style indents
+        // stands at the statement, as after a closer at the statement.
+        if matches!(
+            self.options.brace_style,
+            BraceStyle::Whitesmith | BraceStyle::Vtk
+        ) && self.current.trimmed_start().starts_with('}')
+            && self.current.trimmed_end().ends_with(',')
+            && self
+                .layout
+                .frame_stack
+                .last_closed_brace()
+                .is_some_and(|frame| frame.semantic_kind == BraceSemanticKind::Lambda)
+        {
+            return ContinuationIndent::Level(self.statement_level());
+        }
         if self.current_case_label_continues() {
             // The label itself stands a level out unless switches indent.
             let label_spaces = self.current_line_indent_spaces().saturating_sub(
