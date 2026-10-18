@@ -5070,11 +5070,17 @@ impl FormatEngine<'_> {
             return !self.layout.nesting.brace_type_stack.is_empty();
         };
         let groups = &self.tree.groups;
+        // A block closed inside an expression's delimiters, as a message's
+        // block, is nested in the block holding that expression.
         matches!(self.tree.tokens[span.first], Token::Symbol('}'))
             && groups
                 .closed_at(span.first)
                 .and_then(|group| groups.get(group).parent)
-                .is_some_and(|parent| self.tree.blocks.kind(parent).is_some())
+                .is_some_and(|parent| {
+                    groups
+                        .ancestors(parent)
+                        .any(|group| self.tree.blocks.kind(group).is_some())
+                })
     }
 
     /// Case-block unindent the line being laid out will lose; indents from

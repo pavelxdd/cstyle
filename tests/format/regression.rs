@@ -9085,6 +9085,14 @@ fn a_comment_leading_a_method_header_leaves_its_body_as_without_it() {
 }
 
 #[test]
+fn a_comment_split_off_a_method_closer_after_a_message_block_stands_in_the_body() {
+    let input = "@implementation Item\n- (void)run {\n    [view animate:^{\n        go();\n    }];\n/* note */ }\n@end\n";
+    let expected = "@implementation Item\n- (void)run\n{\n    [view animate:^ {\n        go();\n    }];\n    /* note */\n}\n@end\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
 fn vtk_sets_a_function_try_block_at_the_function_body() {
     let input = "void helper()\ntry {\n    go();\n} catch (...) {\n    stop();\n}\n";
     let expected = "void helper()\ntry\n{\n    go();\n}\ncatch (...)\n{\n    stop();\n}\n";
