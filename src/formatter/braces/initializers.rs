@@ -253,6 +253,30 @@ impl FormatEngine<'_> {
         ))
     }
 
+    /// Whether the pending line starts a row of a list nested in a list
+    /// that a style running rows in after braces keeps on its brace line,
+    /// where others break after the brace and level its rows.
+    pub(crate) fn pending_row_of_levelled_run_in_list(&self) -> bool {
+        if !matches!(
+            self.options.brace_style,
+            BraceStyle::Horstmann | BraceStyle::Pico
+        ) {
+            return false;
+        }
+        let groups = &self.tree.groups;
+        self.output
+            .pending_tokens()
+            .and_then(|span| groups.enclosing(span.first))
+            .is_some_and(|list| {
+                let open = groups.get(list).open;
+                self.tree.blocks.kind(list) == Some(BlockKind::Initializer)
+                    && groups.get(list).parent.is_some_and(|parent| {
+                        self.tree.blocks.kind(parent) == Some(BlockKind::Initializer)
+                    })
+                    && !self.inline_array.list_rows.aligned_children.contains(&open)
+            })
+    }
+
     /// Whether the pending line starts a row of an initializer list whose
     /// elements run in after its brace, and opens a list aligned among
     /// them.

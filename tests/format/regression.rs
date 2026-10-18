@@ -16567,3 +16567,15 @@ fn designator_row_opening_a_list_of_rows_stays_at_the_designators_and_holds() {
         check(&once, &[style], &once);
     }
 }
+
+#[test]
+fn run_in_styles_level_string_rows_of_a_nested_list_as_other_rows() {
+    for (first, second) in [("1", "2"), ("\"a\"", "\"b\"")] {
+        let input =
+            format!("Item value[] = {{\n    [0] = {{ {first},\n            {second} }},\n}};\n");
+        let expected =
+            format!("Item value[] = {{\n    [0] = {{ {first},\n        {second}\n    }},\n}};\n");
+        check(&input, &["--style=horstmann"], &expected);
+        check(&expected, &["--style=horstmann"], &expected);
+    }
+}

@@ -3387,6 +3387,7 @@ impl FormatEngine<'_> {
         }
         if layout.line_kind == LineKind::Normal
             && starts_string_literal_token(line_start)
+            && !self.pending_row_of_levelled_run_in_list()
             && let Some(previous) = self.output.last_line_outside_comment()
         {
             let previous_code = self.output.code_trimmed_of(previous);
