@@ -16006,3 +16006,28 @@ fn indent_preproc_define_leaves_a_case_block_outside_definitions_as_without_it()
     let expected = "void f()\n{\n    switch (kind)\n        {\n#ifdef FEATURE\n        case 1: // first\n#endif\n            {\n            value=0;\n            }\n        default:\n            break;\n        }\n}\n";
     check(input, &["--style=vtk", "--indent-preproc-define"], expected);
 }
+
+#[test]
+fn line_comments_after_an_interface_head_stand_a_level_in_as_block_comments_do() {
+    let expected = "@interface Item : NSObject\n    // note\n    // more\n@property (nonatomic) int value;\n@end\n";
+    for input in [
+        "@interface Item : NSObject\n// note\n    // more\n@property (nonatomic) int value;\n@end\n",
+        expected,
+    ] {
+        check(input, &["--indent-col1-comments"], expected);
+    }
+    check(
+        "@interface Item ()\n    // note\n\n@property (nonatomic) int value;\n@end\n",
+        &[],
+        "@interface Item ()\n    // note\n\n@property (nonatomic) int value;\n@end\n",
+    );
+    // A line comment in column one stays there unless the option indents it.
+    let column_one =
+        "@interface Item : NSObject\n// note\n@property (nonatomic) int value;\n@end\n";
+    check(column_one, &[], column_one);
+    let block =
+        "@interface Item : NSObject\n    /* note */\n@property (nonatomic) int value;\n@end\n";
+    check(block, &[], block);
+    let both = "@interface Item : NSObject\n    /* note */ // more\n@property (nonatomic) int value;\n@end\n";
+    check(both, &[], both);
+}

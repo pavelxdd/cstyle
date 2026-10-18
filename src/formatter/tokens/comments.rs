@@ -1632,6 +1632,7 @@ impl FormatEngine<'_> {
         // A comment line after an interface's head stands a level in; one
         // leading a member stays with the members.
         let follows_objc_interface = (!self.token_input.has_next_meaningful_token
+            || self.token_input.token_followed_by_line_comment_on_line
             || self
                 .token_input
                 .next_input_whitespace
@@ -1639,8 +1640,18 @@ impl FormatEngine<'_> {
                 .is_some_and(|whitespace| whitespace.contains('\n')))
             && self
                 .output
-                .last_non_empty_scoped()
+                .last_code_line_in_scope()
                 .is_some_and(|line| line.trimmed_start().starts_with("@interface"));
+        if kind == CommentKind::Line
+            && follows_objc_interface
+            && self.current.trimmed().is_empty()
+            // A line comment at column one stays there.
+            && (!self.layout.line_state.column1_line_comment || self.options.indent_col1_comments)
+        {
+            self.clear_current();
+            self.current.push_str(&self.options.indent_prefix(1));
+            self.current_is_preindented = true;
+        }
         // A control header's condition continues where its lines do, past
         // the minimum conditional indent.
         let in_header_condition = self.layout.frame_stack.in_header_condition();
@@ -1803,6 +1814,7 @@ impl FormatEngine<'_> {
         }
         if kind == CommentKind::Line
             && standalone_line_comment
+            && !follows_objc_interface
             && (self.layout.line_state.column1_line_comment
                 || self
                     .layout
