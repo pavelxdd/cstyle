@@ -17444,3 +17444,10 @@ fn brace_rows_of_a_list_run_into_the_list_around_it_stand_past_both_lists() {
     );
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_comment_led_lambda_closer_after_an_inner_lambda_closes_at_its_own_head() {
+    let input = "void f()\n{\n    outer([&] {\n        inner([] {\n            go();\n        },\n        first);\n    /* note */ },\n    second);\n}\n";
+    let expected = "void f()\n{\n    outer([&] {\n        inner([] {\n            go();\n        },\n        first);\n        /* note */\n    },\n    second);\n}\n";
+    check(input, &["--style=linux"], expected);
+}

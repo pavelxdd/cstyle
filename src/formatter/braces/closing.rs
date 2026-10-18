@@ -17,8 +17,8 @@ use crate::formatter::structure::groups::{Delimiter, GroupId};
 use crate::formatter::syntax::language;
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, line_brace_imbalance, line_ends_with_comment, preprocessor_directive,
-    trailing_comment_split_limit,
+    ContainsAnyByte, is_bare_comment_line, line_brace_imbalance, line_ends_with_comment,
+    preprocessor_directive, trailing_comment_split_limit,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -306,7 +306,8 @@ impl FormatEngine<'_> {
 
     pub(crate) fn push_close_brace(&mut self, next: Option<&Token>, next_is_adjacent: bool) {
         let closing_lambda_body = self.current_open_brace_is_lambda_body();
-        if self.current_is_blank() {
+        // A `}` that only comments precede leads its row.
+        if self.current_is_blank() || is_bare_comment_line(self.current.trimmed()) {
             self.layout.frame_stack.clear_closed_braces();
         }
         if self.one_line_block_mode {
