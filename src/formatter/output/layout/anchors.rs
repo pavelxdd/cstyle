@@ -4303,7 +4303,12 @@ impl FormatEngine<'_> {
 
     fn return_value_indent(&self, first: usize) -> Option<usize> {
         let keyword = self.tree.previous_code_token(first)?;
-        if !matches!(&self.tree.tokens[keyword], Token::Word(word) if word == "return") {
+        // A list's brace a style sets at its statement stands as one after
+        // an assignment's `=`.
+        if !matches!(&self.tree.tokens[keyword], Token::Word(word) if word == "return")
+            || matches!(self.tree.tokens[first], Token::Symbol('{'))
+                && !self.should_indent_brace_line(BraceType::Array)
+        {
             return None;
         }
         let line = self.line_led_by(keyword)?;

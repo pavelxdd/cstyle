@@ -260,6 +260,11 @@ impl FormatEngine<'_> {
             BraceType::Namespace
         } else if self.layout.command_state.previous_command_char == Some('=')
             || trailing_word(self.current.trimmed_end()) == language::RETURN
+            // A brace below a line its `return` ends lists the value too.
+            || self.current_is_blank()
+                && self.output.last_non_empty_scoped().is_some_and(|previous| {
+                    trailing_word(self.output.code_trimmed_of(previous)) == language::RETURN
+                })
             || self
                 .layout
                 .nesting

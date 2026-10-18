@@ -24,7 +24,7 @@ use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::structure::TokenSpan;
 use crate::formatter::structure::blocks::{BlockKind, is_code_token};
 use crate::formatter::structure::groups::Delimiter;
-use crate::formatter::syntax::{function_name_start, scoped_name_is_constructor};
+use crate::formatter::syntax::{function_name_start, language, scoped_name_is_constructor};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
@@ -35,7 +35,7 @@ use crate::formatter::text::line_scan::{
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::operators::head_ends_binary_operator;
-use crate::source::lex::{is_identifier_start, is_word_char, leading_identifier};
+use crate::source::lex::{is_identifier_start, is_word_char, leading_identifier, trailing_word};
 
 fn is_semicolonless_call_line(line: &str) -> bool {
     let trimmed = line.trimmed();
@@ -3543,6 +3543,7 @@ impl FormatEngine<'_> {
                 );
         if list_brace
             && (last.ends_with('=')
+                || trailing_word(last) == language::RETURN
                 || last.ends_with_any(b",(") && self.layout.nesting.paren_depth > 0)
             && matches!(
                 self.options.brace_style,

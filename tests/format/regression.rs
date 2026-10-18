@@ -16838,3 +16838,28 @@ fn vtk_keeps_a_file_scope_row_a_mid_row_list_breaks_at_the_rows() {
         "int table[][2] = {\n    {1, 2}, {\n        3,\n        4\n    },\n    {5, 6}\n};\n";
     check(input, &["--style=vtk"], expected);
 }
+
+#[test]
+fn a_list_brace_broken_off_a_return_stands_as_one_broken_off_an_assignment() {
+    let input = "Item make()\n{\n    return {\n        1,\n        2\n    };\n}\n";
+    for (style, expected) in [
+        (
+            "allman",
+            "Item make()\n{\n    return\n    {\n        1,\n        2\n    };\n}\n",
+        ),
+        (
+            "gnu",
+            "Item make()\n{\n    return\n    {\n        1,\n        2\n    };\n}\n",
+        ),
+        (
+            "horstmann",
+            "Item make()\n{   return\n    {   1,\n        2\n    };\n}\n",
+        ),
+    ] {
+        check(input, &[&format!("--style={style}")], expected);
+        check(expected, &[&format!("--style={style}")], expected);
+    }
+    // Attach styles attach it to the `return`.
+    let broken = "Item make()\n{\n    return\n    {\n        1,\n        2\n    };\n}\n";
+    check(broken, &["--style=kr"], input);
+}
