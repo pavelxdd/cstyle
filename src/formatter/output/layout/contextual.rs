@@ -709,6 +709,7 @@ impl FormatEngine<'_> {
                     && trimmed.starts_with_any(b"<>|&+-*/%=!?:,.")
             };
             if !plain
+                && layout.line_kind == LineKind::Normal
                 && previous_operator_led
                 && previous_code.ends_with('{')
                 && self.current_inline_array_column().is_none()

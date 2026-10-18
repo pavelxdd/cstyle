@@ -18302,3 +18302,16 @@ fn parameters_after_a_line_comment_on_a_split_head_follow_its_paren() {
         expected,
     );
 }
+
+#[test]
+fn an_access_label_after_a_base_clause_row_opening_the_body_stands_as_any_label() {
+    let input =
+        "struct Item\n    : Base<View<Char>, Char> {\n public:\n  int value;\n  int other;\n};\n";
+    let expected = "struct Item\n    : Base<View<Char>, Char> {\npublic:\n    int value;\n    int other;\n};\n";
+    for style in ["--style=kr", "--style=java", "--style=attach"] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+    let expected = "struct Item\n    : Base<View<Char>, Char> {\n  public:\n    int value;\n    int other;\n};\n";
+    check(input, &["--style=java", "--indent-modifiers"], expected);
+}
