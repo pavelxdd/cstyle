@@ -2,10 +2,12 @@ use crate::config::{BraceStyle, FormatOptions};
 use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::braces::rewrite::is_defer_header;
 use crate::formatter::constructs::headers::is_conditional_header_line;
+use crate::formatter::constructs::labels;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::preprocessor::is_cplusplus_conditional;
 use crate::formatter::state::BraceType;
+use crate::formatter::state::indentation::LineKind;
 use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::syntax::language;
 use crate::formatter::syntax::language::is_macro_like_word;
@@ -434,6 +436,9 @@ impl FormatEngine<'_> {
                     code.is_empty()
                         || code.ends_with_any(b";{}")
                         || code.trimmed_start().starts_with('#')
+                        || code.ends_with(':')
+                            && labels::line_kind(code.trimmed_start(), &self.options.access_labels)
+                                != LineKind::Normal
                 })
         {
             // A macro word heading a block in code, as `SEH_TRY`.

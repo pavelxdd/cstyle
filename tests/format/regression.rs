@@ -9170,6 +9170,33 @@ fn rows_of_a_trailing_comment_in_a_case_block_stand_as_written() {
 }
 
 #[test]
+fn a_word_headed_block_after_a_label_keeps_its_run_in_brace() {
+    let input = "void f()\n{\n    go();\nagain:\n    APPLY\n    {   run();\n    }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=allman",
+            "void f()\n{\n    go();\nagain:\n    APPLY\n    {\n        run();\n    }\n}\n",
+        ),
+        (
+            "--style=kr",
+            "void f()\n{\n    go();\nagain:\n    APPLY {\n        run();\n    }\n}\n",
+        ),
+        (
+            "--style=horstmann",
+            "void f()\n{   go();\nagain:\n    APPLY\n    {   run();\n    }\n}\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+    }
+    check(input, &[], input);
+    check(
+        "void f()\n{\n    switch (op) {\n    case 1:\n        APPLY\n        {   run();\n        }\n    }\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    switch (op) {\n    case 1:\n        APPLY {\n            run();\n        }\n    }\n}\n",
+    );
+}
+
+#[test]
 fn rows_of_a_define_in_a_case_block_stand_as_written() {
     // The rows of a define stand as written, which a case block's unindent
     // leaves too, so a second pass keeps them.
