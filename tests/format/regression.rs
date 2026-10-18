@@ -17205,3 +17205,12 @@ fn a_lambda_in_a_brace_list_opens_its_body_as_in_a_call() {
     let expected = "Handler handlers[] = {\n    {\n        1, [] {\n            go();\n        }\n    },\n    {\n        2, [](int x) {\n            go(x);\n        }\n    },\n};\nvoid f()\n{\n    Handler h[] =\n    {\n        {\n            2, [](int x) {\n                go(x);\n            }\n        },\n    };\n    call({ [] {\n            go();\n        } });\n}\n";
     check(input, &["--style=allman"], expected);
 }
+
+#[test]
+fn an_immediately_invoked_lambda_keeps_its_call_on_its_closer_line() {
+    let input = "void f()\n{\n    auto a = []() {\n        return 1;\n    }();\n    auto b = [] {\n        return 1;\n    }();\n    auto c = [&](int v) {\n        return v;\n    }(1);\n    call([]() {\n        return 1;\n    }());\n}\n";
+    check(input, &[], input);
+    check(input, &["--style=kr"], input);
+    let expected = "void f()\n{\n    auto a = []()\n    {\n        return 1;\n    }();\n    auto b = []\n    {\n        return 1;\n    }();\n    auto c = [&](int v)\n    {\n        return v;\n    }(1);\n    call([]()\n    {\n        return 1;\n    }());\n}\n";
+    check(input, &["--style=allman"], expected);
+}

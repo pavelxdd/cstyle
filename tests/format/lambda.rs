@@ -745,7 +745,7 @@ fn whitesmith_split_lambda_uses_semantic_body_column() {
 }
 
 #[test]
-fn immediately_invoked_multiline_lambda_call_breaks_after_body() {
+fn immediately_invoked_multiline_lambda_keeps_its_call_on_the_closer_line() {
     assert_eq!(
         format_exact(
             fixture!(
@@ -763,21 +763,20 @@ fn immediately_invoked_multiline_lambda_call_breaks_after_body() {
             "{",
             "    call([](int x) {",
             "        return x;",
-            "    }",
-            "    (value));",
+            "    }(value));",
             "}",
         )
     );
 }
 
 #[test]
-fn multiline_return_lambda_invocation_splits_after_body() {
+fn multiline_return_lambda_invocation_stays_on_the_closer_line() {
     assert_eq!(
         format_exact(
             "int f(unsigned n) {\n  return [](unsigned m) {\n    int value = 0;\n    do {\n      ++value;\n    } while ((m >>= 4) != 0);\n    return value;\n  }(n);\n}\n",
             &FormatOptions::default(),
         ),
-        "int f(unsigned n) {\n    return [](unsigned m) {\n        int value = 0;\n        do {\n            ++value;\n        } while ((m >>= 4) != 0);\n        return value;\n    }\n    (n);\n}\n",
+        "int f(unsigned n) {\n    return [](unsigned m) {\n        int value = 0;\n        do {\n            ++value;\n        } while ((m >>= 4) != 0);\n        return value;\n    }(n);\n}\n",
     );
 }
 
@@ -856,7 +855,7 @@ fn empty_param_lambda_call_argument_body_stays_one_line() {
 }
 
 #[test]
-fn no_param_multiline_lambda_empty_invocation_breaks_after_body() {
+fn no_param_multiline_lambda_empty_invocation_stays_on_the_closer_line() {
     assert_eq!(
         format_exact(
             fixture!(
@@ -874,8 +873,7 @@ fn no_param_multiline_lambda_empty_invocation_breaks_after_body() {
             "{",
             "    call([]() {",
             "        return 1;",
-            "    }",
-            "    ());",
+            "    }());",
             "}",
         )
     );

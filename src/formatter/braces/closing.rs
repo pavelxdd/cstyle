@@ -702,8 +702,6 @@ impl FormatEngine<'_> {
             && !source_attached_statement_after_closing
             && !(self.layout.nesting.last_closed_brace_type == Some(BraceType::CompoundLiteral)
                 && matches!(next, Some(Token::Symbol('('))))
-            && !(self.layout.nesting.last_closed_brace_breaks_before_call
-                && matches!(next, Some(Token::Symbol('('))))
             && !matches!(
                 next,
                 None | Some(Token::Newline) | Some(Token::Word(_) | Token::Number(_))
@@ -728,13 +726,16 @@ impl FormatEngine<'_> {
                 .frame_stack
                 .active_ternary()
                 .is_some_and(|frame| frame.colon_role.is_none());
+        // A lambda's call stays on its body's closer line.
+        let invokes_lambda_body = closing_lambda_body && matches!(next, Some(Token::Symbol('(')));
         if attached_ternary_colon
             || closing_lambda_body && self.closer_ends_list_opened_with_lambda(next)
         {
             self.ensure_space();
         } else if (source_attached_closing
             || source_attached_operator_after_closing
-            || source_attached_symbol_after_closing)
+            || source_attached_symbol_after_closing
+            || invokes_lambda_body)
             && !move_one_line_block_comment
         {
         } else if source_attached_number_after_closing && !move_one_line_block_comment {

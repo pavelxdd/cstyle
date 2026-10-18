@@ -2,8 +2,8 @@ use crate::config::{BraceStyle, LineEnding};
 use crate::formatter::braces::classification::{
     ExternCGuard, block_indent_extra, brace_indent_applies, current_ends_block_literal_header,
     is_lambda_body_header, is_lambda_capture_header, is_namespace_or_module_block_header,
-    lambda_header_has_trailing_return, line_ends_lambda_parameter_list,
-    line_opens_lambda_or_capture_only_block, line_opens_parameterized_lambda_block,
+    line_ends_lambda_parameter_list, line_opens_lambda_or_capture_only_block,
+    line_opens_parameterized_lambda_block,
 };
 use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::braces::initializers::{
@@ -181,7 +181,6 @@ struct OpenBrace {
     /// Levels a group opened at the end of a compound literal's row takes
     /// past the block level: the literal places its rows by column.
     element_row_levels: usize,
-    breaks_before_call: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -190,7 +189,6 @@ struct OpenBraceLambda {
     previous_line_opens_body: bool,
     opens_body: bool,
     header_indent: Option<usize>,
-    breaks_before_call: bool,
 }
 
 /// A single-line comment token that directly follows the brace on its line.
@@ -1233,7 +1231,6 @@ impl FormatEngine<'_> {
             block_indent_extra,
             class_block_indent_extra,
             element_row_levels,
-            breaks_before_call: lambda.breaks_before_call,
         };
         if self.should_attach_control_paren_init_brace_from_previous_line(brace_type) {
             let (line, tokens) = self.output.pop_with_tokens().unwrap_or_default();
@@ -1492,13 +1489,6 @@ impl FormatEngine<'_> {
         } else {
             previous_lambda_header.as_ref().map(|(_, indent)| *indent)
         };
-        let lambda_body_has_trailing_return = if line_opens_lambda_body {
-            self.current.has_arrow_after_paren()
-        } else {
-            previous_lambda_header
-                .as_ref()
-                .is_some_and(|(header, _)| lambda_header_has_trailing_return(header))
-        };
         if opens_lambda_body {
             self.layout.nesting.clear_continuation_indents();
             self.layout
@@ -1506,7 +1496,6 @@ impl FormatEngine<'_> {
                 .after_one_shot_continuation_indent = None;
             self.layout.continuation_indent.next_line_indent_spaces = None;
         }
-        let lambda_body_breaks_before_call = opens_lambda_body && !lambda_body_has_trailing_return;
         if self.current_is_lambda_body_header() && !line_opens_lambda_body {
             self.layout.nesting.clear_continuation_indents();
             self.layout
@@ -1520,7 +1509,6 @@ impl FormatEngine<'_> {
             previous_line_opens_body: previous_line_opens_lambda_body,
             opens_body: opens_lambda_body,
             header_indent: lambda_header_indent,
-            breaks_before_call: lambda_body_breaks_before_call,
         }
     }
 
@@ -1735,7 +1723,6 @@ impl FormatEngine<'_> {
         let brace_type = brace.brace_type;
         let block_indent_extra = brace.block_indent_extra;
         let class_block_indent_extra = brace.class_block_indent_extra;
-        let lambda_body_breaks_before_call = brace.breaks_before_call;
         let current_comment_start = self.current_trailing_comment_split_limit();
         if matches!(brace_type, BraceType::Definition | BraceType::NonStatement)
             && self.options.brace_style == BraceStyle::OneTrueBrace
@@ -1774,9 +1761,6 @@ impl FormatEngine<'_> {
             self.layout
                 .nesting
                 .enter_brace(brace.header.take(), brace_type, block_indent_extra);
-            if lambda_body_breaks_before_call {
-                self.layout.nesting.mark_current_brace_break_before_call();
-            }
             let gnu = self.options.brace_style == BraceStyle::Gnu;
             self.layout
                 .indentation
@@ -1829,9 +1813,6 @@ impl FormatEngine<'_> {
             self.layout
                 .nesting
                 .enter_brace(brace.header.take(), brace_type, block_indent_extra);
-            if lambda_body_breaks_before_call {
-                self.layout.nesting.mark_current_brace_break_before_call();
-            }
             self.layout
                 .indentation
                 .enter_block_with_extra(false, block_indent_extra + class_block_indent_extra);
@@ -1858,9 +1839,6 @@ impl FormatEngine<'_> {
             self.layout
                 .nesting
                 .enter_brace(brace.header.take(), brace_type, block_indent_extra);
-            if lambda_body_breaks_before_call {
-                self.layout.nesting.mark_current_brace_break_before_call();
-            }
             self.layout
                 .indentation
                 .enter_block_with_extra(false, block_indent_extra + class_block_indent_extra);
@@ -1897,9 +1875,6 @@ impl FormatEngine<'_> {
             self.layout
                 .nesting
                 .enter_brace(brace.header.take(), brace_type, block_indent_extra);
-            if lambda_body_breaks_before_call {
-                self.layout.nesting.mark_current_brace_break_before_call();
-            }
             self.layout
                 .indentation
                 .enter_block_with_extra(false, block_indent_extra + class_block_indent_extra);
@@ -3228,7 +3203,6 @@ impl FormatEngine<'_> {
         let brace_type = brace.brace_type;
         let block_indent_extra = brace.block_indent_extra;
         let class_block_indent_extra = brace.class_block_indent_extra;
-        let lambda_body_breaks_before_call = brace.breaks_before_call;
         if let Some(level) = inline_nested_header_level
             .or_else(|| self.layout.inline_nested_header_braceless_bias.take())
             && brace.header.as_deref() != Some("else")
@@ -3257,9 +3231,6 @@ impl FormatEngine<'_> {
         self.layout
             .nesting
             .enter_brace(brace.header.take(), brace_type, block_indent_extra);
-        if lambda_body_breaks_before_call {
-            self.layout.nesting.mark_current_brace_break_before_call();
-        }
         let cpp_extern_c_block =
             brace_type == BraceType::Extern && self.extern_c_guard == ExternCGuard::ExternC;
         if cpp_extern_c_block {

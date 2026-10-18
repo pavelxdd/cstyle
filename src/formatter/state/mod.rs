@@ -77,12 +77,10 @@ pub(crate) struct NestingState {
     pub(crate) brace_header_stack: Vec<Option<String>>,
     pub(crate) brace_type_stack: Vec<BraceType>,
     brace_extra_indent_stack: Vec<usize>,
-    brace_break_before_call_stack: Vec<bool>,
     pub(crate) question_depth: usize,
     pub(crate) last_closed_brace_header: Option<String>,
     pub(crate) last_closed_brace_type: Option<BraceType>,
     pub(crate) last_closed_brace_extra_indent: usize,
-    pub(crate) last_closed_brace_breaks_before_call: bool,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -233,21 +231,12 @@ impl NestingState {
         self.brace_header_stack.push(header);
         self.brace_type_stack.push(brace_type);
         self.brace_extra_indent_stack.push(extra_indent);
-        self.brace_break_before_call_stack.push(false);
-    }
-
-    pub(crate) fn mark_current_brace_break_before_call(&mut self) {
-        if let Some(breaks_before_call) = self.brace_break_before_call_stack.last_mut() {
-            *breaks_before_call = true;
-        }
     }
 
     pub(crate) fn exit_brace(&mut self) -> ScopeRecovery {
         self.last_closed_brace_header = self.brace_header_stack.pop().flatten();
         self.last_closed_brace_type = self.brace_type_stack.pop();
         self.last_closed_brace_extra_indent = self.brace_extra_indent_stack.pop().unwrap_or(0);
-        self.last_closed_brace_breaks_before_call =
-            self.brace_break_before_call_stack.pop().unwrap_or(false);
         let mut recovery = ScopeRecovery {
             parens: 0,
             questions: 0,
