@@ -9275,6 +9275,21 @@ fn rows_of_a_define_in_a_case_block_stand_as_written() {
 }
 
 #[test]
+fn a_constructor_body_after_a_template_base_initializer_breaks_as_any_body() {
+    // astyle takes the template arguments for no function head and keeps
+    // the brace attached, unlike after `Base(grow)`.
+    let expected = "class Item\n{\npublic:\n    Item(Item&& other) noexcept\n        : Base<T>(grow)\n    {\n        move(other);\n    }\n};\n";
+    for base in ["Base<T>", "detail::Base<T>"] {
+        let input = format!(
+            "class Item {{\n public:\n  Item(Item&& other) noexcept\n      : {base}(grow) {{\n    move(other);\n  }}\n}};\n"
+        );
+        let expected = expected.replace("Base<T>", base);
+        check(&input, &["--style=kr"], &expected);
+        check(&expected, &["--style=kr"], &expected);
+    }
+}
+
+#[test]
 fn whitesmith_keeps_the_base_of_a_qualified_class_name_on_its_line() {
     let input = "class Block::Iter : public Base {\n private:\n  int value_;\n};\n";
     let expected =

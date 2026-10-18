@@ -122,8 +122,34 @@ pub(crate) fn line_ends_compound_literal_cast(line: &str) -> bool {
         Some(')') => ends_with_value_cast(before_open),
         // A block literal's parameters head its body.
         Some(']' | '^') => false,
+        // So do a template's arguments, as in `Base<T>(value)`.
+        Some('>') => !ends_with_template_arguments(before_open),
         _ => true,
     }
+}
+
+/// Whether `text` ends with the arguments of a named template, the `<` that
+/// opens them right after the name.
+fn ends_with_template_arguments(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    let mut depth = 0usize;
+    for (index, &byte) in bytes.iter().enumerate().rev() {
+        match byte {
+            b'>' => depth += 1,
+            b'<' => {
+                depth -= 1;
+                if depth == 0 {
+                    return text[..index].chars().next_back().is_some_and(is_word_char);
+                }
+            }
+            b';' | b'{' | b'}' => return false,
+            _ => {}
+        }
+        if depth == 0 {
+            return false;
+        }
+    }
+    false
 }
 
 /// Whether `text` ends with a cast that starts a value, which the cast of a
