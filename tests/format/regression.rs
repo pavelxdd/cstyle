@@ -17167,3 +17167,9 @@ fn a_list_brace_before_a_run_of_comments_breaks_as_before_one_comment() {
         "int b[] =   /* c */\n{\n    1,\n};\nint d[] =   /* c */ /* d */\n{\n    1,\n};\n";
     check(input, &["--style=allman"], expected);
 }
+
+#[test]
+fn a_message_keyword_row_passing_a_lambda_keeps_the_keyword_column() {
+    let input = "- (void)run\n{\n    [view animate:nil\n          completion:[] {\n        go();\n    }];\n    [view animate:nil\n          completion:^ {\n        go();\n    }];\n}\n";
+    check(input, &["--style=kr"], input);
+}

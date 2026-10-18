@@ -844,7 +844,14 @@ impl FormatEngine<'_> {
             return;
         }
         let closes_operator_name = self.current.trimmed_end().ends_with("operator[]");
+        // Only a nested message's closer ends the row's alignment; a
+        // lambda's capture list or a subscript leaves it.
         let closing_nested_message_argument = self.layout.frame_stack.bracket_depth() > 1
+            && self
+                .layout
+                .frame_stack
+                .active_bracket()
+                .is_some_and(|frame| frame.role == BracketRole::ObjCMessage)
             && self.layout.objc.message_active
             && self.current.contains(':')
             && !self.current.trimmed_start().starts_with('[');
