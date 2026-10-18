@@ -272,7 +272,7 @@ impl FormatEngine<'_> {
                 && !self.token_input.token_begins_source_line
                 && matches!(
                     self.layout.nesting.brace_type_stack.last(),
-                    Some(BraceType::NonStatement)
+                    Some(BraceType::NonStatement | BraceType::Initializer)
                 ))
         {
             BraceType::Array

@@ -16674,3 +16674,33 @@ fn an_added_brace_goes_before_the_last_block_comment_trailing_its_header() {
     let expected = "void f()\n{\n    for (;;) /* a */ { /* b */\n        go();\n    }\n    for (;;) /* a */ // b\n    {\n        go();\n    }\n}\n";
     check(input, &["--style=1tbs"], expected);
 }
+
+#[test]
+fn a_nested_first_call_argument_list_spanning_rows_closes_its_first_element_alone() {
+    let input = "void f()\n{\n    call(value, {{1,\n            2},\n        {3, 4}});\n}\n";
+    for (style, expected) in [
+        (
+            "allman",
+            "void f()\n{\n    call(value, {{\n            1,\n            2\n        },\n        {3, 4}\n    });\n}\n",
+        ),
+        (
+            "gnu",
+            "void f()\n{\n    call(value, {{\n            1,\n            2\n        },\n        {3, 4}\n    });\n}\n",
+        ),
+        (
+            "vtk",
+            "void f()\n{\n    call(value, {{\n            1,\n            2\n            },\n            {3, 4}\n        });\n}\n",
+        ),
+        (
+            "horstmann",
+            "void f()\n{   call(value, {{1,\n            2\n        },\n        {3, 4}\n    });\n}\n",
+        ),
+        (
+            "pico",
+            "void f()\n{   call(value, {{1,\n            2 },\n        {3, 4 } }); }\n",
+        ),
+    ] {
+        check(input, &[&format!("--style={style}")], expected);
+        check(expected, &[&format!("--style={style}")], expected);
+    }
+}

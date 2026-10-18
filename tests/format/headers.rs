@@ -2336,8 +2336,7 @@ fn malformed_for_without_parens_does_not_open_header() {
     let mut options = FormatOptions::default();
     let args = ["--style=pico", "--remove-braces"].map(str::to_owned);
     apply_command_line_args(&mut options, &args).expect("valid options");
-    let expected =
-        "    for{ y{{ #endif  case(\n        namespaceclass&#define X(x) \\if/* block */\n";
+    let expected = "for{ y{{ #endif  case(\n    namespaceclass&#define X(x) \\if/* block */\n";
 
     assert_eq!(
         format_exact(

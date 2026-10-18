@@ -835,7 +835,14 @@ impl FormatEngine<'_> {
                 .and_then(|row| groups.get(row).close)
                 .and_then(|close| self.output.line_with_token(close))
                 != self.output.line_with_token(element)
-            && let Some((lead, levels, _)) = self.brace_ending_row_levels(element)
+            && let Some((lead, levels, _)) = self.brace_ending_row_levels(element).or_else(|| {
+                matches!(
+                    self.options.brace_style,
+                    BraceStyle::Horstmann | BraceStyle::Pico
+                )
+                .then(|| self.brace_row_levels_through(element))
+                .flatten()
+            })
         {
             return Some(
                 lead + levels.saturating_sub(1) * self.options.indent_width
