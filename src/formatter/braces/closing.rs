@@ -552,17 +552,15 @@ impl FormatEngine<'_> {
             ) {
                 return None;
             }
-            self.output
-                .scoped()
-                .iter()
-                .rev()
-                .take(8)
-                .find(|line| {
+            // Only the frame's own brace on a line of its own sets the
+            // closer at its column.
+            (frame.opens_output_line
+                && self.output.get(frame.open_output_line).is_some_and(|line| {
                     line.trimmed() == "{"
                         && leading_visual_width(line, self.options.tab_width)
                             == frame.sibling_indent_column
-                })
-                .map(|_| frame.sibling_indent_column)
+                }))
+            .then_some(frame.sibling_indent_column)
         })
     }
 

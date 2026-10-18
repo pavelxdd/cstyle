@@ -9101,6 +9101,30 @@ fn a_comment_led_initializer_after_a_run_in_lambda_body_stands_as_without_the_co
 }
 
 #[test]
+fn attach_inlines_attaches_the_bodies_of_methods_inside_structs_and_unions() {
+    // A union's methods attach as a struct's do in every brace style.
+    let input = "int g;\nstruct Item {\n    int run() const\n    {\n        return 1;\n    }\n};\nunion Value {\n    int run() const\n    {\n        return 1;\n    }\n};\n";
+    for (style, expected) in [
+        (
+            "--style=linux",
+            "int g;\nstruct Item {\n    int run() const {\n        return 1;\n    }\n};\nunion Value {\n    int run() const {\n        return 1;\n    }\n};\n",
+        ),
+        (
+            "--style=allman",
+            "int g;\nstruct Item\n{\n    int run() const {\n        return 1;\n    }\n};\nunion Value\n{\n    int run() const {\n        return 1;\n    }\n};\n",
+        ),
+        (
+            "--style=whitesmith",
+            "int g;\nstruct Item\n    {\n    int run() const {\n        return 1;\n        }\n    };\nunion Value\n    {\n    int run() const {\n        return 1;\n        }\n    };\n",
+        ),
+    ] {
+        let args = [style, "--attach-inlines"];
+        check(input, &args, expected);
+        check(expected, &args, expected);
+    }
+}
+
+#[test]
 fn vtk_sets_a_function_try_block_at_the_function_body() {
     let input = "void helper()\ntry {\n    go();\n} catch (...) {\n    stop();\n}\n";
     let expected = "void helper()\ntry\n{\n    go();\n}\ncatch (...)\n{\n    stop();\n}\n";

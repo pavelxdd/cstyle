@@ -3923,7 +3923,13 @@ impl FormatEngine<'_> {
                 .layout
                 .nesting
                 .brace_type_stack
-                .contains(&BraceType::Class)
+                .iter()
+                .any(|enclosing| {
+                    matches!(
+                        enclosing,
+                        BraceType::Class | BraceType::Struct | BraceType::Union
+                    )
+                })
         {
             return true;
         }
