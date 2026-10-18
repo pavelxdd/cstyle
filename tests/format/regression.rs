@@ -9275,6 +9275,15 @@ fn rows_of_a_define_in_a_case_block_stand_as_written() {
 }
 
 #[test]
+fn whitesmith_keeps_the_base_of_a_qualified_class_name_on_its_line() {
+    let input = "class Block::Iter : public Base {\n private:\n  int value_;\n};\n";
+    let expected =
+        "class Block::Iter : public Base\n    {\n    private:\n        int value_;\n    };\n";
+    check(input, &["--style=whitesmith"], expected);
+    check(expected, &["--style=whitesmith"], expected);
+}
+
+#[test]
 fn a_comment_after_the_last_row_of_a_brace_comment_stays_on_the_row() {
     let input = "void f()\n{\n    {/* first row\n        second row */ /* note */\n      int t = 1;\n    }\n}\n";
     for (style, expected) in [
