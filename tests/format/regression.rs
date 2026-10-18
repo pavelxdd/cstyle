@@ -16171,3 +16171,19 @@ fn horstmann_closes_a_list_in_a_run_in_case_body_as_outside_a_switch() {
     check(input, &["--style=horstmann"], expected);
     check(expected, &["--style=horstmann"], expected);
 }
+
+#[test]
+fn whitesmith_indents_the_brace_of_a_comment_led_method_head_as_any_method() {
+    let input = "class Item\n{\npublic:\n    /* note */ int value() const\n    {\n        return value_;\n    }\nprivate:\n    int value_;\n};\n";
+    let expected = "class Item\n    {\n    public:\n        /* note */ int value() const\n            {\n            return value_;\n            }\n    private:\n        int value_;\n    };\n";
+    check(
+        input,
+        &["--style=whitesmith", "--keep-one-line-statements"],
+        expected,
+    );
+    check(
+        expected,
+        &["--style=whitesmith", "--keep-one-line-statements"],
+        expected,
+    );
+}

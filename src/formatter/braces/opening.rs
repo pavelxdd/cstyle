@@ -29,9 +29,8 @@ use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, is_comment_line, is_comment_only_line, leads_with_operator,
-    line_comment_split_limit, preprocessor_directive, reverse_scan_skips_block_comment,
-    trailing_comment_split_limit,
+    ContainsAnyByte, is_comment_line, leads_with_operator, line_comment_split_limit,
+    preprocessor_directive, reverse_scan_skips_block_comment, trailing_comment_split_limit,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -499,8 +498,7 @@ impl FormatEngine<'_> {
                 .last_line_outside_comment()
                 .is_some_and(|previous| {
                     !is_namespace_or_module_block_header(previous)
-                        && previous
-                            .trimmed_start()
+                        && line_scan::after_leading_comments(previous.trimmed_start())
                             .chars()
                             .next()
                             .is_some_and(is_identifier_start)
@@ -522,9 +520,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let previous = self.output.last_line_outside_comment()?;
-        self.output
-            .code_of(previous)
-            .trimmed_start()
+        line_scan::after_leading_comments(self.output.code_of(previous).trimmed_start())
             .starts_with_any(b"<>|&+-*/%=!?:,.")
             .then_some(0)
     }
@@ -578,10 +574,7 @@ impl FormatEngine<'_> {
             && !line_is_control_body_header(previous_code.trimmed_start());
         let previous_definition_brace_spaces = (!self.output_ends_objc_method_header())
             .then(|| {
-                let owner = self.output.scoped().iter().rev().find(|line| {
-                    let trimmed = line.trimmed_start();
-                    !trimmed.is_empty() && !is_comment_only_line(trimmed)
-                })?;
+                let owner = self.output.last_code_line_in_scope()?;
                 let code = self.output.code_trimmed_of(owner);
                 if code.trimmed_start().starts_with('#') {
                     return None;
