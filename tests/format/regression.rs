@@ -16356,3 +16356,12 @@ fn indent_col1_comments_sets_a_column_one_comment_among_initializers_at_the_memb
     );
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn returned_message_rows_align_at_the_keyword_as_other_message_rows() {
+    // astyle drops the rows to the receiver after `return`.
+    let input = "@implementation Item\n- (int)total\n{\n    return [self.other countWith:1\n            and:2];\n}\n@end\n";
+    let expected = "@implementation Item\n- (int)total\n{\n    return [self.other countWith:1\n                       and:2];\n}\n@end\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
