@@ -87,9 +87,21 @@ fn is_lambda_body_header_with_arrow(head: &str, arrow: Option<usize>) -> bool {
     let Some(lb) = matching_open_index(capture, '[', ']') else {
         return false;
     };
-    match capture[..lb].trimmed_end().chars().next_back() {
+    opens_capture_list_after(&capture[..lb])
+}
+
+/// Whether a `[` after `before` opens a lambda's capture list rather than
+/// a subscript: no operand ends `before`, though a keyword taking a value
+/// may.
+fn opens_capture_list_after(before: &str) -> bool {
+    let before = before.trimmed_end();
+    match before.chars().next_back() {
         None => true,
-        Some(ch) => !(is_word_char(ch) || ch == ')' || ch == ']'),
+        Some(ch) if is_word_char(ch) => matches!(
+            trailing_word(before),
+            "return" | "co_return" | "co_yield" | "throw" | "else" | "do"
+        ),
+        Some(ch) => !(ch == ')' || ch == ']'),
     }
 }
 
@@ -101,10 +113,7 @@ pub(crate) fn is_lambda_capture_header(head: &str) -> bool {
     let Some(lb) = matching_open_index(head, '[', ']') else {
         return false;
     };
-    match head[..lb].trimmed_end().chars().next_back() {
-        None => true,
-        Some(ch) => !(is_word_char(ch) || ch == ')' || ch == ']'),
-    }
+    opens_capture_list_after(&head[..lb])
 }
 
 pub(super) fn line_opens_parameterized_lambda_block(line: &str) -> bool {
@@ -137,10 +146,7 @@ pub(crate) fn line_opens_lambda_or_capture_only_block(line: &str) -> bool {
     if !capture.ends_with(']') {
         return false;
     }
-    match head[..capture_start].trimmed_end().chars().next_back() {
-        None => true,
-        Some(ch) => !(is_word_char(ch) || ch == ')' || ch == ']'),
-    }
+    opens_capture_list_after(&head[..capture_start])
 }
 
 fn is_namespace_block_header(line: &str) -> bool {

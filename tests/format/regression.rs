@@ -17476,3 +17476,11 @@ fn an_initializer_after_a_run_in_lambda_initializer_stays_at_the_constructor() {
     check(input, &["--style=pico"], expected);
     check(expected, &["--style=pico"], expected);
 }
+
+#[test]
+fn a_returned_capture_only_lambda_keeps_its_broken_brace_on_a_second_pass() {
+    let input = "void f()\n{\n    return [x] {\n        go();\n    };\n}\n";
+    let expected = "void f()\n{\n    return [x]\n        {\n        go();\n        };\n}\n";
+    check(input, &["--style=vtk"], expected);
+    check(expected, &["--style=vtk"], expected);
+}
