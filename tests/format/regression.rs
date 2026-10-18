@@ -17035,3 +17035,20 @@ fn a_macro_body_ending_mid_expression_or_at_a_label_leaves_the_code_after_it() {
         check(&input, &["--style=kr", "-w"], &input);
     }
 }
+
+#[test]
+fn a_block_after_a_directive_read_as_a_comment_splits_long_rows() {
+    let row = "        x = make_matcher(make_const(alpha_value), BLOCK(make_simple(DUP), make_unbound(STOREV, beta_value)));";
+    let split = "        x = make_matcher(make_const(alpha_value), BLOCK(make_simple(DUP),\n                         make_unbound(STOREV, beta_value)));";
+    for directive in ["#line 796 \"parser.y\"", "#error stop", "#warning stop"] {
+        let input = format!("void f(void) {{\n{directive}\n    {{\n{row}\n    }}\n}}\n");
+        let expected = format!("void f(void) {{\n{directive}\n    {{\n{split}\n    }}\n}}\n");
+        check(
+            &input,
+            &["--style=google", "--max-code-length=80"],
+            &expected,
+        );
+    }
+    let input = format!("void f(void) {{\n#pragma once\n    {{\n{row}\n    }}\n}}\n");
+    check(&input, &["--style=google", "--max-code-length=80"], &input);
+}

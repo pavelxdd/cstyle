@@ -17,6 +17,7 @@ use crate::formatter::structure::TokenSpan;
 use crate::formatter::structure::blocks::{BlockKind, is_code_token, next_code_token};
 use crate::formatter::structure::groups::{Delimiter, GroupId};
 use crate::formatter::syntax::language::is_header;
+use crate::formatter::text::line_scan::preprocessor_directive;
 use crate::formatter::text::trim::Trimmed;
 
 /// Statements longer than this are left to the engine.
@@ -181,12 +182,20 @@ impl FormatEngine<'_> {
     /// astyle takes for an array brace.
     pub(crate) fn is_directive_block(&self, block: GroupId) -> bool {
         let open = self.tree.groups.get(block).open;
+        let after = self
+            .tree
+            .previous_code_token(open)
+            .map_or(0, |before| before + 1);
+        // astyle reads `#error`, `#warning` and `#line` as comments.
         self.tree.blocks.kind(block) == Some(BlockKind::Block)
-            && self.tree.has_directive_in(
-                self.tree
-                    .previous_code_token(open)
-                    .map_or(0, |before| before + 1)..open,
-            )
+            && self.tree.has_directive_in(after..open)
+            && self.tree.tokens[after..open].iter().any(|token| {
+                matches!(token, Token::Preprocessor(preprocessor)
+                if !matches!(
+                    preprocessor_directive(&preprocessor.text),
+                    Some("error" | "warning" | "line" | "region" | "endregion")
+                ))
+            })
     }
 
     /// A line inside a subscript whose `[` ends its line, or any when parens
