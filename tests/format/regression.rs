@@ -9144,6 +9144,16 @@ fn a_comment_led_declarator_after_an_attribute_line_keeps_its_column() {
 }
 
 #[test]
+fn pad_oper_keeps_the_three_way_comparison_operator_whole() {
+    let input = "struct Item {\n    auto operator<=>(const Item &) const = default;\n    bool less = (a<=>b) < 0;\n};\n";
+    check(
+        input,
+        &["--pad-oper"],
+        "struct Item {\n    auto operator<=>(const Item &) const = default;\n    bool less = (a <=> b) < 0;\n};\n",
+    );
+}
+
+#[test]
 fn vtk_sets_a_function_try_block_at_the_function_body() {
     let input = "void helper()\ntry {\n    go();\n} catch (...) {\n    stop();\n}\n";
     let expected = "void helper()\ntry\n{\n    go();\n}\ncatch (...)\n{\n    stop();\n}\n";
