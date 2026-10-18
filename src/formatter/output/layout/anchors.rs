@@ -1125,14 +1125,6 @@ impl FormatEngine<'_> {
         if !text.starts_with(&*token_text(&tokens[row])) {
             return None;
         }
-        // A comment leading a brace row stands at the comments' column, off
-        // the column of indented brace rows.
-        if text.len() != line_text.len()
-            && is_brace(row)
-            && self.should_indent_brace_line(BraceType::Initializer)
-        {
-            return None;
-        }
         // A `}, {` row closes the row before it on the element's line.
         let closes_row_before = matches!(tokens[row], Token::Symbol('}'))
             && groups
@@ -1259,14 +1251,9 @@ impl FormatEngine<'_> {
     fn array_element_brace_indented(&self, first: usize, group: GroupId, outer: GroupId) -> bool {
         let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
-        // A `{` starting its line stands a level in; at file scope, a row
-        // of the outer braces that starts with its elements stays at them.
-        // A row led by a comment stays at the elements.
-        let after_comment = tokens[..first]
-            .iter()
-            .rev()
-            .find(|token| !matches!(token, Token::Whitespace(_)))
-            .is_some_and(|token| matches!(token, Token::Comment(..)));
+        // A `{` starting its line stands a level in, as one a comment leads
+        // does; at file scope, a row of the outer braces that starts with
+        // its elements stays at them.
         let brace_alone = tokens[first + 1..]
             .iter()
             .find(|token| !matches!(token, Token::Whitespace(_) | Token::Comment(..)))
@@ -1281,7 +1268,6 @@ impl FormatEngine<'_> {
                     .any(|token| matches!(token, Token::Newline))
             });
         matches!(tokens[first], Token::Symbol('{'))
-            && !after_comment
             && (brace_alone || row_spans_lines || !self.vtk_flush_outer(group, outer))
     }
 
@@ -2167,10 +2153,33 @@ impl FormatEngine<'_> {
             })
             .or_else(|| self.vtk_aggregate_array_row_indent(code))
             .or_else(|| self.vtk_array_element_indent(code))
+            .or_else(|| self.ratliff_first_brace_row_indent(code))
             .or_else(|| self.initializer_row_indent(code))
-            .or_else(|| self.initializer_first_row_indent(code))
+            .or_else(|| {
+                // A brace row the style indents stands a level past the
+                // rows, a comment leading it or not.
+                self.initializer_first_row_indent(code).map(|spaces| {
+                    let brace_row = matches!(tokens[code], Token::Symbol('{'))
+                        && self.should_indent_brace_line(BraceType::Array);
+                    spaces + usize::from(brace_row) * self.options.indent_width
+                })
+            })
             .or_else(|| self.stacked_argument_indent(code))
-            .or_else(|| self.argument_after_comma_column(code));
+            .or_else(|| self.argument_after_comma_column(code))
+            .or_else(|| {
+                // Otherwise an element's brace the style sets past the
+                // elements stands past the comment, set at them.
+                (self
+                    .tree
+                    .groups
+                    .opened_at(code)
+                    .and_then(|group| self.tree.blocks.kind(group))
+                    == Some(BlockKind::Initializer)
+                    && self.pending_line_opens_indented_plain_block())
+                .then(|| {
+                    leading_visual_width(line, self.options.tab_width) + self.options.indent_width
+                })
+            });
         let spaces = spaces?;
         let mut output = self
             .options

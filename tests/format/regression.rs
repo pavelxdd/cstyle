@@ -12680,17 +12680,17 @@ fn a_comment_after_a_brace_broken_off_a_line_a_comment_leads_keeps_its_gap() {
 }
 
 #[test]
-fn a_brace_row_after_a_brace_row_a_comment_leads_stands_at_the_brace_rows() {
+fn a_brace_row_a_comment_leads_stands_with_the_brace_rows_as_without_it() {
     let input = "void f()\n{\n    struct Item items[] = {\n        /* note */ { .value = 1, .name = \"a\" },\n        { .value = 2, .name = \"b\" },\n    };\n}\n";
     check(
         input,
         &["--style=ratliff"],
-        "void f() {\n    struct Item items[] = {\n        /* note */ { .value = 1, .name = \"a\" },\n            { .value = 2, .name = \"b\" },\n        };\n    }\n",
+        "void f() {\n    struct Item items[] = {\n            /* note */ { .value = 1, .name = \"a\" },\n            { .value = 2, .name = \"b\" },\n        };\n    }\n",
     );
     check(
         input,
         &["--style=whitesmith"],
-        "void f()\n    {\n    struct Item items[] =\n        {\n        /* note */ { .value = 1, .name = \"a\" },\n            { .value = 2, .name = \"b\" },\n        };\n    }\n",
+        "void f()\n    {\n    struct Item items[] =\n        {\n            /* note */ { .value = 1, .name = \"a\" },\n            { .value = 2, .name = \"b\" },\n        };\n    }\n",
     );
 }
 
@@ -14573,7 +14573,7 @@ fn a_comment_led_brace_row_sets_its_branch_body_column_for_the_next_branch() {
     check(
         input,
         &["--style=whitesmith"],
-        "static const struct Item items[] = {\n#if FEATURE\n    /* note */ {1, 2}\n#elif OTHER\n        {1, 2},\n        {3, 4}\n#endif\n    };\n",
+        "static const struct Item items[] = {\n#if FEATURE\n        /* note */ {1, 2}\n#elif OTHER\n        {1, 2},\n        {3, 4}\n#endif\n    };\n",
     );
 }
 
@@ -17213,4 +17213,24 @@ fn an_immediately_invoked_lambda_keeps_its_call_on_its_closer_line() {
     check(input, &["--style=kr"], input);
     let expected = "void f()\n{\n    auto a = []()\n    {\n        return 1;\n    }();\n    auto b = []\n    {\n        return 1;\n    }();\n    auto c = [&](int v)\n    {\n        return v;\n    }(1);\n    call([]()\n    {\n        return 1;\n    }());\n}\n";
     check(input, &["--style=allman"], expected);
+}
+
+#[test]
+fn comment_led_brace_rows_stand_where_the_rows_stand_without_the_comments() {
+    let input = "void f(void)\n{\n    static const int table[2][2] = {\n        /* first */ { 1, 0 },\n        /* second */ { 1, 1 },\n    };\n    static const struct Item items[] = {\n        { 0, 0 },\n#if FEATURE\n        { 1, 2 },\n        /* note */ { 3, 4 },\n#endif\n    };\n}\n";
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f(void) {\n    static const int table[2][2] = {\n            /* first */ { 1, 0 },\n            /* second */ { 1, 1 },\n        };\n    static const struct Item items[] = {\n            { 0, 0 },\n#if FEATURE\n            { 1, 2 },\n            /* note */ { 3, 4 },\n#endif\n        };\n    }\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f(void)\n    {\n    static const int table[2][2] =\n        {\n            /* first */ { 1, 0 },\n            /* second */ { 1, 1 },\n        };\n    static const struct Item items[] =\n        {\n            { 0, 0 },\n#if FEATURE\n            { 1, 2 },\n            /* note */ { 3, 4 },\n#endif\n        };\n    }\n",
+    );
+    check(
+        input,
+        &["--style=vtk"],
+        "void f(void)\n{\n    static const int table[2][2] =\n        {\n            /* first */ { 1, 0 },\n            /* second */ { 1, 1 },\n        };\n    static const struct Item items[] =\n        {\n            { 0, 0 },\n#if FEATURE\n            { 1, 2 },\n            /* note */ { 3, 4 },\n#endif\n        };\n}\n",
+    );
 }

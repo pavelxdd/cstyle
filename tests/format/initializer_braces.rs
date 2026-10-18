@@ -4071,7 +4071,7 @@ fn vtk_rows_after_a_comment_on_their_line_keep_the_row_column() {
 }
 
 #[test]
-fn whitesmith_rows_led_by_a_comment_stay_at_the_brace() {
+fn whitesmith_rows_led_by_a_comment_stand_a_level_past_the_brace() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=whitesmith".to_owned()])
         .expect("valid options");
@@ -4081,8 +4081,8 @@ fn whitesmith_rows_led_by_a_comment_stay_at_the_brace() {
         "    static const u8 trans[2][2] =",
         "        {",
         "        /* State: */",
-        "        /* 0 */ { 1, 0, },",
-        "        /* 1 */ { 1, 1, },",
+        "            /* 0 */ { 1, 0, },",
+        "            /* 1 */ { 1, 1, },",
         "        };",
         "    }",
     );
