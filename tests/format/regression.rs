@@ -9197,6 +9197,14 @@ fn a_word_headed_block_after_a_label_keeps_its_run_in_brace() {
 }
 
 #[test]
+fn rows_of_a_comment_before_an_assigned_value_follow_its_opener() {
+    let input = "void f()\n{\n  APPLY {\n      Item * const value =\n        /* first row\n           second row */\n        1 ? left : right;\n  }\n}\n";
+    let expected = "void f()\n    {\n    APPLY\n        {\n        Item * const value =\n            /* first row\n               second row */\n            1 ? left : right;\n        }\n    }\n";
+    check(input, &["--style=whitesmith"], expected);
+    check(expected, &["--style=whitesmith"], expected);
+}
+
+#[test]
 fn rows_of_a_define_in_a_case_block_stand_as_written() {
     // The rows of a define stand as written, which a case block's unindent
     // leaves too, so a second pass keeps them.
@@ -9208,6 +9216,37 @@ fn rows_of_a_define_in_a_case_block_stand_as_written() {
     }
     let input = "void f()\n{\n    switch (op) {\n    case 1: {\n#if defined(FIRST) && \\\n    defined(SECOND)\n        go();\n#endif\n    }\n    }\n}\n";
     check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn rows_of_a_comment_run_in_after_a_block_brace_follow_its_opener() {
+    // Rows past the `/*` keep their offset from it wherever the brace line
+    // moves; rows at or left of it stand at the body column.
+    for (input, expected) in [
+        (
+            "void f()\n{\n  g();\n  {/* first row\n      second row */\n    int t = 1;\n  }\n}\n",
+            "void f()\n{\n    g();\n    {/* first row\n        second row */\n        int t = 1;\n    }\n}\n",
+        ),
+        (
+            "void f()\n{\n  g();\n  {  /* first row\n      second row */\n    int t = 1;\n  }\n}\n",
+            "void f()\n{\n    g();\n    {  /* first row\n        second row */\n        int t = 1;\n    }\n}\n",
+        ),
+        (
+            "void f()\n{\n  g();\n  {/* first row\n second row */\n    int t = 1;\n  }\n}\n",
+            "void f()\n{\n    g();\n    {/* first row\n        second row */\n        int t = 1;\n    }\n}\n",
+        ),
+        (
+            "void f()\n{\n  g();\n  {      /* first row\n            second row */\n    int t = 1;\n  }\n}\n",
+            "void f()\n{\n    g();\n    {      /* first row\n              second row */\n        int t = 1;\n    }\n}\n",
+        ),
+        (
+            "void f()\n{\n  g();\n  {      /* first row\n      second row */\n    int t = 1;\n  }\n}\n",
+            "void f()\n{\n    g();\n    {      /* first row\n        second row */\n        int t = 1;\n    }\n}\n",
+        ),
+    ] {
+        check(input, &["--style=kr"], expected);
+        check(expected, &["--style=kr"], expected);
+    }
 }
 
 #[test]

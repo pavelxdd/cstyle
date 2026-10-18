@@ -1,4 +1,4 @@
-use crate::config::{BraceStyle, FormatOptions, PointerAlign, ReferenceAlign};
+use crate::config::{BraceStyle, FormatOptions, IndentStyle, PointerAlign, ReferenceAlign};
 use crate::formatter::braces::classification::ExternCGuard;
 use crate::formatter::braces::initializers::initializer_brace_line_comment_gap;
 use crate::formatter::braces::postprocess::horstmann_run_in_fill;
@@ -3474,8 +3474,25 @@ impl FormatEngine<'_> {
                 .sum();
             trim_amount.saturating_sub(chars)
         });
+        // The column of an opener that stands after the brace on its line.
+        let mut merged_opener_column = None;
+        let mut opener_shift = 0;
+        let opener_after_tab = self.current.active_comment().is_some_and(|opener| {
+            self.tree.tokens[..opener]
+                .iter()
+                .rev()
+                .take_while(|token| !matches!(token, Token::Newline))
+                .any(|token| matches!(token, Token::Whitespace(ws) if ws.contains('\t')))
+        });
         let mut lines = comment.lines().enumerate().peekable();
         while let Some((index, line)) = lines.next() {
+            if index == 1 && self.token_input.token_line_opens_with_brace && !opener_after_tab {
+                let opener = comment.lines().next().unwrap_or_default().trimmed_end();
+                merged_opener_column = self.output.last().and_then(|row| {
+                    let lead = row.trimmed_end().strip_suffix(opener)?;
+                    (!lead.trimmed().is_empty()).then(|| visual_width_from(lead, 0, tab_width))
+                });
+            }
             if index == 0 && run_in_opener {
                 // The comment keeps the gap it had after the brace.
                 let gap = self
@@ -3592,28 +3609,57 @@ impl FormatEngine<'_> {
                         } else {
                             self.layout.indentation.indent()
                         };
-                        let merged_comment_column =
-                            self.layout.frame_stack.active_brace().map_or_else(
-                                || {
-                                    ContinuationIndent::Level(indent)
-                                        .columns(self.options.indent_width)
-                                },
-                                |frame| frame.body_indent_column.max(opener_output_column),
-                            );
-                        // Each row keeps what stands past the `/*` column,
-                        // less what a tab crossing it took.
-                        format!(
-                            "{}{}",
-                            self.options.continuation_indent_prefix(
-                                merged_comment_column / self.options.indent_width.max(1),
-                                merged_comment_column,
-                            ),
-                            kept.trimmed_end()
-                        )
+                        let body_column = self.layout.frame_stack.active_brace().map_or_else(
+                            || ContinuationIndent::Level(indent).columns(self.options.indent_width),
+                            |frame| frame.body_indent_column,
+                        );
+                        let row_lead = kept.len() - trimmed_kept.len();
+                        match merged_opener_column {
+                            // A row past the opener keeps its offset from it
+                            // and the others stand at the body.
+                            Some(opener)
+                                if self.output_indent_style == IndentStyle::Spaces
+                                    && !line[..line.len() - line.trimmed_start().len()]
+                                        .contains('\t') =>
+                            {
+                                let column = if row_lead > 0 {
+                                    opener + row_lead
+                                } else {
+                                    body_column
+                                };
+                                format!(
+                                    "{}{}",
+                                    self.comment_row_prefix(column),
+                                    trimmed_kept.trimmed_end()
+                                )
+                            }
+                            _ => {
+                                let merged_comment_column = self
+                                    .layout
+                                    .frame_stack
+                                    .active_brace()
+                                    .map_or(body_column, |_| body_column.max(opener_output_column));
+                                // Each row keeps what stands past the `/*`
+                                // column, less what a tab crossing it took.
+                                format!(
+                                    "{}{}",
+                                    self.options.continuation_indent_prefix(
+                                        merged_comment_column / self.options.indent_width.max(1),
+                                        merged_comment_column,
+                                    ),
+                                    kept.trimmed_end()
+                                )
+                            }
+                        }
                     } else {
                         format!("{opener_prefix}{}", kept.trimmed_end())
                     }
                 }
+            };
+            // The rows follow the opener wherever publishing moved it.
+            let formatted = match opener_shift {
+                0 => formatted,
+                shift => shift_row_lead(formatted, shift),
             };
             if lines.peek().is_none()
                 && !formatted.is_empty()
@@ -3627,6 +3673,9 @@ impl FormatEngine<'_> {
                 self.push_empty_line();
             } else {
                 self.push_raw_comment_output_line(formatted);
+                if index == 0 {
+                    opener_shift = self.published_line_shift;
+                }
             }
         }
     }
@@ -4410,6 +4459,16 @@ impl FormatEngine<'_> {
 
 fn is_decorative_block_comment_closer(line: &str) -> bool {
     line.ends_with("*/") && line.chars().all(|ch| matches!(ch, '*' | '/'))
+}
+
+/// `row` moved `shift` columns, when its lead is spaces only.
+fn shift_row_lead(row: String, shift: isize) -> String {
+    let text = row.trimmed_start();
+    let lead = row.len() - text.len();
+    if text.is_empty() || row[..lead].contains('\t') {
+        return row;
+    }
+    format!("{}{text}", " ".repeat(lead.saturating_add_signed(shift)))
 }
 
 pub(crate) fn trailing_comment_columns(tokens: &[Token]) -> Vec<usize> {
