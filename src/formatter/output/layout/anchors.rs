@@ -136,6 +136,11 @@ impl FormatEngine<'_> {
                 self.argument_after_lambda_argument_indent(first)
             })
         })
+        .or_else(|| {
+            when(!in_parens && after_comma, || {
+                self.initializer_after_lambda_initializer_indent(first)
+            })
+        })
         .or_else(|| self.braceless_body_indent(first))
         .or_else(|| {
             when(opens_brace, || {
@@ -2783,6 +2788,33 @@ impl FormatEngine<'_> {
         (self.output.line_tokens(line)?.first == head).then(|| {
             self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces()
         })
+    }
+
+    /// A constructor's initializer after one whose lambda body closes on
+    /// the line before stands at the constructor's statement.
+    #[inline(never)]
+    fn initializer_after_lambda_initializer_indent(&self, first: usize) -> Option<usize> {
+        if !self.in_constructor_initializer() {
+            return None;
+        }
+        let comma = self.tree.previous_code_token(first)?;
+        if !matches!(self.tree.tokens[comma], Token::Symbol(',')) {
+            return None;
+        }
+        let span = self
+            .output
+            .line_tokens(self.output.line_with_token(comma)?)?;
+        let body = (span.first..=span.last).find_map(|index| {
+            matches!(self.tree.tokens[index], Token::Symbol('}'))
+                .then(|| self.tree.groups.closed_at(index))
+                .flatten()
+                .filter(|&body| self.tree.blocks.kind(body) == Some(BlockKind::Lambda))
+        })?;
+        let open_line = self
+            .output
+            .line_with_token(self.tree.groups.get(body).open)?;
+        let start = self.statement_start_line(open_line);
+        Some(self.output.lead_width(start, self.options.tab_width) + self.case_unindent_spaces())
     }
 
     /// The output line on which the statement continued on output line

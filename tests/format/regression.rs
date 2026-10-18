@@ -17467,3 +17467,12 @@ fn rows_inside_and_after_a_comment_led_multi_line_brace_row_stand_as_without_the
         "static const Item items[2] = {\n        /* 0 */ {\n        1,\n        2\n        },\n    { 3, 4 },\n};\n",
     );
 }
+
+#[test]
+fn an_initializer_after_a_run_in_lambda_initializer_stays_at_the_constructor() {
+    let input =
+        "Item::Item()\n    : value([] {\n        return 1;\n    }()),\n      other(0)\n{\n}\n";
+    let expected = "Item::Item()\n    : value([]\n{   return 1; }()),\nother(0)\n{}\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+}
