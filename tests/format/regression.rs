@@ -9295,6 +9295,21 @@ fn rows_of_a_comment_run_in_after_a_block_brace_follow_its_opener() {
         check(input, &["--style=kr"], expected);
         check(expected, &["--style=kr"], expected);
     }
+    // Horstmann and pico set the opener at the body, which the rows follow.
+    let input = "int items[][2] = {\n  { /* first row\n       second row */\n    1, 2 },\n};\n";
+    for (style, expected) in [
+        (
+            "--style=pico",
+            "int items[][2] = {\n    {   /* first row\n           second row */\n        1, 2 }, };\n",
+        ),
+        (
+            "--style=horstmann",
+            "int items[][2] = {\n    {   /* first row\n           second row */\n        1, 2\n    },\n};\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
 }
 
 #[test]

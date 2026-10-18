@@ -3492,7 +3492,15 @@ impl FormatEngine<'_> {
         });
         let mut lines = comment.lines().enumerate().peekable();
         while let Some((index, line)) = lines.next() {
-            if index == 1 && self.token_input.token_line_opens_with_brace && !opener_after_tab {
+            // Horstmann and pico set the opener at the body later.
+            if index == 1
+                && self.token_input.token_line_opens_with_brace
+                && !opener_after_tab
+                && !matches!(
+                    self.options.brace_style,
+                    BraceStyle::Horstmann | BraceStyle::Pico
+                )
+            {
                 let opener = comment.lines().next().unwrap_or_default().trimmed_end();
                 merged_opener_column = self.output.last().and_then(|row| {
                     let lead = row.trimmed_end().strip_suffix(opener)?;
