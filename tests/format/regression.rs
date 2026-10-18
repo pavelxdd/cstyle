@@ -9267,6 +9267,24 @@ fn rows_of_a_define_in_a_case_block_stand_as_written() {
 }
 
 #[test]
+fn a_comment_after_the_last_row_of_a_brace_comment_stays_on_the_row() {
+    let input = "void f()\n{\n    {/* first row\n        second row */ /* note */\n      int t = 1;\n    }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=allman",
+            "void f()\n{\n    {\n        /* first row\n           second row */ /* note */\n        int t = 1;\n    }\n}\n",
+        ),
+        (
+            "--style=java",
+            "void f() {\n    {\n        /* first row\n           second row */ /* note */\n        int t = 1;\n    }\n}\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
 fn a_block_a_word_heads_continues_its_statements_as_any_block() {
     // astyle reads the block as a list and sets no continuation in it.
     let input = "void f()\n{\n    APPLY {\n        value = first +\n            second;\n        go(first,\n           second);\n    }\n}\n";

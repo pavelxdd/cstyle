@@ -3218,6 +3218,7 @@ impl FormatEngine<'_> {
             " ".repeat(spaces)
         } else if self.token_input.token_line_opens_with_brace
             && !self.token_input.token_begins_source_line
+            && !self.comment_follows_broken_block_brace()
         {
             let case_brace_extra = if self.output.last().is_some_and(|line| {
                 let trimmed = line.trimmed();
@@ -3692,9 +3693,11 @@ impl FormatEngine<'_> {
                 0 => formatted,
                 shift => shift_row_lead(formatted, shift),
             };
+            // A token after the comment on its last row stays on the row.
             if lines.peek().is_none()
                 && !formatted.is_empty()
                 && self.token_input.token_line_opens_with_brace
+                && !self.token_follows_active_comment_on_line()
             {
                 self.push_raw_comment_output_line(formatted);
             } else if lines.peek().is_none() && !formatted.is_empty() {
@@ -3709,6 +3712,28 @@ impl FormatEngine<'_> {
                 }
             }
         }
+    }
+
+    /// Whether the comment follows a block brace the style broke onto a line
+    /// of its own, where the comment opens the body as one on its own line.
+    fn comment_follows_broken_block_brace(&self) -> bool {
+        matches!(
+            self.layout.nesting.brace_type_stack.last(),
+            Some(BraceType::Command | BraceType::Definition)
+        ) && self.output.last().is_some_and(|line| line.trimmed() == "{")
+            && !self
+                .source_run_in_brace_lines
+                .contains(&self.output.len().wrapping_sub(1))
+    }
+
+    /// Whether a token follows the active comment on its last source line.
+    fn token_follows_active_comment_on_line(&self) -> bool {
+        self.current.active_comment().is_some_and(|comment| {
+            self.tree.tokens[comment + 1..]
+                .iter()
+                .take_while(|token| !matches!(token, Token::Newline))
+                .any(|token| !matches!(token, Token::Whitespace(_)))
+        })
     }
 
     /// Whether only opening braces stand before the active comment on its
