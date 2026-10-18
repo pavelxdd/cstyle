@@ -18398,3 +18398,16 @@ fn a_macro_call_leading_a_stream_ending_in_a_call_is_no_standalone_macro_line() 
     check(input, &["--style=horstmann"], expected);
     check(expected, &["--style=horstmann"], expected);
 }
+
+#[test]
+fn a_comment_after_a_closer_of_a_block_opened_above_stays_with_the_closer() {
+    // Only a one-line block's closer moves the comment after it into the
+    // expanded block.
+    let input = "namespace {\nint count;\nstruct Item {}; } // namespace\n";
+    let expected = "namespace\n{\nint count;\nstruct Item {};\n} // namespace\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+    let expected = "namespace {\nint count;\nstruct Item {}; } // namespace\n";
+    check(input, &["--style=lisp"], expected);
+    check(expected, &["--style=lisp"], expected);
+}

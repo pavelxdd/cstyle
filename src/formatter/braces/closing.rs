@@ -466,6 +466,7 @@ impl FormatEngine<'_> {
                         is_standard_add_braces_header(header) || header == "switch"
                     }))
             && self.layout.line_state.is_one_line_block
+            && self.closes_block_opened_on_its_line()
             && !matches!(
                 self.layout.nesting.last_closed_brace_type,
                 Some(BraceType::Array | BraceType::CompoundLiteral | BraceType::Initializer)
@@ -608,6 +609,20 @@ impl FormatEngine<'_> {
                 .continuation_indent
                 .set_next_line_spaces(column + unindent * self.options.indent_width);
         }
+    }
+
+    /// Whether the closer being pushed closes a block opened on its own
+    /// source line.
+    fn closes_block_opened_on_its_line(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        self.current
+            .active_token()
+            .and_then(|close| Some((self.tree.groups.closed_at(close)?, close)))
+            .is_none_or(|(group, close)| {
+                !tokens[self.tree.groups.get(group).open..close]
+                    .iter()
+                    .any(|token| matches!(token, Token::Newline))
+            })
     }
 
     fn move_one_line_block_comment_after_brace(
