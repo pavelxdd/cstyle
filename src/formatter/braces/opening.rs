@@ -945,8 +945,12 @@ impl FormatEngine<'_> {
                 head.insert(0, ' ');
                 head.insert_str(0, code);
             }
-            // A capture list alone heads a lambda the brace below it opens.
-            if is_lambda_body_header(&head) || is_lambda_capture_header(&head) {
+            // A capture list alone heads a lambda the brace below it opens,
+            // as a block literal's head does.
+            if is_lambda_body_header(&head)
+                || is_lambda_capture_header(&head)
+                || current_ends_block_literal_header(&head)
+            {
                 return Some((head, body_indent));
             }
             if code.ends_with(';') || code.ends_with('{') || code.ends_with('}') {

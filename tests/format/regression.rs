@@ -17106,3 +17106,14 @@ fn an_argument_past_a_directive_after_a_lambda_closer_stands_at_the_statement() 
     let expected = "void f()\n    {\n    call(first,\n         []\n        {\n        go();\n#ifdef FEATURE\n        },\n#endif\n    other,\n    more);\n    }\n";
     check(input, &["--style=whitesmith"], expected);
 }
+
+#[test]
+fn a_block_literal_head_above_its_brace_opens_the_block_as_on_the_brace_line() {
+    let input = "void f()\n{\n    dispatch(queue,\n             ^(int value) {\n        go(value);\n    },\n    other);\n}\n";
+    let expected = "void f()\n    {\n    dispatch(queue,\n             ^(int value)\n        {\n        go(value);\n        },\n    other);\n    }\n";
+    check(input, &["--style=whitesmith"], expected);
+    check(expected, &["--style=whitesmith"], expected);
+    let expected = "void f()\n{\n    dispatch(queue,\n             ^(int value)\n        {\n        go(value);\n        },\n    other);\n}\n";
+    check(input, &["--style=vtk"], expected);
+    check(expected, &["--style=vtk"], expected);
+}

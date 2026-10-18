@@ -120,7 +120,8 @@ pub(crate) fn line_ends_compound_literal_cast(line: &str) -> bool {
     match before_open.chars().next_back() {
         Some(ch) if is_word_char(ch) => trailing_word(before_open) == language::RETURN,
         Some(')') => ends_with_value_cast(before_open),
-        Some(']') => false,
+        // A block literal's parameters head its body.
+        Some(']' | '^') => false,
         _ => true,
     }
 }
