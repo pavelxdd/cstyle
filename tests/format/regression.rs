@@ -17117,3 +17117,9 @@ fn a_block_literal_head_above_its_brace_opens_the_block_as_on_the_brace_line() {
     check(input, &["--style=vtk"], expected);
     check(expected, &["--style=vtk"], expected);
 }
+
+#[test]
+fn arguments_after_a_lambda_body_stand_at_the_statement_when_parens_indent() {
+    let input = "void f()\n{\n    result = call(first, [] {\n        go();\n    },\n    other,\n    more);\n    call(first, [] {\n        go();\n    },\n    other);\n}\n";
+    check(input, &["--style=kr", "--indent-after-parens"], input);
+}

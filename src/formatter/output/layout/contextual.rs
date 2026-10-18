@@ -3049,6 +3049,7 @@ impl FormatEngine<'_> {
             && !line_start.starts_with_any(b"#{})")
             && !compound_literal_row
             && !opens_lambda_body
+            && !replay.follows_lambda_body
             && let Some(previous) = self.output.last_line_outside_comment()
         {
             let previous_code = self.output.code_trimmed_of(previous);
