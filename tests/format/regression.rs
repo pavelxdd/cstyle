@@ -17079,3 +17079,10 @@ fn rows_of_a_list_split_off_a_type_closer_by_the_maximum_length_stand_in_the_lis
         attached,
     );
 }
+
+#[test]
+fn a_block_after_a_closer_past_a_constructor_stays_on_its_line() {
+    let input = "Item::Item(int value)\n    : value(value)\n{\n}\nvoid f()\n{\n    if (a) {\n        count++;\n    }\n    {\n        value = 1;\n    }\n}\n";
+    let expected = "Item::Item(int value)\n    : value(value) {\n}\nvoid f() {\n    if (a) {\n        count++;\n    }\n    {\n        value = 1;\n    }\n}\n";
+    check(input, &["--style=java"], expected);
+}
