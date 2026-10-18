@@ -18152,3 +18152,15 @@ fn pad_oper_pads_the_base_colon_of_a_class_nested_in_a_class_once() {
         check(&expected, &["--style=kr", "--pad-oper"], &expected);
     }
 }
+
+#[test]
+fn arguments_of_a_head_after_an_access_label_follow_its_split_return_type() {
+    let input = "class Store {\n public:\n  static Status Open(const Options& options,\n                     Store** result);\n  int Count(int first,\n            int second);\n};\n";
+    let expected = "class Store\n{\npublic:\n    static Status\n    Open(const Options& options,\n         Store** result);\n    int\n    Count(int first,\n          int second);\n};\n";
+    check(input, &["--style=kr", "--break-return-type-decl"], expected);
+    check(
+        expected,
+        &["--style=kr", "--break-return-type-decl"],
+        expected,
+    );
+}

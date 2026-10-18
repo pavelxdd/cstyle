@@ -765,7 +765,7 @@ impl FormatEngine<'_> {
     }
 
     /// Whether the token `index` is the `:` of an access label.
-    fn ends_access_label(&self, index: usize) -> bool {
+    pub(crate) fn ends_access_label(&self, index: usize) -> bool {
         let access = |label: usize| {
             matches!(&self.tree.tokens[label], Token::Word(word)
                     if matches!(word.as_str(), "public" | "protected" | "private")

@@ -1034,7 +1034,9 @@ impl FormatEngine<'_> {
                         .is_none_or(|group| groups.get(group).delimiter == Delimiter::Brace)
                 || matches!(&tokens[before], Token::Word(word) if word == "else" || word == "do")
                 || matches!(tokens[before], Token::Symbol(':'))
-                    && (self.ends_case_label(before) || self.ends_user_label(before))
+                    && (self.ends_case_label(before)
+                        || self.ends_user_label(before)
+                        || self.ends_access_label(before))
             {
                 break None;
             }
