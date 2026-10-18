@@ -16901,3 +16901,11 @@ fn attach_styles_attach_a_constructor_body_after_an_initializer_list_closer() {
     let expected = "Holder::Holder()\n    : value_(1),\n      items_{\n    1,\n    2\n}\n{\n}\n";
     check(input, &["--style=kr"], expected);
 }
+
+#[test]
+fn a_directive_after_a_block_a_directive_parts_from_its_label_stands_with_the_code() {
+    let input = "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n    {\n        pop(state);\n    }\n#ifdef FEATURE\n    break;\n#endif\n    case 2:\n        break;\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n        {\n            pop(state);\n        }\n        #ifdef FEATURE\n        break;\n        #endif\n    case 2:\n        break;\n    }\n}\n";
+    check(input, &["--style=kr", "--indent-preproc-cond"], expected);
+    check(expected, &["--style=kr", "--indent-preproc-cond"], expected);
+}

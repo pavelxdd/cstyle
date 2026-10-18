@@ -6981,7 +6981,13 @@ impl FormatEngine<'_> {
     pub(crate) fn directive_after_case_block_column(&self, directive: usize) -> Option<usize> {
         let close = self.tree.previous_code_token(directive)?;
         let block = self.tree.groups.closed_at(close)?;
-        let label = self.case_label_of_block(self.tree.groups.get(block).open)?;
+        let open = self.tree.groups.get(block).open;
+        let label = self.case_label_of_block(open)?;
+        // A directive between the label and the block makes it a block of
+        // the case's body.
+        if self.tree.has_directive_in(label..open) {
+            return None;
+        }
         let line = self.output.line_with_token(label)?;
         // A block kept whole on its label's line is a statement of the case.
         (self.output.line_tokens(line)?.first == label
