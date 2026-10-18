@@ -16750,3 +16750,11 @@ fn attach_styles_attach_a_list_brace_after_a_call_paren_the_line_ends_in() {
         "void f() {\n    call( {\n        1,\n        2\n        });\n    value = call( {\n        1,\n        2\n        });\n    }\n",
     );
 }
+
+#[test]
+fn whitesmith_brace_rows_of_a_call_argument_list_stand_a_level_past_its_brace() {
+    let input = "void f()\n{\n    call(value, {\n        {1, 2},\n        {3, 4}\n    });\n    call(value, {\n        {2, 3},\n        4\n    });\n}\n";
+    let expected = "void f()\n    {\n    call(value,\n        {\n            {1, 2},\n            {3, 4}\n        });\n    call(value,\n        {\n            {2, 3},\n        4\n        });\n    }\n";
+    check(input, &["--style=whitesmith"], expected);
+    check(expected, &["--style=whitesmith"], expected);
+}

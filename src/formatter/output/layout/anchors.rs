@@ -1464,19 +1464,22 @@ impl FormatEngine<'_> {
     fn vtk_block_like_outer(&self, group: GroupId) -> Option<GroupId> {
         let groups = &self.tree.groups;
         self.vtk_array_outer(group).or_else(|| {
-            (self.options.brace_style == BraceStyle::Vtk && self.in_code(groups.get(group).open))
-                .then(|| {
-                    groups
-                        .ancestors(group)
-                        .take_while(|&id| {
-                            matches!(
-                                self.tree.blocks.kind(id),
-                                Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
-                            )
-                        })
-                        .last()
-                })
-                .flatten()
+            (matches!(
+                self.options.brace_style,
+                BraceStyle::Vtk | BraceStyle::Whitesmith
+            ) && self.in_code(groups.get(group).open))
+            .then(|| {
+                groups
+                    .ancestors(group)
+                    .take_while(|&id| {
+                        matches!(
+                            self.tree.blocks.kind(id),
+                            Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                        )
+                    })
+                    .last()
+            })
+            .flatten()
         })
     }
 
