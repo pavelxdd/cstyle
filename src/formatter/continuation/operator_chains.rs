@@ -415,9 +415,11 @@ impl FormatEngine<'_> {
         }
         let previous = self.output.last_code_line_past_comments_and_directives()?;
         let previous_trimmed = previous.trimmed_end();
+        // Indenting after parens continues a chain a level in, at no shift.
         if !previous_trimmed.ends_with('}')
             && !((previous_trimmed.contains(" << ") || previous_trimmed.contains(" >> "))
-                && self.open_paren_column_of(previous_trimmed).is_none())
+                && self.open_paren_column_of(previous_trimmed).is_none()
+                && !self.options.indent_after_parens)
         {
             return None;
         }

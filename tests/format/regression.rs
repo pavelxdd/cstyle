@@ -16365,3 +16365,22 @@ fn returned_message_rows_align_at_the_keyword_as_other_message_rows() {
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
+
+#[test]
+fn indent_after_parens_continues_a_shift_chain_past_a_directive_a_level_in() {
+    let input = "void f()\n{\n    std::cout << first\n#ifdef FEATURE\n              << second\n#endif\n              << third;\n}\n";
+    let expected = "void f()\n{\n    std::cout << first\n#ifdef FEATURE\n        << second\n#endif\n        << third;\n}\n";
+    for style in ["--style=kr", "--style=gnu"] {
+        check(
+            input,
+            &[style, "--indent-preproc-block", "--indent-after-parens"],
+            expected,
+        );
+        check(
+            expected,
+            &[style, "--indent-preproc-block", "--indent-after-parens"],
+            expected,
+        );
+        check(input, &[style, "--indent-preproc-block"], input);
+    }
+}
