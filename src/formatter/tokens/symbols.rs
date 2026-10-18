@@ -457,9 +457,10 @@ impl FormatEngine<'_> {
                 self.current_is_preindented = true;
             }
         }
-        let semicolonless_macro_call_indent =
-            is_semicolonless_macro_call_name(self.current.trimmed())
-                .then(|| self.current_line_indent_spaces());
+        // A call among a template's parameters is no statement.
+        let semicolonless_macro_call_indent = (!self.template_continuation_active()
+            && is_semicolonless_macro_call_name(self.current.trimmed()))
+        .then(|| self.current_line_indent_spaces());
         let inline_brace_call_indent = self.inline_brace_call_indent_spaces(&self.current);
         let paren_indent_spaces =
             // A line comment after the `(` ends its line as well.

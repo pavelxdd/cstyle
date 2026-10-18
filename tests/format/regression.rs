@@ -18201,3 +18201,11 @@ fn a_body_brace_after_qualifiers_closing_a_multiline_head_stands_at_the_head() {
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn a_macro_call_among_template_parameters_ends_no_statement() {
+    let input = "template <typename To, typename From,\n          ENABLE_IF(first &&\n                    second)>\nauto convert(const From from) -> To {\n  return 0;\n}\n";
+    let expected = "template <typename To, typename From,\n          ENABLE_IF(first &&\n                    second)>\nauto\nconvert(const From from) -> To\n{\n    return 0;\n}\n";
+    check(input, &["--style=kr", "--break-return-type"], expected);
+    check(expected, &["--style=kr", "--break-return-type"], expected);
+}
