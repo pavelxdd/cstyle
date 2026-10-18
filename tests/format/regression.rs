@@ -18186,3 +18186,18 @@ fn arguments_of_an_operator_head_follow_its_split_return_type() {
     let expected = "Node*\nList::Make(\n    const Key& key, int height)\n{\n    return 0;\n}\n";
     check(input, &["--style=kr", "--break-return-type"], expected);
 }
+
+#[test]
+fn a_body_brace_after_qualifiers_closing_a_multiline_head_stands_at_the_head() {
+    let input = "class Item {\n  int call(const char* first,\n           const char* second) const {\n    return 0;\n  }\n  auto size(int first,\n            int second) -> int {\n    return 0;\n  }\n  void run(int first,\n           int second) noexcept override {\n  }\n};\nint call(const char* first,\n         const char* second) const {\n  return 0;\n}\n";
+    let expected = "class Item\n{\n    int call(const char* first,\n             const char* second) const\n    {\n        return 0;\n    }\n    auto size(int first,\n              int second) -> int\n    {\n        return 0;\n    }\n    void run(int first,\n             int second) noexcept override\n    {\n    }\n};\nint call(const char* first,\n         const char* second) const\n{\n    return 0;\n}\n";
+    for style in [
+        "--style=kr",
+        "--style=allman",
+        "--style=gnu",
+        "--style=mozilla",
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
