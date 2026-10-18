@@ -17159,3 +17159,11 @@ fn a_comment_led_argument_after_a_lambda_body_stands_at_the_statement() {
     let input = "void f()\n{\n    call(first, [] {\n        go();\n    },\n    /* note */ other,\n    more);\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_list_brace_before_a_run_of_comments_breaks_as_before_one_comment() {
+    let input = "int b[] = { /* c */\n    1,\n};\nint d[] = { /* c */ /* d */\n    1,\n};\n";
+    let expected =
+        "int b[] =   /* c */\n{\n    1,\n};\nint d[] =   /* c */ /* d */\n{\n    1,\n};\n";
+    check(input, &["--style=allman"], expected);
+}
