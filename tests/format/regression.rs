@@ -9136,6 +9136,14 @@ fn an_attached_closing_while_condition_continues_under_its_paren_where_the_close
 }
 
 #[test]
+fn a_comment_led_declarator_after_an_attribute_line_keeps_its_column() {
+    let input = "void f()\n{\n    static const struct Item\n        first = {\n            1, 2\n        },\n        __attribute__((unused))\n        /* note */ second = {\n            3, 4\n        };\n}\n";
+    let expected = "void f()\n{   static const struct Item\n        first =\n    {   1, 2 },\n    __attribute__((unused))\n    /* note */ second =\n    {   3, 4 }; }\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+}
+
+#[test]
 fn vtk_sets_a_function_try_block_at_the_function_body() {
     let input = "void helper()\ntry {\n    go();\n} catch (...) {\n    stop();\n}\n";
     let expected = "void helper()\ntry\n{\n    go();\n}\ncatch (...)\n{\n    stop();\n}\n";

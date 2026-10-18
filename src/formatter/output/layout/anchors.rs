@@ -2260,6 +2260,7 @@ impl FormatEngine<'_> {
             .or_else(|| self.stacked_argument_indent(code))
             .or_else(|| self.argument_after_comma_column(code))
             .or_else(|| self.declarator_after_comma_indent(code))
+            .or_else(|| self.declarator_after_initializer_indent(code))
             .or_else(|| {
                 // An initializer after one whose lambda body closes above.
                 let in_delimiters =
