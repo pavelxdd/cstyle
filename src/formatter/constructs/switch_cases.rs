@@ -1058,6 +1058,17 @@ pub(crate) fn label_line_holds_braceless_header(code: &str) -> bool {
     header && (statement.ends_with(')') || matches!(statement, "else" | "do"))
 }
 
+/// Whether a goto label follows the case label on `code`, its line.
+fn label_line_holds_goto_label(code: &str) -> bool {
+    let Some(colon) = find_case_colon(code) else {
+        return false;
+    };
+    code[colon + 1..]
+        .trimmed()
+        .strip_suffix(':')
+        .is_some_and(|label| !label.is_empty() && label.chars().all(is_identifier_continue))
+}
+
 fn starts_inline_case_statement(line: &str) -> bool {
     let line = line.trimmed_start();
     if !(starts_header_word(line, "case") || starts_header_word(line, "default")) {
@@ -1724,12 +1735,14 @@ impl FormatEngine<'_> {
             return None;
         }
         let code = self.output.code(index);
-        // A block after a statement or a header kept on the label line is
-        // theirs, not the label's.
+        // A block after a statement, a header or a goto label kept on the
+        // label line is theirs, not the label's.
         let statement_block = || {
             code.strip_suffix('{').is_some_and(|head| {
                 let head = head.trimmed_end();
-                head.ends_with(';') || label_line_holds_braceless_header(head)
+                head.ends_with(';')
+                    || label_line_holds_braceless_header(head)
+                    || label_line_holds_goto_label(head)
             })
         };
         // A label kept after the `}` closing the case block before it.

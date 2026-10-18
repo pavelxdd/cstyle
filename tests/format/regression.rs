@@ -10185,7 +10185,7 @@ fn a_case_label_line_holding_a_statement_label_stands_with_the_case_labels() {
         ),
         (
             "--style=lisp",
-            "void f() {\n    switch (k) {\n    case 1:\n        goto again;\n    case 2: again:\n        x();\n        break;\n    case 3: other: {\n        y(); } } }\n",
+            "void f() {\n    switch (k) {\n    case 1:\n        goto again;\n    case 2: again:\n        x();\n        break;\n    case 3: other: {\n            y(); } } }\n",
         ),
     ] {
         check(input, &[style], expected);
@@ -17306,6 +17306,22 @@ fn a_goto_label_block_after_a_case_label_stands_at_the_case_body() {
     check(
         expected,
         &["--style=gnu", "--keep-one-line-statements"],
+        expected,
+    );
+}
+
+#[test]
+fn a_goto_label_block_kept_on_a_case_line_nests_in_the_case_body() {
+    let input = "void f(void)\n{\n    switch (x) {\n    case 2: done: {\n        int q;\n        break;\n    }\n    case 3: {\n        int q;\n        break;\n    }\n    }\n}\n";
+    let expected = "void f(void)\n{\n    switch (x) {\n    case 2: done: {\n            int q;\n            break;\n        }\n    case 3: {\n        int q;\n        break;\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--keep-one-line-statements"],
+        expected,
+    );
+    check(
+        expected,
+        &["--style=kr", "--keep-one-line-statements"],
         expected,
     );
 }

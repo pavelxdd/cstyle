@@ -6867,6 +6867,18 @@ impl FormatEngine<'_> {
         {
             return None;
         }
+        // A goto label after the case label owns the block, a statement of
+        // the case body.
+        let goto_label = self.tree.previous_code_token(colon).is_some_and(|name| {
+            matches!(&tokens[name], Token::Word(word) if word != "default")
+                && self
+                    .tree
+                    .previous_code_token(name)
+                    .is_some_and(|before| matches!(tokens[before], Token::Symbol(':')))
+        });
+        if goto_label {
+            return None;
+        }
         let label = self.tree.blocks.owner(block).and_then(|owner| {
             (0..=owner).rev().take_while(|&index| !matches!(tokens[index], Token::Symbol(';' | '{' | '}'))).find(|&index| {
                 matches!(&tokens[index], Token::Word(word) if matches!(word.as_str(), "case" | "default"))
