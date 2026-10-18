@@ -635,6 +635,9 @@ impl FormatEngine<'_> {
             self.attached_return_type_indent_delta(line_indent_spaces)
                 .unwrap_or(0)
         };
+        let stacked_base = (!has_next)
+            .then(|| self.layout.nesting.current_continuation_indent_spaces())
+            .flatten();
         let mut spaces = if !has_next {
             let base = self
                 .layout
@@ -753,6 +756,12 @@ impl FormatEngine<'_> {
             self.layout
                 .nesting
                 .push_capped_continuation_indent_spaces(spaces, aligned);
+        } else if stacked_base.is_some_and(|base| spaces == base + continuation_spaces)
+            && !(trailing_first_paren && over_max)
+        {
+            self.layout
+                .nesting
+                .register_derived_continuation_indent_spaces(spaces, continuation_spaces);
         } else if (trailing_first_paren && over_max) || literal_arguments {
             self.layout
                 .nesting

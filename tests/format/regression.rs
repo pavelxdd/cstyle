@@ -18323,3 +18323,18 @@ fn pad_oper_reads_a_pack_expansion_among_template_arguments_as_template_argument
     check(input, &["--style=kr", "--pad-oper"], expected);
     check(expected, &["--style=kr", "--pad-oper"], expected);
 }
+
+#[test]
+fn arguments_after_a_paren_ending_a_split_head_continue_from_the_stack_below_it() {
+    // A paren ending the head continues a level past the column below it,
+    // which the split moves. A braced argument stands with the others, at
+    // file scope as in a body.
+    let input = "static auto check(int value) -> decltype(all_true(\n    first,\n    second));\nstatic auto check(sequence<Is...>) -> decltype(all_true(\n    sequence<Is...>{},\n    second));\n";
+    let expected = "static auto\ncheck(int value) -> decltype(all_true(\n                                 first,\n                                 second));\nstatic auto\ncheck(sequence<Is...>) -> decltype(all_true(\n                                       sequence<Is...> {},\n                                       second));\n";
+    check(input, &["--style=kr", "--break-return-type-decl"], expected);
+    check(
+        expected,
+        &["--style=kr", "--break-return-type-decl"],
+        expected,
+    );
+}

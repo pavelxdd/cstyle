@@ -72,9 +72,9 @@ pub(crate) struct NestingState {
     inline_brace_call_paren_stack: Vec<bool>,
     semicolonless_macro_call_paren_stack: Vec<Option<usize>>,
     continuation_indent_spaces_stack: Vec<usize>,
-    /// The columns the maximum continuation indent capped, by their index
-    /// in the continuation stack.
-    capped_continuation_columns: Vec<(usize, usize)>,
+    /// How the continuation columns that are no column of their line came
+    /// about, by their index in the continuation stack.
+    continuation_column_origins: Vec<(usize, ColumnOrigin)>,
     continuation_indent_checkpoint_stack: Vec<usize>,
     brace_scope_depth_stack: Vec<ScopeDepth>,
     pub(crate) brace_header_stack: Vec<Option<String>>,
@@ -84,6 +84,15 @@ pub(crate) struct NestingState {
     pub(crate) last_closed_brace_header: Option<String>,
     pub(crate) last_closed_brace_type: Option<BraceType>,
     pub(crate) last_closed_brace_extra_indent: usize,
+}
+
+/// How a continuation column that is no column of its line came about.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum ColumnOrigin {
+    /// The maximum continuation indent set it in place of this column.
+    Capped(usize),
+    /// It continues `offset` past the column at stack index `base`.
+    Derived { base: usize, offset: usize },
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -151,7 +160,7 @@ impl NestingState {
     /// Moves the columns registered at or past `from` by `shift`, as a
     /// line split there moves the part after it. A column the maximum
     /// capped stands at its moved column once that is within `max` of
-    /// `base`.
+    /// `base`; one derived from a column below it follows that column.
     pub(crate) fn shift_columns_from(
         &mut self,
         from: usize,
@@ -160,23 +169,31 @@ impl NestingState {
         max: usize,
     ) {
         let len = self.continuation_indent_spaces_stack.len();
-        self.capped_continuation_columns
+        self.continuation_column_origins
             .retain(|&(index, _)| index < len);
-        for (index, column) in self.continuation_indent_spaces_stack.iter_mut().enumerate() {
-            if let Some(capped) = self
-                .capped_continuation_columns
+        for index in 0..len {
+            let origin = self
+                .continuation_column_origins
                 .iter_mut()
-                .find(|(capped, _)| *capped == index)
-            {
-                if capped.1 >= from {
-                    capped.1 = capped.1.saturating_add_signed(shift);
-                    if capped.1.saturating_sub(base) <= max {
-                        *column = capped.1;
+                .find(|(origin, _)| *origin == index)
+                .map(|(_, origin)| origin);
+            let column = self.continuation_indent_spaces_stack[index];
+            self.continuation_indent_spaces_stack[index] = match origin {
+                Some(ColumnOrigin::Capped(aligned)) if *aligned >= from => {
+                    *aligned = aligned.saturating_add_signed(shift);
+                    if aligned.saturating_sub(base) <= max {
+                        *aligned
+                    } else {
+                        column
                     }
                 }
-            } else if *column >= from {
-                *column = column.saturating_add_signed(shift);
-            }
+                Some(ColumnOrigin::Capped(_)) => column,
+                Some(&mut ColumnOrigin::Derived { base, offset }) => {
+                    self.continuation_indent_spaces_stack[base] + offset
+                }
+                None if column >= from => column.saturating_add_signed(shift),
+                None => column,
+            };
         }
         for column in self
             .paren_indent_spaces_stack
@@ -195,14 +212,33 @@ impl NestingState {
     /// place of `aligned`.
     pub(crate) fn push_capped_continuation_indent_spaces(&mut self, spaces: usize, aligned: usize) {
         self.push_continuation_column(spaces);
-        self.capped_continuation_columns
-            .push((self.continuation_indent_spaces_stack.len() - 1, aligned));
+        self.continuation_column_origins.push((
+            self.continuation_indent_spaces_stack.len() - 1,
+            ColumnOrigin::Capped(aligned),
+        ));
+    }
+
+    /// Registers `spaces`, `offset` past the top of the stack when it
+    /// stands there.
+    pub(crate) fn register_derived_continuation_indent_spaces(
+        &mut self,
+        spaces: usize,
+        offset: usize,
+    ) {
+        let base = self.continuation_indent_spaces_stack.len().checked_sub(1);
+        self.register_continuation_indent_spaces(spaces);
+        if let Some(base) = base
+            && self.continuation_indent_spaces_stack[base] + offset == spaces
+        {
+            self.continuation_column_origins
+                .push((base + 1, ColumnOrigin::Derived { base, offset }));
+        }
     }
 
     fn push_continuation_column(&mut self, spaces: usize) {
         let index = self.continuation_indent_spaces_stack.len();
-        self.capped_continuation_columns
-            .retain(|&(capped, _)| capped < index);
+        self.continuation_column_origins
+            .retain(|&(origin, _)| origin < index);
         self.continuation_indent_spaces_stack.push(spaces);
     }
 
