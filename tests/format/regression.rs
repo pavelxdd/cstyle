@@ -16332,3 +16332,14 @@ fn indented_brace_styles_close_a_nested_first_compound_literal_as_an_initializer
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn an_access_label_a_comment_leads_breaks_the_comments_after_it_off_its_member() {
+    let input = "class Item\n{\n/* note */ public:\n    /* note */ int value() const\n    {\n        return value_;\n    }\n};\n";
+    let expected = "class Item\n{\n/* note */ public:\n    /* note */\n    int value() const\n    {\n        return value_;\n    }\n};\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+    let bit_fields =
+        "struct Item {\n    /* note */ unsigned flag : 1;\n    /* note */ int other : 2;\n};\n";
+    check(bit_fields, &["--style=kr"], bit_fields);
+}

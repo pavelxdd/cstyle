@@ -1842,10 +1842,12 @@ impl FormatEngine<'_> {
         if current.ends_with_any(b";{}") {
             return false;
         }
-        let segment = current
-            .rfind([';', '{', '}'])
-            .map_or(current, |index| &current[index + 1..])
-            .trimmed();
+        let segment = after_leading_comments(
+            current
+                .rfind([';', '{', '}'])
+                .map_or(current, |index| &current[index + 1..])
+                .trimmed(),
+        );
         if segment.is_empty()
             || segment.contains('?')
             || in_class && labels::is_access_label_start(segment, &self.options.access_labels)
