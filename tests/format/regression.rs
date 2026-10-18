@@ -9170,6 +9170,20 @@ fn rows_of_a_trailing_comment_in_a_case_block_stand_as_written() {
 }
 
 #[test]
+fn rows_of_a_define_in_a_case_block_stand_as_written() {
+    // The rows of a define stand as written, which a case block's unindent
+    // leaves too, so a second pass keeps them.
+    for label in ["case 1", "default"] {
+        let input = format!(
+            "void f()\n{{\n    switch (op) {{\n    {label}: {{\n#define CHECK          \\\n          go(value);   \\\n          stop()\n        CHECK;\n    }}\n    }}\n}}\n"
+        );
+        check(&input, &["--style=kr"], &input);
+    }
+    let input = "void f()\n{\n    switch (op) {\n    case 1: {\n#if defined(FIRST) && \\\n    defined(SECOND)\n        go();\n#endif\n    }\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
 fn vtk_sets_a_function_try_block_at_the_function_body() {
     let input = "void helper()\ntry {\n    go();\n} catch (...) {\n    stop();\n}\n";
     let expected = "void helper()\ntry\n{\n    go();\n}\ncatch (...)\n{\n    stop();\n}\n";

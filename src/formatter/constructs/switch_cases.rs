@@ -547,6 +547,8 @@ impl SwitchCaseLineTransformer {
 
         let is_preprocessor =
             self.in_continued_preprocessor || line.trimmed_start().starts_with('#');
+        // The rows continuing a directive stand as written.
+        let continues_directive = self.in_continued_preprocessor && !self.indent_preproc_define;
         // A comment spares a level of the line only when the line holds no
         // code: a comment moves no code.
         let comment_only = if self.in_block_comment {
@@ -564,10 +566,15 @@ impl SwitchCaseLineTransformer {
         let spares_comment = self.should_unindent_comment && comment_only;
         self.comment_spared_level = spares_comment && unindent_depth > 0;
         self.comment_kept_level = self.comment_spared_level;
-        if spares_comment && unindent_depth > 0 {
-            self.line_unindent += self.unindent_line(&mut line, unindent_depth - 1);
-        } else if self.should_unindent_line && unindent_depth > 0 {
-            self.line_unindent += self.unindent_line(&mut line, unindent_depth);
+        let levels = if continues_directive || unindent_depth == 0 {
+            None
+        } else if spares_comment {
+            Some(unindent_depth - 1)
+        } else {
+            self.should_unindent_line.then_some(unindent_depth)
+        };
+        if let Some(levels) = levels {
+            self.line_unindent += self.unindent_line(&mut line, levels);
         }
         line
     }
