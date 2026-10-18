@@ -264,6 +264,15 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
         current_indent_spaces: Option<usize>,
     ) -> Option<usize> {
+        // The label's own line stands outside the block it opens.
+        if self
+            .layout
+            .frame_stack
+            .active_brace()
+            .is_some_and(|frame| frame.label_block && frame.open_output_line == self.output.len())
+        {
+            return None;
+        }
         // A comment after a closer leaves it the closer of its row.
         let line_trimmed = self.output.code_of(line).trimmed();
         let body_spaces = self.enclosing_label_block_body_indent_spaces()?;

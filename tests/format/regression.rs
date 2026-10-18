@@ -17325,3 +17325,16 @@ fn a_goto_label_block_kept_on_a_case_line_nests_in_the_case_body() {
         expected,
     );
 }
+
+#[test]
+fn a_goto_label_block_on_an_indented_case_line_keeps_the_case_column() {
+    let input = "void f(void)\n{\n    switch (x) {\n    case 2: done: {\n        int q;\n        break;\n    }\n    }\n}\n";
+    let expected = "void f(void)\n{\n    switch (x)\n        {\n        case 2: done:\n                {\n                int q;\n                break;\n                }\n        }\n}\n";
+    let options = [
+        "--style=vtk",
+        "--indent-switches",
+        "--keep-one-line-statements",
+    ];
+    check(input, &options, expected);
+    check(expected, &options, expected);
+}
