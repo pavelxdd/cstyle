@@ -312,6 +312,12 @@ impl FormatEngine<'_> {
             || !(head_ends_binary_operator(previous_code)
                 || previous_code.ends_with("->")
                 || leads_with_operator(previous_code, b"<>|&+-*/%=!?.~"))
+            // Nor do the angles closing template arguments end one.
+            || self
+                .output
+                .line_tokens(previous_index)
+                .and_then(|span| self.tree.previous_code_token(span.last + 1))
+                .is_some_and(|last| self.closes_template_at(last))
         {
             return None;
         }

@@ -18352,3 +18352,15 @@ fn arguments_after_a_paren_ending_a_split_head_keep_a_capped_column_below_it() {
         expected,
     );
 }
+
+#[test]
+fn a_brace_after_template_arguments_closing_a_head_row_opens_the_body_at_the_head() {
+    // The `>>` closing the arguments is no shift continuing an expression.
+    let input = "template <typename S>\nstruct char_of<\n    S, void_t<size_t>> {\n  using type = char;\n};\n";
+    let expected = "template <typename S>\nstruct char_of<\n    S, void_t<size_t>>\n{\n    using type = char;\n};\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+    let expected = "template <typename S>\nstruct char_of<\n    S, void_t<size_t>>\n{   using type = char; };\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+}

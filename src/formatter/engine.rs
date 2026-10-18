@@ -1030,6 +1030,33 @@ impl<'a> FormatEngine<'a> {
         answer
     }
 
+    /// Whether the `>` or `>>` at `index` closes template arguments.
+    pub(crate) fn closes_template_at(&self, index: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        let mut depth = match tokens.get(index) {
+            Some(Token::Operator(operator)) if operator == ">" => 1usize,
+            Some(Token::Operator(operator)) if operator == ">>" => 2,
+            _ => return false,
+        };
+        let mut cursor = index;
+        while let Some(before) = self.tree.previous_code_token(cursor) {
+            match &tokens[before] {
+                Token::Operator(operator) if operator == ">" => depth += 1,
+                Token::Operator(operator) if operator == ">>" => depth += 2,
+                Token::Operator(operator) if operator == "<" && self.template_opener_at(before) => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return true;
+                    }
+                }
+                Token::Symbol(';' | '{' | '}') => return false,
+                _ => {}
+            }
+            cursor = before;
+        }
+        false
+    }
+
     fn template_opener_at(&self, index: usize) -> bool {
         self.template_openers
             .get_or_init(|| template_openers(&self.tree.tokens))
