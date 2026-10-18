@@ -18388,3 +18388,13 @@ fn a_braced_initializer_in_a_kept_one_line_body_keeps_its_brace_on_its_type() {
     check(input, &["--style=pico"], expected);
     check(expected, &["--style=pico"], expected);
 }
+
+#[test]
+fn a_macro_call_leading_a_stream_ending_in_a_call_is_no_standalone_macro_line() {
+    let input = "void run() {\n  if (value) {\n    LOG(INFO) << \"first\" << escape(text)\n              << \"second\";\n    go();\n  }\n}\n";
+    let expected = "void run()\n{\n    if (value) {\n        LOG(INFO) << \"first\" << escape(text)\n                  << \"second\";\n        go();\n    }\n}\n";
+    check(input, &["--style=kr"], expected);
+    let expected = "void run()\n{   if (value)\n    {   LOG(INFO) << \"first\" << escape(text)\n                  << \"second\";\n        go();\n    }\n}\n";
+    check(input, &["--style=horstmann"], expected);
+    check(expected, &["--style=horstmann"], expected);
+}

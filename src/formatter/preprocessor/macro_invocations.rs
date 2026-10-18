@@ -139,13 +139,14 @@ pub(crate) fn is_standalone_macro_invocation_line(line: &str) -> bool {
     if !line.ends_with(')') || line.contains(';') || line.contains('{') || line.contains('}') {
         return false;
     }
+    // The macro's parentheses close the line.
     let mut depth = 0i32;
-    for ch in line.chars() {
+    for (index, ch) in line.char_indices() {
         match ch {
             '(' => depth += 1,
             ')' => {
                 depth -= 1;
-                if depth < 0 {
+                if depth < 0 || depth == 0 && index + 1 < line.len() {
                     return false;
                 }
             }
