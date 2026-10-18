@@ -9275,6 +9275,24 @@ fn rows_of_a_define_in_a_case_block_stand_as_written() {
 }
 
 #[test]
+fn a_comparison_in_parens_among_template_parameters_opens_no_angle() {
+    // astyle reads `I < 2` as an open angle and sets the declaration after
+    // the head past it, though not for `I > 2`.
+    let expected =
+        "template <typename T, ENABLE_IF(I < 2)>\nvoid get(T value);\nint first;\nint second;\n";
+    for comparison in ["I < 2", "I > 2"] {
+        let input = format!(
+            "template <typename T, ENABLE_IF({comparison})>\nvoid get(T value);\nint first;\n  int second;\n"
+        );
+        check(
+            &input,
+            &["--style=kr"],
+            &expected.replace("I < 2", comparison),
+        );
+    }
+}
+
+#[test]
 fn a_comment_led_row_closing_a_continued_call_in_a_conditional_ends_its_statement() {
     let input = "#ifndef GUARD_H\nPUSH_WARNINGS(4251 \\\n/* note */)\nnamespace testing {\nint value;\n}\n#endif\n";
     let expected = "#ifndef GUARD_H\nPUSH_WARNINGS(4251 \\\n              /* note */)\nnamespace testing\n{\nint value;\n}\n#endif\n";

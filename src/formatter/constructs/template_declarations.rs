@@ -29,15 +29,25 @@ fn angle_depth_delta(line: &str) -> isize {
 }
 
 /// The angle brackets of `line` by char column, leaving out those naming an
-/// operator, as in `operator<<`.
+/// operator, as in `operator<<`, and those inside parentheses, where a `<`
+/// may compare.
 fn angle_chars(line: &str) -> impl Iterator<Item = (usize, char)> + '_ {
     let chars = line.chars().collect::<Vec<_>>();
     let mut operator_name_end = 0;
     let mut column = 0;
+    let mut paren_depth = 0usize;
     std::iter::from_fn(move || {
         while column < chars.len() {
             let at = column;
             column += 1;
+            match chars[at] {
+                '(' => paren_depth += 1,
+                ')' => paren_depth = paren_depth.saturating_sub(1),
+                _ => {}
+            }
+            if paren_depth > 0 {
+                continue;
+            }
             if chars[at..].starts_with(&['o', 'p', 'e', 'r', 'a', 't', 'o', 'r'])
                 && !at
                     .checked_sub(1)
