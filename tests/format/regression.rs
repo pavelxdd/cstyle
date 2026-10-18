@@ -15786,3 +15786,170 @@ fn attach_classes_attaches_the_brace_of_a_class_head_a_comment_leads() {
     check(input, &["--style=gnu", "--attach-namespaces"], expected);
     check(expected, &["--style=gnu", "--attach-namespaces"], expected);
 }
+
+#[test]
+fn comments_before_a_declarator_after_a_multiline_value_stand_at_the_declarator() {
+    for comment in ["/* note */", "// note"] {
+        let input = format!(
+            "int value = helper(1,\n                   2),\n    {comment}\n    other = 2;\n"
+        );
+        let expected = format!(
+            "int value = helper(1,\n                   2),\n            {comment}\n            other = 2;\n"
+        );
+        for style in [
+            "--style=kr",
+            "--style=allman",
+            "--style=gnu",
+            "--style=lisp",
+        ] {
+            check(&input, &[style], &expected);
+            check(&expected, &[style], &expected);
+        }
+    }
+    let input = "void run()\n{\n    value = helper(1,\n                   2),\n    /* note */\n    other = 2;\n}\n";
+    let expected = "void run()\n{\n    value = helper(1,\n                   2),\n            /* note */\n            other = 2;\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn comment_after_a_comment_led_declarator_closer_stands_at_the_next_declarator() {
+    let input = "static const struct Item\n    first = {\n        1, 2\n    /* note */ },\n    /* note */\n    second = {\n        3, 4\n    };\n";
+    let expected = "static const struct Item\n    first = {\n    1, 2\n    /* note */ },\n/* note */\nsecond = {\n    3, 4 };\n";
+    check(input, &["--style=lisp"], expected);
+    check(expected, &["--style=lisp"], expected);
+}
+
+#[test]
+fn member_declarator_after_a_value_continued_in_parentheses_stands_at_the_value() {
+    let cases = [
+        (
+            "struct Item {\n    int value = helper(1,\n                       2),\n        other;\n};\n",
+            "struct Item {\n    int value = helper(1,\n                       2),\n                other;\n};\n",
+        ),
+        (
+            "struct Item {\n    int value = (1 +\n                 2),\n        other;\n};\n",
+            "struct Item {\n    int value = (1 +\n                 2),\n                other;\n};\n",
+        ),
+        (
+            "struct Item {\n    int value = helper(\n            1, 2),\n        other;\n};\n",
+            "struct Item {\n    int value = helper(\n                    1, 2),\n                other;\n};\n",
+        ),
+        (
+            "struct Item {\n    static const int value = helper(1,\n                                    2),\n        other;\n};\n",
+            "struct Item {\n    static const int value = helper(1,\n                                    2),\n                             other;\n};\n",
+        ),
+    ];
+    for (input, expected) in cases {
+        check(input, &["--style=kr"], expected);
+        check(expected, &["--style=kr"], expected);
+    }
+    let input = "struct Item {\n    int value = helper(1,\n                       2),\n        /* note */\n        other;\n};\n";
+    let expected = "struct Item {\n    int value = helper(1,\n                       2),\n                /* note */\n                other;\n};\n";
+    check(input, &["--style=kr"], expected);
+}
+
+#[test]
+fn declarator_after_a_run_in_list_spanning_lines_stands_where_the_assignment_registers() {
+    let cases = [
+        (
+            "void run()\n{\n    int value[2] = {1,\n                    2},\n        other;\n}\n",
+            "void run()\n{\n    int value[2] = {1,\n                    2\n                   },\n                   other;\n}\n",
+        ),
+        (
+            "void run()\n{\n    Item value = {1,\n                  2},\n        other;\n}\n",
+            "void run()\n{\n    Item value = {1,\n                  2\n                 },\n         other;\n}\n",
+        ),
+        (
+            "int value[2] = {1,\n                2},\n    other;\n",
+            "int value[2] = {1,\n                2\n               },\n               other;\n",
+        ),
+        (
+            "struct Item {\n    Item value = {1,\n                  2},\n        other;\n};\n",
+            "struct Item {\n    Item value = {1,\n                  2\n                 },\n         other;\n};\n",
+        ),
+    ];
+    for (input, expected) in cases {
+        check(input, &["--style=kr"], expected);
+        check(expected, &["--style=kr"], expected);
+    }
+}
+
+#[test]
+fn member_declarators_after_an_assignment_stand_where_a_statement_registers() {
+    let cases = [
+        (
+            "struct Item {\n    int value[2] = 3,\n        other;\n};\n",
+            "struct Item {\n    int value[2] = 3,\n                   other;\n};\n",
+        ),
+        (
+            "struct Item {\n    int value[2] = {1, 2},\n        other;\n};\n",
+            "struct Item {\n    int value[2] = {1, 2},\n                   other;\n};\n",
+        ),
+        (
+            "struct Item {\n    int *value = {1, 2},\n        other;\n};\n",
+            "struct Item {\n    int *value = {1, 2},\n         other;\n};\n",
+        ),
+    ];
+    for (input, expected) in cases {
+        check(input, &["--style=kr"], expected);
+        check(expected, &["--style=kr"], expected);
+    }
+}
+
+#[test]
+fn declarators_after_several_assignments_stand_at_the_last_registered_one() {
+    // A value after `]` registers on each assignment; a name only on the
+    // first assignment after a name.
+    let cases = [
+        (
+            "void run()\n{\n    int value = 3, other[2] = 4,\n        last;\n}\n",
+            "void run()\n{\n    int value = 3, other[2] = 4,\n                              last;\n}\n",
+        ),
+        (
+            "void run()\n{\n    int other[2] = 4, value = 3,\n        last;\n}\n",
+            "void run()\n{\n    int other[2] = 4, value = 3,\n                      last;\n}\n",
+        ),
+        (
+            "struct Item {\n    int other[2] = 4, value = 3,\n        last;\n};\n",
+            "struct Item {\n    int other[2] = 4, value = 3,\n                      last;\n};\n",
+        ),
+        (
+            "void run()\n{\n    int value = 3, other = 4,\n        last;\n}\n",
+            "void run()\n{\n    int value = 3, other = 4,\n        last;\n}\n",
+        ),
+    ];
+    for (input, expected) in cases {
+        check(input, &["--style=kr"], expected);
+        check(expected, &["--style=kr"], expected);
+    }
+}
+
+#[test]
+fn closer_of_a_run_in_list_before_more_declarators_stands_under_its_brace() {
+    let cases = [
+        (
+            "void run()\n{\n    int value[2] = {1,\n                    2}, other;\n}\n",
+            "void run()\n{\n    int value[2] = {1,\n                    2\n                   }, other;\n}\n",
+        ),
+        (
+            "int value[2] = {1,\n                2}, other,\n    last;\n",
+            "int value[2] = {1,\n                2\n               }, other,\n               last;\n",
+        ),
+        (
+            "struct Item {\n    Item value = {1,\n                  2}, other;\n};\n",
+            "struct Item {\n    Item value = {1,\n                  2\n                 }, other;\n};\n",
+        ),
+        (
+            "void run()\n{\n    int value[2] = {1,\n                    2}, other[2] = {3,\n                                    4};\n}\n",
+            "void run()\n{\n    int value[2] = {1,\n                    2\n                   }, other[2] = {3,\n                                  4\n                                 };\n}\n",
+        ),
+    ];
+    for (input, expected) in cases {
+        check(input, &["--style=kr"], expected);
+        check(expected, &["--style=kr"], expected);
+    }
+    let input = "void run()\n{\n    int value[2] = {1,\n                    2}, other;\n}\n";
+    let expected = "void run()\n    {\n    int value[2] = {1,\n                    2\n                   }, other;\n    }\n";
+    check(input, &["--style=whitesmith"], expected);
+}

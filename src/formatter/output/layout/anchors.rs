@@ -2273,9 +2273,13 @@ impl FormatEngine<'_> {
             && self.output.line_tokens(comma_line).is_some_and(|span| {
                 span.first > start
                     && matches!(tokens[span.first], Token::Symbol('}'))
-                    && groups
-                        .closed_at(span.first)
-                        .is_some_and(|nested| groups.get(nested).parent == Some(body))
+                    && groups.closed_at(span.first).is_some_and(|nested| {
+                        groups.get(nested).parent == Some(body)
+                            && self
+                                .output
+                                .line_with_token(start)
+                                .is_none_or(|line| !self.runs_in_list_on(nested, line))
+                    })
             })
             && let Some(member_line) = self.output.line_with_token(start)
         {
@@ -2317,12 +2321,21 @@ impl FormatEngine<'_> {
         let second = next_code_token(tokens, start + 1)?;
         if span.first != start
             || !matches!(tokens[registering], Token::Symbol(','))
+            || groups.enclosing(registering) != Some(body)
+                && !self.ends_in_run_in_list(registering, Some(body), line)
             || !matches!(&tokens[start], Token::Word(word)
                 if !matches!(word.as_str(), "struct" | "union" | "class" | "enum"))
-            || !matches!(tokens[second], Token::Word(_))
-            || second >= registering
             || self.tree.has_directive_in(start..first)
         {
+            return None;
+        }
+        // An `=` registers as it does in a statement.
+        if let Some(Some(assign)) = self.declaration_assignment(start, registering) {
+            return Some(
+                self.assigned_declarator_column(assign, false)? + self.case_unindent_spaces(),
+            );
+        }
+        if !matches!(tokens[second], Token::Word(_)) || second >= registering {
             return None;
         }
         let lead = self.output.lead_width(line, self.options.tab_width);
@@ -2828,44 +2841,72 @@ impl FormatEngine<'_> {
             .rev()
             .find(|&index| is_code_token(&tokens[index]))?;
         // A first line that ends at no `,` registers nothing: the rows after
-        // it continue from their own lines.
-        if !matches!(tokens[line_end], Token::Symbol(',')) || groups.enclosing(line_end) != group {
+        // it continue from their own lines. A `,` of an initializer list
+        // run in on the line registers as the line's own would.
+        let ends_in_list = groups.enclosing(line_end) != group;
+        if !matches!(tokens[line_end], Token::Symbol(','))
+            || ends_in_list && !self.ends_in_run_in_list(line_end, group, start_line)
+        {
             return None;
         }
         // A statement run in after a block brace registers its name a level
         // past the line astyle reads, and no second word.
         let run_in = self.runs_in_after_block_brace(start);
-        let mut index = start;
-        let assign = loop {
-            if index >= line_end {
-                if run_in {
-                    return Some(
-                        self.output.lead_width(start_line, self.options.tab_width)
-                            + self.case_unindent_spaces(),
-                    );
-                }
-                // No `=`: the `,` ending the line registers the second word,
-                // and that indent holds for the lines after.
-                let second = next_code_token(tokens, start + 1)?;
-                let second_line = self.output.line_with_token(comma)?;
-                return (second_line != start_line
-                    && self.tree.previous_code_token(start).is_none_or(|before| {
-                        matches!(tokens[before], Token::Symbol(';' | '{' | '}'))
-                    })
-                    && matches!(&tokens[start], Token::Word(word)
-                        if !matches!(word.as_str(), "class" | "struct" | "union" | "enum"))
-                    && !tokens[start..line_end]
-                        .iter()
-                        .any(|token| matches!(token, Token::Symbol(':')))
-                    && matches!(tokens[second], Token::Word(_))
-                    && second < line_end)
-                    .then(|| self.token_column(second))
-                    .flatten()
-                    .map(|column| column + self.case_unindent_spaces());
+        let Some(assign) = self.declaration_assignment(start, line_end)? else {
+            if ends_in_list {
+                return None;
             }
+            if run_in {
+                return Some(
+                    self.output.lead_width(start_line, self.options.tab_width)
+                        + self.case_unindent_spaces(),
+                );
+            }
+            // No `=`: the `,` ending the line registers the second word,
+            // and that indent holds for the lines after.
+            let second = next_code_token(tokens, start + 1)?;
+            let second_line = self.output.line_with_token(comma)?;
+            return (second_line != start_line
+                && self.tree.previous_code_token(start).is_none_or(|before| {
+                    matches!(tokens[before], Token::Symbol(';' | '{' | '}'))
+                })
+                && matches!(&tokens[start], Token::Word(word)
+                    if !matches!(word.as_str(), "class" | "struct" | "union" | "enum"))
+                && !tokens[start..line_end]
+                    .iter()
+                    .any(|token| matches!(token, Token::Symbol(':')))
+                && matches!(tokens[second], Token::Word(_))
+                && second < line_end)
+                .then(|| self.token_column(second))
+                .flatten()
+                .map(|column| column + self.case_unindent_spaces());
+        };
+        Some(self.assigned_declarator_column(assign, run_in)? + self.case_unindent_spaces())
+    }
+
+    /// The `=` at the level of the declaration from `start` before
+    /// `line_end` whose registration holds after the line: the last one
+    /// after a `]`, which registers its value, past the first one after a
+    /// name; `None` when a parenthesis comes before any.
+    fn declaration_assignment(&self, start: usize, line_end: usize) -> Option<Option<usize>> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let mut registering = None;
+        let mut named = false;
+        let mut index = start;
+        while index < line_end {
             match &tokens[index] {
-                Token::Operator(operator) if operator == "=" => break index,
-                Token::Symbol('(') => return None,
+                Token::Operator(operator) if operator == "=" => {
+                    let after_bracket = self
+                        .tree
+                        .previous_code_token(index)
+                        .is_some_and(|before| matches!(tokens[before], Token::Symbol(']')));
+                    if after_bracket || !named {
+                        registering = Some(index);
+                        named |= !after_bracket;
+                    }
+                }
+                Token::Symbol('(') if registering.is_none() => return None,
                 _ => {}
             }
             index = match groups.opened_at(index) {
@@ -2873,7 +2914,15 @@ impl FormatEngine<'_> {
                 None => index,
             };
             index = next_code_token(tokens, index + 1)?;
-        };
+        }
+        Some(registering)
+    }
+
+    /// The column the `=` at `assign` registers for the declarators after
+    /// it: the value after a `]`, else the name it assigns, a level past it
+    /// for a statement run in after a block brace.
+    fn assigned_declarator_column(&self, assign: usize, run_in: bool) -> Option<usize> {
+        let tokens = &self.tree.tokens;
         // astyle drops the indent of an `=` whose value starts with `new`.
         if next_code_token(tokens, assign + 1)
             .is_some_and(|value| matches!(&tokens[value], Token::Word(word) if word == "new"))
@@ -2886,7 +2935,27 @@ impl FormatEngine<'_> {
             Token::Word(_) => (before, usize::from(run_in) * self.options.indent_width),
             _ => return None,
         };
-        Some(self.token_column(target)? + run_in_extra + self.case_unindent_spaces())
+        Some(self.token_column(target)? + run_in_extra)
+    }
+
+    /// Whether the `,` at `comma` belongs to an initializer list in `group`
+    /// that opens on `line` after code.
+    fn ends_in_run_in_list(&self, comma: usize, group: Option<GroupId>, line: usize) -> bool {
+        let groups = &self.tree.groups;
+        groups.enclosing(comma).is_some_and(|list| {
+            groups.get(list).parent == group && self.runs_in_list_on(list, line)
+        })
+    }
+
+    /// Whether `list` is an initializer list opening on `line` after code.
+    pub(crate) fn runs_in_list_on(&self, list: GroupId, line: usize) -> bool {
+        let open = self.tree.groups.get(list).open;
+        self.tree.blocks.kind(list) == Some(BlockKind::Initializer)
+            && self.output.line_with_token(open) == Some(line)
+            && self
+                .output
+                .line_tokens(line)
+                .is_some_and(|span| span.first != open)
     }
 
     /// Visual column of the code token `token` on its output line, found
@@ -4221,17 +4290,25 @@ impl FormatEngine<'_> {
                 .iter()
                 .take_while(|token| !matches!(token, Token::Newline))
                 .any(|token| matches!(token, Token::Symbol('{' | '}')));
-        // A declarator continuing a struct member after a comma.
-        let member_continuation = groups.enclosing(first).is_some_and(|group| {
-            self.tree.blocks.kind(group) == Some(BlockKind::Aggregate)
-                && self
-                    .tree
-                    .previous_code_token(first)
-                    .is_some_and(|previous| {
-                        matches!(tokens[previous], Token::Symbol(','))
-                            && groups.enclosing(previous) == Some(group)
-                    })
-        });
+        // A declarator continuing a member or a declaration after a comma.
+        let member_continuation = groups.enclosing(first).is_none_or(|group| {
+            matches!(
+                self.tree.blocks.kind(group),
+                Some(
+                    BlockKind::Aggregate
+                        | BlockKind::FunctionBody
+                        | BlockKind::Control
+                        | BlockKind::Block
+                        | BlockKind::Namespace
+                        | BlockKind::ExternC
+                )
+            )
+        }) && self.tree.previous_code_token(first).is_some_and(
+            |previous| {
+                matches!(tokens[previous], Token::Symbol(','))
+                    && groups.enclosing(previous) == groups.enclosing(first)
+            },
+        );
         // Comments that end a block stand at its body column; comments
         // before an `else` whose `if` is the body of an `else` that a
         // directive splits stand at that outer `else`.

@@ -255,7 +255,12 @@ impl FormatEngine<'_> {
             || group.is_some_and(|group| {
                 !matches!(
                     self.tree.blocks.kind(group),
-                    Some(BlockKind::FunctionBody | BlockKind::Control | BlockKind::Block)
+                    Some(
+                        BlockKind::FunctionBody
+                            | BlockKind::Control
+                            | BlockKind::Block
+                            | BlockKind::Aggregate
+                    )
                 )
             })
             || !self.options.indent_after_parens && self.tree.has_directive_in(start..first)
@@ -622,7 +627,9 @@ impl FormatEngine<'_> {
                     {
                         // astyle registers again at each such line and
                         // drifts pointer declarators; the first holds.
-                        if !replay.assigned_this_line && !replay.continuation {
+                        if !replay.assigned_this_line
+                            && (!replay.continuation || token_line == start_line)
+                        {
                             replay.assigned_this_line = true;
                             let indent = match tokens[previous] {
                                 Token::Word(_) | Token::Number(_) => relative(previous)?,

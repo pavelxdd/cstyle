@@ -60,7 +60,10 @@ impl FormatEngine<'_> {
     ) -> Option<usize> {
         // A comment after the closer leaves it the closer of its own row.
         let code = line[..trailing_comment_split_limit(line)].trimmed();
-        if !code.starts_with("}, ") || self.line_closes_list_argument() {
+        if !code.starts_with("}, ")
+            || self.line_closes_list_argument()
+            || self.line_closes_run_in_declarator_list()
+        {
             return None;
         }
         let mut closed_blocks = 0usize;

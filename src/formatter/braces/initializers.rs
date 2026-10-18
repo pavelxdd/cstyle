@@ -11,7 +11,7 @@ use crate::formatter::preprocessor::is_conditional_preprocessor;
 use crate::formatter::state::frame::{BraceSemanticKind, ParenRole};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
-use crate::formatter::structure::blocks::next_code_token;
+use crate::formatter::structure::blocks::{BlockKind, next_code_token};
 use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::BraceListRows;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
@@ -234,7 +234,10 @@ impl FormatEngine<'_> {
         }
         // A comment after the closer leaves it the closer of its own row.
         let code = line[..trailing_comment_split_limit(line)].trimmed();
-        if code.starts_with("}, ") && !self.line_closes_list_argument() {
+        if code.starts_with("}, ")
+            && !self.line_closes_list_argument()
+            && !self.line_closes_run_in_declarator_list()
+        {
             return Some(indent.max(self.continuation_base_indent()) * self.options.indent_width);
         }
         if code != "}"
@@ -248,6 +251,26 @@ impl FormatEngine<'_> {
         Some((normal_indent * self.options.indent_width).max(
             self.continuation_base_indent() * self.options.indent_width + self.options.indent_width,
         ))
+    }
+
+    /// Whether the pending line opens with the `}` of an initializer list
+    /// run in after its declarator, which stays under its brace.
+    pub(crate) fn line_closes_run_in_declarator_list(&self) -> bool {
+        let groups = &self.tree.groups;
+        self.output
+            .pending_tokens()
+            .and_then(|span| groups.closed_at(span.first))
+            .is_some_and(|list| {
+                groups.get(list).parent.is_none_or(|parent| {
+                    !matches!(
+                        self.tree.blocks.kind(parent),
+                        Some(BlockKind::Initializer | BlockKind::CompoundLiteral) | None
+                    )
+                }) && self
+                    .output
+                    .line_with_token(groups.get(list).open)
+                    .is_some_and(|line| self.runs_in_list_on(list, line))
+            })
     }
 
     pub(crate) fn initializer_or_array_opening_brace_indent_spaces(
@@ -1306,6 +1329,9 @@ impl FormatEngine<'_> {
         let closing = trimmed.starts_with('}');
         let designator = trimmed.starts_with('.') || trimmed.starts_with('[');
         if !closing && !designator {
+            return None;
+        }
+        if closing && self.line_closes_run_in_declarator_list() {
             return None;
         }
         if closing && let Some(spaces) = self.layout.continuation_indent.next_line_indent_spaces {
