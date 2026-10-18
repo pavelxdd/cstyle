@@ -799,27 +799,12 @@ impl FormatEngine<'_> {
             return Some(lead + levels * self.options.indent_width + self.case_unindent_spaces());
         }
         // A row after the first one a nested list runs into its brace
-        // stands where it would below that brace ending its row, as the
-        // brace of a first element or of one after a closer ends it.
+        // stands where it would below that brace ending its row.
         if matches!(tokens[comma], Token::Symbol(','))
             && groups.enclosing(comma) == Some(group)
-            && groups
-                .get(group)
-                .parent
-                .is_some_and(|parent| self.tree.blocks.kind(parent) == Some(BlockKind::Initializer))
             && self.output.line_with_token(comma)
                 == self.output.line_with_token(groups.get(group).open)
-            && self
-                .tree
-                .previous_code_token(groups.get(group).open)
-                .is_some_and(|before| match tokens[before] {
-                    Token::Symbol('{') => true,
-                    Token::Symbol(',') => self
-                        .tree
-                        .previous_code_token(before)
-                        .is_some_and(|closer| matches!(tokens[closer], Token::Symbol('}'))),
-                    _ => false,
-                })
+            && self.breaks_after_run_in_brace(group)
             && let Some((lead, levels, _)) = self
                 .brace_row_levels_through(groups.get(group).open)
                 .filter(|_| {
@@ -1535,6 +1520,39 @@ impl FormatEngine<'_> {
                 + offset
                 + self.case_unindent_spaces(),
         )
+    }
+
+    /// Whether the list `group`, nested in a list, would break after its
+    /// brace were its first row not run in: the brace of a first element,
+    /// of one after a closer, or of one spanning rows in such a list.
+    fn breaks_after_run_in_brace(&self, group: GroupId) -> bool {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let Some(parent) = groups
+            .get(group)
+            .parent
+            .filter(|&parent| self.tree.blocks.kind(parent) == Some(BlockKind::Initializer))
+        else {
+            return false;
+        };
+        let open = groups.get(group).open;
+        self.tree
+            .previous_code_token(open)
+            .is_some_and(|before| match tokens[before] {
+                Token::Symbol('{') => true,
+                Token::Symbol(',') => {
+                    self.tree
+                        .previous_code_token(before)
+                        .is_some_and(|closer| matches!(tokens[closer], Token::Symbol('}')))
+                        || groups.get(group).close.is_some_and(|close| {
+                            (open + 1..close).any(|index| {
+                                matches!(tokens[index], Token::Newline)
+                                    && groups.enclosing(index) == Some(group)
+                            })
+                        }) && self.breaks_after_run_in_brace(parent)
+                }
+                _ => false,
+            })
     }
 
     /// Whitesmith and Ratliff indent the `}` closing an initializer element

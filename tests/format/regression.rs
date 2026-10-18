@@ -16232,3 +16232,28 @@ fn designated_value_list_in_a_run_in_list_aligns_to_its_elements() {
         }
     }
 }
+
+#[test]
+fn run_in_styles_lay_out_a_mid_row_list_of_a_nested_first_list_as_its_broken_form() {
+    let cases = [
+        (
+            "--style=horstmann",
+            "Item items[] = {{1, {2,\n                     3}}};\n",
+            "Item items[] = {{1, {2,\n            3\n        }\n    }\n};\n",
+        ),
+        (
+            "--style=pico",
+            "Item items[] = {{1, {2,\n                     3}}};\n",
+            "Item items[] = {{1, {2,\n            3 } } };\n",
+        ),
+        (
+            "--style=horstmann",
+            "void run()\n{\n    Item items[] = {{1, {2,\n                         3}}, {4, {5, 6}}};\n}\n",
+            "void run()\n{   Item items[] = {{1, {2,\n                3\n            }\n        }, {4, {5, 6}}\n    };\n}\n",
+        ),
+    ];
+    for (style, input, expected) in cases {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
