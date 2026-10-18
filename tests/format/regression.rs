@@ -16384,3 +16384,25 @@ fn indent_after_parens_continues_a_shift_chain_past_a_directive_a_level_in() {
         check(input, &[style, "--indent-preproc-block"], input);
     }
 }
+
+#[test]
+fn whitesmith_member_constructor_brace_after_same_line_initializers_stands_past_the_head() {
+    let cases = [
+        (
+            "class Item\n{\npublic:\n    Item() : Base(1),\n        Other(2)\n    {\n    }\n};\n",
+            "class Item\n    {\n    public:\n        Item() : Base(1),\n            Other(2)\n            {\n            }\n    };\n",
+        ),
+        (
+            "namespace Space\n{\nclass Item\n{\n    Item() : Base(1),\n        Other(2)\n    {\n    }\n};\n}\n",
+            "namespace Space\n{\nclass Item\n    {\n        Item() : Base(1),\n            Other(2)\n            {\n            }\n    };\n}\n",
+        ),
+        (
+            "class Item\n{\n    Item() noexcept : Base(1),\n        Other(2)\n    {\n    }\n};\n",
+            "class Item\n    {\n        Item() noexcept : Base(1),\n            Other(2)\n            {\n            }\n    };\n",
+        ),
+    ];
+    for (input, expected) in cases {
+        check(input, &["--style=whitesmith"], expected);
+        check(expected, &["--style=whitesmith"], expected);
+    }
+}

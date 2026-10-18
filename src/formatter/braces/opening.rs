@@ -539,6 +539,38 @@ impl FormatEngine<'_> {
             })
     }
 
+    /// The output lead of the line holding the `:` that opens the member
+    /// initializers before the brace being placed.
+    fn constructor_head_line_lead(&self) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let brace = self.output.pending_tokens()?.first;
+        let mut index = self.tree.previous_code_token(brace)?;
+        loop {
+            if let Some(closed) = groups.closed_at(index) {
+                index = groups.get(closed).open;
+            } else if matches!(tokens[index], Token::Symbol(';' | '{' | '}')) {
+                return None;
+            } else if matches!(tokens[index], Token::Symbol(':'))
+                && self
+                    .tree
+                    .previous_code_token(index)
+                    .is_some_and(|close| match &tokens[close] {
+                        Token::Symbol(')') => true,
+                        Token::Word(word) => word == "noexcept",
+                        _ => false,
+                    })
+            {
+                let line = self.output.line_with_token(index)?;
+                return Some(
+                    self.output.lead_width(line, self.options.tab_width)
+                        + self.case_unindent_spaces(),
+                );
+            }
+            index = self.tree.previous_code_token(index)?;
+        }
+    }
+
     pub(crate) fn whitesmith_definition_or_command_opening_brace_indent_spaces(
         &self,
         line: &LineView<'_>,
@@ -602,7 +634,16 @@ impl FormatEngine<'_> {
                 .frame_stack
                 .active_constructor_initializer()
                 .and_then(|frame| {
-                    let base = self.constructor_initializer_base_indent_spaces()?;
+                    let base = self
+                        .constructor_initializer_base_indent_spaces()
+                        .or_else(|| {
+                            // Initializers the head line opens stand a level
+                            // past it, wherever the look back stops.
+                            (frame.layout == ConstructorInitializerLayout::SameLine)
+                                .then(|| self.constructor_head_line_lead())
+                                .flatten()
+                                .map(|lead| lead + self.options.indent_width)
+                        })?;
                     Some(match frame.layout {
                         ConstructorInitializerLayout::SameLine => base,
                         ConstructorInitializerLayout::Split => {
