@@ -17196,3 +17196,12 @@ fn a_lambda_body_in_a_header_condition_stands_a_level_in_as_in_a_call() {
     let input = "void f()\n{\n    if (call([] {\n        go();\n    },\n    other)) {\n        stop();\n    }\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_lambda_in_a_brace_list_opens_its_body_as_in_a_call() {
+    let input = "Handler handlers[] = {\n    { 1, [] {\n        go();\n    } },\n    { 2, [](int x) {\n        go(x);\n    } },\n};\nvoid f()\n{\n    Handler h[] = {\n        { 2, [](int x) {\n            go(x);\n        } },\n    };\n    call({ [] {\n        go();\n    } });\n}\n";
+    let expected = "Handler handlers[] = {\n    {\n        1, [] {\n            go();\n        }\n    },\n    {\n        2, [](int x) {\n            go(x);\n        }\n    },\n};\nvoid f()\n{\n    Handler h[] = {\n        {\n            2, [](int x) {\n                go(x);\n            }\n        },\n    };\n    call({ [] {\n            go();\n        } });\n}\n";
+    check(input, &["--style=kr"], expected);
+    let expected = "Handler handlers[] = {\n    {\n        1, [] {\n            go();\n        }\n    },\n    {\n        2, [](int x) {\n            go(x);\n        }\n    },\n};\nvoid f()\n{\n    Handler h[] =\n    {\n        {\n            2, [](int x) {\n                go(x);\n            }\n        },\n    };\n    call({ [] {\n            go();\n        } });\n}\n";
+    check(input, &["--style=allman"], expected);
+}

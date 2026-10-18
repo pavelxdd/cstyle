@@ -7,6 +7,7 @@ use crate::formatter::constructs::{labels, switch_cases};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{self, Token};
 use crate::formatter::state::indentation::LineKind;
+use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     ContainsAnyByte, is_bare_comment_line, line_ends_with_comment, line_paren_imbalance,
@@ -276,7 +277,10 @@ impl FormatEngine<'_> {
         };
         // A body that closes on the line was kept whole; splitting the
         // header off would drop it.
-        if !is_lambda_body_header(line[..open].trimmed_end()) || line[open + 1..].contains('}') {
+        if !is_lambda_body_header(line[..open].trimmed_end())
+            || line[open + 1..].contains('}')
+            || self.pending_brace_stands_in_brace_list()
+        {
             return false;
         }
         self.finish_line_text(line[..open].trimmed_end());
@@ -293,6 +297,23 @@ impl FormatEngine<'_> {
             self.finish_line_text("{");
         }
         true
+    }
+
+    /// Whether the `{` ending the pending line stands among a brace list's
+    /// elements, which keep their braces on their rows.
+    fn pending_brace_stands_in_brace_list(&self) -> bool {
+        let groups = &self.tree.groups;
+        self.output
+            .pending_tokens()
+            .and_then(|span| self.tree.previous_code_token(span.last + 1))
+            .filter(|&brace| matches!(self.tree.tokens[brace], Token::Symbol('{')))
+            .and_then(|brace| groups.enclosing(brace))
+            .is_some_and(|list| {
+                matches!(
+                    self.tree.blocks.kind(list),
+                    Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                )
+            })
     }
 
     pub(crate) fn try_split_operator_body(&mut self, line: &LineView<'_>) -> bool {

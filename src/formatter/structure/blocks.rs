@@ -164,18 +164,25 @@ fn classify(tokens: &[Token], groups: &Groups, blocks: &Blocks, id: GroupId) -> 
     let group = groups.get(id);
     let parent = group.parent;
     let parent_block = parent.and_then(|parent| blocks.kind(parent));
+    let previous = previous_code_token(tokens, group.open);
+    if previous.is_some_and(|previous| opens_block_literal(tokens, groups, previous)) {
+        return BlockKind::Lambda;
+    }
     if matches!(
         parent_block,
         Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
     ) {
-        return BlockKind::Initializer;
+        // A lambda among a list's elements opens its own body.
+        let head = statement_head(tokens, groups, group.open);
+        return if previous.is_some() && has_lambda_capture(tokens, groups, &head) {
+            BlockKind::Lambda
+        } else {
+            BlockKind::Initializer
+        };
     }
-    let Some(previous) = previous_code_token(tokens, group.open) else {
+    let Some(previous) = previous else {
         return BlockKind::Block;
     };
-    if opens_block_literal(tokens, groups, previous) {
-        return BlockKind::Lambda;
-    }
     let head = statement_head(tokens, groups, group.open);
     // Inside parentheses or brackets a brace belongs to an expression.
     if parent.is_some_and(|parent| groups.get(parent).delimiter != Delimiter::Brace) {
@@ -263,15 +270,10 @@ fn opens_block_literal(tokens: &[Token], groups: &Groups, previous: usize) -> bo
     })
 }
 
-/// A brace inside an expression: a lambda body after a capture list, a
-/// compound literal after a cast, or an initializer.
-fn classify_in_expression(
-    tokens: &[Token],
-    groups: &Groups,
-    head: &[usize],
-    previous: usize,
-) -> BlockKind {
-    let has_capture = head.windows(2).any(|pair| {
+/// Whether `head` ends with a lambda's capture list, or a capture list and
+/// its parameters.
+fn has_lambda_capture(tokens: &[Token], groups: &Groups, head: &[usize]) -> bool {
+    head.windows(2).any(|pair| {
         matches!(tokens[pair[0]], Token::Symbol('['))
             && groups
                 .opened_at(pair[0])
@@ -280,8 +282,18 @@ fn classify_in_expression(
             && matches!(tokens[pair[1]], Token::Symbol('('))
     }) || head
         .last()
-        .is_some_and(|&last| matches!(tokens[last], Token::Symbol('[')));
-    if has_capture {
+        .is_some_and(|&last| matches!(tokens[last], Token::Symbol('[')))
+}
+
+/// A brace inside an expression: a lambda body after a capture list, a
+/// compound literal after a cast, or an initializer.
+fn classify_in_expression(
+    tokens: &[Token],
+    groups: &Groups,
+    head: &[usize],
+    previous: usize,
+) -> BlockKind {
+    if has_lambda_capture(tokens, groups, head) {
         return BlockKind::Lambda;
     }
     match &tokens[previous] {

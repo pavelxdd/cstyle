@@ -3840,6 +3840,16 @@ impl FormatEngine<'_> {
         if self.options.attach_namespace && brace_type == BraceType::Namespace {
             return true;
         }
+        // A lambda's brace in a brace list stays with the list's elements.
+        if brace_type == BraceType::Command
+            && matches!(
+                self.layout.nesting.brace_type_stack.last(),
+                Some(BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral)
+            )
+            && self.pushed_brace_kind() == Some(BlockKind::Lambda)
+        {
+            return true;
+        }
         if self.options.attach_class && brace_type == BraceType::Class {
             return true;
         }

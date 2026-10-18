@@ -291,7 +291,11 @@ impl FormatEngine<'_> {
             .last_closed_brace()
             .filter(|frame| frame.semantic_kind == BraceSemanticKind::Lambda)
             .map(|frame| {
-                if self.options.brace_style == BraceStyle::Ratliff {
+                // Styles indenting their closers close a body at its column.
+                if matches!(
+                    self.options.brace_style,
+                    BraceStyle::Ratliff | BraceStyle::Whitesmith | BraceStyle::Vtk
+                ) {
                     frame.body_indent_column
                 } else {
                     frame.sibling_indent_column
@@ -724,7 +728,9 @@ impl FormatEngine<'_> {
                 .frame_stack
                 .active_ternary()
                 .is_some_and(|frame| frame.colon_role.is_none());
-        if attached_ternary_colon {
+        if attached_ternary_colon
+            || closing_lambda_body && self.closer_ends_list_opened_with_lambda(next)
+        {
             self.ensure_space();
         } else if (source_attached_closing
             || source_attached_operator_after_closing
@@ -787,6 +793,29 @@ impl FormatEngine<'_> {
             }
         }
         self.layout.previous = PreviousToken::Other;
+    }
+
+    /// Whether `next` closes the brace list holding the lambda body the
+    /// current `}` closes, opened on the line the body opened on.
+    fn closer_ends_list_opened_with_lambda(&self, next: Option<&Token>) -> bool {
+        if !matches!(next, Some(Token::Symbol('}'))) {
+            return false;
+        }
+        let groups = &self.tree.groups;
+        let Some(body) = self
+            .current
+            .active_token()
+            .filter(|&index| matches!(self.tree.tokens[index], Token::Symbol('}')))
+            .and_then(|close| groups.closed_at(close))
+        else {
+            return false;
+        };
+        let body_open = groups.get(body).open;
+        groups
+            .enclosing(body_open)
+            .filter(|&list| groups.get(list).delimiter == Delimiter::Brace)
+            .and_then(|list| self.output.line_with_token(groups.get(list).open))
+            .is_some_and(|line| self.output.line_with_token(body_open) == Some(line))
     }
 
     /// Whether the block the current `}` closes opened right after a word.
