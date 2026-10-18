@@ -9267,6 +9267,20 @@ fn rows_of_a_define_in_a_case_block_stand_as_written() {
 }
 
 #[test]
+fn a_block_a_word_heads_continues_its_statements_as_any_block() {
+    // astyle reads the block as a list and sets no continuation in it.
+    let input = "void f()\n{\n    APPLY {\n        value = first +\n            second;\n        go(first,\n           second);\n    }\n}\n";
+    let expected = "void f()\n{\n    APPLY {\n        value = first +\n                second;\n        go(first,\n           second);\n    }\n}\n";
+    let block = "void f()\n{\n    if (ready) {\n        value = first +\n                second;\n        go(first,\n           second);\n    }\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(
+        &input.replace("APPLY", "if (ready)"),
+        &["--style=kr"],
+        block,
+    );
+}
+
+#[test]
 fn the_method_prefix_options_set_the_gap_before_a_return_type_over_paren_padding() {
     let input = "@implementation Item\n- (int)total {\n    return 1;\n}\n@end\n";
     for (options, expected) in [
