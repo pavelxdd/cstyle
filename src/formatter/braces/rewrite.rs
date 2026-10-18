@@ -2607,25 +2607,38 @@ pub(crate) fn add_marked_cross_line_statement_braces(
         {
             continue;
         }
+        // The brace goes before the last of the comments after the header,
+        // but for a line comment ending more than one.
+        let comments = (header_end + 1..open_insert.saturating_sub(1))
+            .filter(|&index| matches!(tokens[index], Token::Comment(_, _)))
+            .collect::<Vec<_>>();
+        let comment_run_ends_in_line_comment = comments.len() > 1
+            && comments
+                .last()
+                .is_some_and(|&last| matches!(tokens[last], Token::Comment(CommentKind::Line, _)));
         if attach_added_braces
+            && !comment_run_ends_in_line_comment
             && open_brace_attaches_to_header_line(tokens, header_end, open_insert)
         {
-            let comment = (header_end + 1..open_insert - 1)
-                .find(|&index| matches!(tokens[index], Token::Comment(_, _)));
-            match comment {
-                Some(comment) => {
+            match comments.last() {
+                Some(&comment) => {
+                    let gap_start = comments
+                        .len()
+                        .checked_sub(2)
+                        .map_or(header_end, |previous| comments[previous])
+                        + 1;
                     insert_before
-                        .entry(header_end + 1)
+                        .entry(gap_start)
                         .or_default()
                         .push(Token::Whitespace(" ".to_owned().into()));
                     insert_before
-                        .entry(header_end + 1)
+                        .entry(gap_start)
                         .or_default()
                         .push(Token::Symbol('{'));
                     // The brace takes its two columns out of the start of the
                     // gap, a tab freeing both.
-                    if comment == header_end + 2
-                        && let Token::Whitespace(gap) = &tokens[header_end + 1]
+                    if comment == gap_start + 1
+                        && let Token::Whitespace(gap) = &tokens[gap_start]
                     {
                         let mut kept = gap.as_str();
                         let mut freed = 0;
@@ -2634,10 +2647,10 @@ pub(crate) fn add_marked_cross_line_statement_braces(
                             kept = &kept[1..];
                         }
                         if freed < 2 {
-                            opener_overruns.insert(header_end + 1, 2 - freed);
+                            opener_overruns.insert(gap_start, 2 - freed);
                         }
-                        replace.insert(header_end + 1, Token::Whitespace(kept.to_owned().into()));
-                    } else if comment == header_end + 1 {
+                        replace.insert(gap_start, Token::Whitespace(kept.to_owned().into()));
+                    } else if comment == gap_start {
                         insert_before
                             .entry(comment)
                             .or_default()
