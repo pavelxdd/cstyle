@@ -453,6 +453,9 @@ pub(crate) struct SwitchCaseLineTransformer {
     quote_char: char,
     raw_string_delimiter: Option<String>,
     marked_label_colon: Option<usize>,
+    /// The unindent of a case block whose brace leads the line, which a
+    /// label later on the line leaves to the line.
+    leading_case_brace_unindent: usize,
     line_unindent: usize,
     line_number: usize,
     tab_width: usize,
@@ -482,6 +485,7 @@ impl SwitchCaseLineTransformer {
             quote_char: '\'',
             raw_string_delimiter: None,
             marked_label_colon: None,
+            leading_case_brace_unindent: 0,
             line_unindent: 0,
             line_number: 0,
             tab_width: options.tab_width,
@@ -518,6 +522,7 @@ impl SwitchCaseLineTransformer {
         self.comment_spared_level = false;
         self.comment_kept_level = false;
         self.line_unindent = 0;
+        self.leading_case_brace_unindent = 0;
 
         if line.is_empty() && !self.empty_line_fill {
             return line;
@@ -542,7 +547,9 @@ impl SwitchCaseLineTransformer {
         self.in_continued_preprocessor = is_preprocessor && line.trimmed_end().ends_with('\\');
         self.parse_line(&mut line, is_preprocessor);
 
-        let unindent_depth = self.total_unindent_depth();
+        let unindent_depth = self
+            .total_unindent_depth()
+            .max(self.leading_case_brace_unindent);
         let spares_comment = self.should_unindent_comment && comment_only;
         self.comment_spared_level = spares_comment && unindent_depth > 0;
         self.comment_kept_level = self.comment_spared_level;
@@ -815,6 +822,9 @@ impl SwitchCaseLineTransformer {
                 } else {
                     self.case_block_state.unindent_case = true;
                     self.case_block_state.unindent_depth += 1;
+                    if first_non_ws_byte(scan) == Some(pos) {
+                        self.leading_case_brace_unindent = self.total_unindent_depth();
+                    }
                 }
                 self.looking_for_case_brace = false;
             }
