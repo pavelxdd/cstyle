@@ -2930,6 +2930,23 @@ impl FormatEngine<'_> {
                 .output
                 .last()
                 .is_some_and(|line| line.trimmed_end().ends_with("})"))
+            // A list's braces closing the line open no block run in.
+            && !self.output.len().checked_sub(1).is_some_and(|line| {
+                self.output
+                    .line_tokens(line)
+                    .and_then(|span| {
+                        (span.first..=span.last)
+                            .rev()
+                            .find(|&index| matches!(self.tree.tokens[index], Token::Symbol('}')))
+                    })
+                    .and_then(|close| self.tree.groups.closed_at(close))
+                    .is_some_and(|list| {
+                        matches!(
+                            self.tree.blocks.kind(list),
+                            Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                        )
+                    })
+            })
         {
             let level = self.layout.indentation.indent() + 1;
             self.layout.continuation_indent.set_next_line_level(level);

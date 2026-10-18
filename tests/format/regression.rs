@@ -18440,3 +18440,11 @@ fn a_brace_list_a_range_for_header_breaks_before_stands_there_on_the_next_pass()
     check(input, &["--style=whitesmith"], expected);
     check(expected, &["--style=whitesmith"], expected);
 }
+
+#[test]
+fn gnu_a_list_in_a_header_over_lines_adds_no_level_to_the_body() {
+    let input = "void run()\n{\n    for (bool word :\n            list{1})\n        {\n            go(word);\n        }\n    for (bool word : {true, false})\n        {\n            go(word);\n        }\n}\n";
+    let expected = "void run()\n{\n    for (bool word :\n            list{1})\n        {\n            go(word);\n        }\n    for (bool word :\n            {true, false})\n        {\n            go(word);\n        }\n}\n";
+    check(input, &["--style=gnu"], expected);
+    check(expected, &["--style=gnu"], expected);
+}
