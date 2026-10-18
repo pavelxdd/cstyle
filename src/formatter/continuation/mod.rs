@@ -712,6 +712,7 @@ impl FormatEngine<'_> {
         let capped_over_max = (has_next || trailing_open_paren || trailing_assignment)
             && over_max
             && inline_brace_call_indent.is_none();
+        let aligned = spaces;
         if capped_over_max {
             let fallback = line_indent_spaces + self.options.indent_width * 2;
             if self.options.indent_after_parens {
@@ -748,7 +749,11 @@ impl FormatEngine<'_> {
         if self.layout.nesting.paren_depth == 1 {
             self.layout.nesting.trim_to_current_statement_continuation();
         }
-        if capped_over_max || (trailing_first_paren && over_max) || literal_arguments {
+        if capped_over_max {
+            self.layout
+                .nesting
+                .push_capped_continuation_indent_spaces(spaces, aligned);
+        } else if (trailing_first_paren && over_max) || literal_arguments {
             self.layout
                 .nesting
                 .push_continuation_indent_spaces_raw(spaces);

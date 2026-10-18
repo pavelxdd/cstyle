@@ -18209,3 +18209,13 @@ fn a_macro_call_among_template_parameters_ends_no_statement() {
     check(input, &["--style=kr", "--break-return-type"], expected);
     check(expected, &["--style=kr", "--break-return-type"], expected);
 }
+
+#[test]
+fn parameters_past_the_maximum_before_a_return_type_split_align_after_it() {
+    // The paren stands past the maximum continuation indent only before
+    // the split.
+    let input = "template <typename T>\nconstexpr void initialize_named_argument(argument_info<T>*, int& index,\n                                         int&) {\n  ++index;\n}\n";
+    let expected = "template <typename T>\nconstexpr void\ninitialize_named_argument(argument_info<T>*, int& index,\n                          int&)\n{\n    ++index;\n}\n";
+    check(input, &["--style=kr", "--break-return-type"], expected);
+    check(expected, &["--style=kr", "--break-return-type"], expected);
+}

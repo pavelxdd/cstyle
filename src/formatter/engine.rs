@@ -2386,6 +2386,7 @@ impl<'a> FormatEngine<'a> {
         let case_label_with_comment =
             switch_cases::case_label_with_trailing_comment(self.current.trimmed());
         let case_label_continues = self.current_case_label_continues();
+        let stacked_before_line = self.layout.nesting.current_continuation_indent_spaces();
         self.finish_line();
         if matches!(
             previous_before_line,
@@ -2401,11 +2402,19 @@ impl<'a> FormatEngine<'a> {
             .split_line_shift
             .take()
             .filter(|split| split.line + 1 == self.output.len());
-        let indent = match (indent, split) {
-            (ContinuationIndent::Spaces(spaces), Some(split)) if spaces >= split.from_column => {
+        let stacked_after_line = self.layout.nesting.current_continuation_indent_spaces();
+        let indent = match (indent, split, stacked_after_line) {
+            // The column the line took from the stack moved as the stack did.
+            (ContinuationIndent::Spaces(spaces), Some(_), Some(moved))
+                if Some(spaces) == stacked_before_line
+                    && stacked_after_line != stacked_before_line =>
+            {
+                ContinuationIndent::Spaces(moved)
+            }
+            (ContinuationIndent::Spaces(spaces), Some(split), _) if spaces >= split.from_column => {
                 ContinuationIndent::Spaces(spaces.saturating_add_signed(split.shift))
             }
-            (indent, _) => indent,
+            (indent, ..) => indent,
         };
         // The label's own column, wherever its style set it, anchors the
         // rest of the label.

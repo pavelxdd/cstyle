@@ -72,6 +72,9 @@ pub(crate) struct NestingState {
     inline_brace_call_paren_stack: Vec<bool>,
     semicolonless_macro_call_paren_stack: Vec<Option<usize>>,
     continuation_indent_spaces_stack: Vec<usize>,
+    /// The columns the maximum continuation indent capped, by their index
+    /// in the continuation stack.
+    capped_continuation_columns: Vec<(usize, usize)>,
     continuation_indent_checkpoint_stack: Vec<usize>,
     brace_scope_depth_stack: Vec<ScopeDepth>,
     pub(crate) brace_header_stack: Vec<Option<String>>,
@@ -142,16 +145,42 @@ impl NestingState {
         let spaces = self
             .current_continuation_indent_spaces()
             .map_or(spaces, |previous| spaces.max(previous));
-        self.continuation_indent_spaces_stack.push(spaces);
+        self.push_continuation_column(spaces);
     }
 
     /// Moves the columns registered at or past `from` by `shift`, as a
-    /// line split there moves the part after it.
-    pub(crate) fn shift_columns_from(&mut self, from: usize, shift: isize) {
+    /// line split there moves the part after it. A column the maximum
+    /// capped stands at its moved column once that is within `max` of
+    /// `base`.
+    pub(crate) fn shift_columns_from(
+        &mut self,
+        from: usize,
+        shift: isize,
+        base: usize,
+        max: usize,
+    ) {
+        let len = self.continuation_indent_spaces_stack.len();
+        self.capped_continuation_columns
+            .retain(|&(index, _)| index < len);
+        for (index, column) in self.continuation_indent_spaces_stack.iter_mut().enumerate() {
+            if let Some(capped) = self
+                .capped_continuation_columns
+                .iter_mut()
+                .find(|(capped, _)| *capped == index)
+            {
+                if capped.1 >= from {
+                    capped.1 = capped.1.saturating_add_signed(shift);
+                    if capped.1.saturating_sub(base) <= max {
+                        *column = capped.1;
+                    }
+                }
+            } else if *column >= from {
+                *column = column.saturating_add_signed(shift);
+            }
+        }
         for column in self
-            .continuation_indent_spaces_stack
+            .paren_indent_spaces_stack
             .iter_mut()
-            .chain(self.paren_indent_spaces_stack.iter_mut())
             .filter(|column| **column >= from)
         {
             *column = column.saturating_add_signed(shift);
@@ -159,6 +188,21 @@ impl NestingState {
     }
 
     pub(crate) fn push_continuation_indent_spaces_raw(&mut self, spaces: usize) {
+        self.push_continuation_column(spaces);
+    }
+
+    /// Pushes `spaces`, the column the maximum continuation indent set in
+    /// place of `aligned`.
+    pub(crate) fn push_capped_continuation_indent_spaces(&mut self, spaces: usize, aligned: usize) {
+        self.push_continuation_column(spaces);
+        self.capped_continuation_columns
+            .push((self.continuation_indent_spaces_stack.len() - 1, aligned));
+    }
+
+    fn push_continuation_column(&mut self, spaces: usize) {
+        let index = self.continuation_indent_spaces_stack.len();
+        self.capped_continuation_columns
+            .retain(|&(capped, _)| capped < index);
         self.continuation_indent_spaces_stack.push(spaces);
     }
 
