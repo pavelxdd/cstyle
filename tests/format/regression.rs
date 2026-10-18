@@ -17004,3 +17004,11 @@ fn arguments_after_a_closure_closer_stand_at_the_closer() {
     let expected = "void run()\n{\n    call(a,\n    b, [] {\n        go();\n    },\n    other,\n    more);\n    call(a,\n    b, ^ {\n        go();\n    },\n    other,\n    more);\n}\n";
     check(input, &["--style=kr"], expected);
 }
+
+#[test]
+fn a_lambda_argument_at_file_scope_breaks_like_a_definition_whatever_its_source() {
+    let expected = "int a;\nREGISTER(name, [](int x)\n{\n    return x;\n});\nREGISTER(name, []\n{\n    return 1;\n});\n";
+    let input = "int a;\nREGISTER(name, [](int x) {\n    return x;\n});\nREGISTER(name, [] {\n    return 1;\n});\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
