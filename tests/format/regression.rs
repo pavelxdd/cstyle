@@ -16343,3 +16343,16 @@ fn an_access_label_a_comment_leads_breaks_the_comments_after_it_off_its_member()
         "struct Item {\n    /* note */ unsigned flag : 1;\n    /* note */ int other : 2;\n};\n";
     check(bit_fields, &["--style=kr"], bit_fields);
 }
+
+#[test]
+fn indent_col1_comments_sets_a_column_one_comment_among_initializers_at_the_members() {
+    let input = "Item::Item(int value, int other)\n    : value_(value),\n      other_(other)\n// note\n{}\n";
+    let expected = "Item::Item(int value, int other)\n    : value_(value),\n      other_(other)\n      // note\n{}\n";
+    check(input, &["--style=kr", "--indent-col1-comments"], expected);
+    check(
+        expected,
+        &["--style=kr", "--indent-col1-comments"],
+        expected,
+    );
+    check(input, &["--style=kr"], input);
+}

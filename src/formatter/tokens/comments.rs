@@ -1815,6 +1815,7 @@ impl FormatEngine<'_> {
         if kind == CommentKind::Line
             && standalone_line_comment
             && !follows_objc_interface
+            && constructor_member_comment_indent.is_none()
             && (self.layout.line_state.column1_line_comment
                 || self
                     .layout
