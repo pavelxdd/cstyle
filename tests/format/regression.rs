@@ -16821,3 +16821,10 @@ fn a_comment_inside_a_for_header_leaves_its_brace_a_block() {
         "void f()\n{\n    for ( /* void */ ; data != end; data += 8) {\n        go();\n    }\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn ratliff_rows_of_a_nested_list_run_into_its_brace_stand_at_the_first() {
+    let input = "const char table[2][2][2] = {\n\t{ { 1,1 }, /* 0 */\n\t  { 1,0 } },\n\t{ { 0,1 }, /* 1 */\n\t  { 0,1 } },\n};\n";
+    let expected = "const char table[2][2][2] = {\n        {   { 1,1 }, /* 0 */\n            { 1,0 }\n        },\n        {   { 0,1 }, /* 1 */\n            { 0,1 }\n        },\n    };\n";
+    check(input, &["--style=ratliff"], expected);
+}

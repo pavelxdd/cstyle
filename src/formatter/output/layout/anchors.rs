@@ -892,8 +892,17 @@ impl FormatEngine<'_> {
                     )
                 })
                 .unwrap_or(false);
-        // Ratliff stands one after a brace row leading its line at that row.
+        // Ratliff stands one after a brace row leading its line at that row
+        // in a list whose `{` ends a line of code.
+        let open_ends_code_line = self
+            .output
+            .line_with_token(groups.get(group).open)
+            .and_then(|line| self.output.line_tokens(line))
+            .is_some_and(|span| {
+                span.last == groups.get(group).open && span.first != groups.get(group).open
+            });
         let after_brace_led_row = self.options.brace_style == BraceStyle::Ratliff
+            && open_ends_code_line
             && open_of_row_before(tokens, groups, group, comma).is_some_and(|element| {
                 matches!(tokens[element], Token::Symbol('{'))
                     && self
