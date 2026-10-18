@@ -16798,3 +16798,9 @@ fn a_kept_one_line_lambda_body_ends_the_continuation_as_a_broken_one_does() {
     let expected = "Box::Box()\n    : one(call(first,\n               [this]() { return go(); },\nlast))\n{\n}\n";
     check(input, &["--style=kr", "--keep-one-line-blocks"], expected);
 }
+
+#[test]
+fn a_row_after_the_tail_of_a_block_comment_over_lines_stands_with_its_siblings() {
+    let input = "typedef enum {\n    VLOCAL,  /* local variable;\n              var.vidx = index */\n    VGLOBAL,  /* global;\n               info */\n    VCALL\n} expkind;\nstatic int first; /* note\n                     more */\nstatic int second;\n";
+    check(input, &["--style=kr"], input);
+}

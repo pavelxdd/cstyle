@@ -2155,7 +2155,7 @@ impl<'a> FormatEngine<'a> {
             // A comment line continues nothing; code a comment leads does.
             && !(self.current_is_preindented
                 && self.current.trimmed_end().ends_with("*/")
-                && !holds_code_after_leading_comments(&self.current))
+                && !holds_code_after_leading_comments(after_comment_tail(&self.current)))
         {
             self.finish_continuation_line_at_newline();
         } else if self.current.trimmed_end().ends_with(';')
@@ -2633,5 +2633,13 @@ fn shared_whitespace(whitespace: &str) -> std::borrow::Cow<'static, str> {
         std::borrow::Cow::Borrowed(&SPACES[..whitespace.len()])
     } else {
         std::borrow::Cow::Owned(whitespace.to_owned())
+    }
+}
+
+/// `line` past the tail of a block comment an earlier line opened.
+fn after_comment_tail(line: &str) -> &str {
+    match (line.find("/*"), line.find("*/")) {
+        (open, Some(close)) if open.is_none_or(|open| close < open) => &line[close + 2..],
+        _ => line,
     }
 }
