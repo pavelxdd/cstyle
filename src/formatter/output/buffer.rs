@@ -1847,6 +1847,13 @@ impl OutputBuffer {
         None
     }
 
+    /// Whether the last non-empty line ends a macro's backslash-continued
+    /// body, which continues no statement after it.
+    pub(crate) fn last_non_empty_ends_macro_body(&self) -> bool {
+        self.last_non_empty_index()
+            .is_some_and(|index| self.directive_of_continuation(index).is_some())
+    }
+
     /// Whether line `index` belongs to a directive, on its first line or on
     /// a backslash-continued one.
     pub(crate) fn is_directive_line(&self, index: usize) -> bool {

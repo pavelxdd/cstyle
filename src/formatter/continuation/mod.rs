@@ -1528,7 +1528,12 @@ impl FormatEngine<'_> {
     }
 
     fn previous_return_continuation_indent_spaces(&self) -> Option<usize> {
-        for line in self.output.scoped().iter().rev().take(8) {
+        for index in self.output.scoped_range().rev().take(8) {
+            // A macro's body continues no statement after it.
+            if self.output.directive_of_continuation(index).is_some() {
+                break;
+            }
+            let line = &self.output[index];
             let trimmed = line.trimmed_start();
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;

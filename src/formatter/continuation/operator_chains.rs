@@ -940,7 +940,7 @@ impl FormatEngine<'_> {
             let raw = &self.output[scan_index];
             let code = self.output.code_before_comment(scan_index).trimmed_end();
             // A macro's body continues no statement after it.
-            if code.ends_with('\\') || raw.trimmed_start().starts_with('#') {
+            if code.ends_with('\\') || self.output.is_directive_line(scan_index) {
                 return None;
             }
             if code.contains('?') {
@@ -967,7 +967,7 @@ impl FormatEngine<'_> {
         }
         let previous = self.output.last_non_empty_scoped()?;
         let previous_code = self.output.code_trimmed_of(previous);
-        if !previous_code.ends_with(':') {
+        if !previous_code.ends_with(':') || self.output.last_non_empty_ends_macro_body() {
             return None;
         }
         let mut branch_indent = Some(leading_visual_width(previous, self.options.tab_width));

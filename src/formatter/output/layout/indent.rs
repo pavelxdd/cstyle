@@ -698,8 +698,11 @@ impl FormatEngine<'_> {
             self.statement_line_before_conditionals(index)
                 .unwrap_or(index)
         });
-        let previous_is_preprocessor =
-            previous_index.is_some_and(|index| self.output.trimmed(index).starts_with('#'));
+        // A macro's body continues no statement after it.
+        let previous_is_macro_body = previous_index
+            .is_some_and(|index| self.output.directive_of_continuation(index).is_some());
+        let previous_is_preprocessor = previous_is_macro_body
+            || previous_index.is_some_and(|index| self.output.trimmed(index).starts_with('#'));
         if let Some(spaces) =
             self.nonconditional_directive_sibling_indent_spaces(line, normal_indent)
         {
@@ -717,6 +720,7 @@ impl FormatEngine<'_> {
             return None;
         }
         if let Some(previous_index) = previous_index
+            && !previous_is_macro_body
             && let Some(spaces) = self.previous_line_indent_spaces(
                 line,
                 current,

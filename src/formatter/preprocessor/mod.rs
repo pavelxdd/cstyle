@@ -814,14 +814,6 @@ impl FormatEngine<'_> {
         } else {
             self.preprocessor.split_else.after_line = false;
         }
-        if line.trimmed_end().ends_with("&&")
-            && let Some(previous) = self.output.last()
-        {
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = Some(
-                leading_visual_width(previous, self.options.tab_width) + self.options.indent_width,
-            );
-        }
         self.layout.previous = PreviousToken::Other;
         self.previous_was_newline = false;
         self.preprocessor.last_output_was_preprocessor = true;

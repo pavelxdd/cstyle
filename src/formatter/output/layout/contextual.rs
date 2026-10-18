@@ -274,7 +274,9 @@ impl FormatEngine<'_> {
     ) -> ContextualLineLayout {
         let line_start = line.trimmed_start();
         let layout = &mut contextual.layout;
-        if let Some(previous) = self.output.last_non_empty_scoped() {
+        if let Some(previous) = self.output.last_non_empty_scoped()
+            && !self.output.last_non_empty_ends_macro_body()
+        {
             let previous_trimmed = previous.trimmed_start();
             let current = line_start;
             let comment_column = leading_visual_width(previous, self.options.tab_width);

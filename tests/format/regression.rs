@@ -17012,3 +17012,26 @@ fn a_lambda_argument_at_file_scope_breaks_like_a_definition_whatever_its_source(
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
+
+#[test]
+fn a_ternary_ending_a_macro_body_leaves_the_code_after_it() {
+    let input = "#define FIELDS(cfg) \\\n\t.depth = (cfg) ? 1 : 0\n\nstatic const char *\nlock_repo(int force)\n{\n    return 0;\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_macro_body_ending_in_a_logical_operator_leaves_the_code_after_it() {
+    let input = "#define M(cfg) \\\n\treturn a &&\n\nint value = 1;\nint other = 2;\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_macro_body_ending_mid_expression_or_at_a_label_leaves_the_code_after_it() {
+    for body in ["a = b ?", "x = a ? b :", "public:", "return a &&"] {
+        let input = format!(
+            "#define M(cfg) \\\n    {body}\n\nstatic const char *\nlock_repo(int force)\n{{\n    return 0;\n}}\nint value = 1;\n"
+        );
+        check(&input, &["--style=kr"], &input);
+        check(&input, &["--style=kr", "-w"], &input);
+    }
+}
