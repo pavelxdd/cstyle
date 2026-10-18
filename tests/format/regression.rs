@@ -16073,3 +16073,63 @@ fn a_trailing_block_comment_after_a_case_block_moves_no_code() {
         );
     }
 }
+
+#[test]
+fn lisp_sets_a_space_before_every_list_closer_a_row_holds() {
+    let cases = [
+        (
+            "Item run()\n{\n    return {1,\n            2};\n}\n",
+            "Item run() {\n    return {1,\n            2 }; }\n",
+        ),
+        (
+            "void run()\n{\n    call(helper({1,\n                 2}), value);\n}\n",
+            "void run() {\n    call(helper({1,\n                 2 }), value); }\n",
+        ),
+        (
+            "void run()\n{\n    call({1, {2,\n              3}});\n}\n",
+            "void run() {\n    call({1, {2,\n              3 } }); }\n",
+        ),
+        (
+            "void run()\n{\n    call({1,\n          2});\n}\n",
+            "void run() {\n    call({1,\n          2 }); }\n",
+        ),
+    ];
+    for (input, expected) in cases {
+        check(input, &["--style=lisp"], expected);
+        check(expected, &["--style=lisp"], expected);
+    }
+    // A closer right after a block comment keeps the source's gap.
+    for input in [
+        "int list[] = {1,\n              2 /* c */};\n",
+        "int list[] = {1,\n              2 /* c */ };\n",
+    ] {
+        check(input, &["--style=lisp"], input);
+    }
+    check(
+        "void run()\n{\n    call(helper({1,\n                 2}), value);\n}\n",
+        &["--style=pico"],
+        "void run()\n{   call(helper({1,\n                 2 }), value); }\n",
+    );
+}
+
+#[test]
+fn lisp_rows_of_a_list_a_joined_closer_line_opens_move_with_it() {
+    let cases = [
+        (
+            "int value[2] = {1,\n                2}, other[2] = {3,\n                                4};\n",
+            "int value[2] = {1,\n                2 }, other[2] = {3,\n                                 4 };\n",
+        ),
+        (
+            "void run()\n{\n    int value[2] = {1,\n                    2}, other[2] = {3,\n                                    4,\n                                    5};\n}\n",
+            "void run() {\n    int value[2] = {1,\n                    2 }, other[2] = {3,\n                                     4,\n                                     5 }; }\n",
+        ),
+        (
+            "int value[2] = {1,\n                2}, other[2] = {3, {4,\n                                    5}};\n",
+            "int value[2] = {1,\n                2 }, other[2] = {3, {4,\n                                     5 } };\n",
+        ),
+    ];
+    for (input, expected) in cases {
+        check(input, &["--style=lisp"], expected);
+        check(expected, &["--style=lisp"], expected);
+    }
+}

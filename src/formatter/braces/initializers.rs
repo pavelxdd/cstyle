@@ -17,7 +17,7 @@ use crate::formatter::syntax::BraceListRows;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, preprocessor_directive, trailing_comment_split_limit,
+    ContainsAnyByte, line_ends_with_comment, preprocessor_directive, trailing_comment_split_limit,
     unmatched_open_brace_content_offset,
 };
 use crate::formatter::text::line_view::LineView;
@@ -1164,12 +1164,25 @@ impl FormatEngine<'_> {
                     .clone()
                     .filter(|gap| !gap.is_empty() && gap.chars().all(|ch| ch == ' ' || ch == '\t'))
             });
+        // Lisp and pico set a space before a closer a row holds; one right
+        // after a block comment keeps the gap the source left.
+        let spaced_closer = if run_in_after_comment {
+            self.token_input
+                .previous_input_whitespace
+                .as_deref()
+                .is_some_and(|gap| !gap.is_empty())
+        } else {
+            matches!(
+                self.options.brace_style,
+                BraceStyle::Pico | BraceStyle::Lisp
+            ) && !self.current_is_blank()
+        };
         if let Some(Some(gap)) = return_initializer_gap.or(source_closing_gap) {
             self.trim_current_end_horizontal_space();
             self.current.push_str(&gap);
         } else {
             self.trim_current_end_horizontal_space();
-            if run_in_after_comment {
+            if spaced_closer {
                 self.ensure_space();
             }
         }
@@ -1189,18 +1202,66 @@ impl FormatEngine<'_> {
         }
         let lead = self.output.lead_width(published, self.options.tab_width)
             + self.layout.line_adjuster.last_line_case_unindent();
+        // Lisp and pico join a closer's line to the row before; its lists'
+        // rows align to where its text then stands.
+        let target = self
+            .lisp_joined_text_column(published)
+            .map_or(lead, |column| {
+                column + self.layout.line_adjuster.last_line_case_unindent()
+            });
         for frame in &mut self.inline_array.frames {
             if frame.output_line != published {
                 continue;
             }
-            if let Some(laid_out) = frame.line_lead.take()
-                && laid_out != lead
-            {
-                let shift = |column: usize| (column + lead).saturating_sub(laid_out);
+            let laid_out = frame.line_lead.take().unwrap_or(lead);
+            if laid_out != target {
+                let shift = |column: usize| (column + target).saturating_sub(laid_out);
                 frame.body_column = shift(frame.body_column);
                 frame.brace_column = shift(frame.brace_column);
             }
         }
+    }
+
+    /// The column the text of output line `line` stands at once lisp and
+    /// pico join it, with the closers leading it, to the row before.
+    fn lisp_joined_text_column(&self, line: usize) -> Option<usize> {
+        if !matches!(
+            self.options.brace_style,
+            BraceStyle::Pico | BraceStyle::Lisp
+        ) {
+            return None;
+        }
+        let joins = |index: usize| {
+            index > 0
+                && self.output.trimmed(index).starts_with('}')
+                && self.output.line_tokens(index).is_some()
+                && {
+                    let previous = &self.output[index - 1];
+                    !previous.trimmed().is_empty()
+                        && preprocessor_directive(previous.trimmed_start()).is_none()
+                        && !previous.trimmed_end().ends_with('\\')
+                        && !line_ends_with_comment(previous)
+                }
+        };
+        if !joins(line) {
+            return None;
+        }
+        let mut start = line;
+        while joins(start) {
+            start -= 1;
+        }
+        let tab_width = self.options.tab_width;
+        let mut end = visual_width_from(self.output[start].trimmed_end(), 0, tab_width);
+        for index in start + 1..=line {
+            let previous = &self.output[index - 1];
+            if !previous.trimmed_end().ends_with('{') {
+                end += 1;
+            }
+            if index < line {
+                end = visual_width_from(self.output.trimmed(index), end, tab_width);
+            }
+        }
+        Some(end)
     }
 
     pub(crate) fn current_inline_array_column(&self) -> Option<usize> {
