@@ -834,7 +834,14 @@ impl FormatEngine<'_> {
         {
             self.finish_line();
         }
-        self.emit_source_space();
+        // A padded operator keeps its space before the bracket, as a
+        // capture default's `=` does.
+        if !(self.options.pad_operators
+            && self.layout.previous == PreviousToken::Operator
+            && self.current.ends_with(' '))
+        {
+            self.emit_source_space();
+        }
         self.current.push(']');
         self.layout.command_state.observe_char(']');
         if self.inline_array.initializer_designator_bracket_depth > 0 {

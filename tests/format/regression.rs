@@ -17272,3 +17272,13 @@ fn lambda_rows_of_a_call_brace_list_keep_their_braces_as_in_a_declaration_list()
         "void f()\n    {\n    run(\n        {\n        [] {\n            go();\n            },\n        [](int x) {\n            go(x);\n            },\n        });\n    }\n",
     );
 }
+
+#[test]
+fn pad_oper_pads_a_capture_default_on_both_sides() {
+    let input = "void f()\n{\n    auto a = [=]() { return 1; };\n    call([=] {\n        go();\n    });\n    auto b = [=, &x]() { return x; };\n}\n";
+    check(
+        input,
+        &["--pad-oper"],
+        "void f()\n{\n    auto a = [ = ]() {\n        return 1;\n    };\n    call([ = ] {\n        go();\n    });\n    auto b = [ =, &x]() {\n        return x;\n    };\n}\n",
+    );
+}
