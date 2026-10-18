@@ -18315,3 +18315,11 @@ fn an_access_label_after_a_base_clause_row_opening_the_body_stands_as_any_label(
     let expected = "struct Item\n    : Base<View<Char>, Char> {\n  public:\n    int value;\n    int other;\n};\n";
     check(input, &["--style=java", "--indent-modifiers"], expected);
 }
+
+#[test]
+fn pad_oper_reads_a_pack_expansion_among_template_arguments_as_template_arguments() {
+    let input = "static auto check(index_sequence<Is...>);\nauto value = check(sequence<Is...>{});\nbool first = point.x < other.x && other.y > point.y;\n";
+    let expected = "static auto check(index_sequence<Is...>);\nauto value = check(sequence<Is...> {});\nbool first = point.x < other.x && other.y > point.y;\n";
+    check(input, &["--style=kr", "--pad-oper"], expected);
+    check(expected, &["--style=kr", "--pad-oper"], expected);
+}
