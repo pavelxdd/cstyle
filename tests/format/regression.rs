@@ -9264,6 +9264,14 @@ fn rows_of_a_define_in_a_case_block_stand_as_written() {
     }
     let input = "void f()\n{\n    switch (op) {\n    case 1: {\n#if defined(FIRST) && \\\n    defined(SECOND)\n        go();\n#endif\n    }\n    }\n}\n";
     check(input, &["--style=kr"], input);
+    // An option indenting the directive lays its rows, which the unindent
+    // then takes as any line.
+    let input = "void f()\n{\n    switch (op) {\n    case 1: {\n#if defined(FIRST) && \\\n        defined(SECOND)\n        go();\n#endif\n    }\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--indent-preproc-cond"],
+        "void f()\n{\n    switch (op) {\n    case 1: {\n        #if defined(FIRST) && \\\n        defined(SECOND)\n        go();\n        #endif\n    }\n    }\n}\n",
+    );
 }
 
 #[test]

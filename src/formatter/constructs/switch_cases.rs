@@ -473,6 +473,9 @@ pub(crate) struct SwitchCaseLineTransformer {
     indent_width: usize,
     indent_cases: bool,
     indent_preproc_define: bool,
+    indent_preproc_cond: bool,
+    /// An option lays the rows of the directive the line continues.
+    continued_directive_laid: bool,
     empty_line_fill: bool,
     body_level_braces: bool,
 }
@@ -503,6 +506,8 @@ impl SwitchCaseLineTransformer {
             indent_width: options.indent_width,
             indent_cases: options.indent_cases,
             indent_preproc_define: options.indent_preproc_define,
+            indent_preproc_cond: options.indent_preproc_conditional,
+            continued_directive_laid: false,
             empty_line_fill: options.empty_line_fill,
             body_level_braces: options.brace_style == BraceStyle::Whitesmith,
         }
@@ -547,8 +552,18 @@ impl SwitchCaseLineTransformer {
 
         let is_preprocessor =
             self.in_continued_preprocessor || line.trimmed_start().starts_with('#');
-        // The rows continuing a directive stand as written.
-        let continues_directive = self.in_continued_preprocessor && !self.indent_preproc_define;
+        if !self.in_continued_preprocessor && is_preprocessor {
+            self.continued_directive_laid = match preprocessor_directive(line.trimmed_start()) {
+                Some(directive) if is_conditional_preprocessor(directive) => {
+                    self.indent_preproc_cond
+                }
+                Some("define") => self.indent_preproc_define,
+                _ => false,
+            };
+        }
+        // The rows continuing a directive stand as written, unless an option
+        // lays them.
+        let continues_directive = self.in_continued_preprocessor && !self.continued_directive_laid;
         // A comment spares a level of the line only when the line holds no
         // code: a comment moves no code.
         let comment_only = if self.in_block_comment {
