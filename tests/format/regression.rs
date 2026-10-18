@@ -16050,3 +16050,26 @@ fn declarations_after_an_indented_block_that_ends_a_split_declaration_return_to_
         );
     }
 }
+
+#[test]
+fn a_trailing_block_comment_after_a_case_block_moves_no_code() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n    } break; /* note */\n    default:\n        break;\n    }\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=linux", "--keep-one-line-statements"][..],
+            "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n    } break; /* note */\n    default:\n        break;\n    }\n}\n",
+        ),
+        (
+            &["--style=linux"][..],
+            "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n    }\n    break; /* note */\n    default:\n        break;\n    }\n}\n",
+        ),
+    ] {
+        check(input, args, expected);
+        let line_comment = input.replace("/* note */", "// note");
+        check(
+            &line_comment,
+            args,
+            &expected.replace("/* note */", "// note"),
+        );
+    }
+}
