@@ -15476,6 +15476,16 @@ fn tab_indent_fills_a_list_closer_past_the_statement_with_spaces_when_its_list_o
 }
 
 #[test]
+fn tab_indent_tabs_a_ratliff_list_closer_whose_elements_stand_a_level_in() {
+    let input = "void f()\n{\n    value = call(first, {\n        1,\n        2,\n    });\n    run({\n        [](int x) {\n            go(x);\n        },\n    });\n}\n";
+    check(
+        input,
+        &["--style=ratliff", "--indent=tab=4"],
+        "void f() {\n\tvalue = call(first, {\n\t\t1,\n\t\t2,\n\t\t});\n\trun({\n\t\t[](int x) {\n\t\t\tgo(x);\n\t\t\t},\n\t\t});\n\t}\n",
+    );
+}
+
+#[test]
 fn a_nested_list_run_in_after_its_outer_brace_keeps_its_source_gap() {
     for input in [
         "void f()\n{\n    k = { { 1, 2 },\n        { 3, 4 }\n    };\n}\n",

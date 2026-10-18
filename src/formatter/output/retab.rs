@@ -542,17 +542,20 @@ impl FormatEngine<'_> {
                 )
             });
         // A brace closing a list opened after code continues the statement
-        // past its indent, as its elements do, unless the list opens with a
-        // nested brace that holds its elements a level in.
+        // past its indent, as its elements run on from that brace do,
+        // unless the list opens with a nested brace that holds its elements
+        // a level in.
         let closes_after_code = closes_compound_literal
             && groups.closed_at(first).is_some_and(|group| {
                 let open = groups.get(group).open;
-                !next_code_token(&self.tree.tokens, open + 1)
-                    .is_some_and(|next| matches!(self.tree.tokens[next], Token::Symbol('{')))
+                let next = next_code_token(&self.tree.tokens, open + 1);
+                !next.is_some_and(|next| matches!(self.tree.tokens[next], Token::Symbol('{')))
                     && self.output.line_with_token(open).is_some_and(|line| {
                         self.output
                             .line_tokens(line)
                             .is_some_and(|span| span.first != open)
+                            && next
+                                .is_some_and(|next| self.output.line_with_token(next) == Some(line))
                     })
             });
         if matches!(
