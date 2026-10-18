@@ -906,6 +906,15 @@ impl SwitchCaseLineTransformer {
         self.case_block_state.unindent_depth + self.stack_unindent_depth()
     }
 
+    /// The levels the next line loses when it continues a block comment and
+    /// holds no code: a level fewer where a comment spares one.
+    pub(crate) fn comment_row_unindent_depth(&self) -> usize {
+        let depth = self.next_line_unindent_depth();
+        let spares = self.case_block_state.switch_brace_count == 1
+            && (self.case_block_state.unindent_case || self.case_block_state.body_level_case);
+        depth.saturating_sub(usize::from(spares && depth > 0))
+    }
+
     pub(crate) fn next_line_unindent_depth(&self) -> usize {
         self.total_unindent_depth() + usize::from(self.unindent_next_line)
     }

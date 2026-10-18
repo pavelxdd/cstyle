@@ -9162,6 +9162,14 @@ fn mozilla_breaks_a_run_in_enum_list_below_the_brace_it_breaks() {
 }
 
 #[test]
+fn rows_of_a_trailing_comment_in_a_case_block_stand_as_written() {
+    // The case block's unindent leaves the rows where the source wrote
+    // them, so a second pass keeps them too.
+    let input = "void f()\n{\n    switch (op) {\n    case 1: {\n        if (ready) {\n            check(value);  /* first row\n                           ** second row */\n            go();\n        }\n        break;\n    }\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
 fn vtk_sets_a_function_try_block_at_the_function_body() {
     let input = "void helper()\ntry {\n    go();\n} catch (...) {\n    stop();\n}\n";
     let expected = "void helper()\ntry\n{\n    go();\n}\ncatch (...)\n{\n    stop();\n}\n";

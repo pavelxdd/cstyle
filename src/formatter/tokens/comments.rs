@@ -3403,6 +3403,18 @@ impl FormatEngine<'_> {
                 // astyle writes the rows of a comment opened after code as
                 // they stand.
                 let verbatim = shifted == line.trimmed_end();
+                // A case block's unindent leaves them standing too.
+                let unindent = self.layout.line_adjuster.comment_row_case_unindent_depth()
+                    * self.options.indent_width;
+                let shifted = if verbatim
+                    && unindent > 0
+                    && !shifted.trimmed().is_empty()
+                    && !shifted[..shifted.len() - shifted.trimmed_start().len()].contains('\t')
+                {
+                    format!("{}{shifted}", " ".repeat(unindent))
+                } else {
+                    shifted
+                };
                 let is_last_line = lines.peek().is_none();
                 let last_line_starts_with_star = line.trimmed_start().starts_with('*');
                 let keep_line_open =

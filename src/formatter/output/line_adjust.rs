@@ -171,6 +171,14 @@ impl LineAdjuster {
         self.switch_case_transformer.total_unindent_depth()
     }
 
+    /// The levels a row continuing a block comment loses, with no code on it.
+    pub fn comment_row_case_unindent_depth(&self) -> usize {
+        if !self.case_processing_enabled {
+            return 0;
+        }
+        self.switch_case_transformer.comment_row_unindent_depth()
+    }
+
     pub fn next_line_case_unindent_depth(&self) -> usize {
         self.switch_case_transformer.next_line_unindent_depth()
     }
