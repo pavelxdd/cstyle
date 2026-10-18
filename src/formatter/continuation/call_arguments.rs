@@ -2394,6 +2394,8 @@ impl FormatEngine<'_> {
 }
 
 pub(crate) fn line_opens_attachable_lambda_block(options: &FormatOptions, line: &str) -> bool {
+    // A comment after the code takes no part in the head.
+    let line = &line[..trailing_comment_split_limit(line)];
     let trimmed = line.trimmed_end();
     if trimmed.ends_with('{') {
         return line_opens_lambda_block(line)

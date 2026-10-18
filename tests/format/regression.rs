@@ -17491,3 +17491,10 @@ fn a_comment_after_an_inner_lambda_brace_leaves_its_head_row_in_the_outer_body()
     let expected = "void f()\n{\n    outer([&]\n    {\n        inner([]   /* c */\n        {\n            go();\n        });\n    });\n}\n";
     check(input, &["--style=allman"], expected);
 }
+
+#[test]
+fn a_comment_after_a_lambda_argument_brace_leaves_its_row_at_the_statement() {
+    let input = "void f()\n{\n    call(first,\n         [] { /* note */\n        go();\n    },\n    other,\n    more);\n}\n";
+    let expected = "void f()\n{\n    call(first,\n    [] { /* note */\n        go();\n    },\n    other,\n    more);\n}\n";
+    check(input, &["--style=kr"], expected);
+}
