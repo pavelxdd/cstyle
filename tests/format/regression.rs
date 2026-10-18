@@ -16612,40 +16612,26 @@ fn vtk_indents_the_braces_of_a_method_of_a_type_inside_a_function_like_its_type(
 }
 
 #[test]
-fn an_attached_brace_goes_before_the_last_block_comment_trailing_its_header() {
-    let input = "void f()\n{\n    for (;;) /* a */ /* b */ /* c */\n    {\n        go();\n    }\n    for (;;) /* a */  /* b */\n    {\n        go();\n    }\n    for (;;) /* a */ /* b */ {\n        go();\n    }\n    if (x) /* a */ /* b */\n        go();\n    else /* a */ /* b */\n    {\n        stop();\n    }\n}\n";
-    let expected = "void f()\n{\n    for (;;) /* a */ /* b */ { /* c */\n        go();\n    }\n    for (;;) /* a */ { /* b */\n        go();\n    }\n    for (;;) /* a */ { /* b */\n        go();\n    }\n    if (x) /* a */ /* b */\n        go();\n    else /* a */ { /* b */\n        stop();\n    }\n}\n";
+fn a_header_brace_after_a_block_comment_moves_before_it_and_a_block_comment_after_it_down() {
+    let input = "void f()\n{\n    for (;;) /* a */ { /* b */\n        go();\n    }\n    if (ready) {\n        go();\n    } else /* a */ { /* b */\n        stop();\n    }\n    for (;;) /* a */\n    { /* c */\n        go();\n    }\n}\n";
+    let expected = "void f()\n{\n    for (;;) { /* a */\n        /* b */\n        go();\n    }\n    if (ready) {\n        go();\n    } else { /* a */\n        /* b */\n        stop();\n    }\n    for (;;) { /* a */\n        /* c */\n        go();\n    }\n}\n";
     check(input, &["--style=kr"], expected);
-    check(expected, &["--style=kr"], expected);
-    let input = "class Item /* a */ /* b */\n{\n};\n";
     check(
         input,
-        &["--style=attach"],
-        "class Item /* a */ { /* b */\n};\n",
+        &["--style=java"],
+        &expected.replace("f()\n{", "f() {"),
     );
-    // A line comment after them keeps the brace off the header.
-    let input = "void f()\n{\n    for (;;) /* a */ /* b */ // c\n    {\n        go();\n    }\n}\n";
-    check(input, &["--style=kr"], input);
-    // A block comment after the brace starts its body.
-    let input =
-        "void f()\n{\n    for (;;) /* a */ /* b */\n    { /* c */\n        go();\n    }\n}\n";
-    let expected =
-        "void f()\n{\n    for (;;) /* a */ { /* b */\n        /* c */\n        go();\n    }\n}\n";
-    check(input, &["--style=kr"], expected);
 }
 
 #[test]
-fn a_brace_between_block_comments_on_its_header_line_stays_between_them() {
-    // astyle moves it before the comment ahead of it, which leaves its
-    // own output with a brace between comments unstable.
-    for header in ["for (;;)", "while (ready)", "if (ready)"] {
-        let input =
-            format!("void f()\n{{\n    {header} /* a */ {{ /* b */\n        go();\n    }}\n}}\n");
-        check(&input, &["--style=kr"], &input);
-        check(&input, &["--style=java"], &input.replace("f()\n{", "f() {"));
-    }
-    let input = "void f()\n{\n    if (ready) {\n        go();\n    } else /* a */ { /* b */\n        stop();\n    }\n}\n";
+fn a_header_brace_after_a_run_of_block_comments_keeps_its_place() {
+    // astyle moves it before the last of them, where its own output moves
+    // it again.
+    let input = "void f()\n{\n    for (;;) /* a */ /* b */\n    {\n        go();\n    }\n    for (;;) /* a */ /* b */ {\n        go();\n    }\n}\n";
     check(input, &["--style=kr"], input);
+    let input = "void f()\n{\n    for (;;) /* a */ /* b */ go();\n}\n";
+    let expected = "void f()\n{\n    for (;;) /* a */ /* b */ {\n        go();\n    }\n}\n";
+    check(input, &["--style=1tbs"], expected);
 }
 
 #[test]
@@ -16665,13 +16651,9 @@ fn a_header_brace_after_a_block_comment_moves_before_it_ahead_of_a_line_comment(
 }
 
 #[test]
-fn an_added_brace_goes_before_the_last_block_comment_trailing_its_header() {
-    let input = "void f()\n{\n    for (;;) /* a */ /* b */\n        go();\n    for (;;) /* a */ /* b */ go();\n    if (ready) /* a */ go(); else /* b */ /* c */ stop();\n}\n";
-    let expected = "void f()\n{\n    for (;;) /* a */ { /* b */\n        go();\n    }\n    for (;;) /* a */ { /* b */\n        go();\n    }\n    if (ready) { /* a */\n        go();\n    } else /* b */ { /* c */\n        stop();\n    }\n}\n";
-    check(input, &["--style=1tbs"], expected);
-    check(input, &["--style=kr", "--add-braces"], expected);
-    let input = "void f()\n{\n    for (;;) /* a */   /* b */\n        go();\n    for (;;) /* a */ // b\n        go();\n}\n";
-    let expected = "void f()\n{\n    for (;;) /* a */ { /* b */\n        go();\n    }\n    for (;;) /* a */ // b\n    {\n        go();\n    }\n}\n";
+fn an_added_brace_stays_off_a_header_a_block_and_a_line_comment_trail() {
+    let input = "void f()\n{\n    for (;;) /* a */ // b\n        go();\n    if (ready) /* a */ go(); else /* b */ stop();\n}\n";
+    let expected = "void f()\n{\n    for (;;) /* a */ // b\n    {\n        go();\n    }\n    if (ready) { /* a */\n        go();\n    } else { /* b */\n        stop();\n    }\n}\n";
     check(input, &["--style=1tbs"], expected);
 }
 

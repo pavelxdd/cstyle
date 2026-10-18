@@ -2607,8 +2607,8 @@ pub(crate) fn add_marked_cross_line_statement_braces(
         {
             continue;
         }
-        // The brace goes before the last of the comments after the header,
-        // but for a line comment ending more than one.
+        // The brace goes before the comments after the header, but for a
+        // line comment ending more than one.
         let comments = (header_end + 1..open_insert.saturating_sub(1))
             .filter(|&index| matches!(tokens[index], Token::Comment(_, _)))
             .collect::<Vec<_>>();
@@ -2620,13 +2620,9 @@ pub(crate) fn add_marked_cross_line_statement_braces(
             && !comment_run_ends_in_line_comment
             && open_brace_attaches_to_header_line(tokens, header_end, open_insert)
         {
-            match comments.last() {
+            match comments.first() {
                 Some(&comment) => {
-                    let gap_start = comments
-                        .len()
-                        .checked_sub(2)
-                        .map_or(header_end, |previous| comments[previous])
-                        + 1;
+                    let gap_start = header_end + 1;
                     insert_before
                         .entry(gap_start)
                         .or_default()

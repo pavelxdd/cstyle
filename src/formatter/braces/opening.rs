@@ -117,38 +117,14 @@ fn attach_brace_before_trailing_comment(line: &str) -> Option<String> {
     } else {
         trailing_comment_split_limit(line)
     };
-    if comment_start == line.len() || line[..comment_start].trimmed_end().is_empty() {
+    if comment_start == line.len() {
         return None;
     }
-    // A run of block comments takes the brace before its last.
-    let comment_start = last_trailing_block_comment_start(line, comment_start)
-        .map_or(comment_start, |last| line[..last].trimmed_end().len());
     let code = line[..comment_start].trimmed_end();
-    Some(attach_brace_in_comment_gap(code, &line[comment_start..]))
-}
-
-/// The start of the last block comment of the comment run from `run_start`
-/// to the end of `line`, or `None` when the run holds a line comment.
-fn last_trailing_block_comment_start(line: &str, run_start: usize) -> Option<usize> {
-    let mut start = run_start;
-    let mut last = None;
-    loop {
-        let rest = &line[start..];
-        let comment = rest.trimmed_start();
-        if comment.is_empty() {
-            return last;
-        }
-        let close = comment.strip_prefix("/*")?.find("*/")?;
-        let comment_start = start + rest.len() - comment.len();
-        last = Some(comment_start);
-        start = comment_start + close + 4;
+    if code.is_empty() {
+        return None;
     }
-}
-
-/// Whether `comment` is a run of block comments on one line.
-fn is_trailing_block_comment_run(comment: &str) -> bool {
-    comment.trimmed_start().starts_with("/*")
-        && line_scan::after_leading_comments(comment).is_empty()
+    Some(attach_brace_in_comment_gap(code, &line[comment_start..]))
 }
 
 fn attach_brace_in_comment_gap(code: &str, rest: &str) -> String {
@@ -1123,7 +1099,7 @@ impl FormatEngine<'_> {
         if comment_start == self.current.len() {
             return None;
         }
-        if !is_trailing_block_comment_run(&self.current[comment_start..]) {
+        if !is_single_trailing_block_comment(&self.current[comment_start..]) {
             return None;
         }
         attach_brace_before_trailing_comment(&self.current)
@@ -2395,13 +2371,12 @@ impl FormatEngine<'_> {
             && self.token_input.token_followed_by_final_line_comment
             && self.options.brace_style == BraceStyle::None;
         // A bare block's brace keeps its place after a comment; a header's
-        // moves before the comment trailing its header, but for a block
-        // comment after it.
+        // moves before the comment trailing its header.
         let reorder_allowed = match brace_type {
             BraceType::Command => brace.header.is_some(),
             BraceType::Definition | BraceType::Struct | BraceType::Union => true,
             _ => false,
-        } && !matches!(next, Some(Token::Comment(CommentKind::Block, _)));
+        };
         if reorder_allowed
             && let Some(reordered) = self.reorder_brace_before_current_block_comment()
         {
@@ -3686,7 +3661,7 @@ impl FormatEngine<'_> {
                     self.options.brace_style,
                     BraceStyle::Attach | BraceStyle::Ratliff | BraceStyle::Lisp
                 ) && (ends_parameter_list(trimmed) || objc_method_header)
-                    && (is_trailing_block_comment_run(comment) || comment.starts_with("//"));
+                    && (is_single_trailing_block_comment(comment) || comment.starts_with("//"));
             }
             let last_word = trimmed
                 .rsplit(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
@@ -3695,7 +3670,7 @@ impl FormatEngine<'_> {
             if !trimmed.ends_with(')') && !matches!(last_word, "else" | "do" | "try") {
                 return false;
             }
-            is_trailing_block_comment_run(comment) || comment.starts_with("//")
+            is_single_trailing_block_comment(comment) || comment.starts_with("//")
         })
     }
 
