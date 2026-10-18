@@ -16704,3 +16704,30 @@ fn a_nested_first_call_argument_list_spanning_rows_closes_its_first_element_alon
         check(expected, &[&format!("--style={style}")], expected);
     }
 }
+
+#[test]
+fn a_list_brace_broken_off_an_assigned_call_paren_stands_as_after_a_plain_call() {
+    let input = "void f()\n{\n    value = call({\n        1,\n        2\n    });\n}\n";
+    for (style, expected) in [
+        (
+            "allman",
+            "void f()\n{\n    value = call(\n    {\n        1,\n        2\n    });\n}\n",
+        ),
+        (
+            "whitesmith",
+            "void f()\n    {\n    value = call(\n        {\n        1,\n        2\n        });\n    }\n",
+        ),
+        (
+            "vtk",
+            "void f()\n{\n    value = call(\n        {\n        1,\n        2\n        });\n}\n",
+        ),
+    ] {
+        check(input, &[&format!("--style={style}")], expected);
+        check(expected, &[&format!("--style={style}")], expected);
+    }
+    // So does a row a list's brace leads, or one opening a lambda's body,
+    // as after a plain call.
+    let input = "void f()\n{\n    value = call(\n                {1, 2}, other);\n    value = call(\n        first, [&]() { go(); });\n    value = call(\n        Item{1, 2}, other);\n}\n";
+    let expected = "void f()\n{\n    value = call(\n    {1, 2}, other);\n    value = call(\n    first, [&]() {\n        go();\n    });\n    value = call(\n                Item{1, 2}, other);\n}\n";
+    check(input, &["--style=kr"], expected);
+}

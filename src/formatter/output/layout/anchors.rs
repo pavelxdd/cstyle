@@ -21,7 +21,7 @@ use crate::formatter::structure::groups::{Delimiter, GroupId};
 use crate::formatter::syntax::language::{is_header, is_macro_like_word};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, after_leading_comments, preprocessor_directive,
+    ContainsAnyByte, after_leading_comments, has_unmatched_open_brace, preprocessor_directive,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -400,7 +400,8 @@ impl FormatEngine<'_> {
             })
         })
         .or_else(|| {
-            when(after_paren, || {
+            // A row opening a brace past its line stands as a block's.
+            when(after_paren && !has_unmatched_open_brace(line), || {
                 self.argument_after_assigned_call_paren_indent(first)
             })
         })
@@ -6355,10 +6356,12 @@ impl FormatEngine<'_> {
         let group = groups.opened_at(open)?;
         let callee = self.tree.previous_code_token(open)?;
         let assign = self.tree.previous_code_token(callee)?;
+        // A row a brace leads stands as a block's.
         if groups.get(group).delimiter != Delimiter::Paren
             || groups.enclosing(first) != Some(group)
             || !matches!(tokens[callee], Token::Word(_))
             || !matches!(&tokens[assign], Token::Operator(operator) if operator == "=")
+            || matches!(tokens[first], Token::Symbol('{'))
             || tokens[open + 1..first]
                 .iter()
                 .any(|token| matches!(token, Token::Comment(..)))
