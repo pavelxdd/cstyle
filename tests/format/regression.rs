@@ -16289,3 +16289,21 @@ fn brace_row_after_a_broken_first_element_of_a_call_argument_list_stands_as_assi
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
+
+#[test]
+fn vtk_rows_of_a_nested_first_call_argument_list_stand_where_its_closer_leaves_them() {
+    // astyle sets the rows a level nearer when the closers join the last
+    // row; they stand as they do with the closer on its own line.
+    for (input, expected) in [
+        (
+            "void run()\n{\n    call({{1, 2},\n          {3, 4}});\n}\n",
+            "void run()\n{\n    call({{1, 2},\n            {3, 4}});\n}\n",
+        ),
+        (
+            "void run()\n{\n    call({{1, 2},\n          {3, 4}\n         });\n}\n",
+            "void run()\n{\n    call({{1, 2},\n            {3, 4}\n        });\n}\n",
+        ),
+    ] {
+        check(input, &["--style=vtk"], expected);
+    }
+}
