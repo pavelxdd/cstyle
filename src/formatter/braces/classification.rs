@@ -337,7 +337,7 @@ impl FormatEngine<'_> {
                 ))
         {
             BraceType::Array
-        } else if pending_extern
+        } else if pending_extern && !self.brace_opens_function_body()
             || (block_word.as_deref() == Some("extern") && !self.current_ends_definition_header())
         {
             BraceType::Extern
@@ -458,6 +458,14 @@ impl FormatEngine<'_> {
         } else {
             BraceType::NonStatement
         }
+    }
+
+    /// Whether the brace being pushed opens a function's body.
+    fn brace_opens_function_body(&self) -> bool {
+        self.current
+            .active_token()
+            .and_then(|brace| self.tree.groups.opened_at(brace))
+            .is_some_and(|group| self.tree.blocks.kind(group) == Some(BlockKind::FunctionBody))
     }
 
     fn brace_opens_constructor_body(&self) -> bool {

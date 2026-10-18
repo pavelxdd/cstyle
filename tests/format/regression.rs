@@ -18364,3 +18364,13 @@ fn a_brace_after_template_arguments_closing_a_head_row_opens_the_body_at_the_hea
     check(input, &["--style=pico"], expected);
     check(expected, &["--style=pico"], expected);
 }
+
+#[test]
+fn a_function_defined_after_extern_c_opens_a_function_body() {
+    let input = "extern \"C\" int value(int first,\n                      int second) {\n  TRY {\n    go(first);\n  }\n  return first;\n}\nextern \"C\" {\nint other(int first);\n}\n";
+    let expected = "extern \"C\" int value(int first,\n                     int second)\n{\n    TRY {\n        go(first);\n    }\n    return first;\n}\nextern \"C\" {\n    int other(int first);\n}\n";
+    check(input, &["--style=kr"], expected);
+    let expected = "extern \"C\" int value(int first,\n                     int second)\n{   TRY\n    {   go(first); }\n    return first; }\nextern \"C\"\n{   int other(int first); }\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+}
