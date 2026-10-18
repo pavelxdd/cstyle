@@ -17373,3 +17373,10 @@ fn every_row_of_a_lambda_body_in_a_call_brace_list_stands_at_its_body() {
     let expected = "void f()\n{\n    call({ [x] {\n            go();\n            #ifdef FEATURE\n            run();\n            #endif\n            if (ready) {\n                stop();\n            }\n        } });\n}\n";
     check(input, &["--style=kr", "--indent-preproc-cond"], expected);
 }
+
+#[test]
+fn a_lambda_row_of_a_brace_list_keeps_its_column_with_a_comment_after_its_brace() {
+    let input = "void f()\n{\n    run({\n        [](int x) { /* note */\n            go(x);\n        },\n    });\n}\n";
+    check(input, &["--style=kr"], input);
+    check(input, &["--style=1tbs"], input);
+}

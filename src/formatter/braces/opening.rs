@@ -427,7 +427,9 @@ impl FormatEngine<'_> {
         &self,
         line: &LineView<'_>,
     ) -> Option<usize> {
-        let line_start = line.trimmed_start();
+        // A comment after the code takes no part in the row.
+        let line_code = line[..trailing_comment_split_limit(line)].trimmed_end();
+        let line_start = line_code.trimmed_start();
         // The body's first row follows the brace, whatever directives
         // stand between them.
         let follows_lambda_brace = || {
@@ -439,9 +441,9 @@ impl FormatEngine<'_> {
                 .is_some_and(|body| self.tree.blocks.kind(body) == Some(BlockKind::Lambda))
         };
         if line_start.starts_with_any(b"{}")
-            || line.trimmed_end().ends_with('{')
+            || line_code.ends_with('{')
             || is_lambda_body_header(line_start)
-            || current_ends_block_literal_header(line.trimmed_end())
+            || current_ends_block_literal_header(line_code)
             || !(self
                 .output
                 .last_line_outside_comment()
