@@ -9004,6 +9004,14 @@ fn a_definition_with_parameter_declarations_breaks_and_attaches_its_return_type(
 }
 
 #[test]
+fn a_case_brace_attached_to_its_label_line_keeps_the_switch_open_for_later_labels() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1:\n    {\n        value=0;\n    } case 2:\n        value=1;\n        break;\n    }\n}\n";
+    let expected = "void f() {\n    switch (kind) {\n    case 1: {\n        value=0; } case 2:\n        value=1;\n        break; } }\n";
+    check(input, &["--style=lisp"], expected);
+    check(expected, &["--style=lisp"], expected);
+}
+
+#[test]
 fn break_blocks_keeps_a_label_after_a_case_closer_with_its_statements() {
     let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        value=0;\n    } case 2:\n        value=1;\n        break;\n    }\n}\n";
     check(input, &["--style=kr", "--break-blocks", "-o"], input);

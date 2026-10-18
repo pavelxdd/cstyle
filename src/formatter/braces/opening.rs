@@ -2304,6 +2304,8 @@ impl FormatEngine<'_> {
                 line
             });
         self.layout.command_state.observe_char('{');
+        // The line was observed before the brace joined it.
+        self.layout.line_adjuster.observe_line(&LineView::new("{"));
         let line_already_has_line_comment =
             line[trailing_comment_split_limit(&line)..].contains("//");
         // The comment the brace's own line held opens the body.
