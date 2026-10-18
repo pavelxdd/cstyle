@@ -1021,18 +1021,54 @@ impl FrameStack {
         start_column: usize,
         new_indent: usize,
     ) {
+        self.move_line_frames(
+            line,
+            new_line,
+            0,
+            |column, line_indent| shift_column_for_indent(column, line_indent, start_column),
+            new_indent,
+        );
+    }
+
+    /// Moves the frames opened at or past `from_column` of output line
+    /// `line` to `new_line`, split off at that column to stand `shift`
+    /// columns away on a line indented `new_indent`.
+    pub(crate) fn move_split_line_frames(
+        &mut self,
+        line: usize,
+        new_line: usize,
+        from_column: usize,
+        shift: isize,
+        new_indent: usize,
+    ) {
+        self.move_line_frames(
+            line,
+            new_line,
+            from_column,
+            |column, _| column.saturating_add_signed(shift),
+            new_indent,
+        );
+    }
+
+    fn move_line_frames(
+        &mut self,
+        line: usize,
+        new_line: usize,
+        from_column: usize,
+        shift: impl Fn(usize, usize) -> usize,
+        new_indent: usize,
+    ) {
         let mut moved = Vec::new();
-        let mut anchor_shift = None;
+        let mut anchor_indent = None;
         for entry in &mut self.delimiters {
             let frame = &mut entry.frame;
-            if frame.opener_output_line != line {
+            if frame.opener_output_line != line || frame.opener_output_column < from_column {
                 continue;
             }
-            let shift = |column: usize| {
-                shift_column_for_indent(column, frame.line_indent_spaces, start_column)
-            };
+            let line_indent = frame.line_indent_spaces;
+            let shift = |column: usize| shift(column, line_indent);
             moved.push(entry.id);
-            anchor_shift.get_or_insert((frame.line_indent_spaces, start_column));
+            anchor_indent.get_or_insert(line_indent);
             frame.opener_output_line = new_line;
             frame.opener_output_column = shift(frame.opener_output_column);
             if let Some(column) = frame.continuation_indent_column.as_mut() {
@@ -1049,22 +1085,19 @@ impl FrameStack {
             frame.line_indent_spaces = new_indent;
         }
         for frame in &mut self.brackets {
-            if frame.opener_output_line == line {
+            if frame.opener_output_line == line && frame.opener_output_column >= from_column {
                 frame.opener_output_line = new_line;
-                frame.opener_output_column = shift_column_for_indent(
-                    frame.opener_output_column,
-                    frame.line_indent_spaces,
-                    start_column,
-                );
+                frame.opener_output_column =
+                    shift(frame.opener_output_column, frame.line_indent_spaces);
                 frame.line_indent_spaces = new_indent;
             }
         }
-        if let Some((old, new)) = anchor_shift
+        if let Some(line_indent) = anchor_indent
             && let Some(argument) = self.last_argument.as_mut()
             && argument.owner.is_some_and(|owner| moved.contains(&owner))
             && let Some(column) = argument.sibling_anchor_column.as_mut()
         {
-            *column = shift_column_for_indent(*column, old, new);
+            *column = shift(*column, line_indent);
         }
     }
 

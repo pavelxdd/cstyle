@@ -145,6 +145,19 @@ impl NestingState {
         self.continuation_indent_spaces_stack.push(spaces);
     }
 
+    /// Moves the columns registered at or past `from` by `shift`, as a
+    /// line split there moves the part after it.
+    pub(crate) fn shift_columns_from(&mut self, from: usize, shift: isize) {
+        for column in self
+            .continuation_indent_spaces_stack
+            .iter_mut()
+            .chain(self.paren_indent_spaces_stack.iter_mut())
+            .filter(|column| **column >= from)
+        {
+            *column = column.saturating_add_signed(shift);
+        }
+    }
+
     pub(crate) fn push_continuation_indent_spaces_raw(&mut self, spaces: usize) {
         self.continuation_indent_spaces_stack.push(spaces);
     }

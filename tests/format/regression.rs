@@ -18174,3 +18174,15 @@ fn an_rvalue_reference_parameter_after_a_reference_return_type_line_stays_a_refe
     check(input, &["--style=kr", "--pad-oper"], expected);
     check(expected, &["--style=kr", "--pad-oper"], expected);
 }
+
+#[test]
+fn arguments_of_an_operator_head_follow_its_split_return_type() {
+    let input = "inline Flags operator|(Flags first,\n                       Flags second,\n                       Flags third) {\n  return first;\n}\nint Item::operator()(const char* first,\n                     const char* second) {\n  return 0;\n}\n";
+    let expected = "inline Flags\noperator|(Flags first,\n          Flags second,\n          Flags third)\n{\n    return first;\n}\nint\nItem::operator()(const char* first,\n                 const char* second)\n{\n    return 0;\n}\n";
+    check(input, &["--style=kr", "--break-return-type"], expected);
+    check(expected, &["--style=kr", "--break-return-type"], expected);
+    // Parameters after a `(` ending the head continue from its line.
+    let input = "Node* List::Make(\n    const Key& key, int height) {\n  return 0;\n}\n";
+    let expected = "Node*\nList::Make(\n    const Key& key, int height)\n{\n    return 0;\n}\n";
+    check(input, &["--style=kr", "--break-return-type"], expected);
+}

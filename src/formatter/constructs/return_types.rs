@@ -1,7 +1,7 @@
 use crate::config::PointerAlign;
 use crate::formatter::constructs::headers::is_header;
 use crate::formatter::continuation::ContinuationIndent;
-use crate::formatter::engine::FormatEngine;
+use crate::formatter::engine::{FormatEngine, SplitLineShift};
 use crate::formatter::lexer::Token;
 use crate::formatter::structure::TokenSpan;
 use crate::formatter::structure::blocks::next_code_token;
@@ -537,6 +537,36 @@ impl FormatEngine<'_> {
             self.push_formatted_line(&return_type, indent);
             self.output.set_pending_tokens(Some(function_span));
             self.push_formatted_line(&function_part, indent);
+        }
+        // The columns the head registered past its name moved with it.
+        let function_line = return_type_line + 1;
+        if function_line + 1 == self.output.len() {
+            let lead = self
+                .output
+                .lead_width(return_type_line, self.options.tab_width);
+            let name_column = lead
+                + visual_width_from(
+                    line[..name_offset].trimmed_start(),
+                    lead,
+                    self.options.tab_width,
+                );
+            let new_lead = self
+                .output
+                .lead_width(function_line, self.options.tab_width);
+            let shift = new_lead as isize - name_column as isize;
+            self.layout.nesting.shift_columns_from(name_column, shift);
+            self.layout.frame_stack.move_split_line_frames(
+                return_type_line,
+                function_line,
+                name_column,
+                shift,
+                new_lead,
+            );
+            self.split_line_shift = Some(SplitLineShift {
+                line: function_line,
+                from_column: name_column,
+                shift,
+            });
         }
         // The return type line opens the body of a directive's branch as
         // a line laid out whole would.

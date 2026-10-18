@@ -178,6 +178,15 @@ pub(crate) type OpenParenLine = (usize, usize);
 /// and the index of that line's first line comment.
 pub(crate) type LineCommentCache = (usize, usize, usize, Option<usize>);
 
+/// The columns a split moved: those at or past `from_column` of the part
+/// that ends output line `line` moved `shift` columns.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct SplitLineShift {
+    pub(crate) line: usize,
+    pub(crate) from_column: usize,
+    pub(crate) shift: isize,
+}
+
 pub(crate) struct FormatEngine<'a> {
     pub(crate) options: &'a FormatOptions,
     /// Indent style of the finished output; the engine itself may lay out a
@@ -358,9 +367,10 @@ pub(crate) struct FormatEngine<'a> {
     /// Braceless bodies a statement ended before the comments closing its
     /// line, left once that line is laid out.
     pub(crate) braceless_exit_after_line: bool,
-    /// How far splitting a statement off its case label moved the
-    /// statement's columns.
-    pub(crate) label_split_shift: Option<(usize, isize)>,
+    /// How far splitting a line moved the columns of the part ending it,
+    /// as a statement split off its case label or a head off its return
+    /// type.
+    pub(crate) split_line_shift: Option<SplitLineShift>,
     /// A label broke its line before comments; the statement after them
     /// starts a line of its own.
     pub(crate) statement_after_label_pending: bool,
@@ -520,7 +530,7 @@ impl<'a> FormatEngine<'a> {
             published_line_shift: 0,
             brace_frame_awaits_line: false,
             braceless_exit_after_line: false,
-            label_split_shift: None,
+            split_line_shift: None,
             statement_after_label_pending: false,
             disabled_formatting: None,
             current_is_preindented: false,
@@ -2386,15 +2396,14 @@ impl<'a> FormatEngine<'a> {
         ) {
             self.layout.previous = previous_before_line;
         }
-        // The columns of a statement split off its case label moved with it.
-        let shift = self
-            .label_split_shift
+        // The columns of the part a split ends the line with moved with it.
+        let split = self
+            .split_line_shift
             .take()
-            .filter(|&(line, _)| line + 1 == self.output.len())
-            .map(|(_, shift)| shift);
-        let indent = match (indent, shift) {
-            (ContinuationIndent::Spaces(spaces), Some(shift)) => {
-                ContinuationIndent::Spaces(spaces.saturating_add_signed(shift))
+            .filter(|split| split.line + 1 == self.output.len());
+        let indent = match (indent, split) {
+            (ContinuationIndent::Spaces(spaces), Some(split)) if spaces >= split.from_column => {
+                ContinuationIndent::Spaces(spaces.saturating_add_signed(split.shift))
             }
             (indent, _) => indent,
         };

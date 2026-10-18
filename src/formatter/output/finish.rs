@@ -4,7 +4,7 @@ use crate::formatter::constructs::switch_cases::{
 };
 use crate::formatter::continuation::operator_chains;
 use crate::formatter::ends_inside_block_comment;
-use crate::formatter::engine::FormatEngine;
+use crate::formatter::engine::{FormatEngine, SplitLineShift};
 use crate::formatter::lexer::Token;
 use crate::formatter::state::BraceType;
 use crate::formatter::state::PreviousToken;
@@ -232,12 +232,11 @@ impl FormatEngine<'_> {
                             self.options.tab_width,
                         );
                     self.finish_line_text(&statement);
-                    self.label_split_shift = self.output.last().map(|published| {
-                        (
-                            self.output.len() - 1,
-                            leading_visual_width(published, self.options.tab_width) as isize
-                                - source_column as isize,
-                        )
+                    self.split_line_shift = self.output.last().map(|published| SplitLineShift {
+                        line: self.output.len() - 1,
+                        from_column: 0,
+                        shift: leading_visual_width(published, self.options.tab_width) as isize
+                            - source_column as isize,
                     });
                 }
             } else {
