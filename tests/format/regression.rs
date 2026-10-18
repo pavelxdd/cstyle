@@ -17388,3 +17388,10 @@ fn a_template_typed_list_holding_a_lambda_lays_it_out_as_a_typed_list() {
     check(input, &["--style=kr"], expected);
     check(input, &["--style=allman"], expected);
 }
+
+#[test]
+fn run_in_list_closers_stay_together_in_a_call_or_return_and_part_after_an_assignment() {
+    let input = "void f()\n{\n    x = { {\n            1, 2\n        } };\n    call({ {\n            1, 2\n        } }, 3);\n    return { {\n            1, 2\n        } };\n}\n";
+    let expected = "void f()\n{\n    x = { {\n            1, 2\n        }\n    };\n    call({ {\n            1, 2\n        } }, 3);\n    return { {\n            1, 2\n        } };\n}\n";
+    check(input, &["--style=kr"], expected);
+}

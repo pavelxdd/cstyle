@@ -729,8 +729,7 @@ impl FormatEngine<'_> {
                 .is_some_and(|frame| frame.colon_role.is_none());
         // A lambda's call stays on its body's closer line.
         let invokes_lambda_body = closing_lambda_body && matches!(next, Some(Token::Symbol('(')));
-        if attached_ternary_colon
-            || closing_lambda_body && self.closer_ends_list_opened_with_lambda(next)
+        if attached_ternary_colon || self.closer_ends_list_opened_with_it(closing_lambda_body, next)
         {
             self.ensure_space();
         } else if (source_attached_closing
@@ -797,9 +796,13 @@ impl FormatEngine<'_> {
         self.layout.previous = PreviousToken::Other;
     }
 
-    /// Whether `next` closes the brace list holding the lambda body the
-    /// current `}` closes, opened on the line the body opened on.
-    fn closer_ends_list_opened_with_lambda(&self, next: Option<&Token>) -> bool {
+    /// Whether `next` closes the brace list holding the lambda body or the
+    /// list the current `}` closes, opened on the line that one opened on.
+    fn closer_ends_list_opened_with_it(
+        &self,
+        closing_lambda_body: bool,
+        next: Option<&Token>,
+    ) -> bool {
         if !matches!(next, Some(Token::Symbol('}'))) {
             return false;
         }
@@ -809,6 +812,9 @@ impl FormatEngine<'_> {
             .active_token()
             .filter(|&index| matches!(self.tree.tokens[index], Token::Symbol('}')))
             .and_then(|close| groups.closed_at(close))
+            .filter(|&closed| {
+                closing_lambda_body || self.tree.blocks.kind(closed) == Some(BlockKind::Initializer)
+            })
         else {
             return false;
         };
