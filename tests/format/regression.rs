@@ -17052,3 +17052,17 @@ fn a_block_after_a_directive_read_as_a_comment_splits_long_rows() {
     let input = format!("void f(void) {{\n#pragma once\n    {{\n{row}\n    }}\n}}\n");
     check(&input, &["--style=google", "--max-code-length=80"], &input);
 }
+
+#[test]
+fn a_case_block_below_its_label_comment_stands_past_the_label_inside_a_labeled_case() {
+    let input = "void f(void)\n{\n  switch (x) {\n    case 1: done: {\n      switch (y) {\n        case 2: {  /* note */\n          int q;\n          break;\n        }\n      }\n      break;\n    }\n  }\n}\n";
+    let expected = "void f(void)\n{   switch (x)\n    {   case 1: done:\n            {   switch (y)\n                {   case 2:    /* note */\n                    {   int q;\n                        break; } }\n                break; } } }\n";
+    check(input, &["--style=pico"], expected);
+}
+
+#[test]
+fn a_case_label_sharing_its_line_with_a_goto_label_keeps_the_case_column() {
+    let input = "void f(void)\n{\n  switch (x) {\n    case 1:\n      go();\n      break;\n    default: done: {\n      int r;\n      break;\n    }\n  }\n}\n";
+    let expected = "void f(void)\n{   switch (x)\n    {   case 1:\n            go();\n            break;\n        default: done:\n            {   int r;\n                break; } } }\n";
+    check(input, &["--style=pico"], expected);
+}
