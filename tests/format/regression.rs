@@ -17182,3 +17182,11 @@ fn a_block_literal_at_file_scope_sets_its_body_in_from_its_brace_under_vtk() {
         "int a;\nid other = ^\n{\n    return 1;\n};\nid third = ^(int x)\n{\n    return x;\n};\n";
     check(input, &["--style=vtk"], expected);
 }
+
+#[test]
+fn an_argument_of_a_call_opened_on_an_indented_lambda_closer_row_aligns_under_its_paren() {
+    let input =
+        "void f()\n{\n    call(a, [] {\n        go();\n    }, g(x,\n         y),\n    b);\n}\n";
+    let expected = "void f()\n    {\n    call(a, []\n        {\n        go();\n        }, g(x,\n             y),\n    b);\n    }\n";
+    check(input, &["--style=whitesmith"], expected);
+}
