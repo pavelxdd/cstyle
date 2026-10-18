@@ -16540,3 +16540,30 @@ fn indent_preproc_block_indents_a_block_after_an_interface_head_with_a_superclas
         check(&input, &["--style=kr", "--indent-preproc-block"], &expected);
     }
 }
+
+#[test]
+fn run_in_styles_format_a_list_their_brace_ran_rows_into_as_before() {
+    let input = "/* clang-format off */\nstatic struct Entry entries[] = {\n\t[FIRST]  = { \"first\",\n\t\t     \"one\" },\n\t[SECOND] = { \"second\",\n\t\t     \"two\" },\n};\n";
+    for style in ["--style=horstmann", "--style=pico"] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_string()]).expect("valid options");
+        let once = String::from_utf8(format_bytes(input.as_bytes(), &options).expect("format"))
+            .expect("utf8");
+        check(&once, &[style], &once);
+    }
+}
+
+#[test]
+fn designator_row_opening_a_list_of_rows_stays_at_the_designators_and_holds() {
+    let input = "void f()\n{\n\tstruct reftable_log_record\n\t\tlog = { .refname = (char *) \"refs/heads/master\",\n\t\t\t.update_index = update_index,\n\t\t\t.value = { .update = {\n\t\t\t\t\t   .name = (char *) \"Han\",\n\t\t\t\t\t   .time = 0x5e430672,\n\t\t\t\t   } } };\n\tint i;\n}\n";
+    let expected = "void f()\n{\n    struct reftable_log_record\n        log = { .refname = (char *) \"refs/heads/master\",\n                .update_index = update_index,\n                .value = {\n                    .update = {\n                        .name = (char *) \"Han\",\n                        .time = 0x5e430672,\n                    }\n                }\n    };\n    int i;\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+    for style in ["--style=whitesmith", "--style=ratliff", "--style=vtk"] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_string()]).expect("valid options");
+        let once = String::from_utf8(format_bytes(input.as_bytes(), &options).expect("format"))
+            .expect("utf8");
+        check(&once, &[style], &once);
+    }
+}

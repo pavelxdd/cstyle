@@ -459,7 +459,9 @@ pub(crate) struct BraceListRows {
     pub(crate) aligned_parents: IndexSet<usize>,
 }
 
-pub(crate) fn brace_list_rows(tokens: &[Token], tree: &SourceTree) -> BraceListRows {
+/// With `runs_in`, a `{` leading its line has its first row run in by the
+/// style and counts as ending its line.
+pub(crate) fn brace_list_rows(tokens: &[Token], tree: &SourceTree, runs_in: bool) -> BraceListRows {
     let mut rows = BraceListRows::default();
     let mut run_in = IndexSet::default();
     let mut children = Vec::new();
@@ -503,6 +505,14 @@ pub(crate) fn brace_list_rows(tokens: &[Token], tree: &SourceTree) -> BraceListR
                     }
                 }
                 stack.push(index);
+                if runs_in && begins_line {
+                    if let Some((_, around)) = stack.split_last() {
+                        rows.nested.extend(around.iter().copied());
+                    }
+                    begins_line = true;
+                    previous = Some(index);
+                    continue;
+                }
                 open_on_line = Some(index);
             }
             Token::Symbol('}') => {

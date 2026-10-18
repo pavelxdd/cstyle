@@ -254,20 +254,26 @@ impl FormatEngine<'_> {
     }
 
     /// Whether the pending line starts a row of an initializer list whose
-    /// elements run in after its brace.
+    /// elements run in after its brace, and opens a list aligned among
+    /// them.
     fn pending_row_of_run_in_list(&self) -> bool {
         let groups = &self.tree.groups;
-        self.output
-            .pending_tokens()
-            .and_then(|span| groups.enclosing(span.first))
-            .is_some_and(|list| {
-                self.tree.blocks.kind(list) == Some(BlockKind::Initializer)
-                    && self
-                        .output
-                        .line_with_token(groups.get(list).open)
-                        .and_then(|line| self.output.line_tokens(line))
-                        .is_some_and(|span| span.last != groups.get(list).open)
-            })
+        let Some(span) = self.output.pending_tokens() else {
+            return false;
+        };
+        groups.enclosing(span.first).is_some_and(|list| {
+            self.tree.blocks.kind(list) == Some(BlockKind::Initializer)
+                && self
+                    .output
+                    .line_with_token(groups.get(list).open)
+                    .and_then(|line| self.output.line_tokens(line))
+                    .is_some_and(|open_span| open_span.last != groups.get(list).open)
+        }) && (span.first..=span.last).any(|index| {
+            self.inline_array
+                .list_rows
+                .aligned_children
+                .contains(&index)
+        })
     }
 
     /// Whether the pending line opens with the `}` of an initializer list
