@@ -9125,6 +9125,17 @@ fn attach_inlines_attaches_the_bodies_of_methods_inside_structs_and_unions() {
 }
 
 #[test]
+fn an_attached_closing_while_condition_continues_under_its_paren_where_the_closer_moved() {
+    // The closer a style indents takes the `while` with it; the condition's
+    // rows align under the paren where it stands.
+    let input = "void f()\n{\n    do {\n        value++;\n    } while (value < count &&\n             ready);\n}\n";
+    let expected = "void f()\n    {\n    do\n        {\n        value++;\n        } while (value < count &&\n                 ready);\n    }\n";
+    let args = ["--style=whitesmith", "--attach-closing-while"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
+
+#[test]
 fn vtk_sets_a_function_try_block_at_the_function_body() {
     let input = "void helper()\ntry {\n    go();\n} catch (...) {\n    stop();\n}\n";
     let expected = "void helper()\ntry\n{\n    go();\n}\ncatch (...)\n{\n    stop();\n}\n";
