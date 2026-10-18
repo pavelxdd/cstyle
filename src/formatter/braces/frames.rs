@@ -433,6 +433,7 @@ impl FormatEngine<'_> {
             sibling_indent_column,
             split_header,
             open_output_line: self.output.len(),
+            open_token: self.current.active_token(),
             opens_output_line: self.current_is_blank(),
             close_output_line: None,
             close_ends_output_line: false,

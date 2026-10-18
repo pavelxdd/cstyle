@@ -455,7 +455,15 @@ impl FormatEngine<'_> {
         self.layout
             .frame_stack
             .active_brace()
-            .filter(|frame| frame.semantic_kind == BraceSemanticKind::Lambda)
+            // A lambda whose brace follows the row has its body below it.
+            .filter(|frame| {
+                frame.semantic_kind == BraceSemanticKind::Lambda
+                    && !frame.open_token.is_some_and(|brace| {
+                        self.output
+                            .pending_tokens()
+                            .is_some_and(|span| brace > span.last)
+                    })
+            })
             .map(|frame| {
                 // A brace VTK leaves at its statement sets the body in from
                 // it, as a function's.

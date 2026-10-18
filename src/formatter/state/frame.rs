@@ -207,6 +207,8 @@ pub(crate) struct BraceFrame {
     pub(crate) open_output_line: usize,
     /// The `{` begins its output line.
     pub(crate) opens_output_line: bool,
+    /// The source token of the `{`.
+    pub(crate) open_token: Option<usize>,
     pub(crate) close_output_line: Option<usize>,
     pub(crate) close_ends_output_line: bool,
 }
@@ -1543,6 +1545,7 @@ mod tests {
             sibling_indent_column: 7,
             split_header: false,
             open_output_line: 0,
+            open_token: None,
             opens_output_line: false,
             close_output_line: None,
             close_ends_output_line: false,

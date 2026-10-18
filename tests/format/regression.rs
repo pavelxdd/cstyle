@@ -17395,3 +17395,11 @@ fn run_in_list_closers_stay_together_in_a_call_or_return_and_part_after_an_assig
     let expected = "void f()\n{\n    x = { {\n            1, 2\n        }\n    };\n    call({ {\n            1, 2\n        } }, 3);\n    return { {\n            1, 2\n        } };\n}\n";
     check(input, &["--style=kr"], expected);
 }
+
+#[test]
+fn a_lambda_call_opening_an_outer_lambda_body_stands_at_that_body_when_braces_break() {
+    let input = "void f()\n{\n    outer([&] {\n        inner([] {\n            go();\n        },\n        first);\n    },\n    second);\n}\n";
+    let expected = "void f()\n{\n    outer([&]\n    {\n        inner([]\n        {\n            go();\n        },\n        first);\n    },\n    second);\n}\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+}
