@@ -17380,3 +17380,11 @@ fn a_lambda_row_of_a_brace_list_keeps_its_column_with_a_comment_after_its_brace(
     check(input, &["--style=kr"], input);
     check(input, &["--style=1tbs"], input);
 }
+
+#[test]
+fn a_template_typed_list_holding_a_lambda_lays_it_out_as_a_typed_list() {
+    let input = "void f()\n{\n    auto v = std::vector<Fn>{ [x] {\n        go();\n        run();\n    } };\n}\n";
+    let expected = "void f()\n{\n    auto v = std::vector<Fn> { [x] {\n            go();\n            run();\n        }\n    };\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(input, &["--style=allman"], expected);
+}

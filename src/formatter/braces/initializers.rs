@@ -1053,11 +1053,20 @@ impl FormatEngine<'_> {
                 })
             });
         let call_argument_array = call_argument_array_column.is_some();
+        // The list's own brace decides, whatever braces its line opens later.
+        let follows_template_type = self
+            .current
+            .active_token()
+            .filter(|&close| matches!(self.tree.tokens[close], Token::Symbol('}')))
+            .and_then(|close| self.tree.groups.closed_at(close))
+            .and_then(|list| self.tree.previous_code_token(self.tree.groups.get(list).open))
+            .map(|before| matches!(&self.tree.tokens[before], Token::Operator(operator) if operator == ">"));
         let typed_initializer = matches!(closing_brace_type, Some(BraceType::Initializer))
-            && self
-                .output
-                .get(open_output_len)
-                .is_some_and(|line| line_opens_typed_initializer(line));
+            && follows_template_type.unwrap_or_else(|| {
+                self.output
+                    .get(open_output_len)
+                    .is_some_and(|line| line_opens_typed_initializer(line))
+            });
         // A style indenting braces indents the `}` of a compound literal
         // that its line opened.
         let closing_brace_indent = if closing_line_opened_literal

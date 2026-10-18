@@ -231,6 +231,12 @@ fn classify(tokens: &[Token], groups: &Groups, blocks: &Blocks, id: GroupId) -> 
         {
             BlockKind::Initializer
         }
+        // A template type's value, as `std::vector<int>{ 1, 2 };`.
+        Token::Operator(operator)
+            if operator == ">" && closing_is_followed_by_terminator(tokens, group.close) =>
+        {
+            BlockKind::Initializer
+        }
         // A statement-like macro such as `SEH_TRY {`.
         Token::Word(_) if !BlockKind::is_declaration_scope(parent_block) => BlockKind::Control,
         _ => BlockKind::Unknown,
