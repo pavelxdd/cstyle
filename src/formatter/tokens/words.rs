@@ -80,6 +80,7 @@ impl FormatEngine<'_> {
             && self.layout.nesting.paren_depth == 0
             && !self.current_line_has_class_initializer_colon
             && !self.layout.in_class_base_clause
+            && !self.line_colon_ends_class_head()
             && !self.layout.line_state.ternary_colon
             && !self.layout.objc.message_active
             && !after_leading_comments(self.current.trimmed_start()).starts_with("@interface ")
@@ -123,6 +124,23 @@ impl FormatEngine<'_> {
             self.layout.indentation.clear_continuation_indents();
             self.layout.nesting.clear_continuation_indents();
         }
+    }
+
+    /// Whether the colon ending the line opens the base clause of a class
+    /// head that may start lines before.
+    fn line_colon_ends_class_head(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        let Some(colon) = self.current.tokens().map(|span| span.last) else {
+            return false;
+        };
+        if !matches!(tokens.get(colon), Some(Token::Symbol(':'))) {
+            return false;
+        }
+        tokens[..colon]
+            .iter()
+            .rev()
+            .take_while(|token| !matches!(token, Token::Symbol(';' | '{' | '}')))
+            .any(|token| matches!(token, Token::Word(word) if matches!(word.as_str(), "class" | "struct" | "union")))
     }
 
     fn record_braceless_header_frames(&mut self, word: &str, next: Option<&Token>) {

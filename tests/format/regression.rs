@@ -9326,6 +9326,14 @@ fn a_constructor_body_after_a_template_base_initializer_breaks_as_any_body() {
 }
 
 #[test]
+fn whitesmith_keeps_the_base_of_a_class_head_over_lines_on_its_line() {
+    let input = "template <typename It>\nstruct is_inserter<\n    It, enable_if<is_same<\n            typename It::type, int>::value>> : std::true_type {};\n";
+    let expected = "template <typename It>\nstruct is_inserter<\n    It, enable_if<is_same<\ntypename It::type, int>::value>> : std::true_type {};\n";
+    check(input, &["--style=whitesmith"], expected);
+    check(expected, &["--style=whitesmith"], expected);
+}
+
+#[test]
 fn whitesmith_keeps_the_base_of_a_qualified_class_name_on_its_line() {
     let input = "class Block::Iter : public Base {\n private:\n  int value_;\n};\n";
     let expected =
