@@ -17173,3 +17173,12 @@ fn a_message_keyword_row_passing_a_lambda_keeps_the_keyword_column() {
     let input = "- (void)run\n{\n    [view animate:nil\n          completion:[] {\n        go();\n    }];\n    [view animate:nil\n          completion:^ {\n        go();\n    }];\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_block_literal_at_file_scope_sets_its_body_in_from_its_brace_under_vtk() {
+    let input =
+        "int a;\nid other = ^{\n    return 1;\n};\nid third = ^(int x) {\n    return x;\n};\n";
+    let expected =
+        "int a;\nid other = ^\n{\n    return 1;\n};\nid third = ^(int x)\n{\n    return x;\n};\n";
+    check(input, &["--style=vtk"], expected);
+}

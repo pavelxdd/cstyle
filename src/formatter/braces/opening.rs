@@ -443,7 +443,15 @@ impl FormatEngine<'_> {
             .frame_stack
             .active_brace()
             .filter(|frame| frame.semantic_kind == BraceSemanticKind::Lambda)
-            .map(|frame| frame.body_indent_column)
+            .map(|frame| {
+                // A brace VTK leaves at its statement sets the body in from
+                // it, as a function's.
+                if self.options.brace_style == BraceStyle::Vtk && frame.header_indent_column == 0 {
+                    frame.sibling_indent_column + self.options.indent_width
+                } else {
+                    frame.body_indent_column
+                }
+            })
     }
 
     pub(crate) fn embedded_capture_lambda_indent_spaces(
