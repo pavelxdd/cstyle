@@ -1632,6 +1632,7 @@ impl FormatEngine<'_> {
         let is_bit_field = !is_asm_operand_colon
             && !is_class_initializer
             && !is_enum_underlying_type
+            && !is_class_base
             && self.is_bit_field_colon(match next {
                 // A member split at its colon has its width on the next line.
                 // A token a rewrite made has no index in the source.

@@ -18138,3 +18138,17 @@ fn a_default_in_a_template_head_sets_no_column_for_the_declaration_after_it() {
     check(expected, &["--style=kr", "--break-return-type"], expected);
 }
 
+#[test]
+fn pad_oper_pads_the_base_colon_of_a_class_nested_in_a_class_once() {
+    // The space after the colon is padded; the one before it stays as written.
+    for (colon, padded) in [(" : ", " : "), (" :", " : "), (":", ": ")] {
+        let input = format!(
+            "struct List {{\n  struct Item{colon}Base {{\n    int value;\n  }};\n  class Node{colon}public Base<> {{\n    int value;\n  }};\n}};\n"
+        );
+        let expected = format!(
+            "struct List {{\n    struct Item{padded}Base {{\n        int value;\n    }};\n    class Node{padded}public Base<>\n    {{\n        int value;\n    }};\n}};\n"
+        );
+        check(&input, &["--style=kr", "--pad-oper"], &expected);
+        check(&expected, &["--style=kr", "--pad-oper"], &expected);
+    }
+}
