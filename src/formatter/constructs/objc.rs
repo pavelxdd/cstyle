@@ -669,13 +669,15 @@ impl FormatEngine<'_> {
         if self.layout.nesting.paren_depth > 0 {
             return false;
         }
-        let line = self.current.trimmed_start();
+        // Comments leading the line take no part in the method's head.
+        let line = after_leading_comments(self.current.trimmed_start());
         line.strip_prefix(['-', '+'])
             .is_some_and(|rest| rest.trimmed_start().starts_with('('))
     }
 
     pub(crate) fn is_objc_method_prefix(&self, next: Option<&Token>) -> bool {
-        matches!(next, Some(Token::Symbol('('))) && self.current.trimmed().is_empty()
+        matches!(next, Some(Token::Symbol('(')))
+            && after_leading_comments(self.current.trimmed()).is_empty()
     }
 
     pub(crate) fn compute_objc_method_colon_align(

@@ -903,7 +903,8 @@ impl FormatEngine<'_> {
                 self.emit_trailing_source_space();
             }
             "+" | "-" if self.is_objc_method_prefix(next) => {
-                self.trim_current_end();
+                // A comment leading the line keeps its gap before the prefix.
+                self.emit_source_space();
                 self.current.push_str(operator);
                 self.layout.objc.post_prefix = true;
                 if self.options.pad_method_prefix {

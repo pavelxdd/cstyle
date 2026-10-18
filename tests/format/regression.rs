@@ -9077,6 +9077,14 @@ fn lisp_closes_an_empty_body_after_a_header_comment_as_without_it() {
 }
 
 #[test]
+fn a_comment_leading_a_method_header_leaves_its_body_as_without_it() {
+    let input = "@implementation Item\n/* note */ - (void)run {\n    [view animate:^{\n        go();\n    } completion:^(BOOL done) {\n        stop();\n    }];\n}\n@end\n";
+    let expected = "@implementation Item\n/* note */ - (void)run\n{\n    [view animate:^\n    {\n        go();\n    } completion:^(BOOL done)\n    {\n        stop();\n    }];\n}\n@end\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+}
+
+#[test]
 fn vtk_sets_a_function_try_block_at_the_function_body() {
     let input = "void helper()\ntry {\n    go();\n} catch (...) {\n    stop();\n}\n";
     let expected = "void helper()\ntry\n{\n    go();\n}\ncatch (...)\n{\n    stop();\n}\n";
