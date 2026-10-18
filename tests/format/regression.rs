@@ -16731,3 +16731,22 @@ fn a_list_brace_broken_off_an_assigned_call_paren_stands_as_after_a_plain_call()
     let expected = "void f()\n{\n    value = call(\n    {1, 2}, other);\n    value = call(\n    first, [&]() {\n        go();\n    });\n    value = call(\n                Item{1, 2}, other);\n}\n";
     check(input, &["--style=kr"], expected);
 }
+
+#[test]
+fn attach_styles_attach_a_list_brace_after_a_call_paren_the_line_ends_in() {
+    let input = "void f()\n{\n    call(\n    {\n        1,\n        2\n    });\n    value = call(\n    {\n        1,\n        2\n    });\n}\n";
+    let expected = "void f()\n{\n    call( {\n        1,\n        2\n    });\n    value = call( {\n        1,\n        2\n    });\n}\n";
+    for style in ["kr", "stroustrup", "mozilla"] {
+        check(input, &[&format!("--style={style}")], expected);
+    }
+    check(
+        input,
+        &["--style=java"],
+        &expected.replace("f()\n{", "f() {"),
+    );
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    call( {\n        1,\n        2\n        });\n    value = call( {\n        1,\n        2\n        });\n    }\n",
+    );
+}

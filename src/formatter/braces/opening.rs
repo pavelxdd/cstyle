@@ -3556,8 +3556,18 @@ impl FormatEngine<'_> {
         }) {
             return false;
         }
-        if matches!(brace_type, BraceType::Array | BraceType::Initializer)
-            && (last.ends_with('=') || last.ends_with(',') && self.layout.nesting.paren_depth > 0)
+        // A list among the arguments of a call in a block, its brace a
+        // statement's after the open paren.
+        let list_brace = matches!(brace_type, BraceType::Array | BraceType::Initializer)
+            || brace_type == BraceType::Command
+                && last.ends_with('(')
+                && matches!(
+                    self.layout.nesting.brace_type_stack.last(),
+                    Some(BraceType::Command | BraceType::Definition)
+                );
+        if list_brace
+            && (last.ends_with('=')
+                || last.ends_with_any(b",(") && self.layout.nesting.paren_depth > 0)
             && matches!(
                 self.options.brace_style,
                 BraceStyle::OneTrueBrace
