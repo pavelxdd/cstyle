@@ -2681,7 +2681,9 @@ impl FormatEngine<'_> {
     fn argument_after_lambda_argument_indent(&self, first: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
-        self.layout.frame_stack.active_constructor_initializer()?;
+        if !self.in_constructor_initializer() {
+            return None;
+        }
         let comma = self.tree.previous_code_token(first)?;
         let close = self.tree.previous_code_token(comma)?;
         let body = groups.closed_at(close)?;

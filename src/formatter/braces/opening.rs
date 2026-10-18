@@ -3705,23 +3705,13 @@ impl FormatEngine<'_> {
             brace_type == BraceType::Definition && self.output_ends_objc_method_header();
         // A constructor's body after the closer of its last initializer's
         // list attaches to it.
-        let after_initializer_list = matches!(brace_type, BraceType::Command | BraceType::Definition)
+        let after_initializer_list =
+            matches!(brace_type, BraceType::Command | BraceType::Definition)
                 && matches!(
                     self.options.brace_style,
                     BraceStyle::Attach | BraceStyle::Ratliff | BraceStyle::Lisp
                 )
-                && self
-                    .layout
-                    .frame_stack
-                    .active_constructor_initializer()
-                    .is_some()
-                // A constructor's body opens outside any function.
-                && !self
-                    .layout
-                    .nesting
-                    .brace_type_stack
-                    .iter()
-                    .any(|brace_type| matches!(brace_type, BraceType::Command | BraceType::Definition))
+                && self.in_constructor_initializer()
                 && self
                     .output
                     .last_non_empty_index()

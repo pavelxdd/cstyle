@@ -3,6 +3,7 @@ use crate::formatter::braces::classification::is_lambda_capture_header;
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
+use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::{ConstructorInitializerFrame, ConstructorInitializerLayout};
 use crate::formatter::structure::blocks::is_code_token;
 use crate::formatter::structure::groups::Delimiter;
@@ -190,6 +191,22 @@ impl FormatEngine<'_> {
         let open = self.open_paren_column_of(previous)?;
         let target = leading_visual_width(previous, self.options.tab_width) + open + 1;
         (target == self.token_input.input_source_indent).then_some(target)
+    }
+
+    /// Whether the last constructor's initializers may still be read: its
+    /// frame stays recorded past the body, which opens outside any
+    /// function.
+    pub(crate) fn in_constructor_initializer(&self) -> bool {
+        self.layout
+            .frame_stack
+            .active_constructor_initializer()
+            .is_some()
+            && !self
+                .layout
+                .nesting
+                .brace_type_stack
+                .iter()
+                .any(|brace_type| matches!(brace_type, BraceType::Command | BraceType::Definition))
     }
 
     pub(crate) fn record_constructor_initializer_frame(&mut self, function_try: bool) {

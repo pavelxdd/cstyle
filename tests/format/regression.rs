@@ -17132,3 +17132,10 @@ fn arguments_after_a_lambda_body_opening_its_own_line_stand_at_the_statement() {
     check(input, &["--style=pico"], expected);
     check(expected, &["--style=pico"], expected);
 }
+
+#[test]
+fn arguments_after_a_lambda_body_past_an_inline_constructor_stand_at_the_statement() {
+    let input = "class Item {\n    Item() : value(0) {}\n};\nvoid f()\n{\n    call(first,\n         [] {\n        go();\n    },\n    other,\n    more);\n}\n";
+    let expected = "class Item\n{   Item() : value(0) {}\n};\nvoid f()\n{   call(first,\n         []\n    {   go();\n    },\n    other,\n    more);\n}\n";
+    check(input, &["--style=horstmann"], expected);
+}
