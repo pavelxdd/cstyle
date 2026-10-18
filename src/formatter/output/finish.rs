@@ -608,12 +608,49 @@ impl FormatEngine<'_> {
         })
     }
 
+    /// Joins each closer of a body empty in the source to its brace's line,
+    /// past the comments the brace moved before, as the empty body joins
+    /// with no comment there.
+    fn join_empty_body_closers(&mut self) {
+        let lines = std::mem::take(&mut self.empty_body_closer_lines);
+        for line in lines.into_iter().rev() {
+            let Some(brace_line) = line.checked_sub(1) else {
+                continue;
+            };
+            if !self
+                .output
+                .get(line)
+                .is_some_and(|closer| closer.trimmed_start().starts_with('}'))
+            {
+                continue;
+            }
+            let joined = format!(
+                "{}{}",
+                self.output[brace_line].trimmed_end(),
+                self.output[line].trimmed()
+            );
+            self.output.set(brace_line, joined);
+            self.output.remove(line);
+            for list in [
+                &mut self.joined_closer_padding_lines,
+                &mut self.source_run_in_brace_lines,
+            ] {
+                for index in list.iter_mut() {
+                    if *index > line {
+                        *index -= 1;
+                    }
+                }
+            }
+        }
+    }
+
     /// The finished text, and where the fill of each of its whitespace-only
     /// lines came from.
     pub(crate) fn finish(mut self) -> (String, Vec<EmptyFillSource>) {
         // Whole-output passes look at every construct.
         self.output.clear_scope();
         self.flush_backslash_body_parts();
+        self.join_empty_body_closers();
         self.lift_joined_closer_padding();
         self.merge_source_run_in_braces();
         self.merge_run_in_comment_braces();

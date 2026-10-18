@@ -308,6 +308,35 @@ impl FormatEngine<'_> {
             })
     }
 
+    /// Whether the `}` being pushed, under Lisp, leads its line and closes a
+    /// body empty in the source whose brace's line ends with a block comment:
+    /// the comment the brace moved before, which leaves the body as empty as
+    /// with no comment.
+    fn closes_empty_body_after_moved_comment(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        if self.options.brace_style != BraceStyle::Lisp || !self.current_is_blank() {
+            return false;
+        }
+        let Some(close) = self.current.active_token() else {
+            return false;
+        };
+        let Some(open) = groups.closed_at(close).map(|body| groups.get(body).open) else {
+            return false;
+        };
+        tokens[open + 1..close]
+            .iter()
+            .all(|token| matches!(token, Token::Whitespace(_) | Token::Newline))
+            && self.output.len().checked_sub(1).is_some_and(|last| {
+                self.output.line_with_token(open) == Some(last)
+                    && self
+                        .output
+                        .code_trimmed_of(&self.output[last])
+                        .ends_with('{')
+                    && self.output[last].trimmed_end().ends_with("*/")
+            })
+    }
+
     pub(crate) fn push_close_brace(&mut self, next: Option<&Token>, next_is_adjacent: bool) {
         let closing_lambda_body = self.current_open_brace_is_lambda_body();
         // A `}` that only comments precede leads its row.
@@ -416,6 +445,9 @@ impl FormatEngine<'_> {
         self.preprocessor.split_else.closing_brace_has_else =
             matches!(next, Some(Token::Word(word)) if word == "else");
         self.mark_closed_brace_output_position();
+        if self.closes_empty_body_after_moved_comment() {
+            self.empty_body_closer_lines.push(self.output.len());
+        }
         self.current.push('}');
         self.layout.command_state.observe_char('}');
         self.layout.compound_literal.just_closed =

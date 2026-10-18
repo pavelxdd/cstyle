@@ -9067,6 +9067,16 @@ fn ratliff_sets_a_comment_led_block_brace_where_the_brace_stands_without_it() {
 }
 
 #[test]
+fn lisp_closes_an_empty_body_after_a_header_comment_as_without_it() {
+    // The comment the brace moves before leaves the empty body joined; a
+    // comment written after the brace opens the body's rows.
+    let input = "void g()\n{\n}\nvoid f() /* note */\n{\n}\nItem::Item(int value)\n    : value(value) /* note */\n{\n}\nvoid h()\n{ /* note */\n}\n";
+    let expected = "void g() {}\nvoid f() { /* note */}\nItem::Item(int value)\n    : value(value) { /* note */}\nvoid h() {\n    /* note */\n}\n";
+    check(input, &["--style=lisp"], expected);
+    check(expected, &["--style=lisp"], expected);
+}
+
+#[test]
 fn vtk_sets_a_function_try_block_at_the_function_body() {
     let input = "void helper()\ntry {\n    go();\n} catch (...) {\n    stop();\n}\n";
     let expected = "void helper()\ntry\n{\n    go();\n}\ncatch (...)\n{\n    stop();\n}\n";
