@@ -16952,3 +16952,11 @@ fn lisp_pads_a_list_closer_its_row_holds_before_a_directive_too() {
     let expected = "static const struct Item others[] = {\n    {\n        3,\n#ifdef FEATURE\n        4 }\n#endif\n};\n";
     check(input, &["--style=lisp"], expected);
 }
+
+#[test]
+fn a_paren_in_a_char_literal_leaves_the_braces_after_it_attached() {
+    // astyle counts the paren and breaks the attached braces of the
+    // headers after it.
+    let input = "void f()\n{\n    if (c == '(') {\n        if (x) {\n            go();\n        }\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
