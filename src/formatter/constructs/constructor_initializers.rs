@@ -13,8 +13,8 @@ use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
     after_leading_comments, has_unmatched_open_brace, inline_brace_pair_range,
-    is_comment_only_line, line_paren_imbalance, trailing_comment_split_limit,
-    unmatched_open_paren_columns,
+    is_comment_only_line, line_paren_imbalance, preprocessor_directive,
+    trailing_comment_split_limit, unmatched_open_paren_columns,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -831,11 +831,23 @@ impl FormatEngine<'_> {
         let mut initializer = None;
         let len = self.output.len();
         let floor = len.saturating_sub(32);
+        // A macro's body continues nothing after it.
+        let after_macro = len
+            .checked_sub(1)
+            .is_none_or(|last| !self.output.trimmed(last).ends_with('\\'));
         let stops = |index: usize| {
             let trimmed = self.output.code_trimmed(index);
             trimmed == "{"
                 || trimmed == "}"
                 || trimmed.ends_with(';')
+                || after_macro && preprocessor_directive(trimmed) == Some("define")
+                || after_macro
+                    && self
+                        .output
+                        .directive_of_continuation(index)
+                        .is_some_and(|directive| {
+                            preprocessor_directive(self.output.trimmed(directive)) == Some("define")
+                        })
                 || trimmed.starts_with("*/")
                 || trimmed.ends_with("*/")
                 || self.output.code_has(index, b'{')

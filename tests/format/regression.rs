@@ -18272,3 +18272,21 @@ fn a_head_on_its_own_line_after_its_return_type_starts_what_its_rows_continue() 
     check(input, &["--style=kr", "--break-return-type"], expected);
     check(expected, &["--style=kr", "--break-return-type"], expected);
 }
+
+#[test]
+fn a_colon_row_in_a_macro_body_starts_no_initializer_list_for_the_code_after_it() {
+    let input =
+        "#define CHECK(value) \\\n  : fail(value)\ninline int\nvalue(int first);\nint other;\n";
+    check(input, &["--style=kr"], input);
+    let input = "#define CHECK(value) \\\n  : fail(value)\ninline int value(int first,\n                 int second);\n";
+    let expected = "#define CHECK(value) \\\n  : fail(value)\ninline int\nvalue(int first,\n      int second);\n";
+    check(input, &["--style=kr", "--break-return-type-decl"], expected);
+    check(
+        expected,
+        &["--style=kr", "--break-return-type-decl"],
+        expected,
+    );
+    // The rows of the macro go on with its own initializers.
+    let input = "#define BUILD(Type) \\\n  Type::Type() \\\n    : first(1), \\\n      second(2) {}\nint other;\n";
+    check(input, &["--style=kr"], input);
+}
