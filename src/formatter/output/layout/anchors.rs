@@ -2201,16 +2201,23 @@ impl FormatEngine<'_> {
             return None;
         }
         // The arguments after a lambda's body stand at the statement.
-        if (open + 1..first).any(|index| {
+        if self.lambda_body_opens_in_group_before(group, first) {
+            return None;
+        }
+        Some(self.token_column(argument)? + self.case_unindent_spaces())
+    }
+
+    /// Whether a lambda body opens directly in `group` before `first`.
+    pub(crate) fn lambda_body_opens_in_group_before(&self, group: GroupId, first: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        (groups.get(group).open + 1..first).any(|index| {
             matches!(tokens[index], Token::Symbol('{'))
                 && groups.enclosing(index) == Some(group)
                 && groups
                     .opened_at(index)
                     .is_some_and(|body| self.tree.blocks.kind(body) == Some(BlockKind::Lambda))
-        }) {
-            return None;
-        }
-        Some(self.token_column(argument)? + self.case_unindent_spaces())
+        })
     }
 
     /// A line that opens with a block comment and continues with a

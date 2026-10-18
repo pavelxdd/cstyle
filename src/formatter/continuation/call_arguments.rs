@@ -1991,6 +1991,13 @@ impl FormatEngine<'_> {
         if self.token_input.token_source_line_indent != anchor {
             return None;
         }
+        // The arguments after a lambda's body stand at the statement.
+        if let Some(first) = self.output.pending_tokens().map(|span| span.first)
+            && let Some(group) = self.tree.groups.enclosing(first)
+            && self.lambda_body_opens_in_group_before(group, first)
+        {
+            return None;
+        }
         let code = self.output.code_trimmed_of(line);
         if code.ends_with('{')
             && (line_opens_lambda_block(line)

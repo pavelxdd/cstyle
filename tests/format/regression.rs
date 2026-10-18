@@ -9170,6 +9170,20 @@ fn rows_of_a_trailing_comment_in_a_case_block_stand_as_written() {
 }
 
 #[test]
+fn an_argument_after_a_lambda_body_stands_at_the_statement_under_any_conditional_indent() {
+    let input = "void f()\n{\n    return call([] {\n        go();\n    }, value,\n                other);\n}\n";
+    let expected =
+        "void f()\n{\n    return call([] {\n        go();\n    }, value,\n    other);\n}\n";
+    for minimum in ["0", "2"] {
+        check(
+            input,
+            &["--style=kr", &format!("--min-conditional-indent={minimum}")],
+            expected,
+        );
+    }
+}
+
+#[test]
 fn a_word_headed_block_after_a_label_keeps_its_run_in_brace() {
     let input = "void f()\n{\n    go();\nagain:\n    APPLY\n    {   run();\n    }\n}\n";
     for (style, expected) in [
