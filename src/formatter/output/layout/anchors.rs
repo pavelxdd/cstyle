@@ -2243,6 +2243,7 @@ impl FormatEngine<'_> {
                     .then(|| self.sibling_statement_column(code))
                     .flatten()
             })
+            .or_else(|| self.first_indented_block_brace_column(code))
             .or_else(|| self.vtk_aggregate_array_row_indent(code))
             .or_else(|| self.vtk_array_element_indent(code))
             .or_else(|| self.ratliff_first_brace_row_indent(code))
@@ -7215,6 +7216,18 @@ impl FormatEngine<'_> {
         self.enclosing_block_body_column(first)
     }
 
+    /// A block's brace opening its enclosing block's statements, where the
+    /// style indents block braces, stands a level past those statements.
+    fn first_indented_block_brace_column(&self, first: usize) -> Option<usize> {
+        if !matches!(self.tree.tokens[first], Token::Symbol('{'))
+            || self.tree.statements.block_opening(first).is_none()
+            || !self.should_indent_brace_line(BraceType::Command)
+        {
+            return None;
+        }
+        Some(self.enclosing_block_statement_column(first)? + self.options.indent_width)
+    }
+
     /// Column of the statements of the block that holds the statement
     /// after a label on the line being laid out.
     pub(crate) fn label_statement_column(&self) -> Option<usize> {
@@ -7482,6 +7495,12 @@ impl FormatEngine<'_> {
         {
             return None;
         }
+        self.enclosing_block_statement_column(first)
+    }
+
+    /// The column of the statements of the block enclosing `first`, which
+    /// a statement there stands at whatever it is.
+    fn enclosing_block_statement_column(&self, first: usize) -> Option<usize> {
         let block = self.enclosing_block(first)?;
         let column = match self.block_body_anchor(block)? {
             BodyAnchor::BraceLine(lead) => {

@@ -9058,6 +9058,15 @@ fn a_comment_leading_a_declarator_row_leaves_it_where_it_stands_without() {
 }
 
 #[test]
+fn ratliff_sets_a_comment_led_block_brace_where_the_brace_stands_without_it() {
+    // First in its block or after a statement, the brace stands a level in.
+    let input = "void f()\n{\n    /* note */ {\n        value = 1;\n    }\n    go();\n    /* note */ {\n        value = 2;\n    }\n}\n";
+    let expected = "void f() {\n        /* note */ {\n        value = 1;\n        }\n    go();\n        /* note */ {\n        value = 2;\n        }\n    }\n";
+    check(input, &["--style=ratliff"], expected);
+    check(expected, &["--style=ratliff"], expected);
+}
+
+#[test]
 fn vtk_sets_a_function_try_block_at_the_function_body() {
     let input = "void helper()\ntry {\n    go();\n} catch (...) {\n    stop();\n}\n";
     let expected = "void helper()\ntry\n{\n    go();\n}\ncatch (...)\n{\n    stop();\n}\n";
