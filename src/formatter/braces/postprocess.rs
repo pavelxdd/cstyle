@@ -601,7 +601,10 @@ pub(crate) fn horstmann_run_in_fill(
     let switch_label = switch_cases::find_case_colon(next_line.trimmed_start()).is_some();
     // An access label runs in at its own column, right after the brace
     // when that is where it stands.
-    if labels::is_access_label(next_line, &options.access_labels) {
+    if labels::is_access_label(
+        &next_line[..trailing_comment_split_limit(next_line)],
+        &options.access_labels,
+    ) {
         let tab_width = options.tab_width.max(1);
         let brace_column = leading_visual_width(brace_line, tab_width);
         let target_column = leading_visual_width(next_line, tab_width);

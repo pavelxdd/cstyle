@@ -16442,3 +16442,23 @@ fn a_member_after_a_method_closer_of_a_type_in_a_case_block_stands_at_the_member
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn run_in_access_label_a_comment_trails_stands_at_its_modifier_column() {
+    for comment in ["/* note */", "// note"] {
+        let input = format!(
+            "class Derived : public Base\n{{\npublic: {comment}\n    virtual ~Derived() override;\n}};\n"
+        );
+        let expected = format!(
+            "class Derived : public Base\n{{ public: {comment}\n    virtual ~Derived() override;\n}};\n"
+        );
+        for style in ["--style=horstmann", "--style=pico"] {
+            let expected = if style == "--style=pico" {
+                expected.replace("override;\n};", "override; };")
+            } else {
+                expected.clone()
+            };
+            check(&input, &[style, "--indent-modifiers"], &expected);
+        }
+    }
+}
