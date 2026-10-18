@@ -18219,3 +18219,11 @@ fn parameters_past_the_maximum_before_a_return_type_split_align_after_it() {
     check(input, &["--style=kr", "--break-return-type"], expected);
     check(expected, &["--style=kr", "--break-return-type"], expected);
 }
+
+#[test]
+fn a_template_head_closing_before_code_on_its_row_ends_there() {
+    let input = "template <typename T,\n          typename U> struct Item {\n  int value;\n};\nint other;\ntemplate <typename T,\n          typename U> void run(T first,\n                               U second);\nint last;\ntemplate class Access<Tag, Buffer,\n                      &Buffer::file>;\nauto get_file(Buffer&) -> FILE*;\nint after;\n";
+    let expected = "template <typename T,\n          typename U> struct Item {\n    int value;\n};\nint other;\ntemplate <typename T,\n          typename U> void run(T first,\n                               U second);\nint last;\ntemplate class Access<Tag, Buffer,\n                      &Buffer::file>;\nauto get_file(Buffer&) -> FILE*;\nint after;\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}

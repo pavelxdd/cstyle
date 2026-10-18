@@ -374,10 +374,13 @@ impl FormatEngine<'_> {
             }
         } else if self.layout.template_declaration.uses_source_indent {
             self.layout.template_declaration.angle_depth += angle_delta;
-            if self.layout.template_declaration.angle_depth <= 0 && trimmed.ends_with('>') {
+            if self.layout.template_declaration.angle_depth <= 0 {
                 self.layout.template_declaration = TemplateDeclarationState::default();
-                self.layout.nesting.clear_continuation_indents();
-                self.layout.continuation_indent.clear_next_line();
+                // Code after the head on its row continues on its own.
+                if trimmed.ends_with('>') {
+                    self.layout.nesting.clear_continuation_indents();
+                    self.layout.continuation_indent.clear_next_line();
+                }
             }
         }
     }
