@@ -18419,3 +18419,13 @@ fn a_member_initializer_row_with_a_run_in_body_continues_the_list() {
     check(input, &["--style=lisp"], expected);
     check(expected, &["--style=lisp"], expected);
 }
+
+#[test]
+fn an_empty_type_body_after_a_base_clause_over_lines_stays_empty() {
+    let input = "struct Item\n    : public First,\n      public Second {};\nstruct Other\n    : Base<T,\n           U> {};\ntemplate <typename T>\nstruct Third<T> : public First,\n                  public Second {};\n";
+    let expected = "struct Item\n    : public First,\n      public Second {};\nstruct Other\n    : Base<T,\n      U> {};\ntemplate <typename T>\nstruct Third<T> : public First,\n    public Second {};\n";
+    for style in ["--style=lisp", "--style=pico", "--style=kr"] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}

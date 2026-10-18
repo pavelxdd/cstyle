@@ -1294,6 +1294,35 @@ impl FormatEngine<'_> {
             && self.inferred_definition_brace(tokens, brace_index)
     }
 
+    /// Whether the brace at `start` opens the body of a type whose head
+    /// holds a base clause, as `struct Item : Base {`.
+    fn opens_body_after_base_clause(&self, start: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let Some(body) = groups.opened_at(start) else {
+            return false;
+        };
+        if self.tree.blocks.kind(body) != Some(BlockKind::Aggregate) {
+            return false;
+        }
+        let Some(owner) = self.tree.blocks.owner(body) else {
+            return false;
+        };
+        // The head may open with its template parameters.
+        let level = groups.enclosing(start);
+        (owner..start)
+            .find(|&index| {
+                groups.enclosing(index) == level
+                    && matches!(&tokens[index], Token::Word(word)
+                        if matches!(word.as_str(), "struct" | "class" | "union"))
+            })
+            .is_some_and(|keyword| {
+                (keyword + 1..start).any(|index| {
+                    matches!(tokens[index], Token::Symbol(':')) && groups.enclosing(index) == level
+                })
+            })
+    }
+
     pub(crate) fn try_push_one_line_initializer_block(
         &mut self,
         tokens: &[Token],
@@ -1314,6 +1343,7 @@ impl FormatEngine<'_> {
                     matches!(header, "autoreleasepool" | "@try" | "@catch" | "@finally")
                 })
             || self.inferred_definition_brace(tokens, start)
+            || tokens.len() == self.tree.tokens.len() && self.opens_body_after_base_clause(start)
         {
             return None;
         }
