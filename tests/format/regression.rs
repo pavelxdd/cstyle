@@ -1743,7 +1743,7 @@ fn member_init_list_stays_consistent_after_nested_lambda_close_brace() {
     check(
         "Type::Type()\n    : m_alpha(makeAlpha(\n                  [this]() {\n                  return ready();\n},\n                  extra))\n, m_beta(new Beta)\n, m_gamma(new Gamma)\n{\n}\n",
         &["--style=1tbs", "--min-conditional-indent=0"],
-        "Type::Type()\n    : m_alpha(makeAlpha(\n              [this]()\n{\n    return ready();\n},\n              extra))\n    , m_beta(new Beta)\n    , m_gamma(new Gamma)\n{\n}\n",
+        "Type::Type()\n    : m_alpha(makeAlpha(\n                  [this]()\n{\n    return ready();\n},\n                  extra))\n    , m_beta(new Beta)\n    , m_gamma(new Gamma)\n{\n}\n",
     );
 }
 
@@ -16784,5 +16784,16 @@ fn a_kept_one_line_lambda_body_ends_the_continuation_as_a_broken_one_does() {
 #[test]
 fn a_row_after_the_tail_of_a_block_comment_over_lines_stands_with_its_siblings() {
     let input = "typedef enum {\n    VLOCAL,  /* local variable;\n              var.vidx = index */\n    VGLOBAL,  /* global;\n               info */\n    VCALL\n} expkind;\nstatic int first; /* note\n                     more */\nstatic int second;\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn arguments_of_a_call_a_constructor_initializer_line_ends_in_indent_past_the_enclosing_arguments()
+{
+    let input = "Box::Box()\n    : one(new Box(\n          nullptr,\n          this))\n    , two(call(\n          first))\n    , three(make(\n          first,\n          second))\n{\n}\n";
+    let expected = "Box::Box()\n    : one(new Box(\n              nullptr,\n              this))\n    , two(call(\n              first))\n    , three(make(\n                first,\n                second))\n{\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+    let input = "Box::Box()\n    : one(\n          first),\n      two(make(first,\n               second))\n{\n}\n";
     check(input, &["--style=kr"], input);
 }

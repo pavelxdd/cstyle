@@ -605,9 +605,21 @@ impl FormatEngine<'_> {
             _ => None,
         }?;
         let code = self.output.code_before_comment_trimmed(decided);
+        self.arguments_after_open_paren_spaces(code)
+    }
+
+    /// Where the arguments of the call the line `code` leaves open stand:
+    /// past the last paren its text follows, a level further for a paren
+    /// nested in it that ends the line.
+    fn arguments_after_open_paren_spaces(&self, code: &str) -> Option<usize> {
         let open = self.open_paren_column_of(code)?;
         let spaces_after_open = code[open + 1..].len() - code[open + 1..].trimmed_start().len();
-        Some(visual_width_from(&code[..open + 1], 0, self.options.tab_width) + spaces_after_open)
+        let nested_at_end = code.ends_with('(') && open + 1 < code.len();
+        Some(
+            visual_width_from(&code[..open + 1], 0, self.options.tab_width)
+                + spaces_after_open
+                + usize::from(nested_at_end) * self.options.indent_width,
+        )
     }
 
     /// The nearest lines from `floor` on that decide the look back of
@@ -658,7 +670,9 @@ impl FormatEngine<'_> {
         }
         let code = self.output.code_before_comment_trimmed(index);
         let body = self.output.code_body(index);
-        let colon = body.starts_with(':') && !body.starts_with("::");
+        // A member a leading comma starts opens its arguments as the first
+        // one does.
+        let colon = body.starts_with(':') && !body.starts_with("::") || body.starts_with(',');
         let comma = body.ends_with(',');
         let opens = (colon || comma) && self.open_paren_column_of(code).is_some();
         let stops = body.starts_with(')')
@@ -689,8 +703,11 @@ impl FormatEngine<'_> {
         if !previous_code.ends_with('(') {
             return None;
         }
-        self.constructor_initializer_base_indent_spaces()
-            .map(|spaces| spaces + self.options.indent_width)
+        let base = self.constructor_initializer_base_indent_spaces()?;
+        Some(
+            self.arguments_after_open_paren_spaces(previous_code)
+                .unwrap_or(base + self.options.indent_width),
+        )
     }
 
     pub(crate) fn constructor_initializer_closing_paren_indent_spaces(

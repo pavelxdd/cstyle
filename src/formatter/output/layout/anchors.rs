@@ -131,6 +131,11 @@ impl FormatEngine<'_> {
         })
         .or_else(|| when(in_parens, || self.literal_argument_indent(first)))
         .or_else(|| when(in_parens, || self.row_around_kept_lambda_body_indent(first)))
+        .or_else(|| {
+            when(in_parens && after_comma, || {
+                self.argument_after_lambda_argument_indent(first)
+            })
+        })
         .or_else(|| self.braceless_body_indent(first))
         .or_else(|| {
             when(opens_brace, || {
@@ -2658,6 +2663,36 @@ impl FormatEngine<'_> {
         }
         let line = self.statement_start_line(self.output.line_with_token(open)?);
         Some(self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces())
+    }
+
+    /// Among a constructor's initializers, an argument after a lambda
+    /// argument whose head leads its row stands at that row: astyle sets
+    /// it at the head of the constructor.
+    #[inline(never)]
+    fn argument_after_lambda_argument_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        self.layout.frame_stack.active_constructor_initializer()?;
+        let comma = self.tree.previous_code_token(first)?;
+        let close = self.tree.previous_code_token(comma)?;
+        let body = groups.closed_at(close)?;
+        if self.tree.blocks.kind(body) != Some(BlockKind::Lambda) {
+            return None;
+        }
+        let mut head = groups.get(body).open;
+        while let Some(before) = self.tree.previous_code_token(head)
+            && groups.enclosing(before) == groups.enclosing(comma)
+            && !matches!(tokens[before], Token::Symbol(',' | '('))
+        {
+            head = match groups.closed_at(before) {
+                Some(group) => groups.get(group).open,
+                None => before,
+            };
+        }
+        let line = self.output.line_with_token(head)?;
+        (self.output.line_tokens(line)?.first == head).then(|| {
+            self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces()
+        })
     }
 
     /// The output line on which the statement continued on output line
