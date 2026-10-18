@@ -17282,3 +17282,30 @@ fn pad_oper_pads_a_capture_default_on_both_sides() {
         "void f()\n{\n    auto a = [ = ]() {\n        return 1;\n    };\n    call([ = ] {\n        go();\n    });\n    auto b = [ =, &x]() {\n        return x;\n    };\n}\n",
     );
 }
+
+#[test]
+fn a_goto_label_block_after_a_case_label_stands_at_the_case_body() {
+    let input = "void f(void)\n{\n    switch (x) {\n    case 1: done: {\n        int q;\n        break;\n    }\n    }\n}\n";
+    let expected = "void f(void)\n{\n    switch (x)\n    {\n    case 1: done:\n        {\n            int q;\n            break;\n        }\n    }\n}\n";
+    check(
+        input,
+        &["--style=allman", "--keep-one-line-statements"],
+        expected,
+    );
+    check(
+        expected,
+        &["--style=allman", "--keep-one-line-statements"],
+        expected,
+    );
+    let expected = "void f(void)\n{\n    switch (x)\n        {\n        case 1: done:\n            {\n                int q;\n                break;\n            }\n        }\n}\n";
+    check(
+        input,
+        &["--style=gnu", "--keep-one-line-statements"],
+        expected,
+    );
+    check(
+        expected,
+        &["--style=gnu", "--keep-one-line-statements"],
+        expected,
+    );
+}
