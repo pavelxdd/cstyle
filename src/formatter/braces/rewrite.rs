@@ -3438,7 +3438,7 @@ fn initializer_brace_type(
     }
     match tokens.get(previous)? {
         Token::Operator(operator) if operator == "=" => Some(BraceType::Array),
-        Token::Operator(operator) if operator == ">" && !has_block_word => {
+        Token::Operator(operator) if operator == ">" && !has_block_word || operator == "^" => {
             Some(BraceType::Initializer)
         }
         Token::Symbol(',') | Token::Symbol('@') => Some(BraceType::Array),

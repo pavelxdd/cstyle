@@ -13,7 +13,7 @@ use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::structure::blocks::{BlockKind, next_code_token};
-use crate::formatter::structure::groups::GroupId;
+use crate::formatter::structure::groups::{Delimiter, GroupId};
 use crate::formatter::syntax::language;
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
@@ -690,7 +690,7 @@ impl FormatEngine<'_> {
             // the word's, as a macro's, which the statement goes on from.
             && !(self.options.break_one_line_statements
                 && self.layout.nesting.last_closed_brace_type == Some(BraceType::Command)
-                && !self.closed_block_is_word_headed())
+                && !(self.closed_block_is_word_headed() || self.closed_block_is_in_expression()))
             && !source_attached_statement_after_closing;
         let source_attached_closing = self.options.brace_style == BraceStyle::None
             && self.token_input.token_begins_source_line
@@ -800,6 +800,22 @@ impl FormatEngine<'_> {
                     .previous_code_token(self.tree.groups.get(group).open)
             })
             .is_some_and(|before| matches!(tokens[before], Token::Word(_)))
+    }
+
+    /// Whether the block the current `}` closes stands within parentheses
+    /// or brackets, as a block literal passed in a call or message.
+    fn closed_block_is_in_expression(&self) -> bool {
+        let groups = &self.tree.groups;
+        self.current
+            .active_token()
+            .filter(|&index| matches!(self.tree.tokens[index], Token::Symbol('}')))
+            .and_then(|close| groups.enclosing(close))
+            .is_some_and(|group| {
+                matches!(
+                    groups.get(group).delimiter,
+                    Delimiter::Paren | Delimiter::Bracket
+                )
+            })
     }
 
     fn braceless_body_continues(&self, next: Option<&Token>) -> bool {

@@ -123,15 +123,16 @@ fn is_namespace_block_header(line: &str) -> bool {
 }
 
 fn current_ends_block_literal_header(head: &str) -> bool {
-    if !head.ends_with(')') {
-        return false;
-    }
-    let Some(open) = matching_open_index(head, '(', ')') else {
-        return false;
+    let before = if head.ends_with('^') {
+        head
+    } else {
+        let Some(open) = matching_open_index(head, '(', ')') else {
+            return false;
+        };
+        head[..open].trimmed_end().trim_end_matches(|ch: char| {
+            is_word_char(ch) || matches!(ch, '*' | '&' | ' ' | '\t' | ':')
+        })
     };
-    let before = head[..open].trimmed_end().trim_end_matches(|ch: char| {
-        is_word_char(ch) || matches!(ch, '*' | '&' | ' ' | '\t' | ':')
-    });
     let Some(rest) = before.strip_suffix('^') else {
         return false;
     };

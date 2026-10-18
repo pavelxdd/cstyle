@@ -16974,3 +16974,16 @@ fn a_message_keyword_after_a_block_closer_is_no_label() {
     check(input, &["--style=kr"], input);
     check(input, &[], input);
 }
+
+#[test]
+fn a_parameterless_block_literal_kept_on_one_line_stays_whole() {
+    let input = "void run(void)\n{\n    dispatch_async(q, ^{ go(); });\n    block = ^{ go(); };\n    call(^{ go(); }, ^{ stop(); });\n}\n";
+    let expected = "void run(void)\n{\n    dispatch_async(q, ^ { go(); });\n    block = ^ { go(); };\n    call(^ { go(); }, ^ { stop(); });\n}\n";
+    for style in ["--style=kr", "--style=allman", "--style=gnu"] {
+        check(input, &[style], expected);
+    }
+    let input = "- (void)run\n{\n    [view animate:^{ go(); }];\n    [view animate:[^{ go(); } copy]];\n}\n";
+    let expected = "- (void)run\n{\n    [view animate:^ { go(); }];\n    [view animate:[^ { go(); } copy]];\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(input, &["--style=allman"], expected);
+}
