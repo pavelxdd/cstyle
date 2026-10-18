@@ -17427,3 +17427,20 @@ fn a_lambda_row_of_a_list_run_into_a_call_list_opens_its_body_past_the_row() {
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
+
+#[test]
+fn brace_rows_of_a_list_run_into_the_list_around_it_stand_past_both_lists() {
+    let input =
+        "void f()\n{\n    call({ {\n            {1, 2},\n            {3, 4}\n        } });\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    call({ {\n                {1, 2},\n                {3, 4}\n            } });\n    }\n",
+    );
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    call({ {\n                {1, 2},\n                {3, 4}\n            } });\n    }\n",
+    );
+    check(input, &["--style=kr"], input);
+}

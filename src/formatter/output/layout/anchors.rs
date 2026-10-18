@@ -300,6 +300,11 @@ impl FormatEngine<'_> {
             })
         })
         .or_else(|| {
+            when(opens_brace, || {
+                self.nested_run_in_list_brace_row_indent(first)
+            })
+        })
+        .or_else(|| {
             when(whitesmith || ratliff || vtk || closes_brace, || {
                 self.run_in_nested_array_row_indent(first)
             })
@@ -1322,6 +1327,54 @@ impl FormatEngine<'_> {
                 .is_some_and(|outer| self.array_element_brace_indented(first, list, outer)),
             _ => self.should_indent_brace_line(BraceType::Command),
         }
+    }
+
+    /// A brace row of a list run into the list around it, both opened on
+    /// one line, stands a level past the line for each of those lists, and
+    /// a level more where the style sets element braces past the rows.
+    #[inline(never)]
+    fn nested_run_in_list_brace_row_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let is_list = |id: GroupId| {
+            matches!(
+                self.tree.blocks.kind(id),
+                Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+            )
+        };
+        let group = groups.enclosing(first).filter(|&group| is_list(group))?;
+        let open = groups.get(group).open;
+        let previous = self.tree.previous_code_token(first)?;
+        if !(previous == open
+            || matches!(tokens[previous], Token::Symbol(','))
+                && groups.enclosing(previous) == Some(group))
+            || !groups.opened_at(first).is_some_and(is_list)
+        {
+            return None;
+        }
+        let line = self.output.line_with_token(open)?;
+        if self.output.line_tokens(line)?.first == open
+            || self.output.line_with_token(first) == Some(line)
+        {
+            return None;
+        }
+        let mut levels = 0;
+        let mut list = Some(group);
+        while let Some(id) = list.filter(|&id| {
+            is_list(id) && self.output.line_with_token(groups.get(id).open) == Some(line)
+        }) {
+            levels += 1;
+            list = groups.get(id).parent;
+        }
+        if levels < 2 {
+            return None;
+        }
+        let brace_offset = usize::from(self.element_brace_stands_past_rows(first));
+        Some(
+            self.output.lead_width(line, self.options.tab_width)
+                + (levels + brace_offset) * self.options.indent_width
+                + self.case_unindent_spaces(),
+        )
     }
 
     /// Styles that indent braces lay out the rows of an initializer whose
