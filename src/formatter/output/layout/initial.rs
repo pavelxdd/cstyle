@@ -24,6 +24,7 @@ use crate::formatter::state::frame::BracketFrame;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::text::columns::{column_after, leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
+use crate::formatter::text::line_scan::after_leading_comments;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::is_bare_comment_line;
 use crate::formatter::text::line_scan::{
@@ -1069,8 +1070,8 @@ impl FormatEngine<'_> {
                 .last_non_empty_index()
                 .is_some_and(|index| is_bare_comment_line(self.output.trimmed(index)))
                 || self.output.last().is_some_and(|last| last.trimmed().is_empty()))
-            && !line.trimmed_start().starts_with_any(b"{}")
-            && !line_starts_call(line.trimmed_start())
+            && !after_leading_comments(line.trimmed_start()).starts_with_any(b"{}")
+            && !line_starts_call(after_leading_comments(line.trimmed_start()))
             && let Some(previous) = self.previous_code_line_past_comments_and_directives()
             && let previous_code = self.output.code_trimmed_of(previous)
             // A head with bases opens its body next.

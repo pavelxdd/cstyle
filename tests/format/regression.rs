@@ -16462,3 +16462,21 @@ fn run_in_access_label_a_comment_trails_stands_at_its_modifier_column() {
         }
     }
 }
+
+#[test]
+fn a_comment_led_function_name_after_a_split_return_type_stands_as_without_the_comment() {
+    for (input, expected) in [
+        (
+            "static struct Item *\n\n/* note */ make(int value);\n",
+            "static struct Item *\n\n/* note */ make(int value);\n",
+        ),
+        (
+            "static struct Item *\n\nmake(int value);\n",
+            "static struct Item *\n\nmake(int value);\n",
+        ),
+    ] {
+        for style in ["--style=kr", "--style=google"] {
+            check(input, &[style], expected);
+        }
+    }
+}
