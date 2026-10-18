@@ -513,9 +513,9 @@ pub(crate) fn brace_list_rows(tokens: &[Token], tree: &SourceTree) -> BraceListR
         begins_line = false;
         previous = Some(index);
     }
-    // An element brace follows a separator; one after a capture list or a
-    // cast opens a lambda body or a compound literal. A row of a nested list
-    // stands as a block does.
+    // An element brace follows a separator or a designator's `=`; one after
+    // a capture list or a cast opens a lambda body or a compound literal. A
+    // row of a nested list stands as a block does.
     for (child, parent) in children {
         if run_in.contains(&parent)
             && !rows.nested.contains(&parent)
@@ -524,9 +524,10 @@ pub(crate) fn brace_list_rows(tokens: &[Token], tree: &SourceTree) -> BraceListR
                 .groups
                 .opened_at(parent)
                 .is_some_and(|group| tree.blocks.kind(group) == Some(BlockKind::Initializer))
-            && tree
-                .previous_code_token(child)
-                .is_some_and(|before| matches!(tokens[before], Token::Symbol(',')))
+            && tree.previous_code_token(child).is_some_and(|before| {
+                matches!(&tokens[before], Token::Symbol(','))
+                    || matches!(&tokens[before], Token::Operator(operator) if operator == "=")
+            })
         {
             rows.aligned_children.insert(child);
             rows.aligned_parents.insert(parent);

@@ -16187,3 +16187,48 @@ fn whitesmith_indents_the_brace_of_a_comment_led_method_head_as_any_method() {
         expected,
     );
 }
+
+#[test]
+fn mid_row_list_spanning_rows_breaks_after_its_brace_in_a_list_the_output_levels() {
+    let cases = [
+        (
+            "--style=kr",
+            "Item items[] = {{\"a\", {1, 2}},\n                {\"b\", {3,\n                       4}}};\n",
+            "Item items[] = {{\"a\", {1, 2}},\n    {\n        \"b\", {\n            3,\n            4\n        }\n    }\n};\n",
+        ),
+        (
+            "--style=whitesmith",
+            "Item items[] = {{\"a\", {1, 2}},\n                {\"b\", {3,\n                       4}}};\n",
+            "Item items[] = {{\"a\", {1, 2}},\n        {\n        \"b\", {\n            3,\n            4\n            }\n        }\n    };\n",
+        ),
+        (
+            "--style=kr",
+            "void run()\n{\n    Item items[] = {{1, {2,\n                         3}}, {4, {5, 6}}};\n}\n",
+            "void run()\n{\n    Item items[] = {{\n            1, {\n                2,\n                3\n            }\n        }, {4, {5, 6}}\n    };\n}\n",
+        ),
+    ];
+    for (style, input, expected) in cases {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn designated_value_list_in_a_run_in_list_aligns_to_its_elements() {
+    let cases = [
+        (
+            "Item value = {.first = {1,\n                        2},\n              .second = 3};\n",
+            "Item value = {.first = {1,\n                        2\n                       },\n              .second = 3\n             };\n",
+        ),
+        (
+            "Item value = {.first = {1, 2},\n              .second = {3,\n                         4}};\n",
+            "Item value = {.first = {1, 2},\n              .second = {3,\n                         4\n                        }\n             };\n",
+        ),
+    ];
+    for style in ["--style=kr", "--style=whitesmith"] {
+        for (input, expected) in cases {
+            check(input, &[style], expected);
+            check(expected, &[style], expected);
+        }
+    }
+}

@@ -17,8 +17,8 @@ use crate::formatter::syntax::BraceListRows;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, line_ends_with_comment, preprocessor_directive, trailing_comment_split_limit,
-    unmatched_open_brace_content_offset,
+    ContainsAnyByte, has_unmatched_open_brace, line_ends_with_comment, preprocessor_directive,
+    trailing_comment_split_limit, unmatched_open_brace_content_offset,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -251,6 +251,23 @@ impl FormatEngine<'_> {
         Some((normal_indent * self.options.indent_width).max(
             self.continuation_base_indent() * self.options.indent_width + self.options.indent_width,
         ))
+    }
+
+    /// Whether the pending line starts a row of an initializer list whose
+    /// elements run in after its brace.
+    fn pending_row_of_run_in_list(&self) -> bool {
+        let groups = &self.tree.groups;
+        self.output
+            .pending_tokens()
+            .and_then(|span| groups.enclosing(span.first))
+            .is_some_and(|list| {
+                self.tree.blocks.kind(list) == Some(BlockKind::Initializer)
+                    && self
+                        .output
+                        .line_with_token(groups.get(list).open)
+                        .and_then(|line| self.output.line_tokens(line))
+                        .is_some_and(|span| span.last != groups.get(list).open)
+            })
     }
 
     /// Whether the pending line opens with the `}` of an initializer list
@@ -872,6 +889,13 @@ impl FormatEngine<'_> {
                     .iter()
                     .find(|token| !matches!(token, Token::Whitespace(_) | Token::Comment(..)))
                     .is_some_and(|token| matches!(token, Token::Newline | Token::Symbol('{')))
+                    // A brace the layout broke its row after levels its rows
+                    // too.
+                    || self
+                        .output
+                        .line_with_token(open)
+                        .and_then(|line| self.output.line_tokens(line))
+                        .is_some_and(|span| span.last == open)
             })
     }
 
@@ -1393,6 +1417,11 @@ impl FormatEngine<'_> {
             return None;
         }
         if closing && self.line_closes_run_in_declarator_list() {
+            return None;
+        }
+        // A designator row of a list aligned after its brace stands at its
+        // elements, though a list it opens holds the line.
+        if designator && has_unmatched_open_brace(line) && self.pending_row_of_run_in_list() {
             return None;
         }
         if closing && let Some(spaces) = self.layout.continuation_indent.next_line_indent_spaces {
