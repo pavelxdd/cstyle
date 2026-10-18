@@ -17123,3 +17123,12 @@ fn arguments_after_a_lambda_body_stand_at_the_statement_when_parens_indent() {
     let input = "void f()\n{\n    result = call(first, [] {\n        go();\n    },\n    other,\n    more);\n    call(first, [] {\n        go();\n    },\n    other);\n}\n";
     check(input, &["--style=kr", "--indent-after-parens"], input);
 }
+
+#[test]
+fn arguments_after_a_lambda_body_opening_its_own_line_stand_at_the_statement() {
+    let input = "void f()\n{\n    call(first,\n         [] {\n        go();\n    },\n    other,\n    more);\n}\n";
+    let expected =
+        "void f()\n{   call(first,\n         []\n    {   go(); },\n    other,\n    more); }\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+}

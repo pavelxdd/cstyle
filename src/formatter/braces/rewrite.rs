@@ -17,7 +17,7 @@ use crate::formatter::lexer::{
 use crate::formatter::preprocessor::{
     is_conditional_preprocessor, is_known_preprocessor_directive,
 };
-use crate::formatter::state::frame::BraceSemanticKind;
+use crate::formatter::state::frame::{BraceSemanticKind, LambdaBodySpan};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::structure::SourceTree;
@@ -1553,6 +1553,7 @@ impl FormatEngine<'_> {
                 .last_non_empty_scoped()
                 .is_some_and(|line| self.output.code_trimmed_of(line).ends_with(')')))
         .then(|| self.opening_body_fill(tokens, start, self.options.indent_width - 1));
+        let opens_line = self.current_is_blank();
         self.push_attached_one_line_block(
             &tokens[start..=close_index],
             brace_type,
@@ -1562,6 +1563,7 @@ impl FormatEngine<'_> {
             opening_body_gap,
         );
         self.current.record_token_range(start, close_index);
+        self.record_one_line_lambda_body(start, opens_line);
         if brace_type == BraceType::CompoundLiteral {
             self.layout.compound_literal.just_closed = true;
         }
@@ -1922,6 +1924,7 @@ impl FormatEngine<'_> {
             _ => None,
         };
         let leading_gap = is_asm_block.then(|| source_gap.unwrap_or(""));
+        let opens_line = self.current_is_blank();
         self.push_attached_one_line_block(
             &tokens[start..=close_index],
             brace_type,
@@ -1931,6 +1934,7 @@ impl FormatEngine<'_> {
             opening_body_gap,
         );
         self.current.record_token_range(start, close_index);
+        self.record_one_line_lambda_body(start, opens_line);
         let closes_do = self.layout.command_state.current_header.as_deref() == Some("do");
         if closes_do {
             self.layout.nesting.last_closed_brace_header = Some("do".to_string());
@@ -2132,6 +2136,24 @@ impl FormatEngine<'_> {
             &format!("{}{{", " ".repeat(brace_column + 1 + width)),
             &self.output_options(),
         )
+    }
+
+    /// Records a lambda's body kept on the line its `{` at `open` stands
+    /// on, which `opens_line` when the brace begins it.
+    fn record_one_line_lambda_body(&mut self, open: usize, opens_line: bool) {
+        if self
+            .tree
+            .groups
+            .opened_at(open)
+            .is_some_and(|group| self.tree.blocks.kind(group) == Some(BlockKind::Lambda))
+        {
+            let line = self.output.len();
+            self.layout.frame_stack.record_lambda_body(LambdaBodySpan {
+                open_output_line: line,
+                close_output_line: line,
+                opens_output_line: opens_line,
+            });
+        }
     }
 
     fn push_attached_one_line_block(

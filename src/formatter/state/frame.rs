@@ -205,6 +205,8 @@ pub(crate) struct BraceFrame {
     pub(crate) sibling_indent_column: usize,
     pub(crate) split_header: bool,
     pub(crate) open_output_line: usize,
+    /// The `{` begins its output line.
+    pub(crate) opens_output_line: bool,
     pub(crate) close_output_line: Option<usize>,
     pub(crate) close_ends_output_line: bool,
 }
@@ -314,6 +316,16 @@ pub(crate) struct FrameStack {
     line_closed_lambda_parameter_list: bool,
     line_closed_brackets: Vec<BracketFrame>,
     closed_brace_frames: Vec<BraceFrame>,
+    last_lambda_body: Option<LambdaBodySpan>,
+}
+
+/// The output lines of the last lambda body closed, and whether its `{`
+/// began its line.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) struct LambdaBodySpan {
+    pub(crate) open_output_line: usize,
+    pub(crate) close_output_line: usize,
+    pub(crate) opens_output_line: bool,
 }
 
 fn shift_column_for_indent(column: usize, old_indent: usize, new_indent: usize) -> usize {
@@ -1183,7 +1195,23 @@ impl FrameStack {
         if let Some(frame) = self.last_closed_brace_mut() {
             frame.close_output_line = Some(line);
             frame.close_ends_output_line = false;
+            if frame.semantic_kind == BraceSemanticKind::Lambda {
+                let span = LambdaBodySpan {
+                    open_output_line: frame.open_output_line,
+                    close_output_line: line,
+                    opens_output_line: frame.opens_output_line,
+                };
+                self.last_lambda_body = Some(span);
+            }
         }
+    }
+
+    pub(crate) fn record_lambda_body(&mut self, span: LambdaBodySpan) {
+        self.last_lambda_body = Some(span);
+    }
+
+    pub(crate) fn last_lambda_body(&self) -> Option<LambdaBodySpan> {
+        self.last_lambda_body
     }
 
     pub(crate) fn mark_last_closed_brace_line_end(&mut self, line: usize, ends_with_brace: bool) {
@@ -1510,6 +1538,7 @@ mod tests {
             sibling_indent_column: 7,
             split_header: false,
             open_output_line: 0,
+            opens_output_line: false,
             close_output_line: None,
             close_ends_output_line: false,
         });

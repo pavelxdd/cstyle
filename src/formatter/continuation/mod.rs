@@ -895,22 +895,14 @@ impl FormatEngine<'_> {
         if !self.current.trimmed_end().ends_with(',') {
             return false;
         }
-        let Some(lambda) = self
-            .layout
-            .frame_stack
-            .last_closed_brace()
-            .filter(|frame| frame.semantic_kind == BraceSemanticKind::Lambda)
-        else {
-            return false;
-        };
-        let Some(close_line) = lambda.close_output_line else {
+        let Some(lambda) = self.layout.frame_stack.last_lambda_body() else {
             return false;
         };
         let Some(call) = self.layout.frame_stack.active_delimiter() else {
             return false;
         };
         let groups = &self.tree.groups;
-        lambda.open_output_line < close_line
+        (lambda.open_output_line < lambda.close_output_line || lambda.opens_output_line)
             && call.opener_output_line <= lambda.open_output_line
             && self
                 .current
