@@ -17146,3 +17146,10 @@ fn arguments_after_a_lambda_body_stand_at_the_statement_after_an_inserted_blank_
     let expected = "void f()\n{\n    if (a) {\n        first();\n    }\n\n    call([&](int value) {\n        go(value);\n    },\n    other,\n    more);\n}\n";
     check(input, &["--break-blocks=all"], expected);
 }
+
+#[test]
+fn arguments_after_a_lambda_closer_with_a_trailing_comment_stand_at_the_statement() {
+    let input = "void f()\n{\n    dispatch(queue,\n             [](int value) {\n        go(value);\n    }, /* note */\n    other);\n}\n";
+    let expected = "void f()\n{\n    dispatch(queue,\n    [](int value) {\n        go(value);\n    }, /* note */\n    other);\n}\n";
+    check(input, &[], expected);
+}

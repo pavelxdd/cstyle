@@ -892,9 +892,6 @@ impl FormatEngine<'_> {
     /// that a lambda's body spanning lines has passed: those stand at the
     /// statement, as the body's closer does.
     pub(crate) fn continues_arguments_after_lambda_body(&self) -> bool {
-        if !self.current.trimmed_end().ends_with(',') {
-            return false;
-        }
         let Some(lambda) = self.layout.frame_stack.last_lambda_body() else {
             return false;
         };
@@ -902,12 +899,14 @@ impl FormatEngine<'_> {
             return false;
         };
         let groups = &self.tree.groups;
+        // Comments after the line's comma take no part in it.
         (lambda.open_output_line < lambda.close_output_line || lambda.opens_output_line)
             && call.opener_output_line <= lambda.open_output_line
             && self
                 .current
                 .tokens()
                 .and_then(|span| self.tree.previous_code_token(span.last + 1))
+                .filter(|&comma| matches!(self.tree.tokens[comma], Token::Symbol(',')))
                 .and_then(|comma| groups.enclosing(comma))
                 .is_some_and(|group| groups.get(group).delimiter == Delimiter::Paren)
     }
