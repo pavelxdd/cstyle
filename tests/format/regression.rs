@@ -16480,3 +16480,24 @@ fn a_comment_led_function_name_after_a_split_return_type_stands_as_without_the_c
         }
     }
 }
+
+#[test]
+fn a_comment_led_declarator_after_a_split_type_stands_as_without_the_comment() {
+    // astyle moves the row to the type's column when a comment leads it.
+    for (input, expected) in [
+        (
+            "struct Item\n/* note */ first, second;\n",
+            "struct Item\n    /* note */ first, second;\n",
+        ),
+        (
+            "struct Item\n\n/* note */ first, second;\n",
+            "struct Item\n\n    /* note */ first, second;\n",
+        ),
+        (
+            "struct Item\n\nfirst, second;\n",
+            "struct Item\n\n    first, second;\n",
+        ),
+    ] {
+        check(input, &["--style=kr"], expected);
+    }
+}
