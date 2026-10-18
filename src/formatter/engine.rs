@@ -2167,11 +2167,10 @@ impl<'a> FormatEngine<'a> {
                     | BraceStyle::Horstmann
                     | BraceStyle::Pico
             )
-            && (self.current.trimmed_start().starts_with('}')
-                || self
-                    .current
-                    .trimmed_start()
-                    .starts_with_any(b"<>|&+-*/%=!?:,.~"))
+            && {
+                let code = after_leading_comments(self.current.trimmed_start());
+                code.starts_with('}') || code.starts_with_any(b"<>|&+-*/%=!?:,.~")
+            }
         {
             self.finish_line();
             self.layout.continuation_indent.clear_next_line();

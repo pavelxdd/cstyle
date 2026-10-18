@@ -15772,3 +15772,17 @@ fn a_message_literal_brace_inside_a_string_aligns_no_rows() {
     let input = "static struct driver builtin[] = {\n    PATTERNS(\"first\",\n             \"@[\",\n             \"\"),\n    PATTERNS(\"second\",\n             \"y\"),\n};\n";
     check(input, &[], input);
 }
+
+#[test]
+fn attach_classes_attaches_the_brace_of_a_class_head_a_comment_leads() {
+    let input = "/* note */ class Item\n{\npublic:\n    Item();\n};\n";
+    let expected = "/* note */ class Item {\npublic:\n    Item();\n};\n";
+    for style in ["--style=gnu", "--style=allman"] {
+        check(input, &[style, "--attach-classes"], expected);
+        check(expected, &[style, "--attach-classes"], expected);
+    }
+    let input = "/* note */ namespace Space\n{\nint value;\n}\n";
+    let expected = "/* note */ namespace Space {\nint value;\n}\n";
+    check(input, &["--style=gnu", "--attach-namespaces"], expected);
+    check(expected, &["--style=gnu", "--attach-namespaces"], expected);
+}
