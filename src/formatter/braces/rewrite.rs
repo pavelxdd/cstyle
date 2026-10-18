@@ -2439,12 +2439,16 @@ impl FormatEngine<'_> {
         if self.current.trimmed_end().ends_with('@') {
             return true;
         }
+
         match self.inline_array.aggregate_braces.last() {
             Some(true) => true,
             Some(false) => match self.layout.command_state.previous_command_char {
                 Some('=') => true,
                 Some(')') => self.current_ends_compound_literal_type(),
-                _ => false,
+                // A type's braces among arguments, as `Type{value}`, open no
+                // block.
+                Some(ch) => is_word_char(ch) && self.layout.nesting.paren_depth > 0,
+                None => false,
             },
             None => matches!(
                 self.layout.nesting.brace_type_stack.last(),

@@ -18374,3 +18374,13 @@ fn a_function_defined_after_extern_c_opens_a_function_body() {
     check(input, &["--style=pico"], expected);
     check(expected, &["--style=pico"], expected);
 }
+
+#[test]
+fn a_braced_initializer_in_a_kept_one_line_body_keeps_its_brace_on_its_type() {
+    let input = "int run() {\n  return visit(formatter{out});\n}\n";
+    let expected = "int run()\n{   return visit(formatter{out }); }\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+    let input = "int run() { return visit(formatter{out}); }\n";
+    check(input, &["--style=allman", "--keep-one-line-blocks"], input);
+}
