@@ -16909,3 +16909,24 @@ fn a_directive_after_a_block_a_directive_parts_from_its_label_stands_with_the_co
     check(input, &["--style=kr", "--indent-preproc-cond"], expected);
     check(expected, &["--style=kr", "--indent-preproc-cond"], expected);
 }
+
+#[test]
+fn a_kept_one_line_switch_block_stands_at_its_statement() {
+    // astyle moves the switch to column one, and splits it amid its
+    // statements without keeping one-line statements.
+    let input = "void f()\n{\n    switch (value) { case 1: go(); break; default: break; }\n    next();\n}\n";
+    check(
+        input,
+        &[
+            "--style=kr",
+            "--keep-one-line-blocks",
+            "--keep-one-line-statements",
+        ],
+        input,
+    );
+    check(
+        input,
+        &["--style=kr", "--keep-one-line-blocks"],
+        "void f()\n{\n    switch (value) {\n    case 1:\n        go();\n        break;\n    default:\n        break;\n    }\n    next();\n}\n",
+    );
+}
