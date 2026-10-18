@@ -17364,3 +17364,12 @@ fn a_comment_led_call_opening_a_lambda_among_a_brace_list_stays_at_its_statement
     let expected = "void f()\n{\n    value = 0;\n    /* note */ call({ [] {\n            go();\n        } });\n    /* note */ call([]\n    {\n        go();\n    });\n}\n";
     check(input, &["--style=allman"], expected);
 }
+
+#[test]
+fn every_row_of_a_lambda_body_in_a_call_brace_list_stands_at_its_body() {
+    let input = "void f()\n{\n    call({ [x] {\n        go();\n#ifdef FEATURE\n        run();\n#endif\n        if (ready) {\n            stop();\n        }\n    } });\n}\n";
+    let expected = "void f()\n{\n    call({ [x] {\n            go();\n#ifdef FEATURE\n            run();\n#endif\n            if (ready) {\n                stop();\n            }\n        } });\n}\n";
+    check(input, &["--style=kr"], expected);
+    let expected = "void f()\n{\n    call({ [x] {\n            go();\n            #ifdef FEATURE\n            run();\n            #endif\n            if (ready) {\n                stop();\n            }\n        } });\n}\n";
+    check(input, &["--style=kr", "--indent-preproc-cond"], expected);
+}

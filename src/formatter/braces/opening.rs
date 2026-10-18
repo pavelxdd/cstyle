@@ -1329,6 +1329,27 @@ impl FormatEngine<'_> {
 
     /// The levels between the block level and a row of the compound literal
     /// around, for a group that row opens at its end.
+    /// The levels a brace list that holds the lambda body being opened adds
+    /// past the indent, when the list opened on a line it set no level for.
+    fn lambda_list_levels(&self) -> usize {
+        if self.pushed_brace_kind() != Some(BlockKind::Lambda) {
+            return 0;
+        }
+        self.layout
+            .frame_stack
+            .enclosing_brace()
+            .filter(|list| {
+                matches!(
+                    list.semantic_kind,
+                    BraceSemanticKind::Array | BraceSemanticKind::Initializer
+                )
+            })
+            .map_or(0, |list| {
+                (list.body_indent_column / self.options.indent_width)
+                    .saturating_sub(self.layout.indentation.indent())
+            })
+    }
+
     fn element_row_levels(&self, brace_type: BraceType, next: Option<&Token>) -> usize {
         if !matches!(
             brace_type,
@@ -3281,7 +3302,8 @@ impl FormatEngine<'_> {
                 block_indent_extra
                     + class_block_indent_extra
                     + double_brace_extra
-                    + brace.element_row_levels,
+                    + brace.element_row_levels
+                    + self.lambda_list_levels(),
             );
         }
         if attached_case_label {
