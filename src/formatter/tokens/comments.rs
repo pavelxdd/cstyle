@@ -405,6 +405,11 @@ impl FormatEngine<'_> {
         // A delimiter the line's code closed set no column for it.
         let closes_delimiters =
             line_paren_imbalance(after_leading_comments(self.current.as_str())).0 > 0;
+        // The arguments after a lambda's body stand at the statement.
+        let follows_lambda_body = self
+            .layout
+            .continuation_indent
+            .input_line_follows_lambda_body;
         let line_continuation_indent = self
             .layout
             .continuation_indent
@@ -416,7 +421,9 @@ impl FormatEngine<'_> {
                     .frame_stack
                     .active_delimiter()
                     .filter(|frame| {
-                        !closes_delimiters && frame.opener_output_line < self.output.len()
+                        !closes_delimiters
+                            && !follows_lambda_body
+                            && frame.opener_output_line < self.output.len()
                     })
                     .and_then(|frame| frame.continuation_indent_column)
                     .unwrap_or(captured)

@@ -17153,3 +17153,9 @@ fn arguments_after_a_lambda_closer_with_a_trailing_comment_stand_at_the_statemen
     let expected = "void f()\n{\n    dispatch(queue,\n    [](int value) {\n        go(value);\n    }, /* note */\n    other);\n}\n";
     check(input, &[], expected);
 }
+
+#[test]
+fn a_comment_led_argument_after_a_lambda_body_stands_at_the_statement() {
+    let input = "void f()\n{\n    call(first, [] {\n        go();\n    },\n    /* note */ other,\n    more);\n}\n";
+    check(input, &["--style=kr"], input);
+}
