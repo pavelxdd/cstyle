@@ -16758,3 +16758,9 @@ fn whitesmith_brace_rows_of_a_call_argument_list_stand_a_level_past_its_brace() 
     check(input, &["--style=whitesmith"], expected);
     check(expected, &["--style=whitesmith"], expected);
 }
+
+#[test]
+fn ratliff_last_brace_row_of_a_call_argument_list_stands_at_the_row_before() {
+    let input = "void f() {\n    call(value, {\n            {2, 3},\n            {4, 5}\n        });\n    }\n";
+    check(input, &["--style=ratliff"], input);
+}

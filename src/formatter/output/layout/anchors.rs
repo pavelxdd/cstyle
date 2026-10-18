@@ -886,10 +886,21 @@ impl FormatEngine<'_> {
                     )
                 })
                 .unwrap_or(false);
+        // Ratliff stands one after a brace row leading its line at that row.
+        let after_brace_led_row = self.options.brace_style == BraceStyle::Ratliff
+            && open_of_row_before(tokens, groups, group, comma).is_some_and(|element| {
+                matches!(tokens[element], Token::Symbol('{'))
+                    && self
+                        .output
+                        .line_with_token(element)
+                        .and_then(|line| self.output.line_tokens(line))
+                        .is_some_and(|span| span.first == element)
+            });
         if separated.is_none()
             && matches!(tokens[first], Token::Symbol('{'))
             && self.should_indent_brace_line(BraceType::Initializer)
             && !after_split_brace_row
+            && !after_brace_led_row
             && !(self.options.brace_style == BraceStyle::Vtk
                 && open_of_row_before(tokens, groups, group, comma).is_some_and(|element| {
                     matches!(tokens[element], Token::Symbol('{'))
