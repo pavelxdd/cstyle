@@ -18164,3 +18164,13 @@ fn arguments_of_a_head_after_an_access_label_follow_its_split_return_type() {
         expected,
     );
 }
+
+#[test]
+fn an_rvalue_reference_parameter_after_a_reference_return_type_line_stays_a_reference() {
+    // A head split after a return type ending in `&` continues no `&`
+    // expression into its parameters.
+    let input = "class Status {\n  Status&\n  operator=(Status&& other) noexcept;\n  Status&\n  assign(Status&& other);\n};\nStatus&\nassign(Status&& other) {\n  return *this;\n}\nint\nvalue() {\n  return first &\n         check(second && third);\n}\n";
+    let expected = "class Status\n{\n    Status&\n    operator=(Status&& other) noexcept;\n    Status&\n    assign(Status&& other);\n};\nStatus&\nassign(Status&& other)\n{\n    return *this;\n}\nint\nvalue()\n{\n    return first &\n           check(second && third);\n}\n";
+    check(input, &["--style=kr", "--pad-oper"], expected);
+    check(expected, &["--style=kr", "--pad-oper"], expected);
+}

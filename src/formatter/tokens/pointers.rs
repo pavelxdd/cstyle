@@ -85,7 +85,9 @@ impl FormatEngine<'_> {
     }
 
     pub(super) fn is_rvalue_reference_like(&self, next: Option<&Token>) -> bool {
-        if self.continues_operator_expression()
+        // A parameter list continues no expression of the line before it.
+        if self.tree_declaration_context() != Some(true)
+            && self.continues_operator_expression()
             && matches!(
                 self.layout.previous,
                 PreviousToken::Word
