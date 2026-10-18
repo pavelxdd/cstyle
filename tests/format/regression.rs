@@ -15953,3 +15953,56 @@ fn closer_of_a_run_in_list_before_more_declarators_stands_under_its_brace() {
     let expected = "void run()\n    {\n    int value[2] = {1,\n                    2\n                   }, other;\n    }\n";
     check(input, &["--style=whitesmith"], expected);
 }
+
+#[test]
+fn run_in_list_row_after_a_directive_and_a_blank_line_breaks_its_closer_as_elsewhere() {
+    let expected = "static const struct Item items[] = {\n#ifdef FEATURE\n    {3, 4},\n#endif\n\n    {\n        5,\n        6\n    }\n};\n";
+    for input in [
+        "static const struct Item items[] = {\n#ifdef FEATURE\n    {3, 4},\n#endif\n\n    {5,\n     6}\n};\n",
+        expected,
+    ] {
+        check(input, &["--style=kr"], expected);
+    }
+    let without_blank_line = "static const struct Item items[] = {\n#ifdef FEATURE\n    {3, 4},\n#endif\n    {5,\n     6}\n};\n";
+    let expected = "static const struct Item items[] = {\n#ifdef FEATURE\n    {3, 4},\n#endif\n    {\n        5,\n        6\n    }\n};\n";
+    check(without_blank_line, &["--style=kr"], expected);
+}
+
+#[test]
+fn code_a_comment_leads_after_a_whitesmith_case_block_stands_where_the_code_alone_would() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1:\n        {\n            value=0;\n        }\n        /* note */ break;\n    }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=whitesmith",
+            "void f()\n    {\n    switch (kind)\n        {\n        case 1:\n            {\n            value=0;\n            }\n        /* note */ break;\n        }\n    }\n",
+        ),
+        (
+            "--style=vtk",
+            "void f()\n{\n    switch (kind)\n        {\n        case 1:\n            {\n            value=0;\n            }\n        /* note */ break;\n        }\n}\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+        let bare = expected.replace("/* note */ break;", "break;");
+        check(&bare, &[style], &bare);
+    }
+}
+
+#[test]
+fn indent_preproc_define_leaves_a_case_block_outside_definitions_as_without_it() {
+    let input = "void f()\n{\n    switch (kind) {\n#ifdef FEATURE\n    case 1: // first\n#endif\n    {\n        value=0;\n    }\n    default:\n        break;\n    }\n}\n";
+    for style in [
+        "--style=kr",
+        "--style=vtk",
+        "--style=whitesmith",
+        "--style=gnu",
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_string()]).expect("valid options");
+        let output = format_bytes(input.as_bytes(), &options).expect("format bytes");
+        let expected = String::from_utf8(output).expect("utf8");
+        check(input, &[style, "--indent-preproc-define"], &expected);
+    }
+    let expected = "void f()\n{\n    switch (kind)\n        {\n#ifdef FEATURE\n        case 1: // first\n#endif\n            {\n            value=0;\n            }\n        default:\n            break;\n        }\n}\n";
+    check(input, &["--style=vtk", "--indent-preproc-define"], expected);
+}
