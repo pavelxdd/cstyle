@@ -16579,3 +16579,16 @@ fn run_in_styles_level_string_rows_of_a_nested_list_as_other_rows() {
         check(&expected, &["--style=horstmann"], &expected);
     }
 }
+
+#[test]
+fn a_nested_list_spanning_rows_breaks_after_its_brace_whatever_its_first_element() {
+    // astyle keeps a first string element on the brace line.
+    for (first, second) in [("1", "2"), ("\"a\"", "\"b\"")] {
+        let input =
+            format!("Item value[] = {{\n    [0] = {{ {first},\n            {second} }},\n}};\n");
+        let expected = format!(
+            "Item value[] = {{\n    [0] = {{\n        {first},\n        {second}\n    }},\n}};\n"
+        );
+        check(&input, &["--style=kr"], &expected);
+    }
+}
