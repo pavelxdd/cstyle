@@ -1106,17 +1106,21 @@ impl FormatEngine<'_> {
         {
             return None;
         }
+        // The ternary is one of the statement the row continues.
         let mut saw_colon_argument = false;
-        let has_recent_ternary_argument = (0..self.output.len()).rev().take(16).any(|index| {
+        let mut has_recent_ternary_argument = false;
+        for index in self.output.scoped_range().rev().take(16) {
             let code = self.output.code(index);
             let trimmed_code = self.output.code_trimmed(index);
             if trimmed_code.starts_with(':') && code.ends_with(',') {
                 saw_colon_argument = true;
-                false
-            } else {
-                saw_colon_argument && trimmed_code.contains('?')
+            } else if saw_colon_argument && trimmed_code.contains('?') {
+                has_recent_ternary_argument = true;
+                break;
+            } else if trimmed_code.ends_with_any(b";{}") {
+                break;
             }
-        });
+        }
         has_recent_ternary_argument.then_some(
             leading_visual_width(previous, self.options.tab_width)
                 + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width,

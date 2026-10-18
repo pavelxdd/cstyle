@@ -16960,3 +16960,10 @@ fn a_paren_in_a_char_literal_leaves_the_braces_after_it_attached() {
     let input = "void f()\n{\n    if (c == '(') {\n        if (x) {\n            go();\n        }\n    }\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_designator_row_after_a_ternary_designator_of_an_earlier_list_stands_at_the_rows() {
+    let input = "void f(void)\n{\n    struct Config c = {\n        .tern = ready ? FIRST\n        : SECOND,\n        .x = 1,\n    };\n}\nstruct Config g = {\n    .value = FLAG_A |\n    FLAG_B,\n    .lead = FLAG_A\n    | FLAG_B,\n};\n";
+    let expected = "void f(void)\n{\n    struct Config c = {\n        .tern = ready ? FIRST\n                : SECOND,\n        .x = 1,\n    };\n}\nstruct Config g = {\n    .value = FLAG_A |\n             FLAG_B,\n    .lead = FLAG_A\n            | FLAG_B,\n};\n";
+    check(input, &[], expected);
+}
