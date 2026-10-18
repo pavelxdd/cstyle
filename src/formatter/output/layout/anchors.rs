@@ -1309,7 +1309,17 @@ impl FormatEngine<'_> {
         let open = groups.get(group).open;
         let closer = matches!(tokens[first], Token::Symbol('}'));
         let rows = &self.inline_array.list_rows;
-        if self.tree.blocks.kind(group) != Some(BlockKind::Initializer)
+        // A compound literal among parens keeps its rows under its first
+        // element.
+        let literal_in_parens = self.tree.blocks.kind(group) == Some(BlockKind::CompoundLiteral)
+            && groups
+                .get(group)
+                .parent
+                .is_some_and(|parent| groups.get(parent).delimiter != Delimiter::Brace);
+        if !matches!(
+            self.tree.blocks.kind(group),
+            Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+        ) || literal_in_parens
             || groups
                 .get(group)
                 .parent

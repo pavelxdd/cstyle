@@ -16307,3 +16307,28 @@ fn vtk_rows_of_a_nested_first_call_argument_list_stand_where_its_closer_leaves_t
         check(input, &["--style=vtk"], expected);
     }
 }
+
+#[test]
+fn indented_brace_styles_close_a_nested_first_compound_literal_as_an_initializer() {
+    for (style, expected) in [
+        (
+            "--style=whitesmith",
+            "void run()\n    {\n    value = (Item) {{1, 2},\n            {3, 4}\n        };\n    }\n",
+        ),
+        (
+            "--style=vtk",
+            "void run()\n{\n    value = (Item) {{1, 2},\n            {3, 4}\n        };\n}\n",
+        ),
+        (
+            "--style=ratliff",
+            "void run() {\n    value = (Item) {{1, 2},\n            {3, 4}\n        };\n    }\n",
+        ),
+    ] {
+        check(
+            "void run()\n{\n    value = (Item){{1, 2},\n                   {3, 4}};\n}\n",
+            &[style],
+            expected,
+        );
+        check(expected, &[style], expected);
+    }
+}
