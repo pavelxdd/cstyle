@@ -6,9 +6,11 @@ use crate::formatter::braces::classification::{
 use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::constructs::headers::{line_is_control_body_header, starts_header_word};
 use crate::formatter::engine::FormatEngine;
+use crate::formatter::lexer::Token;
 use crate::formatter::preprocessor::output_has_active_preprocessor_branch;
 use crate::formatter::state::frame::CommaRole;
 use crate::formatter::state::indentation::LineKind;
+use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::language;
 use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::text::columns::column_after;
@@ -1012,7 +1014,23 @@ impl FormatEngine<'_> {
         if !self.call_arguments_contain_brace_block() {
             return None;
         }
-        Some(leading_visual_width(previous, self.options.tab_width))
+        // After a block's closer the arguments stand at the line of the
+        // call's paren, wherever the style puts the block's braces.
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let call_line = self
+            .output
+            .last_non_empty_index()
+            .and_then(|index| self.output.line_tokens(index))
+            .filter(|span| matches!(tokens[span.first], Token::Symbol('}')))
+            .and_then(|span| groups.closed_at(span.first))
+            .and_then(|block| groups.enclosing(groups.get(block).open))
+            .filter(|&call| groups.get(call).delimiter == Delimiter::Paren)
+            .and_then(|call| self.output.line_with_token(groups.get(call).open));
+        Some(match call_line {
+            Some(line) => self.output.lead_width(line, self.options.tab_width),
+            None => leading_visual_width(previous, self.options.tab_width),
+        })
     }
 
     fn call_arguments_contain_brace_block(&self) -> bool {

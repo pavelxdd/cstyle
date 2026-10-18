@@ -15476,6 +15476,48 @@ fn tab_indent_fills_a_list_closer_past_the_statement_with_spaces_when_its_list_o
 }
 
 #[test]
+fn an_argument_after_an_indented_block_closer_stands_at_the_statement_indent() {
+    let input = "void f(void)\n{\n    value = call(first, {\n        1, 2 },\n        other,\n        more);\n    call(first, ^{\n        go();\n    },\n    other);\n}\n";
+    for (style, expected) in [
+        (
+            "--style=ratliff",
+            "void f(void) {\n    value = call(first, {\n        1, 2\n        },\n    other,\n    more);\n    call(first, ^ {\n        go();\n        },\n    other);\n    }\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void f(void)\n    {\n    value = call(first,\n        {\n        1, 2\n        },\n    other,\n    more);\n    call(first, ^\n        {\n        go();\n        },\n    other);\n    }\n",
+        ),
+        (
+            "--style=vtk",
+            "void f(void)\n{\n    value = call(first,\n        {\n        1, 2\n        },\n    other,\n    more);\n    call(first, ^\n        {\n        go();\n        },\n    other);\n}\n",
+        ),
+        (
+            "--style=kr",
+            "void f(void)\n{\n    value = call(first, {\n        1, 2\n    },\n    other,\n    more);\n    call(first, ^ {\n        go();\n    },\n    other);\n}\n",
+        ),
+    ] {
+        let args = [style, "--break-after-logical", "--min-conditional-indent=0"];
+        check(input, &args, expected);
+        check(expected, &args, expected);
+    }
+    let input = "void f(void)\n{\n    call(first,\n         second, ^{\n        go();\n    },\n         other);\n}\n";
+    for (style, expected) in [
+        (
+            "--style=allman",
+            "void f(void)\n{\n    call(first,\n         second, ^\n    {\n        go();\n    },\n    other);\n}\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void f(void)\n    {\n    call(first,\n         second, ^\n        {\n        go();\n        },\n    other);\n    }\n",
+        ),
+    ] {
+        let args = [style, "--break-after-logical", "--min-conditional-indent=0"];
+        check(input, &args, expected);
+        check(expected, &args, expected);
+    }
+}
+
+#[test]
 fn tab_indent_tabs_a_ratliff_list_closer_whose_elements_stand_a_level_in() {
     let input = "void f()\n{\n    value = call(first, {\n        1,\n        2,\n    });\n    run({\n        [](int x) {\n            go(x);\n        },\n    });\n}\n";
     check(
