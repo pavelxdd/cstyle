@@ -2200,6 +2200,16 @@ impl FormatEngine<'_> {
         if self.output.line_with_token(argument)? != line || argument >= first {
             return None;
         }
+        // The arguments after a lambda's body stand at the statement.
+        if (open + 1..first).any(|index| {
+            matches!(tokens[index], Token::Symbol('{'))
+                && groups.enclosing(index) == Some(group)
+                && groups
+                    .opened_at(index)
+                    .is_some_and(|body| self.tree.blocks.kind(body) == Some(BlockKind::Lambda))
+        }) {
+            return None;
+        }
         Some(self.token_column(argument)? + self.case_unindent_spaces())
     }
 

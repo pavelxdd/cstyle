@@ -15495,6 +15495,14 @@ fn a_comment_leading_a_block_literal_argument_row_leaves_it_where_it_stands_with
 }
 
 #[test]
+fn a_comment_led_argument_after_a_lambda_body_stands_at_the_statement_under_a_length_limit() {
+    let input = "void f()\n{\n    call(first, [](int value) {\n        return value;\n    },\n    other,\n    /* note */ more);\n    call(first, ^{\n        go();\n    },\n    /* note */ more);\n}\n";
+    for args in [&["--max-code-length=60"][..], &[][..]] {
+        check(input, args, input.replace("^{", "^ {").as_str());
+    }
+}
+
+#[test]
 fn an_argument_after_an_indented_block_closer_stands_at_the_statement_indent() {
     let input = "void f(void)\n{\n    value = call(first, {\n        1, 2 },\n        other,\n        more);\n    call(first, ^{\n        go();\n    },\n    other);\n}\n";
     for (style, expected) in [
