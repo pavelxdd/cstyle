@@ -16424,3 +16424,21 @@ fn same_line_initializer_rows_of_a_constructor_in_a_case_block_stand_past_its_he
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn a_member_after_a_method_closer_of_a_type_in_a_case_block_stands_at_the_members() {
+    let input = "void f()\n{\n    switch (kind)\n    {\n    case 1:\n        {\n            struct Local\n            {\n                Local()\n                {\n                }\n                int value;\n            };\n        }\n    }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=whitesmith",
+            "void f()\n    {\n    switch (kind)\n        {\n        case 1:\n            {\n            struct Local\n                {\n                Local()\n                    {\n                    }\n                int value;\n                };\n            }\n        }\n    }\n",
+        ),
+        (
+            "--style=ratliff",
+            "void f() {\n    switch (kind) {\n        case 1: {\n            struct Local {\n                Local() {\n                    }\n                int value;\n                };\n            }\n        }\n    }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}

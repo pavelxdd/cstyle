@@ -8,6 +8,7 @@ use crate::formatter::lexer::{Token, first_visible_token, raw_strings, token_tex
 use crate::formatter::output::LineDelimiters;
 use crate::formatter::output::buffer::LookBack;
 use crate::formatter::preprocessor::is_conditional_preprocessor;
+use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::structure::blocks::next_code_token;
@@ -1302,6 +1303,12 @@ impl FormatEngine<'_> {
                 .brace_header_stack
                 .iter()
                 .any(|header| header.as_deref() == Some("case"))
+            // A type's body nested in the case block lays its members out
+            // past its own closers.
+            && !matches!(
+                self.layout.nesting.brace_type_stack.last(),
+                Some(BraceType::Struct | BraceType::Union | BraceType::Class)
+            )
             && self.layout.nesting.last_closed_brace_header.as_deref() != Some("switch")
         {
             return (current_spaces.unwrap_or(0) < target).then_some(target);
