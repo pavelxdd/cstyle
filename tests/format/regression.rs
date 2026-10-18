@@ -17498,3 +17498,10 @@ fn a_comment_after_a_lambda_argument_brace_leaves_its_row_at_the_statement() {
     let expected = "void f()\n{\n    call(first,\n    [] { /* note */\n        go();\n    },\n    other,\n    more);\n}\n";
     check(input, &["--style=kr"], expected);
 }
+
+#[test]
+fn a_comment_after_a_comment_running_over_lines_keeps_its_gap() {
+    let input = "void f()\n{\n    switch (k) {  /* a\n          b */ /* c */\n    case 1:\n        break;\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (k)\n    {\n        /* a\n              b */ /* c */\n    case 1:\n        break;\n    }\n}\n";
+    check(input, &["--style=allman"], expected);
+}

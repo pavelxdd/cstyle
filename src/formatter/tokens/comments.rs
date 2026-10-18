@@ -4477,6 +4477,10 @@ pub(crate) fn trailing_comment_columns(tokens: &[Token]) -> Vec<usize> {
                         columns.push(column.saturating_sub(segment_start_column));
                     }
                 }
+                // The line ends within a comment running over lines.
+                if comment.contains('\n') {
+                    break;
+                }
                 column += comment.chars().count();
                 seen_token = true;
             }
