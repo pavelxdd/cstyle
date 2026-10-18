@@ -78,7 +78,7 @@ impl ContinuationIndentState {
 
 /// The width from `start_column` to the first declarator of `line`, its
 /// tabs stopping as they do there.
-fn declaration_comma_continuation_width(
+pub(crate) fn declaration_comma_continuation_width(
     line: &str,
     start_column: usize,
     tab_width: usize,
@@ -1598,7 +1598,8 @@ impl FormatEngine<'_> {
     }
 
     fn declaration_continuation_indent_spaces(&self) -> Option<usize> {
-        if self.layout.indentation.statement_depth() != 0
+        // A head below its return type declares as one opening its line.
+        if self.layout.indentation.statement_depth() != 0 && !self.comma_follows_head_parameters()
             || self.layout.in_class_base_clause
             || self.in_enum_declaration_brace()
             || self.in_initializer_brace()
@@ -1625,7 +1626,11 @@ impl FormatEngine<'_> {
                         self.layout.nesting.brace_type_stack.last(),
                         Some(BraceType::Command | BraceType::Definition)
                     );
-                return leads_statement.then(|| self.current_line_indent_spaces());
+                // A head's parameters closed before the comma declare on,
+                // as a trailing return type's template arguments do.
+                if !self.comma_follows_head_parameters() {
+                    return leads_statement.then(|| self.current_line_indent_spaces());
+                }
             }
         }
         let current_prefix_len = line.len() - line.trimmed_start().len();
@@ -1680,6 +1685,35 @@ impl FormatEngine<'_> {
                     self.options.tab_width,
                 ),
         )
+    }
+
+    /// Whether the `,` ending the current line follows, at its own level,
+    /// the closed parameter list of a function head.
+    fn comma_follows_head_parameters(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let Some(comma) = self
+            .current
+            .tokens()
+            .and_then(|span| self.tree.previous_code_token(span.last + 1))
+            .filter(|&comma| matches!(tokens.get(comma), Some(Token::Symbol(','))))
+        else {
+            return false;
+        };
+        let level = groups.enclosing(comma);
+        let mut index = comma;
+        while let Some(before) = self.tree.previous_code_token(index) {
+            if let Some(group) = groups.closed_at(before) {
+                return self.tree.functions.by_params(group).is_some();
+            }
+            if groups.enclosing(before) != level
+                || matches!(tokens[before], Token::Symbol(';' | '{' | '}' | ','))
+            {
+                return false;
+            }
+            index = before;
+        }
+        false
     }
 
     fn asm_colon_continuation_indent_spaces(&self) -> Option<usize> {

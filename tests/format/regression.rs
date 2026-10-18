@@ -18254,3 +18254,21 @@ fn break_return_type_reads_a_head_with_a_trailing_return_type_as_any_head() {
     let expected = "auto\nget(int x) -> decltype(x)\n{\n    return x;\n}\nauto\npair_of(int x) -> pair<int, int>\n{\n    return x;\n}\nauto find(int x) -> decltype(x);\n";
     check(input, &["--style=kr", "--break-return-type"], expected);
 }
+
+#[test]
+fn a_head_on_its_own_line_after_its_return_type_starts_what_its_rows_continue() {
+    // astyle stacks from the line the name starts, with the return type
+    // split off or written above it.
+    let expected = "auto\nget(int x) -> pair<int,\n    int>\n{\n    return x;\n}\n";
+    for input in [
+        "auto get(int x) -> pair<int,\n                         int> {\n  return x;\n}\n",
+        "auto\nget(int x) -> pair<int,\n  int> {\n  return x;\n}\n",
+    ] {
+        check(input, &["--style=kr", "--break-return-type"], expected);
+    }
+    check(expected, &["--style=kr", "--break-return-type"], expected);
+    let expected = "template <typename T>\nauto\nfind_end(T&& range) -> select_t<check<T&&>::value,\n         decltype(end(range))>\n{\n    return end(range);\n}\n";
+    let input = "template <typename T>\nauto find_end(T&& range) -> select_t<check<T&&>::value,\n                                     decltype(end(range))> {\n  return end(range);\n}\n";
+    check(input, &["--style=kr", "--break-return-type"], expected);
+    check(expected, &["--style=kr", "--break-return-type"], expected);
+}

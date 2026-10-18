@@ -1,6 +1,6 @@
 use crate::config::PointerAlign;
 use crate::formatter::constructs::headers::is_header;
-use crate::formatter::continuation::ContinuationIndent;
+use crate::formatter::continuation::{ContinuationIndent, declaration_comma_continuation_width};
 use crate::formatter::engine::{FormatEngine, SplitLineShift};
 use crate::formatter::lexer::Token;
 use crate::formatter::structure::TokenSpan;
@@ -11,7 +11,7 @@ use crate::formatter::syntax::language::{self, is_non_type_keyword, is_type_like
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     ContainsAnyByte, find_outside_quotes, line_comment_split_limit,
-    reverse_scan_skips_block_comment,
+    reverse_scan_skips_block_comment, trailing_comment_split_limit,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -568,10 +568,28 @@ impl FormatEngine<'_> {
                 shift,
                 new_lead,
             );
+            // A declaration's comma continues past the first word of the
+            // line it ends, which the split changes.
+            let tab_width = self.options.tab_width;
+            let code = |text: &str| {
+                text[..trailing_comment_split_limit(text)]
+                    .trimmed()
+                    .to_string()
+            };
+            let unsplit = code(line);
+            let function_code = code(&function_part);
+            let declaration_columns = function_code.ends_with(',').then(|| {
+                (
+                    lead + declaration_comma_continuation_width(&unsplit, lead, tab_width),
+                    new_lead
+                        + declaration_comma_continuation_width(&function_code, new_lead, tab_width),
+                )
+            });
             self.split_line_shift = Some(SplitLineShift {
                 line: function_line,
                 from_column: name_column,
                 shift,
+                declaration_columns,
             });
         }
         // The return type line opens the body of a directive's branch as

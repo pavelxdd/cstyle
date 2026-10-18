@@ -179,12 +179,15 @@ pub(crate) type OpenParenLine = (usize, usize);
 pub(crate) type LineCommentCache = (usize, usize, usize, Option<usize>);
 
 /// The columns a split moved: those at or past `from_column` of the part
-/// that ends output line `line` moved `shift` columns.
+/// that ends output line `line` moved `shift` columns, and the column a
+/// declaration's comma ending the line continues at moved from the first
+/// of `declaration_columns` to the second.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct SplitLineShift {
     pub(crate) line: usize,
     pub(crate) from_column: usize,
     pub(crate) shift: isize,
+    pub(crate) declaration_columns: Option<(usize, usize)>,
 }
 
 pub(crate) struct FormatEngine<'a> {
@@ -2404,6 +2407,15 @@ impl<'a> FormatEngine<'a> {
             .filter(|split| split.line + 1 == self.output.len());
         let stacked_after_line = self.layout.nesting.current_continuation_indent_spaces();
         let indent = match (indent, split, stacked_after_line) {
+            (ContinuationIndent::Spaces(spaces), Some(split), _)
+                if split
+                    .declaration_columns
+                    .is_some_and(|(unsplit, _)| unsplit == spaces) =>
+            {
+                ContinuationIndent::Spaces(
+                    split.declaration_columns.map_or(spaces, |(_, moved)| moved),
+                )
+            }
             // The column the line took from the stack moved as the stack did.
             (ContinuationIndent::Spaces(spaces), Some(_), Some(moved))
                 if Some(spaces) == stacked_before_line
