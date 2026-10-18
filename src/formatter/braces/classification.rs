@@ -180,6 +180,8 @@ pub(crate) fn current_ends_block_literal_header(head: &str) -> bool {
     let Some(rest) = before.strip_suffix('^') else {
         return false;
     };
+    // Comments before the caret take no part in the head.
+    let rest = &rest[..trailing_comment_split_limit(rest)];
     match rest.trimmed_end().chars().next_back() {
         None => true,
         Some(ch) => matches!(ch, '=' | '(' | ',' | '[' | ':' | '{'),

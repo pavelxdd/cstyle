@@ -15476,6 +15476,25 @@ fn tab_indent_fills_a_list_closer_past_the_statement_with_spaces_when_its_list_o
 }
 
 #[test]
+fn a_comment_leading_a_block_literal_argument_row_leaves_it_where_it_stands_without() {
+    for (args, input, expected) in [
+        (
+            &["--style=kr"][..],
+            "void f()\n{\n    dispatch(queue,\n             /* note */ ^{\n        go(value);\n    },\n    other);\n}\n",
+            "void f()\n{\n    dispatch(queue,\n    /* note */ ^ {\n        go(value);\n    },\n    other);\n}\n",
+        ),
+        (
+            &["--style=ratliff"][..],
+            "void f()\n{\n    dispatch(queue,\n             /* note */ ^(int value) {\n        go(value);\n    },\n    other);\n}\n",
+            "void f() {\n    dispatch(queue,\n    /* note */ ^(int value) {\n        go(value);\n        },\n    other);\n    }\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
 fn an_argument_after_an_indented_block_closer_stands_at_the_statement_indent() {
     let input = "void f(void)\n{\n    value = call(first, {\n        1, 2 },\n        other,\n        more);\n    call(first, ^{\n        go();\n    },\n    other);\n}\n";
     for (style, expected) in [
