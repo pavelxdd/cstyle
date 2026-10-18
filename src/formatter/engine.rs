@@ -2332,6 +2332,43 @@ impl<'a> FormatEngine<'a> {
         }
     }
 
+    /// The continuation `indent` worked out for the line just finished,
+    /// moved with the columns a split of that line moved; the stack's top
+    /// before the line finished was `stacked_before_line`.
+    pub(crate) fn continuation_after_split(
+        &mut self,
+        indent: ContinuationIndent,
+        stacked_before_line: Option<usize>,
+    ) -> ContinuationIndent {
+        let split = self
+            .split_line_shift
+            .take()
+            .filter(|split| split.line + 1 == self.output.len());
+        let stacked_after_line = self.layout.nesting.current_continuation_indent_spaces();
+        match (indent, split, stacked_after_line) {
+            (ContinuationIndent::Spaces(spaces), Some(split), _)
+                if split
+                    .declaration_columns
+                    .is_some_and(|(unsplit, _)| unsplit == spaces) =>
+            {
+                ContinuationIndent::Spaces(
+                    split.declaration_columns.map_or(spaces, |(_, moved)| moved),
+                )
+            }
+            // The column the line took from the stack moved as the stack did.
+            (ContinuationIndent::Spaces(spaces), Some(_), Some(moved))
+                if Some(spaces) == stacked_before_line
+                    && stacked_after_line != stacked_before_line =>
+            {
+                ContinuationIndent::Spaces(moved)
+            }
+            (ContinuationIndent::Spaces(spaces), Some(split), _) if spaces >= split.from_column => {
+                ContinuationIndent::Spaces(spaces.saturating_add_signed(split.shift))
+            }
+            (indent, ..) => indent,
+        }
+    }
+
     fn finish_continuation_line_at_newline(&mut self) {
         let is_logical_continuation = self.logical_continuation_indent_spaces().is_some();
         let has_array_bound_operator_continuation = self
@@ -2400,34 +2437,7 @@ impl<'a> FormatEngine<'a> {
         ) {
             self.layout.previous = previous_before_line;
         }
-        // The columns of the part a split ends the line with moved with it.
-        let split = self
-            .split_line_shift
-            .take()
-            .filter(|split| split.line + 1 == self.output.len());
-        let stacked_after_line = self.layout.nesting.current_continuation_indent_spaces();
-        let indent = match (indent, split, stacked_after_line) {
-            (ContinuationIndent::Spaces(spaces), Some(split), _)
-                if split
-                    .declaration_columns
-                    .is_some_and(|(unsplit, _)| unsplit == spaces) =>
-            {
-                ContinuationIndent::Spaces(
-                    split.declaration_columns.map_or(spaces, |(_, moved)| moved),
-                )
-            }
-            // The column the line took from the stack moved as the stack did.
-            (ContinuationIndent::Spaces(spaces), Some(_), Some(moved))
-                if Some(spaces) == stacked_before_line
-                    && stacked_after_line != stacked_before_line =>
-            {
-                ContinuationIndent::Spaces(moved)
-            }
-            (ContinuationIndent::Spaces(spaces), Some(split), _) if spaces >= split.from_column => {
-                ContinuationIndent::Spaces(spaces.saturating_add_signed(split.shift))
-            }
-            (indent, ..) => indent,
-        };
+        let indent = self.continuation_after_split(indent, stacked_before_line);
         // The label's own column, wherever its style set it, anchors the
         // rest of the label.
         let indent = match self.output.len().checked_sub(1) {

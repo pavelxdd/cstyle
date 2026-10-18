@@ -18290,3 +18290,15 @@ fn a_colon_row_in_a_macro_body_starts_no_initializer_list_for_the_code_after_it(
     let input = "#define BUILD(Type) \\\n  Type::Type() \\\n    : first(1), \\\n      second(2) {}\nint other;\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn parameters_after_a_line_comment_on_a_split_head_follow_its_paren() {
+    let input = "struct Match {\n  bool operator ()(int text, int re,  // note\n                   int first = 0,\n                   int second = 0) const;\n  bool find(int text, int re,  // note\n            int first = 0) const;\n};\n";
+    let expected = "struct Match {\n    bool\n    operator ()(int text, int re,  // note\n                int first = 0,\n                int second = 0) const;\n    bool\n    find(int text, int re,  // note\n         int first = 0) const;\n};\n";
+    check(input, &["--style=kr", "--break-return-type-decl"], expected);
+    check(
+        expected,
+        &["--style=kr", "--break-return-type-decl"],
+        expected,
+    );
+}

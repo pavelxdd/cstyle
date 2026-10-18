@@ -2054,6 +2054,7 @@ impl FormatEngine<'_> {
         self.layout.previous = PreviousToken::Other;
         self.previous_was_newline = false;
         if kind == CommentKind::Line {
+            let stacked_before_line = self.layout.nesting.current_continuation_indent_spaces();
             self.finish_line();
             if let Some(spaces) =
                 line_comment_stream_chain_indent.or(ternary_branch_comment_indent_spaces)
@@ -2069,6 +2070,7 @@ impl FormatEngine<'_> {
                 let spaces = leading_visual_width(line, self.options.tab_width);
                 self.set_next_continuation_indent(ContinuationIndent::Spaces(spaces));
             } else if let Some(indent) = line_comment_continuation_indent {
+                let indent = self.continuation_after_split(indent, stacked_before_line);
                 self.set_next_continuation_indent(indent);
             }
         }
