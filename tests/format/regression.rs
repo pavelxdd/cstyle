@@ -17338,3 +17338,12 @@ fn a_goto_label_block_on_an_indented_case_line_keeps_the_case_column() {
     check(input, &options, expected);
     check(expected, &options, expected);
 }
+
+#[test]
+fn vtk_keeps_comment_led_rows_of_a_flush_file_scope_list_at_its_rows() {
+    let input = "static const Item items[2] = {\n    /* 0 */ { 1, 0 },\n    { 1, 1 },\n};\n";
+    check(input, &["--style=vtk"], input);
+    let input =
+        "static const Item items[2] = {\n    /* 0 */ { 1, 0 },\n    /* 1 */ { 1, 1 },\n};\n";
+    check(input, &["--style=vtk"], input);
+}

@@ -1271,6 +1271,32 @@ impl FormatEngine<'_> {
             && (brace_alone || row_spans_lines || !self.vtk_flush_outer(group, outer))
     }
 
+    /// Whether the `{` at `first`, opening an element's list among a
+    /// list's rows, stands a level past those rows.
+    fn element_brace_stands_past_rows(&self, first: usize) -> bool {
+        let groups = &self.tree.groups;
+        let is_aggregate = |id: GroupId| {
+            matches!(
+                self.tree.blocks.kind(id),
+                Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+            )
+        };
+        let Some(list) = groups
+            .opened_at(first)
+            .filter(|&group| is_aggregate(group))
+            .and_then(|_| groups.enclosing(first))
+            .filter(|&list| is_aggregate(list))
+        else {
+            return false;
+        };
+        if self.options.brace_style == BraceStyle::Vtk {
+            return self
+                .vtk_block_like_outer(list)
+                .is_some_and(|outer| self.array_element_brace_indented(first, list, outer));
+        }
+        self.should_indent_brace_line(BraceType::Array)
+    }
+
     /// Whether output line `index`, led by a `{`, stands a level past the
     /// body around it: a block's indented brace, or an element's brace that
     /// the style sets past the elements.
@@ -2159,9 +2185,9 @@ impl FormatEngine<'_> {
                 // A brace row the style indents stands a level past the
                 // rows, a comment leading it or not.
                 self.initializer_first_row_indent(code).map(|spaces| {
-                    let brace_row = matches!(tokens[code], Token::Symbol('{'))
-                        && self.should_indent_brace_line(BraceType::Array);
-                    spaces + usize::from(brace_row) * self.options.indent_width
+                    spaces
+                        + usize::from(self.element_brace_stands_past_rows(code))
+                            * self.options.indent_width
                 })
             })
             .or_else(|| self.stacked_argument_indent(code))
@@ -2169,14 +2195,7 @@ impl FormatEngine<'_> {
             .or_else(|| {
                 // Otherwise an element's brace the style sets past the
                 // elements stands past the comment, set at them.
-                (self
-                    .tree
-                    .groups
-                    .opened_at(code)
-                    .and_then(|group| self.tree.blocks.kind(group))
-                    == Some(BlockKind::Initializer)
-                    && self.pending_line_opens_indented_plain_block())
-                .then(|| {
+                self.element_brace_stands_past_rows(code).then(|| {
                     leading_visual_width(line, self.options.tab_width) + self.options.indent_width
                 })
             });
