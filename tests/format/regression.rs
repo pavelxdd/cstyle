@@ -17190,3 +17190,9 @@ fn an_argument_of_a_call_opened_on_an_indented_lambda_closer_row_aligns_under_it
     let expected = "void f()\n    {\n    call(a, []\n        {\n        go();\n        }, g(x,\n             y),\n    b);\n    }\n";
     check(input, &["--style=whitesmith"], expected);
 }
+
+#[test]
+fn a_lambda_body_in_a_header_condition_stands_a_level_in_as_in_a_call() {
+    let input = "void f()\n{\n    if (call([] {\n        go();\n    },\n    other)) {\n        stop();\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
