@@ -18727,3 +18727,24 @@ fn force_tab_rows_of_a_comment_after_a_block_brace_tab_to_the_body() {
     check(input, &options, expected);
     check(expected, &options, expected);
 }
+
+#[test]
+fn a_comment_run_in_after_a_switch_brace_stands_with_the_statement_after_it() {
+    // astyle runs the comment in at the case labels' column while a statement
+    // run in there stands at the statements'; the comment stands at the
+    // statement it leads, as without the run-in.
+    let input = "void f()\n{\n    switch (kind) {\n        /* note */\n        value = 0;\n    case 1:\n        break;\n    }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=pico",
+            "void f()\n{   switch (kind)\n    {       /* note */\n            value = 0;\n        case 1:\n            break; } }\n",
+        ),
+        (
+            "--style=horstmann",
+            "void f()\n{   switch (kind)\n    {       /* note */\n            value = 0;\n        case 1:\n            break;\n    }\n}\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
