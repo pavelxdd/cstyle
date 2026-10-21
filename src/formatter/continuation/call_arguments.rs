@@ -1232,7 +1232,9 @@ impl FormatEngine<'_> {
             return None;
         }
         let (previous, previous_code) = self.output.last_code_outside_comment()?;
-        if !previous_code.ends_with(',') {
+        // A row a brace leads ends a block or a list among the arguments,
+        // no sibling of the next one.
+        if !previous_code.ends_with(',') || previous_code.trimmed_start().starts_with_any(b"{}") {
             return None;
         }
         // A split opener stands among the lines before the last since the

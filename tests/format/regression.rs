@@ -19167,4 +19167,25 @@ fn a_template_type_s_list_brace_ending_its_line_takes_a_space_as_on_one_line() {
     check(input, &[], expected);
     check(expected, &[], expected);
 }
+#[test]
+fn arguments_after_a_block_among_a_macro_s_arguments_take_no_column_from_its_brace() {
+    // A block among a macro's arguments is no sibling row: the arguments
+    // after it continue the call as after a list among them.
+    let input = "void run() {\n  EXPECT_THROW(\n      {\n        start();\n      },\n      std::exception);\n}\n";
+    for (style, expected) in [
+        (
+            "--style=allman",
+            "void run()\n{\n    EXPECT_THROW(\n    {\n        start();\n    },\n        std::exception);\n}\n",
+        ),
+        (
+            "--style=pico",
+            "void run()\n{   EXPECT_THROW(\n    {   start(); },\n        std::exception); }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+    let one_row = "void run()\n{\n    EXPECT_THROW(\n    { start(); },\n        std::exception);\n}\n";
+    check(one_row, &["--style=allman"], one_row);
+}
 
