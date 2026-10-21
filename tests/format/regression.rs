@@ -19289,3 +19289,23 @@ fn a_range_for_list_keeps_its_shape_with_the_for_paren_unpadded() {
         check(expected, &[style, "--unpad-paren"], expected);
     }
 }
+
+#[test]
+fn indented_parens_set_the_arguments_after_a_block_brought_up_to_its_paren_a_level_in() {
+    // Parens that indent after them take no column from a brace a style
+    // attaches to the paren's line: the arguments after the block stand a
+    // level past the statement on every pass.
+    let input = "void f()\n{\n    EXPECT_THROW(\n        {\n            start();\n        },\n        std::exception);\n}\n";
+    let expected =
+        "void f()\n{\n    EXPECT_THROW( {\n        start();\n    },\n        std::exception);\n}\n";
+    let attached = "void f() {\n    EXPECT_THROW( {\n        start();\n    },\n        std::exception);\n}\n";
+    let lisp = "void f() {\n    EXPECT_THROW( {\n        start(); },\n        std::exception); }\n";
+    for (style, expected) in [
+        ("--style=kr", expected),
+        ("--style=google", attached),
+        ("--style=lisp", lisp),
+    ] {
+        check(input, &[style, "--indent-after-parens"], expected);
+        check(expected, &[style, "--indent-after-parens"], expected);
+    }
+}

@@ -2364,9 +2364,11 @@ impl FormatEngine<'_> {
         // A brace joining the `(` its line ended with leads that paren's
         // arguments.
         let line_index = self.output.len();
-        let leads_paren_arguments = line[..trailing_comment_split_limit(&line)]
-            .trimmed_end()
-            .ends_with('(')
+        // Parens that indent after them align no argument to the brace.
+        let leads_paren_arguments = !self.options.indent_after_parens
+            && line[..trailing_comment_split_limit(&line)]
+                .trimmed_end()
+                .ends_with('(')
             && self
                 .layout
                 .frame_stack
