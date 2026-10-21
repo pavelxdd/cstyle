@@ -19645,3 +19645,27 @@ fn an_if_after_a_closer_and_a_comment_on_its_line_heads_its_block() {
         expected,
     );
 }
+
+#[test]
+fn an_else_if_block_after_a_closer_and_a_comment_stands_with_its_chain() {
+    // The `if` of an `else if` kept on a closer's line heads a block that
+    // stands where its chain's `if` puts it, as an `else` block does.
+    let input = "void f()\n{\n    if (ready) {\n        value=1;\n    } /*c*/ else if (more) {\n        value=2;\n    }\n    go();\n}\n";
+    for (style, expected) in [
+        (
+            "--style=whitesmith",
+            "void f()\n    {\n    if (ready)\n        {\n        value=1;\n        } /*c*/ else if (more)\n        {\n        value=2;\n        }\n    go();\n    }\n",
+        ),
+        (
+            "--style=vtk",
+            "void f()\n{\n    if (ready)\n        {\n        value=1;\n        } /*c*/ else if (more)\n        {\n        value=2;\n        }\n    go();\n}\n",
+        ),
+        (
+            "--style=gnu",
+            "void f()\n{\n    if (ready)\n        {\n            value=1;\n        } /*c*/ else if (more)\n        {\n            value=2;\n        }\n    go();\n}\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}

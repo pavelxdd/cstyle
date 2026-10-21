@@ -6271,9 +6271,18 @@ impl FormatEngine<'_> {
                 .filter(|&previous| is_word(previous, &["do", "else", "try"]))
         })?;
         // An `else` block belongs to the line of its `if`: a `}` before the
-        // `else` may close a block nested deeper.
-        if is_word(inner, &["else"])
-            && let Some(if_token) = self.tree.statements.if_of_else(inner)
+        // `else` may close a block nested deeper. So does the block of the
+        // `if` of an `else if` on one line.
+        let chain_else = if is_word(inner, &["if"]) {
+            self.tree.previous_code_token(inner).filter(|&previous| {
+                is_word(previous, &["else"])
+                    && self.output.line_with_token(previous) == self.output.line_with_token(inner)
+            })
+        } else {
+            Some(inner).filter(|&inner| is_word(inner, &["else"]))
+        };
+        if let Some(else_token) = chain_else
+            && let Some(if_token) = self.tree.statements.if_of_else(else_token)
         {
             inner = if_token;
         }
