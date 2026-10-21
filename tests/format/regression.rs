@@ -18537,3 +18537,11 @@ fn added_braces_keep_a_comment_running_over_rows_with_the_statement_on_the_heade
         check(expected, &[style, "--add-braces"], expected);
     }
 }
+
+#[test]
+fn a_comma_among_template_parameters_with_defaults_parts_no_member_declarators() {
+    let expected = "class Buffer\n{\n    template <typename Alloc = Allocator,\n              typename Other = Allocator>\n    void walk();\n    template <typename Alloc = Allocator,\n              ENABLE_IF(traits<Alloc>::value)>\n    void move();\n};\n";
+    let input = expected.replace("              ", "                       ");
+    check(&input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}

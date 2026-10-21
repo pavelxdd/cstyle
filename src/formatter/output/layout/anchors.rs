@@ -2499,6 +2499,24 @@ impl FormatEngine<'_> {
                 .closed_at(before)
                 .map_or(before, |group| groups.get(group).open);
         }
+        // A comma in a template's parameters or arguments parts no
+        // declarators.
+        let mut angles = 0usize;
+        for index in start..comma {
+            match &tokens[index] {
+                Token::Operator(operator) if operator == "<" && self.template_opener_at(index) => {
+                    angles += 1;
+                }
+                Token::Operator(operator) if operator == ">" => angles = angles.saturating_sub(1),
+                Token::Operator(operator) if operator == ">>" => {
+                    angles = angles.saturating_sub(2);
+                }
+                _ => {}
+            }
+        }
+        if angles > 0 {
+            return None;
+        }
         // Whether a `:` of the body stands before the `,`, read on from the
         // last look that started where this one does.
         let body_colon = |from: usize, to: usize| {

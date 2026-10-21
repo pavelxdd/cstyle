@@ -1057,7 +1057,7 @@ impl<'a> FormatEngine<'a> {
         false
     }
 
-    fn template_opener_at(&self, index: usize) -> bool {
+    pub(crate) fn template_opener_at(&self, index: usize) -> bool {
         self.template_openers
             .get_or_init(|| template_openers(&self.tree.tokens))
             .get(index)
