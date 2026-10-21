@@ -115,6 +115,13 @@ impl FormatEngine<'_> {
         None
     }
 
+    /// Whether the trailing-return head whose body the line is in has a
+    /// parameter defaulted to `{}` on its brace's line.
+    pub(crate) fn recent_trailing_return_header_holds_empty_default(&self) -> bool {
+        self.recent_base_trailing_return_function_header_index()
+            .is_some_and(|index| holds_empty_brace_default(self.output.code_before_comment(index)))
+    }
+
     pub(crate) fn recent_base_trailing_return_function_header(&self) -> bool {
         self.recent_base_trailing_return_function_header_index()
             .is_some()
@@ -155,7 +162,10 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
     ) -> Option<usize> {
         let current = line.trimmed_start();
-        if !current.ends_with('{') || !current.contains("= {}") || !current.contains(") ->") {
+        if !current.ends_with('{')
+            || !holds_empty_brace_default(current)
+            || !current.contains(") ->")
+        {
             return None;
         }
         for (previous_index, previous) in self
@@ -704,4 +714,14 @@ fn is_pointer_prefixed_function_part(line: &str) -> bool {
     !before.is_empty()
         && !language::is_header(before)
         && function_name_start(before).is_some_and(|start| start == 0)
+}
+
+/// Whether `code` defaults a parameter to an empty brace, `= {}` or `= { }`.
+fn holds_empty_brace_default(code: &str) -> bool {
+    code.match_indices('=').any(|(at, _)| {
+        code[at + 1..]
+            .trim_start()
+            .strip_prefix('{')
+            .is_some_and(|rest| rest.trim_start().starts_with('}'))
+    })
 }

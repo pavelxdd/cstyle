@@ -19015,3 +19015,33 @@ fn a_template_parameter_s_default_continues_nothing_after_its_angles() {
     check(input, &args, expected);
     check(expected, &args, expected);
 }
+
+#[test]
+fn a_using_alias_value_in_a_trailing_return_function_continues_a_level_in() {
+    // Its value continues past the alias as in any other body, whether the
+    // style attaches the body's brace to the head or not.
+    let input = "auto helper(int from) -> To {\n  using Rep =\n      typename common<int>::type;\n  return Rep();\n}\n";
+    for (style, expected) in [
+        (
+            "--style=java",
+            "auto helper(int from) -> To {\n    using Rep =\n        typename common<int>::type;\n    return Rep();\n}\n",
+        ),
+        (
+            "--style=ratliff",
+            "auto helper(int from) -> To {\n    using Rep =\n        typename common<int>::type;\n    return Rep();\n    }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn lisp_reads_a_spaced_empty_brace_default_as_the_unspaced_one() {
+    // The style's `{ }` is the `{}` default whose head astyle lays out its
+    // own way, as it does without the space.
+    let input = "template <typename Char>\nCONSTEXPR auto write(Char value, const specs& s,\n                     locale_ref loc = {}) -> Out {\n  using unsigned_type =\n      conditional_t<is_same<Char, char>::value, unsigned char, unsigned>;\n  return out;\n}\n";
+    let expected = "template <typename Char>\nCONSTEXPR auto write(Char value, const specs& s,\nlocale_ref loc = { }) -> Out {\n    using unsigned_type =\n    conditional_t<is_same<Char, char>::value, unsigned char, unsigned>;\n    return out; }\n";
+    check(input, &["--style=lisp"], expected);
+    check(expected, &["--style=lisp"], expected);
+}
