@@ -428,9 +428,6 @@ impl FormatEngine<'_> {
         if let Some(spaces) = replay.inline_body_owner_indent_spaces {
             exact_indent_spaces = Some(spaces);
         }
-        if let Some(spaces) = replay.lisp_attached_suffix_indent_spaces {
-            exact_indent_spaces = Some(spaces);
-        }
         if let Some(spaces) = replay.header_operator_indent_spaces {
             exact_indent_spaces = Some(spaces);
         }

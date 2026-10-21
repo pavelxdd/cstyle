@@ -19351,3 +19351,14 @@ fn rows_of_a_range_for_list_whose_brace_ends_its_line_take_the_list_s_column() {
         check(expected, args, expected);
     }
 }
+
+#[test]
+fn arguments_after_a_compound_literal_continue_the_call_with_a_maximum_code_length() {
+    // A maximum code length moves no argument after the literal's closer
+    // back to the statement.
+    let input = "void f()\n{\n    rc = send(session, &(struct msg) {\n        .len = 1,\n    },\n    timeout,\n    flags);\n}\n";
+    let expected = "void f()\n{   rc = send(session, &(struct msg)\n    {   .len = 1, },\n              timeout,\n              flags); }\n";
+    let args = ["--style=pico", "--max-code-length=60"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}

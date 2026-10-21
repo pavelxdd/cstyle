@@ -121,26 +121,6 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn replayed_lisp_attached_suffix_indent_spaces(&self) -> Option<usize> {
-        if self.options.max_code_length.is_none()
-            || !matches!(
-                self.options.brace_style,
-                BraceStyle::Pico | BraceStyle::Lisp
-            )
-            || !self
-                .output
-                .last_line_outside_comment()
-                .is_some_and(|previous| {
-                    let code = self.output.code_trimmed_of(previous);
-                    code.trimmed_start().starts_with('}') && code.ends_with(',')
-                })
-        {
-            return None;
-        }
-        let spaces = self.layout.indentation.indent() * self.options.indent_width;
-        (spaces == self.token_input.input_source_indent).then_some(spaces)
-    }
-
     pub(crate) fn max_length_brace_row_layout(
         &self,
         line: &str,

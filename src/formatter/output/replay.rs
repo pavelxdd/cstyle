@@ -35,7 +35,6 @@ impl FormatEngine<'_> {
                         )
                     })
                 });
-        let lisp_attached_suffix_indent_spaces = self.replayed_lisp_attached_suffix_indent_spaces();
         let header_operator_indent_spaces =
             self.replayed_header_operator_indent_spaces(line, closed_delimiter_continuation_indent);
         let closed_lambda_parameter_list = self
@@ -61,7 +60,6 @@ impl FormatEngine<'_> {
             closed_delimiter_continuation_indent,
             constructor_lambda_header_indent_spaces,
             inline_body_owner_indent_spaces,
-            lisp_attached_suffix_indent_spaces,
             header_operator_indent_spaces,
             closed_lambda_parameter_list,
             closed_split_lambda_parameter_list,

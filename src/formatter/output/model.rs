@@ -6,7 +6,6 @@ pub(crate) struct LineReplayLayout {
     pub(crate) closed_delimiter_continuation_indent: Option<usize>,
     pub(crate) constructor_lambda_header_indent_spaces: Option<usize>,
     pub(crate) inline_body_owner_indent_spaces: Option<usize>,
-    pub(crate) lisp_attached_suffix_indent_spaces: Option<usize>,
     pub(crate) header_operator_indent_spaces: Option<usize>,
     pub(crate) closed_lambda_parameter_list: bool,
     pub(crate) closed_split_lambda_parameter_list: bool,
