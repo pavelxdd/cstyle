@@ -1283,11 +1283,9 @@ impl FormatEngine<'_> {
                     && frames.last().copied() == Some(DefineFrame::Brace))
             {
                 continuation_column
-            } else if define_complete_designated_initializer_row(content)
-                // astyle reads a brace opening the replacement as a block,
-                // whose assignments each register past the last.
-                && frames.last().copied() != Some(DefineFrame::Brace)
-            {
+            } else if define_complete_designated_initializer_row(content) {
+                // A designator row ends its element: the next one stands at
+                // the list's rows, as outside a macro.
                 None
             } else {
                 // An assignment registers the column after it, a continuing

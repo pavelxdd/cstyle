@@ -837,11 +837,11 @@ fn indent_preproc_define_statement_expression_body_keeps_block_indent() {
 }
 
 #[test]
-fn indent_preproc_define_drifts_designated_rows_of_a_block_brace() {
+fn indent_preproc_define_keeps_designated_rows_of_a_brace_opening_the_replacement() {
     let mut options = FormatOptions::default();
     options.indent_preproc_define = true;
-    // astyle reads the brace opening the replacement as a block, whose
-    // assignments each register the column past the last.
+    // Each designator row ends its element: the rows stand together, as the
+    // same list does outside a macro.
     let source = fixture!(
         "#define ITEM(name, value) \\",
         "    { \\",
@@ -850,17 +850,18 @@ fn indent_preproc_define_drifts_designated_rows_of_a_block_brace() {
         "        .help = get_help(name), \\",
         "    }",
     );
-    let expected = fixture!(
-        "#define ITEM(name, value) \\",
-        "    { \\",
-        "        .name = (name), \\",
-        "                .value = (value), \\",
-        "                         .help = get_help(name), \\",
-        "    }",
-    );
     let actual = format_with(source, &options);
 
-    assert_eq!(actual, expected);
+    assert_eq!(actual, source);
+    // Rows holding several designators stand together as well.
+    let source = fixture!(
+        "#define EMPTY { \\",
+        "        .first = 0, .second = 0, \\",
+        "        .third = 0, .fourth = 0, .fifth = 0, \\",
+        "        .last = true \\",
+        "    }",
+    );
+    assert_eq!(format_with(source, &options), source);
 }
 
 #[test]
