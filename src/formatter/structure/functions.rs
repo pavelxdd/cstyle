@@ -290,11 +290,12 @@ fn function_head(
         HeadEnd::Found(body) => body,
         HeadEnd::Unterminated => return Some(HeadMatch::ParameterList),
     };
+    // A function-try-block's `try` block is the function's body.
     if body.is_some_and(|body| {
         !matches!(
             blocks.kind(body),
             Some(BlockKind::FunctionBody | BlockKind::Unknown)
-        )
+        ) && !is_try_body(tokens, groups, body)
     }) {
         return None;
     }
@@ -305,6 +306,13 @@ fn function_head(
         params,
         body,
     }))
+}
+
+/// Whether the brace group `body` is the block of a `try`, as a
+/// function-try-block's body is.
+fn is_try_body(tokens: &[Token], groups: &Groups, body: GroupId) -> bool {
+    previous_code_token(tokens, groups.get(body).open)
+        .is_some_and(|word| matches!(&tokens[word], Token::Word(word) if word == "try"))
 }
 
 /// `MACRO(type, name)(params) {`: a macro call standing for a function's

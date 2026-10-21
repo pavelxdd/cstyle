@@ -19771,3 +19771,15 @@ fn breaking_return_types_reads_a_definition_after_a_requires_clause() {
     check(&input, &args, &expected);
     check(&expected, &args, &expected);
 }
+
+#[test]
+fn return_type_options_read_a_function_try_block_as_a_definition() {
+    // The try block is the function's body: the head is a definition.
+    let input = "void helper()\ntry {\n    go();\n} catch (...) {\n    stop();\n}\n";
+    let joined = "void helper()\ntry\n{\n    go();\n} catch (...)\n{\n    stop();\n}\n";
+    let broken = "void\nhelper()\ntry\n{\n    go();\n} catch (...)\n{\n    stop();\n}\n";
+    check(input, &["--style=kr", "--break-return-type"], broken);
+    check(broken, &["--style=kr", "--break-return-type"], broken);
+    check(broken, &["--style=kr", "--attach-return-type"], joined);
+    check(input, &["--style=kr", "--break-return-type-decl"], joined);
+}
