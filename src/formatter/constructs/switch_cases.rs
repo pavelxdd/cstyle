@@ -1798,7 +1798,7 @@ impl FormatEngine<'_> {
             })
         };
         // A label kept after the `}` closing the case block before it.
-        let label = trimmed.trim_start_matches('}').trimmed_start();
+        let label = after_leading_comments(trimmed.trim_start_matches('}'));
         if (trimmed.starts_with('}')
             && (label.starts_with("case ") || label.starts_with("default:")))
             && closing_indents.is_empty()
@@ -1989,7 +1989,7 @@ impl FormatEngine<'_> {
         } else if trimmed.starts_with('}') && !case_layout.opens_block {
             None
         } else if let Some(after_brace) = trimmed.strip_prefix('}') {
-            let after_brace = after_brace.trimmed_start();
+            let after_brace = after_leading_comments(after_brace);
             let closer_leads_label = starts_header_word(after_brace, "case")
                 || starts_header_word(after_brace, "default");
             let mut closed = 0usize;
@@ -2096,7 +2096,7 @@ impl FormatEngine<'_> {
             return Some(open_spaces + self.case_unindent_spaces());
         }
 
-        let after_brace = line.trimmed_start().strip_prefix("} ")?.trimmed_start();
+        let after_brace = after_leading_comments(line.trimmed_start().strip_prefix("} ")?);
         let indent =
             if starts_header_word(after_brace, "case") || after_brace.starts_with("default:") {
                 self.layout
@@ -2232,7 +2232,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn compound_case_label_indent_override(&self, line: &LineView<'_>) -> Option<usize> {
-        let after_brace = line.trimmed_start().strip_prefix('}')?.trimmed_start();
+        let after_brace = after_leading_comments(line.trimmed_start().strip_prefix('}')?);
         if !(starts_header_word(after_brace, "case") || starts_header_word(after_brace, "default"))
         {
             return None;

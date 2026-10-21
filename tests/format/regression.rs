@@ -19539,3 +19539,39 @@ fn a_switch_after_a_comment_led_case_block_stands_at_the_statement() {
     check(input, &["--style=ratliff"], expected);
     check(expected, &["--style=ratliff"], expected);
 }
+
+#[test]
+fn a_label_after_a_case_block_closer_and_a_comment_stands_as_a_kept_label() {
+    // A comment between a case block's closer and the next label keeps
+    // them on one line, laid out as a label kept after the closer.
+    let plain = "void f()\n{\n    switch (kind) {\n    case 1: {\n        break;\n    } /*c*/ default:\n        break;\n    }\n    go();\n}\n";
+    let block = "void f()\n{\n    switch (kind) {\n    case 1: {\n        break;\n    } /*c*/ case 2: {\n        go();\n        break;\n    }\n    }\n    go();\n}\n";
+    for (style, plain_expected, block_expected) in [
+        ("--style=kr", plain, block),
+        (
+            "--style=allman",
+            "void f()\n{\n    switch (kind)\n    {\n    case 1:\n    {\n        break;\n    } /*c*/ default:\n        break;\n    }\n    go();\n}\n",
+            "void f()\n{\n    switch (kind)\n    {\n    case 1:\n    {\n        break;\n    } /*c*/ case 2:\n    {\n        go();\n        break;\n    }\n    }\n    go();\n}\n",
+        ),
+        (
+            "--style=gnu",
+            "void f()\n{\n    switch (kind)\n        {\n        case 1:\n        {\n            break;\n        } /*c*/ default:\n            break;\n        }\n    go();\n}\n",
+            "void f()\n{\n    switch (kind)\n        {\n        case 1:\n        {\n            break;\n        } /*c*/ case 2:\n        {\n            go();\n            break;\n        }\n        }\n    go();\n}\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void f()\n    {\n    switch (kind)\n        {\n        case 1:\n            {\n            break;\n            } /*c*/ default:\n            break;\n        }\n    go();\n    }\n",
+            "void f()\n    {\n    switch (kind)\n        {\n        case 1:\n            {\n            break;\n            } /*c*/ case 2:\n            {\n            go();\n            break;\n            }\n        }\n    go();\n    }\n",
+        ),
+        (
+            "--style=ratliff",
+            "void f() {\n    switch (kind) {\n        case 1: {\n            break;\n            } /*c*/ default:\n            break;\n        }\n    go();\n    }\n",
+            "void f() {\n    switch (kind) {\n        case 1: {\n            break;\n            } /*c*/ case 2: {\n            go();\n            break;\n            }\n        }\n    go();\n    }\n",
+        ),
+    ] {
+        for (input, expected) in [(plain, plain_expected), (block, block_expected)] {
+            check(input, &[style], expected);
+            check(expected, &[style], expected);
+        }
+    }
+}

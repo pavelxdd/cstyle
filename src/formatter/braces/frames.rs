@@ -22,7 +22,7 @@ fn case_label_token_offset(line: &str, header: &str) -> Option<usize> {
     let code = &line[..lead + trailing_comment_split_limit(&line[lead..])];
     // Labels that lead the line, or follow the brace closing the case
     // before, own what follows them all.
-    let trimmed = code.trimmed_start().trim_start_matches('}').trimmed_start();
+    let trimmed = after_leading_comments(code.trimmed_start().trim_start_matches('}'));
     if (trimmed.starts_with("case") || trimmed.starts_with("default"))
         && code.matches(':').count() > 1
         && trimmed.starts_with(header)
@@ -62,11 +62,10 @@ fn holds_code(line: &str) -> bool {
 }
 
 /// Whether a label after `prefix` stands at the labels' column: after the
-/// brace closing the case before, or after comments alone.
+/// brace closing the case before, after comments, or after both.
 fn brace_led(prefix: &str) -> bool {
     let prefix = prefix.trimmed();
-    !prefix.is_empty()
-        && (prefix.chars().all(|ch| ch == '}') || after_leading_comments(prefix).is_empty())
+    !prefix.is_empty() && after_leading_comments(prefix.trim_start_matches('}')).is_empty()
 }
 
 fn leading_case_label_count(line: &str) -> usize {
@@ -204,7 +203,7 @@ impl FormatEngine<'_> {
             .current
             .trimmed_start()
             .strip_prefix('}')
-            .map_or(self.current.trimmed_start(), str::trim_start);
+            .map_or(self.current.trimmed_start(), after_leading_comments);
         let split_header = !header_candidate.is_empty()
             && brace_header.is_some_and(|header| {
                 leading_identifier(header_candidate) != header
