@@ -19783,3 +19783,33 @@ fn return_type_options_read_a_function_try_block_as_a_definition() {
     check(broken, &["--style=kr", "--attach-return-type"], joined);
     check(input, &["--style=kr", "--break-return-type-decl"], joined);
 }
+
+#[test]
+fn break_blocks_pads_a_header_after_a_kept_block_after_a_statement() {
+    // The line holding a statement and a block kept after it pads nothing
+    // around the block, but the header after it parts from it as from any
+    // statement line before it.
+    let input = "void f()\n{\n    value=1; if (ready) { value=0; }\n    for (i = 0; i < n; i++) {\n        total += i;\n    }\n}\n";
+    let expected = "void f()\n{\n    value=1; if (ready) { value=0; }\n\n    for (i = 0; i < n; i++) {\n        total += i;\n    }\n}\n";
+    let args = ["--style=kr", "--break-blocks", "-O", "-o"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+    let expected = "void f()\n{   value=1; if (ready) { value=0; }\n\n    for (i = 0; i < n; i++)\n    {   total += i; } }\n";
+    check(input, &["--style=pico", "--break-blocks"], expected);
+    check(expected, &["--style=pico", "--break-blocks"], expected);
+}
+
+#[test]
+fn indenting_define_bodies_leaves_a_case_block_after_a_conditional_alone() {
+    // The option governs `#define` bodies only: the case's block after a
+    // conditional stands as it does without the option.
+    let input = "void f()\n{\n    switch (state) {\n    case 2:\n#ifdef TRACE\n    {\n        push(state);\n    }\n#endif\n    break;\n    }\n}\n";
+    let expected = input;
+    for args in [
+        &["--style=1tbs"][..],
+        &["--style=1tbs", "--indent-preproc-define"][..],
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
