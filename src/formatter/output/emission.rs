@@ -283,6 +283,14 @@ impl FormatEngine<'_> {
         format!("{prefix}{}", line.trim_start_matches([' ', '\t']))
     }
 
+    /// Publishes a line as written, which no layout step moves.
+    pub(super) fn publish_verbatim_line(&mut self, line: String) {
+        self.layout.previous_pre_adjust_line = Some(line.clone());
+        let hints = self.output.line_hints(line.trimmed_start());
+        self.published_line_shift = 0;
+        self.output.push_with_hints(line, hints);
+    }
+
     pub(super) fn publish_unadjusted_line(&mut self, line: String) {
         self.layout.previous_pre_adjust_line = Some(line.clone());
         self.publish_ready_line(line);

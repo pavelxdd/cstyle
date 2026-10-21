@@ -28,11 +28,8 @@ impl FormatEngine<'_> {
         let comments = self.current.take_comments();
         self.output.set_pending_comments(comments);
         let line = self.take_current();
-        let published = self.output.len();
-        self.publish_unadjusted_line(line);
-        if self.output.len() > published {
-            self.output.mark_last_verbatim();
-        }
+        self.publish_verbatim_line(line);
+        self.output.mark_last_verbatim();
         self.layout.previous = PreviousToken::None;
         self.previous_was_newline = false;
     }

@@ -42,19 +42,6 @@ pub(crate) mod layout;
 mod macro_definitions;
 pub(crate) mod macro_invocations;
 
-pub(crate) fn indent_off_follows_code(tokens: &[Token]) -> bool {
-    let mut seen_code = false;
-    for token in tokens {
-        match token {
-            Token::Whitespace(_) | Token::Newline => {}
-            Token::Comment(_, comment) if comment.contains("*INDENT-OFF*") => return seen_code,
-            Token::Comment(_, _) => {}
-            _ => seen_code = true,
-        }
-    }
-    false
-}
-
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
 pub(crate) struct PreprocessorSplitElseState {
     pub(crate) extra_indent: bool,

@@ -9539,9 +9539,17 @@ fn convert_tabs_lays_comment_rows_where_they_stand_without_it() {
 #[test]
 fn convert_tabs_keeps_the_tabs_of_a_disabled_region() {
     let input = "void f()\n{\n\t/* *INDENT-OFF*\t*/\tint\tq;\n\t\treturn;\tx;\n\t/* *INDENT-ON* */\n\tint\tz;\n}\n";
-    let expected = "void f()\n{\n    /* *INDENT-OFF*\t*/\tint\tq;\n\t\treturn;\tx;\n\t/* *INDENT-ON* */\n    int z;\n}\n";
+    let expected = "void f()\n{\n\t/* *INDENT-OFF*\t*/\tint\tq;\n\t\treturn;\tx;\n\t/* *INDENT-ON* */\n    int z;\n}\n";
     check(input, &["--convert-tabs"], expected);
     check(expected, &["--convert-tabs"], expected);
+    // So do those of a region a marker after another comment disables.
+    let input = "void f()\n{\n/* a */ // *INDENT-OFF*\n\ty\t= 2;\n  x  =  1;\n}\n";
+    let expected = "void f() {\n/* a */ // *INDENT-OFF*\n\ty\t= 2;\n  x  =  1;\n}\n";
+    check(
+        input,
+        &["--style=java", "--indent=tab=4", "--convert-tabs"],
+        expected,
+    );
 }
 
 #[test]

@@ -715,7 +715,11 @@ impl<'a> FormatEngine<'a> {
         while let Some(line) = cursor.next_line() {
             self.format_line(tokens, line);
         }
-        self.finish_line();
+        if !self.formatting_disabled() {
+            self.finish_line();
+        } else if !self.current.is_empty() {
+            self.finish_disabled_line();
+        }
         self
     }
 
@@ -729,6 +733,7 @@ impl<'a> FormatEngine<'a> {
 
     fn format_line(&mut self, tokens: &[Token], line: TokenLine) {
         self.observe_input_line(&tokens[line.start..line.end]);
+        self.observe_formatting_markers(&tokens[line.start..line.end]);
         if !self.formatting_disabled()
             && self.try_push_case_line_marker(tokens, line.start, line.end)
         {
@@ -768,6 +773,16 @@ impl<'a> FormatEngine<'a> {
                 );
             }
             if self.formatting_disabled() {
+                if matches!(tokens[index], Token::Newline)
+                    && self
+                        .disabled_formatting
+                        .as_ref()
+                        .is_some_and(DisabledFormattingState::enables_after_line)
+                {
+                    // The line's end is formatted again.
+                    self.enable_formatting();
+                    continue;
+                }
                 let next = next_non_whitespace(tokens, index + 1, line.end)
                     .and_then(|next_index| tokens.get(next_index));
                 self.push_disabled(&tokens[index], next);
@@ -1402,8 +1417,6 @@ impl<'a> FormatEngine<'a> {
             }
         }
         self.layout.line_state.has_literal_quote = has_literal;
-        self.layout.line_state.indent_off_follows_code =
-            has_comment && preprocessor::indent_off_follows_code(tokens);
         self.layout.line_state.operator_padding_disabled = has_comment
             && tokens.iter().any(
                 |token| matches!(token, Token::Comment(_, comment) if comment.contains("*NOPAD*")),
@@ -2551,10 +2564,34 @@ impl<'a> FormatEngine<'a> {
         self.disabled_formatting.is_some()
     }
 
+    /// Disables formatting from the start of a line a disabling marker leads,
+    /// and enables it again after a line an enabling marker leads.
+    fn observe_formatting_markers(&mut self, tokens: &[Token]) {
+        let (disables, enables) = leading_formatting_markers(tokens);
+        if let Some(disabled) = self.disabled_formatting.as_mut() {
+            if enables {
+                disabled.enable_after_line();
+            }
+        } else if disables {
+            self.finish_line();
+            self.disabled_formatting = Some(DisabledFormattingState::capture(self));
+        }
+    }
+
+    fn enable_formatting(&mut self) {
+        self.finish_disabled_line();
+        if let Some(disabled) = self.disabled_formatting.take() {
+            disabled.restore(self);
+        }
+        self.layout.previous_pre_adjust_line = self.output.last().cloned();
+        self.reset_block_spacing();
+        self.previous_was_newline = false;
+    }
+
     fn push_disabled(&mut self, token: &Token, next: Option<&Token>) {
-        let is_indent_on =
-            matches!(token, Token::Comment(_, comment) if comment.contains("*INDENT-ON*"));
-        if !is_indent_on && let Some(disabled) = self.disabled_formatting.as_mut() {
+        if !is_formatting_marker(token)
+            && let Some(disabled) = self.disabled_formatting.as_mut()
+        {
             disabled.push_token(
                 token,
                 TokenPushContext {
@@ -2572,16 +2609,6 @@ impl<'a> FormatEngine<'a> {
 
         match token {
             Token::Newline => self.finish_disabled_line(),
-            Token::Comment(_, comment) if comment.contains("*INDENT-ON*") => {
-                self.push_disabled_raw_text(comment);
-                self.finish_disabled_line();
-                if let Some(disabled) = self.disabled_formatting.take() {
-                    disabled.restore(self);
-                }
-                self.layout.previous_pre_adjust_line = self.output.last().cloned();
-                self.reset_block_spacing();
-                self.previous_was_newline = false;
-            }
             _ => self.push_disabled_raw_text(&token_text(token)),
         }
     }
@@ -2596,6 +2623,29 @@ impl<'a> FormatEngine<'a> {
             }
         }
     }
+}
+
+fn is_formatting_marker(token: &Token) -> bool {
+    matches!(token, Token::Comment(_, comment)
+        if comment.contains("*INDENT-OFF*") || comment.contains("*INDENT-ON*"))
+}
+
+/// Whether the comments leading the input line `tokens` disable and enable
+/// formatting: a marker counts in a comment of one line that no code and no
+/// comment of several lines precede.
+fn leading_formatting_markers(tokens: &[Token]) -> (bool, bool) {
+    let (mut disables, mut enables) = (false, false);
+    for token in tokens {
+        match token {
+            Token::Whitespace(_) | Token::Newline => {}
+            Token::Comment(_, comment) if !comment.contains('\n') => {
+                disables |= comment.contains("*INDENT-OFF*");
+                enables |= comment.contains("*INDENT-ON*");
+            }
+            _ => break,
+        }
+    }
+    (disables, enables)
 }
 
 /// Number of `}` tokens that directly follow the `;` at `index`, skipping layout.

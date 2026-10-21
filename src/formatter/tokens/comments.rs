@@ -33,7 +33,6 @@ use crate::formatter::text::line_scan::{
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::tabs::blanks_to_spaces;
 use crate::formatter::text::trim::Trimmed;
-use crate::formatter::tokens::disabled_formatting::DisabledFormattingState;
 use crate::formatter::tokens::operators::{
     find_assignment_operator, head_ends_assignment_operator, head_ends_binary_operator,
     starts_with_chain_operator,
@@ -944,18 +943,6 @@ impl FormatEngine<'_> {
                 .continuation_indent
                 .input_line_continuation_indent = Some(ContinuationIndent::Spaces(spaces));
         }
-        if comment.contains("*INDENT-OFF*") && !self.layout.line_state.indent_off_follows_code {
-            self.finish_line();
-            if self.token_input.token_begins_source_line && self.token_input.token_source_column > 0
-            {
-                self.current
-                    .push_str(&" ".repeat(self.token_input.token_source_column));
-            }
-            self.current.push_str(comment.trimmed_end());
-            self.disabled_formatting = Some(DisabledFormattingState::capture(self));
-            return;
-        }
-
         if self.should_break_header_before_comment() {
             self.finish_line();
             self.layout.continuation_indent.next_line_indent = Some(self.statement_level() + 1);

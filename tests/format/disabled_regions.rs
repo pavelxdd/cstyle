@@ -373,3 +373,60 @@ fn disabled_region_reads_a_line_ending_colon_without_overflow() {
     let input = "/* *INDENT-OFF* */\nchar *text = ready ?\n    first(value) :\n    other;\n";
     assert_eq!(format_exact(input, &FormatOptions::default()), input);
 }
+
+#[test]
+fn disabled_region_marker_lines_stay_as_written() {
+    let input = "void f()\n{\n\t// *INDENT-OFF*\n\tx  =  1;\n\t// *INDENT-ON*\n\ty  =  2;\n}\n";
+    assert_eq!(
+        format_exact(input, &FormatOptions::default()),
+        "void f()\n{\n\t// *INDENT-OFF*\n\tx  =  1;\n\t// *INDENT-ON*\n    y  =  2;\n}\n"
+    );
+}
+
+#[test]
+fn code_after_an_enabling_marker_stays_on_its_line_as_written() {
+    let input =
+        "void f()\n{\n/* *INDENT-OFF* */\nx  =  1;\n/* *INDENT-ON* */ y  =  2;\nz  =  3;\n}\n";
+    assert_eq!(
+        format_exact(input, &FormatOptions::default()),
+        "void f()\n{\n/* *INDENT-OFF* */\nx  =  1;\n/* *INDENT-ON* */ y  =  2;\n    z  =  3;\n}\n"
+    );
+}
+
+#[test]
+fn an_enabling_marker_after_code_leaves_formatting_disabled() {
+    let input = "void f()\n{\n// *INDENT-OFF*\nx  =  1;\nw  =  0; // *INDENT-ON*\ny  =  2;\n// *INDENT-ON*\nz  =  3;\n}\n";
+    assert_eq!(
+        format_exact(input, &FormatOptions::default()),
+        "void f()\n{\n// *INDENT-OFF*\nx  =  1;\nw  =  0; // *INDENT-ON*\ny  =  2;\n// *INDENT-ON*\n    z  =  3;\n}\n"
+    );
+}
+
+#[test]
+fn a_marker_in_a_comment_of_several_lines_changes_nothing() {
+    let input = "void f()\n{\n/* *INDENT-OFF*\n */\nx  =  1;\n/* *INDENT-ON* */\ny  =  2;\n}\n";
+    assert_eq!(
+        format_exact(input, &FormatOptions::default()),
+        "void f()\n{\n    /* *INDENT-OFF*\n     */\n    x  =  1;\n    /* *INDENT-ON* */\n    y  =  2;\n}\n"
+    );
+}
+
+#[test]
+fn a_disabled_region_ending_the_file_stays_as_written() {
+    let input = "void f()\n{\n// *INDENT-OFF*\nif(x){y  =  1;}";
+    let output = cstyle::api::format_bytes(input.as_bytes(), &FormatOptions::default())
+        .expect("format bytes");
+    assert_eq!(String::from_utf8(output).expect("utf8"), input);
+}
+
+#[test]
+fn a_closing_brace_inside_a_disabled_region_stays_as_written() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=whitesmith".to_owned()])
+        .expect("valid options");
+    let input = "void f()\n{\n// *INDENT-OFF*\nx  =  1;\n}\nint  g;\n";
+    assert_eq!(
+        format_exact(input, &options),
+        "void f()\n    {\n// *INDENT-OFF*\nx  =  1;\n}\nint  g;\n"
+    );
+}

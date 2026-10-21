@@ -91,8 +91,8 @@ enum KeptTabs {
     Indent,
     /// The tabs of a line's indent and those between a line's leading braces
     /// and a block comment after them, which a comment's rows are measured
-    /// from, and every tab from a disabling comment that no code precedes on
-    /// its line through the line of the comment enabling formatting again.
+    /// from, and every tab from a disabling comment leading its line through
+    /// the line an enabling comment leads.
     CommentLayout,
 }
 
@@ -148,8 +148,8 @@ fn to_spaces_stateful(
     // Whether the line holds only blanks and braces so far.
     let mut braces_lead = !in_block_comment;
     let track_disabled = kept == KeptTabs::CommentLayout;
-    // Whether the line holds code outside comments so far.
-    let mut code_on_line = start_quote.is_some();
+    // Whether the line holds code, or a comment of several lines, so far.
+    let mut code_on_line = in_block_comment || start_quote.is_some();
     let mut disabled = false;
     let mut enables_after_line = false;
     let mut previous = 0u8;
@@ -173,7 +173,8 @@ fn to_spaces_stateful(
                 .iter()
                 .take_while(|&&byte| is_plain_byte(byte))
                 .count();
-            if bytes[index..index + run].iter().any(|&byte| byte != b' ') {
+            let holds_text = bytes[index..index + run].iter().any(|&byte| byte != b' ');
+            if holds_text {
                 at_indent = false;
             }
             if bytes[index..index + run]
@@ -182,7 +183,7 @@ fn to_spaces_stateful(
             {
                 braces_lead = false;
             }
-            if !in_block_comment && !in_line_comment && !at_indent {
+            if holds_text && !in_block_comment && !in_line_comment {
                 code_on_line = true;
             }
             index += run;
@@ -195,7 +196,7 @@ fn to_spaces_stateful(
             in_line_comment = false;
             at_indent = true;
             braces_lead = !in_block_comment && quote.is_none();
-            code_on_line = quote.is_some();
+            code_on_line = in_block_comment || quote.is_some();
             if enables_after_line {
                 disabled = false;
                 enables_after_line = false;
@@ -299,9 +300,11 @@ fn to_spaces_stateful(
         let opens_comment = byte == b'/' && matches!(bytes.get(index), Some(b'/' | b'*'));
         if opens_comment && track_disabled {
             let text = comment_text(line, index - 1, bytes[index] == b'*');
-            if !disabled && !code_on_line && text.contains("*INDENT-OFF*") {
+            // A marker counts in a comment of one line leading its line.
+            let leads = !code_on_line && !text.contains('\n');
+            if !disabled && leads && text.contains("*INDENT-OFF*") {
                 disabled = true;
-            } else if disabled && text.contains("*INDENT-ON*") {
+            } else if disabled && leads && text.contains("*INDENT-ON*") {
                 enables_after_line = true;
             }
         }
@@ -435,6 +438,21 @@ mod tests {
         assert_eq!(
             source_to_spaces("x; // *INDENT-OFF*\ny;\tz;\n", 4),
             "x; // *INDENT-OFF*\ny;  z;\n"
+        );
+        assert_eq!(
+            source_to_spaces(
+                "// *INDENT-OFF*\na;\tb; // *INDENT-ON*\nc;\td;\n// *INDENT-ON*\ne;\tf;\n",
+                4
+            ),
+            "// *INDENT-OFF*\na;\tb; // *INDENT-ON*\nc;\td;\n// *INDENT-ON*\ne;  f;\n"
+        );
+        assert_eq!(
+            source_to_spaces("/* *INDENT-OFF*\n */\ta;\tb;\n", 4),
+            "/* *INDENT-OFF*\n */ a;  b;\n"
+        );
+        assert_eq!(
+            source_to_spaces("/* a */ // *INDENT-OFF*\n\ty\t= 2;\n", 4),
+            "/* a */ // *INDENT-OFF*\n\ty\t= 2;\n"
         );
     }
 

@@ -420,7 +420,6 @@ pub(crate) struct LineState {
     pub(crate) is_one_line_block: bool,
     pub(crate) column1_line_comment: bool,
     pub(crate) has_literal_quote: bool,
-    pub(crate) indent_off_follows_code: bool,
     pub(crate) operator_padding_disabled: bool,
     pub(crate) in_class_initializer: bool,
     pub(crate) trailing_comment_columns: std::collections::VecDeque<usize>,
