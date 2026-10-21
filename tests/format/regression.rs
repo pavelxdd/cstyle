@@ -18636,3 +18636,11 @@ fn a_comment_ending_a_range_for_list_brace_line_stays_on_the_header_line_a_brace
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn a_split_declaration_value_row_stands_alike_whatever_its_type_names() {
+    // astyle sets the rows of a declaration whose type names a struct a
+    // level deeper; the rows stand as for any other type.
+    let input = "void f(void)\n{\n    int a[]\n        = { 1, 2 };\n    struct item b[]\n        = { 1, 2 };\n    int c[]\n    = {\n        1,\n    };\n    struct item d[]\n    = {\n        1,\n    };\n}\n";
+    check(input, &[], input);
+}
