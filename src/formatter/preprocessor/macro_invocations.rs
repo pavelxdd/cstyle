@@ -7,7 +7,9 @@ use crate::formatter::structure::TokenSpan;
 use crate::formatter::structure::blocks::is_code_token;
 use crate::formatter::syntax::SyntaxRole;
 use crate::formatter::text::columns;
-use crate::formatter::text::line_scan::has_unclosed_delimiter_after;
+use crate::formatter::text::line_scan::{
+    has_unclosed_delimiter_after, trailing_comment_split_limit,
+};
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::leading_identifier;
 
@@ -99,7 +101,9 @@ impl FormatEngine<'_> {
                 .previous_pre_adjust_line
                 .as_ref()
                 .and_then(|previous| {
-                    headers::line_is_control_body_header(previous.trimmed_start()).then(|| {
+                    // A comment ending the line holds no header's body.
+                    let code = &previous[..trailing_comment_split_limit(previous)];
+                    headers::line_is_control_body_header(code.trimmed_start()).then(|| {
                         columns::leading_visual_width(previous, self.options.tab_width)
                             + self.options.indent_width
                     })
@@ -121,6 +125,8 @@ impl FormatEngine<'_> {
         } else {
             self.push_formatted_line(trimmed, indent);
         }
+        // The call is a statement before what follows it.
+        self.layout.command_state.observe_char(')');
         self.previous_was_newline = true;
         if trimmed.starts_with("Q_FOREACH(") {
             self.layout

@@ -19467,3 +19467,23 @@ fn a_for_header_padded_inside_its_paren_continues_past_the_pad() {
         check(expected, &args, expected);
     }
 }
+
+#[test]
+fn a_macro_block_after_a_braceless_body_and_its_comment_stands_at_the_statement() {
+    // The comment ending the header's line ends its body with it: the
+    // macro's block after it is no part of the header.
+    let input = "void f()\n{\n    if (ready) value=0;   // note\n    TEST_CASE(\"name\")\n    {\n        go();\n    }\n}\n";
+    check(input, &["--style=allman"], input);
+}
+
+#[test]
+fn break_blocks_pads_a_header_after_a_macro_call_leading_its_block() {
+    // A macro call without a `;` is a statement before the header, as
+    // when another statement goes before it.
+    let input =
+        "void f()\n{\n    LOG(value)\n    switch (kind) {\n    case 1:\n        break;\n    }\n}\n";
+    let expected = "void f()\n{\n    LOG(value)\n\n    switch (kind) {\n    case 1:\n        break;\n    }\n}\n";
+    let args = ["--style=kr", "--break-blocks"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
