@@ -4,7 +4,9 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{CommentKind, Token};
 use crate::formatter::state::BraceType;
 use crate::formatter::structure::blocks::{is_code_token, next_code_token};
-use crate::formatter::text::line_scan::{holds_code_after_leading_comments, is_bare_comment_line};
+use crate::formatter::text::line_scan::{
+    after_leading_comments, holds_code_after_leading_comments, is_bare_comment_line,
+};
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::leading_identifier;
 
@@ -78,7 +80,10 @@ impl FormatEngine<'_> {
             }
             return;
         }
-        if !self.current_is_blank()
+        // A label after the closer of the case before it parts from nothing.
+        let leads_after_closer =
+            !matches!(word, "case" | "default") && self.current_holds_closer_and_comments();
+        if !(self.current_is_blank() || leads_after_closer)
             || (self.layout.command_state.previous_command_char == Some('{')
                 && (!self.preprocessor.last_output_was_preprocessor
                     || self.comment_precedes_directives()))
@@ -517,6 +522,17 @@ impl FormatEngine<'_> {
             }
         }
         self.clear_block_spacing_header();
+    }
+
+    /// Whether the line being built holds only a closer and comments after
+    /// it: a header after them leads the line's code.
+    fn current_holds_closer_and_comments(&self) -> bool {
+        self.current
+            .trimmed_start()
+            .strip_prefix('}')
+            .is_some_and(|rest| {
+                !rest.trimmed().is_empty() && after_leading_comments(rest).is_empty()
+            })
     }
 
     /// Whether the chain the header being pushed belongs to opened after a

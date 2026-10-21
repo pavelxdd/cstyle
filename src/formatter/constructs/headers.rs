@@ -1335,7 +1335,7 @@ impl FormatEngine<'_> {
                 .current
                 .trimmed()
                 .strip_prefix('}')
-                .is_some_and(|rest| rest.trimmed().is_empty()))
+                .is_some_and(|rest| after_leading_comments(rest).is_empty()))
         .then(|| self.layout.indentation.indent() * self.options.indent_width);
         let starts_output_line = self.token_input.token_begins_source_line
             || (self.current_is_blank() && self.previous_was_newline);
@@ -1497,7 +1497,9 @@ impl FormatEngine<'_> {
         if word == "if" {
             // Comments leading the line hold no code before the header.
             let before = after_leading_comments(current).trimmed();
-            let before = before.strip_prefix('}').map_or(before, str::trim_start);
+            let before = before
+                .strip_prefix('}')
+                .map_or(before, after_leading_comments);
             // A statement or a label may precede it on its line.
             let follows_statement = before.ends_with(';')
                 || before.ends_with(':')

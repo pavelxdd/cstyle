@@ -5636,10 +5636,37 @@ impl FormatEngine<'_> {
             return None;
         }
         let (line, levels) = self.header_chain_before(first)?;
+        // A closer leading the header's line stands at its own block's brace:
+        // the header stands at the statement that block belongs to.
+        let tokens = &self.tree.tokens;
+        let header_column = self
+            .output
+            .line_tokens(line)
+            .map(|span| span.first)
+            .filter(|&lead| matches!(tokens[lead], Token::Symbol('}')))
+            .and_then(|close| self.closed_block_statement_column(close))
+            .unwrap_or_else(|| self.output.lead_width(line, self.options.tab_width));
+        Some(header_column + levels * self.options.indent_width + self.case_unindent_spaces())
+    }
+
+    /// The column of the statement whose block the `}` at `close` ends: its
+    /// header's, or a bare block's own brace's out of the style's indent.
+    fn closed_block_statement_column(&self, close: usize) -> Option<usize> {
+        let group = self.tree.groups.closed_at(close)?;
+        let tab_width = self.options.tab_width;
+        let open = self.tree.groups.get(group).open;
+        if let Some(owner) = self.tree.blocks.owner(group).filter(|&owner| owner != open) {
+            return Some(
+                self.output
+                    .lead_width(self.line_led_by_header(owner)?, tab_width),
+            );
+        }
+        let brace_extra = usize::from(self.should_indent_brace_line(BraceType::Command))
+            * self.options.indent_width;
         Some(
-            self.output.lead_width(line, self.options.tab_width)
-                + levels * self.options.indent_width
-                + self.case_unindent_spaces(),
+            self.output
+                .lead_width(self.output.line_with_token(open)?, tab_width)
+                .saturating_sub(brace_extra),
         )
     }
 

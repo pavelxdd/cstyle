@@ -19627,3 +19627,21 @@ fn break_blocks_reads_a_label_after_a_case_block_closer_past_a_comment() {
         check(expected, args, expected);
     }
 }
+
+#[test]
+fn an_if_after_a_closer_and_a_comment_on_its_line_heads_its_block() {
+    // The comment between the closer and the `if` holds no code: the `if`
+    // heads its block, which breaking blocks pads as any header's.
+    let input = "void f()\n{\n    {\n        value=1;\n    } /*c*/ if (other) {\n        value=2;\n    }\n    go();\n}\n";
+    let expected = "void f()\n{\n    {\n        value=1;\n\n    } /*c*/ if (other) {\n        value=2;\n    }\n\n    go();\n}\n";
+    check(input, &["--style=kr", "--break-blocks"], expected);
+    check(expected, &["--style=kr", "--break-blocks"], expected);
+    // Its block stands at its own level, not at the closer's.
+    let expected = "void f()\n    {\n        {\n        value=1;\n\n        } /*c*/ if (other)\n        {\n        value=2;\n        }\n\n    go();\n    }\n";
+    check(input, &["--style=whitesmith", "--break-blocks"], expected);
+    check(
+        expected,
+        &["--style=whitesmith", "--break-blocks"],
+        expected,
+    );
+}
