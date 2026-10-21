@@ -1244,6 +1244,19 @@ impl FormatEngine<'_> {
     }
 
     fn record_header_frame(&mut self, word: &str) {
+        // The `if` of an `else` kept after a statement on its line stands
+        // with the `else`, not with the statement.
+        let else_after_statement_indent = (word == "if")
+            .then(|| self.current.trimmed_end().strip_suffix("else"))
+            .flatten()
+            .filter(|before| self.output.code_of(before).trimmed_end().ends_with(';'))
+            .and_then(|_| {
+                self.layout
+                    .frame_stack
+                    .active_header()
+                    .filter(|frame| frame.header == "else")
+                    .map(|frame| frame.line_indent_spaces)
+            });
         let attached_closing_indent =
             (word == "else" && self.current.trimmed_start().starts_with('}')).then(|| {
                 let closed = self.layout.frame_stack.last_closed_brace();
@@ -1386,7 +1399,8 @@ impl FormatEngine<'_> {
             && !self.current_is_blank()
             && after_leading_comments(&self.current).trimmed().is_empty())
         .then(|| self.continuation_base_indent() * self.options.indent_width);
-        let line_indent_spaces = comment_led_label_indent
+        let line_indent_spaces = else_after_statement_indent
+            .or(comment_led_label_indent)
             .or(attached_closing_indent)
             .or(closed_if_indent)
             .or(open_if_indent)
@@ -2227,10 +2241,39 @@ impl FormatEngine<'_> {
                 .output
                 .current_closing_brace_open(self.options.tab_width)
             && open_spaces > output_spaces
+            && !self.closing_brace_opens_after_statement()
         {
             result = Some(open_spaces);
         }
         (result != current_spaces).then_some(result?)
+    }
+
+    /// Whether the line holding the `{` that the pending line's leading `}`
+    /// closes starts with a statement before the brace's header: its indent
+    /// is that statement's.
+    fn closing_brace_opens_after_statement(&self) -> bool {
+        let groups = &self.tree.groups;
+        let Some(open) = self
+            .output
+            .pending_tokens()
+            .and_then(|span| groups.closed_at(span.first))
+            .map(|group| groups.get(group).open)
+        else {
+            return false;
+        };
+        let Some(first) = self
+            .output
+            .line_with_token(open)
+            .and_then(|line| self.output.line_tokens(line))
+            .map(|span| span.first)
+        else {
+            return false;
+        };
+        let scope = groups.enclosing(open);
+        (first..open).any(|index| {
+            matches!(self.tree.tokens[index], Token::Symbol(';'))
+                && groups.enclosing(index) == scope
+        })
     }
 
     pub(crate) fn closing_header_body_brace_indent_spaces(

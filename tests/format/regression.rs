@@ -19587,3 +19587,28 @@ fn pico_sets_a_label_after_a_case_block_run_into_its_line_at_the_labels() {
     let commented = expected.replace("} case 2:", "} /*c*/ case 2:");
     check(&commented, &["--style=pico"], &commented);
 }
+
+#[test]
+fn an_else_if_kept_after_a_statement_stands_with_its_else() {
+    // The `if` of an `else` kept on a statement's line belongs to the chain,
+    // not to the statement: the bodies after it stand a level past the
+    // chain's `if`.
+    let input = "void f()\n{\n    if (ready)\n        value=0;   else if (other)\n        result=0;   else\n        result=1;\n}\n";
+    check(
+        input,
+        &["--style=allman", "--keep-one-line-statements"],
+        input,
+    );
+    let braced = "void f()\n{\n    if (ready) { value=0; } else if (other) { result=0; } else { result=1; }\n}\n";
+    let expected = "void f() {\n    if (ready)\n        value=0;   else if (other)\n        result=0;   else\n        result=1;\n}\n";
+    let args = [
+        "--style=google",
+        "--remove-braces",
+        "--keep-one-line-statements",
+    ];
+    check(braced, &args, expected);
+    check(expected, &args, expected);
+    // Its block closes at the chain's `if`.
+    let block = "void f()\n{\n    if (ready)\n        value=0;   else if (other) {\n        result=0;\n    } else\n        result=1;\n    go();\n}\n";
+    check(block, &["--style=kr", "--keep-one-line-statements"], block);
+}
