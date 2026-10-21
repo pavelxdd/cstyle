@@ -19298,12 +19298,33 @@ fn indented_parens_set_the_arguments_after_a_block_brought_up_to_its_paren_a_lev
     let input = "void f()\n{\n    EXPECT_THROW(\n        {\n            start();\n        },\n        std::exception);\n}\n";
     let expected =
         "void f()\n{\n    EXPECT_THROW( {\n        start();\n    },\n        std::exception);\n}\n";
-    let attached = "void f() {\n    EXPECT_THROW( {\n        start();\n    },\n        std::exception);\n}\n";
+    let attached =
+        "void f() {\n    EXPECT_THROW( {\n        start();\n    },\n        std::exception);\n}\n";
     let lisp = "void f() {\n    EXPECT_THROW( {\n        start(); },\n        std::exception); }\n";
     for (style, expected) in [
         ("--style=kr", expected),
         ("--style=google", attached),
         ("--style=lisp", lisp),
+    ] {
+        check(input, &[style, "--indent-after-parens"], expected);
+        check(expected, &[style, "--indent-after-parens"], expected);
+    }
+}
+
+#[test]
+fn indented_parens_set_a_range_for_list_brace_where_the_header_continues() {
+    // The header continues a level past the statement, and its list's
+    // brace stands there with its rows a level in, as any continuation.
+    let input = "void f() {\n  for (auto v : {\n      1, 2\n    }) {\n    go(v);\n  }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=allman",
+            "void f()\n{\n    for (auto v :\n        {\n            1, 2\n        })\n    {\n        go(v);\n    }\n}\n",
+        ),
+        (
+            "--style=pico",
+            "void f()\n{   for (auto v :\n        {   1, 2 })\n    {   go(v); } }\n",
+        ),
     ] {
         check(input, &[style, "--indent-after-parens"], expected);
         check(expected, &[style, "--indent-after-parens"], expected);

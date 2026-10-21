@@ -496,6 +496,12 @@ impl FormatEngine<'_> {
         } else {
             base_spaces
         };
+        // Parens that indent after them continue a level past the header.
+        if self.options.indent_after_parens {
+            return Some(
+                base_spaces + self.options.continuation_indent * self.options.indent_width,
+            );
+        }
         Some(self.apply_min_conditional_indent(base_spaces, base_spaces + open + 1))
     }
 
@@ -503,11 +509,10 @@ impl FormatEngine<'_> {
     pub(crate) fn output_for_header_continuation_spaces(&self, line: &str) -> Option<usize> {
         let (base_spaces, open) = for_header_paren(line)?;
         let base_spaces = leading_visual_width(line, self.options.tab_width).max(base_spaces);
-        let spaces = base_spaces + open + 1;
         Some(if self.options.indent_after_parens {
-            spaces
+            base_spaces + self.options.continuation_indent * self.options.indent_width
         } else {
-            spaces.max(base_spaces + min_conditional_indent_spaces(self.options))
+            (base_spaces + open + 1).max(base_spaces + min_conditional_indent_spaces(self.options))
         })
     }
 
