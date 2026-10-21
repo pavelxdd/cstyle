@@ -1072,6 +1072,17 @@ impl FormatEngine<'_> {
         if !previous_code.ends_with(',') || self.open_paren_column_of(previous_code).is_none() {
             return None;
         }
+        // A call ending a braceless header's body leaves the next line to
+        // the header's level.
+        if self
+            .output
+            .last_non_empty_index()
+            .and_then(|index| self.output.line_tokens(index))
+            .and_then(|span| next_code_token(&self.tree.tokens, span.first))
+            .is_some_and(|first| self.tree.statements.braceless_header(first).is_some())
+        {
+            return None;
+        }
         let in_preprocessor_else_context =
             self.output.scoped_range().rev().take(128).any(|index| {
                 let trimmed = self.output.code_before_comment(index).trimmed();

@@ -19744,3 +19744,13 @@ fn a_label_outside_any_block_leaves_the_lines_after_it_at_their_level() {
     check(input, &args, expected);
     check(expected, &args, expected);
 }
+
+#[test]
+fn a_call_ending_a_braceless_body_after_a_split_else_leaves_its_level() {
+    // The call ends the body of the header before it: the statement after
+    // it, and that statement's argument rows, stand at the header's level.
+    let input = "void f()\n{\n    if (ready) {\n        first();\n#if FEATURE\n    } else {\n        second();\n#endif\n    }\n    if (!ready)\n        throw Error(\"not ready\",\n                    value);\n    if (check(first,\n              field<Item>{\n                  value},\n              more)) {\n        go();\n    }\n}\n";
+    let expected = "void f()\n{   if (ready)\n    {   first();\n#if FEATURE\n    }\n    else\n    {   second();\n#endif\n    }\n    if (!ready)\n        throw Error(\"not ready\",\n                    value);\n    if (check(first,\n              field<Item>\n    {   value },\n              more))\n    {   go(); } }\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+}
