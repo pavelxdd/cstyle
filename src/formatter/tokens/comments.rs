@@ -3436,7 +3436,8 @@ impl FormatEngine<'_> {
                         line,
                         false,
                         &" ".repeat(line_indent),
-                        first_comment_column,
+                        &mut row_trim,
+                        tab_extra,
                     )
                 } else if line_rows.is_some() {
                     if line.trimmed().is_empty() {
@@ -3553,6 +3554,16 @@ impl FormatEngine<'_> {
                 .sum();
             trim_amount.saturating_sub(chars)
         });
+        // Rows the brace's line takes the opener back from are laid from the
+        // body, a level past the brace in the source as well.
+        let mut strip_trim = if !opener_on_own_line
+            && self.token_input.token_line_opens_with_brace
+            && !self.token_input.token_begins_source_line
+        {
+            self.token_input.token_source_line_indent + self.options.indent_width
+        } else {
+            trim_amount
+        };
         // The column of an opener that stands after the brace on its line.
         let mut merged_opener_column = None;
         let mut opener_shift = 0;
@@ -3624,23 +3635,13 @@ impl FormatEngine<'_> {
                 {
                     format!("{opener_prefix}{}", line.trimmed_end())
                 } else {
-                    // Rows the brace's line takes the opener back from are
-                    // laid from the body, a level past the brace in the
-                    // source as well.
-                    let source_base = if !opener_on_own_line
-                        && self.token_input.token_line_opens_with_brace
-                        && !self.token_input.token_begins_source_line
-                    {
-                        self.token_input.token_source_line_indent + self.options.indent_width
-                    } else {
-                        trim_amount
-                    };
                     strip_block_comment_line(
                         self.options,
                         line,
                         index == 0,
                         opener_prefix,
-                        source_base,
+                        &mut strip_trim,
+                        opener_tab_extra,
                     )
                 }
             } else if index == 0
@@ -4820,26 +4821,13 @@ fn strip_block_comment_line(
     line: &str,
     is_opener: bool,
     prefix: &str,
-    opener_source_column: usize,
+    row_trim: &mut usize,
+    tab_extra: usize,
 ) -> String {
     let indent_len = options.indent_width;
     let tab_width = options.tab_width.max(1);
-    // A row's converted tabs are spaces before its prefix goes.
-    let converted;
-    let line = if options.convert_tabs && !is_opener && line.contains('\t') {
-        let lead = leading_whitespace_len(line);
-        converted = format!(
-            "{}{}",
-            blanks_to_spaces(&line[..lead], 0, tab_width),
-            &line[lead..]
-        );
-        converted.as_str()
-    } else {
-        line
-    };
-    let chars: Vec<char> = line.chars().collect();
-
     if is_opener {
+        let chars: Vec<char> = line.chars().collect();
         let Some(mut content_start) = chars[2..]
             .iter()
             .position(|&ch| ch != ' ' && ch != '\t')
@@ -4864,78 +4852,54 @@ fn strip_block_comment_line(
         return format!("{prefix}{head}{}{}", " ".repeat(insert), tail.trimmed_end());
     }
 
-    let Some(first) = chars.iter().position(|&ch| ch != ' ' && ch != '\t') else {
+    // A row loses its indent up to the opener's as the rows of any comment
+    // do, then its prefix: a `*` past the indent goes, with the text it
+    // leads set at least one indent in unless a tab stands before it.
+    let (kept, kept_column) = astyle_comment_row_rest_at(line, row_trim, tab_extra, tab_width);
+    // Converted tabs are spaces before the prefix goes.
+    let converted;
+    let kept = if options.convert_tabs && kept.contains('\t') {
+        let lead = leading_whitespace_len(kept);
+        converted = format!(
+            "{}{}",
+            blanks_to_spaces(&kept[..lead], kept_column, tab_width),
+            &kept[lead..]
+        );
+        converted.as_str()
+    } else {
+        kept
+    };
+    let Some(first) = kept.find(|ch| ch != ' ' && ch != '\t') else {
         return String::new();
     };
-    if chars[first] == '*' && chars.get(first + 1) == Some(&'/') {
-        return format!("{prefix}*/");
-    }
-    if chars[first] == '*' {
-        let Some(second) = chars[first + 1..]
-            .iter()
-            .position(|&ch| ch != ' ' && ch != '\t')
-            .map(|pos| first + 1 + pos)
-        else {
+    let rest = &kept[first..];
+    if let Some(after_star) = rest.strip_prefix('*') {
+        if after_star.starts_with('/') {
+            return format!("{prefix}*/");
+        }
+        let Some(gap) = after_star.find(|ch| ch != ' ' && ch != '\t') else {
             return String::new();
         };
-        if chars[second] == '*' {
-            let rel =
-                visual_column_at(&chars, first, tab_width).saturating_sub(opener_source_column);
-            let content: String = chars[first..].iter().collect();
-            return format!("{prefix}{}{}", " ".repeat(rel), content.trimmed_end());
+        let second = first + 1 + gap;
+        if kept[second..].starts_with('*') {
+            return format!("{prefix}{}", kept.trimmed_end());
         }
-        // A tab before the text leaves the line as it was, less its `*`.
-        let own_lead = lead_past_column(&chars[..first], opener_source_column, tab_width);
-        if own_lead.contains(&'\t') || chars[first + 1..second].contains(&'\t') {
-            let mut kept: String = own_lead.iter().chain(&chars[first + 1..]).collect();
-            kept = kept.trimmed_end().to_string();
-            if kept.ends_with('*') {
-                kept.pop();
-                kept = kept.trimmed_end().to_string();
-            }
-            return format!("{prefix}{kept}");
-        }
-        let rel = visual_column_at(&chars, second, tab_width)
-            .saturating_sub(opener_source_column)
-            .max(indent_len);
-        let mut content = chars[second..]
-            .iter()
-            .collect::<String>()
-            .trimmed_end()
-            .to_string();
-        if content.ends_with('*') {
-            content.pop();
-            content = content.trimmed_end().to_string();
-        }
-        return format!("{prefix}{}{content}", " ".repeat(rel));
-    }
-    let content: String = chars[first..].iter().collect();
-    // A line indented with a tab past the opener's column keeps its indent.
-    let own_lead = lead_past_column(&chars[..first], opener_source_column, tab_width);
-    if own_lead.contains(&'\t') {
-        let lead: String = own_lead.iter().collect();
-        return format!("{prefix}{lead}{}", content.trimmed_end());
-    }
-    let rel = visual_column_at(&chars, first, tab_width)
-        .saturating_sub(opener_source_column)
-        .max(indent_len);
-    format!("{prefix}{}{}", " ".repeat(rel), content.trimmed_end())
-}
-
-/// The part of the leading whitespace `lead` past visual column `column`.
-fn lead_past_column(lead: &[char], column: usize, tab_width: usize) -> &[char] {
-    let mut width = 0;
-    for (index, &ch) in lead.iter().enumerate() {
-        if width >= column {
-            return &lead[index..];
-        }
-        width += if ch == '\t' {
-            tab_width - width % tab_width
+        let row = if kept[..second].contains('\t') {
+            format!("{}{}", &kept[..first], &kept[first + 1..])
         } else {
-            1
+            format!("{}{}", " ".repeat(second.max(indent_len)), &kept[second..])
         };
+        let mut row = row.trimmed_end().to_string();
+        if row.ends_with('*') {
+            row.pop();
+            row = row.trimmed_end().to_string();
+        }
+        return format!("{prefix}{row}");
     }
-    &lead[lead.len()..]
+    if !kept[..first].contains('\t') && first < indent_len {
+        return format!("{prefix}{}{}", " ".repeat(indent_len), rest.trimmed_end());
+    }
+    format!("{prefix}{}", kept.trimmed_end())
 }
 
 /// Whether a line holds code or another block comment after its first
@@ -4956,6 +4920,17 @@ fn astyle_comment_row_rest<'a>(
     opener_tab_extra: usize,
     tab_width: usize,
 ) -> &'a str {
+    astyle_comment_row_rest_at(line, trim, opener_tab_extra, tab_width).0
+}
+
+/// `astyle_comment_row_rest` with the column astyle reads the rest's first
+/// character at, from which it converts the tabs left in the rest.
+fn astyle_comment_row_rest_at<'a>(
+    line: &'a str,
+    trim: &mut usize,
+    opener_tab_extra: usize,
+    tab_width: usize,
+) -> (&'a str, usize) {
     let bytes = line.as_bytes();
     let mut tab_extra = 0usize;
     let mut index = 0usize;
@@ -4967,10 +4942,17 @@ fn astyle_comment_row_rest<'a>(
                 if index < tab_extra {
                     *trim = index + opener_tab_extra;
                 }
-                break;
+                return (&line[index..], opener_tab_extra + index);
             }
         }
         index += 1;
     }
-    &line[index..]
+    // A rest whose dropped tabs took other columns than the opener's indent
+    // starts at the trimmed column.
+    let column = if tab_extra == opener_tab_extra {
+        opener_tab_extra + index
+    } else {
+        (*trim).max(opener_tab_extra)
+    };
+    (&line[index..], column)
 }

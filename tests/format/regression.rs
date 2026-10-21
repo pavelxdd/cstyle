@@ -9491,6 +9491,43 @@ fn remove_comment_prefix_lays_rows_of_a_comment_after_a_comment_from_the_first()
 }
 
 #[test]
+fn remove_comment_prefix_strips_a_row_after_trimming_whole_tabs_up_to_the_opener() {
+    for (input, expected) in [
+        (
+            "int g;\n /* b\n\t** c*/\nint h;\n",
+            "int g;\n/*  b\n** c*/\nint h;\n",
+        ),
+        (
+            "int g;\n /*\n\t * c */\nint h;\n",
+            "int g;\n/*\n    c */\nint h;\n",
+        ),
+        (
+            "int g;\n /** b\n\t\t** c*/\nint h;\n",
+            "int g;\n/** b\n\t** c*/\nint h;\n",
+        ),
+        (
+            "int g;\n\t /* b\n\t\t* c */ x = 1;\nint h;\n",
+            "int g;\n/*  b\n    c */ x = 1;\nint h;\n",
+        ),
+        (
+            "void f()\n{\n /* b\n\t** c\n\t * d */\n}\n",
+            "void f()\n{\n    /*  b\n    ** c\n        d */\n}\n",
+        ),
+    ] {
+        check(
+            input,
+            &["--style=allman", "--remove-comment-prefix"],
+            expected,
+        );
+        check(
+            expected,
+            &["--style=allman", "--remove-comment-prefix"],
+            expected,
+        );
+    }
+}
+
+#[test]
 fn remove_comment_prefix_strips_rows_whose_tabs_are_converted_as_spaces() {
     let args = ["--remove-comment-prefix", "--convert-tabs"];
     for input in [
@@ -9504,6 +9541,24 @@ fn remove_comment_prefix_strips_rows_whose_tabs_are_converted_as_spaces() {
         &["--remove-comment-prefix"],
         "int g;\n/*\n\t c*/\nint h;\n",
     );
+    // The tabs past the opener's indent convert from where its trim ends.
+    for (input, expected) in [
+        (
+            "int g;\n  /*\n\t** c*/\nint h;\n",
+            "int g;\n/*\n** c*/\nint h;\n",
+        ),
+        (
+            "int g;\n /*\n\t * c */\nint h;\n",
+            "int g;\n/*\n    c */\nint h;\n",
+        ),
+        (
+            "int g;\n /* b\n\t\t** c */ x = 1;\nint h;\n",
+            "int g;\n/*  b\n   ** c */ x = 1;\nint h;\n",
+        ),
+    ] {
+        check(input, &args, expected);
+        check(expected, &args, expected);
+    }
 }
 
 #[test]
