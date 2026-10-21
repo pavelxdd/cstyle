@@ -18113,9 +18113,12 @@ fn a_comment_after_a_lambda_argument_brace_leaves_its_row_at_the_statement() {
 
 #[test]
 fn a_comment_after_a_comment_running_over_lines_keeps_its_gap() {
+    // The comments after the switch body's brace stand with its labels,
+    // as with the brace on the header's line.
     let input = "void f()\n{\n    switch (k) {  /* a\n          b */ /* c */\n    case 1:\n        break;\n    }\n}\n";
-    let expected = "void f()\n{\n    switch (k)\n    {\n        /* a\n              b */ /* c */\n    case 1:\n        break;\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (k)\n    {\n    /* a\n          b */ /* c */\n    case 1:\n        break;\n    }\n}\n";
     check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
 }
 
 #[test]
@@ -19359,6 +19362,51 @@ fn arguments_after_a_compound_literal_continue_the_call_with_a_maximum_code_leng
     let input = "void f()\n{\n    rc = send(session, &(struct msg) {\n        .len = 1,\n    },\n    timeout,\n    flags);\n}\n";
     let expected = "void f()\n{   rc = send(session, &(struct msg)\n    {   .len = 1, },\n              timeout,\n              flags); }\n";
     let args = ["--style=pico", "--max-code-length=60"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
+
+#[test]
+fn a_comment_after_a_broken_switch_brace_stands_with_the_labels_after_a_macro_line() {
+    // The comment after the switch body's brace stands with the case
+    // labels wherever the style sets the brace, whatever line went before.
+    let input = "void f()\n{\n    LOG(value)\n    switch (kind) {  /* dispatch on kind\n                    ** of value */\n    case 1:\n        value = 0;\n        break;\n    }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void f()\n{\n    LOG(value)\n    switch (kind) {\n    /* dispatch on kind\n                    ** of value */\n    case 1:\n        value = 0;\n        break;\n    }\n}\n",
+        ),
+        (
+            "--style=allman",
+            "void f()\n{\n    LOG(value)\n    switch (kind)\n    {\n    /* dispatch on kind\n                    ** of value */\n    case 1:\n        value = 0;\n        break;\n    }\n}\n",
+        ),
+        (
+            "--style=gnu",
+            "void f()\n{\n    LOG(value)\n    switch (kind)\n        {\n        /* dispatch on kind\n                        ** of value */\n        case 1:\n            value = 0;\n            break;\n        }\n}\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void f()\n    {\n    LOG(value)\n    switch (kind)\n        {\n        /* dispatch on kind\n                        ** of value */\n        case 1:\n            value = 0;\n            break;\n        }\n    }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn a_comment_after_a_broken_switch_brace_before_a_statement_stands_with_the_statements() {
+    let input = "void f()\n{\n    switch (code) {\n    /* mapped keys */\n        MAP(first)\n        MAP(second)\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (code)\n    {\n        /* mapped keys */\n        MAP(first)\n        MAP(second)\n    }\n}\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+}
+
+#[test]
+fn a_comment_after_an_attached_switch_brace_stands_with_the_labels_after_a_macro_line() {
+    let input = "void f()\n{\n    LOG(value)\n    switch (kind) {  /* dispatch on kind\n                    ** of value */\n    case 1:\n        value = 0;\n        break;\n    }\n}\n";
+    let expected = "void f()\n{\n    LOG(value)\n    switch (kind) {\n        /* dispatch on kind\n                        ** of value */\n        case 1:\n            value = 0;\n            break;\n    }\n}\n";
+    let args = ["--style=kr", "--indent-switches"];
     check(input, &args, expected);
     check(expected, &args, expected);
 }

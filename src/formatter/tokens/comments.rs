@@ -2688,6 +2688,31 @@ impl FormatEngine<'_> {
             {
                 return Some(self.output.lead_width(opener, self.options.tab_width));
             }
+            // A comment after the switch body's brace a style breaks from
+            // its header stands with the labels it comes before.
+            let switch_body_brace_line = trimmed == "{"
+                && self
+                    .current
+                    .active_comment()
+                    .and_then(|comment| self.tree.previous_code_token(comment))
+                    .filter(|&brace| matches!(self.tree.tokens[brace], Token::Symbol('{')))
+                    .and_then(|brace| self.tree.previous_code_token(brace))
+                    .and_then(|close| self.tree.groups.closed_at(close))
+                    .and_then(|parens| {
+                        self.tree
+                            .previous_code_token(self.tree.groups.get(parens).open)
+                    })
+                    .is_some_and(|header| {
+                        matches!(&self.tree.tokens[header], Token::Word(word) if word == "switch")
+                    });
+            if switch_body_brace_line && !self.comment_precedes_switch_statement() {
+                return Some(
+                    self.layout
+                        .indentation
+                        .line_indent(LineKind::SwitchLabel, self.options)
+                        * self.options.indent_width,
+                );
+            }
             if trimmed.starts_with("switch") && code.ends_with('{') {
                 // A comment that followed the `{` attached to the header
                 // stands with the indented case labels.
@@ -3261,13 +3286,22 @@ impl FormatEngine<'_> {
             }
         {
             // A comment that trailed the brace stands where one on a line of
-            // its own does.
-            let levels = usize::from(self.comment_precedes_switch_statement())
-                * (1 + usize::from(self.options.brace_style == BraceStyle::Ratliff));
-            " ".repeat(
-                leading_visual_width(previous, self.options.tab_width)
-                    + levels * self.options.indent_width,
-            )
+            // its own does: with the labels it comes before, or a level in
+            // before a statement.
+            if self.comment_precedes_switch_statement() {
+                let levels = 1 + usize::from(self.options.brace_style == BraceStyle::Ratliff);
+                " ".repeat(
+                    leading_visual_width(previous, self.options.tab_width)
+                        + levels * self.options.indent_width,
+                )
+            } else {
+                " ".repeat(
+                    self.layout
+                        .indentation
+                        .line_indent(LineKind::SwitchLabel, self.options)
+                        * self.options.indent_width,
+                )
+            }
         } else if let Some(previous) = self.output.last_non_empty_scoped()
             && {
                 let code = self.output.code_trimmed_of(previous);
