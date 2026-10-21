@@ -18797,3 +18797,13 @@ fn a_comment_before_a_constructor_body_stands_with_the_initializer_rows_before_i
     let expected = "Item::Item(int v)\n    : items_{1, 2}\n      /* note */\n{\n    start();\n}\n";
     check(expected, &["--style=kr"], expected);
 }
+
+#[test]
+fn a_continuation_row_a_lambda_opens_in_keeps_its_column() {
+    // The row stands where the continuation puts it, the lambda's body after
+    // it as on any row; one the source keeps on one line breaks the same.
+    let input = "void run()\n{\n    auto make = []() {\n        return first |\n               filter([](auto c) { return c != 2; });\n    };\n    auto other = []() {\n        return first |\n               filter([](auto c) {\n                   return c != 2;\n               });\n    };\n}\n";
+    let expected = "void run()\n{\n    auto make = []()\n    {\n        return first |\n               filter([](auto c)\n        {\n            return c != 2;\n        });\n    };\n    auto other = []()\n    {\n        return first |\n               filter([](auto c)\n        {\n            return c != 2;\n        });\n    };\n}\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+}

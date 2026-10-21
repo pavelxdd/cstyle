@@ -1546,6 +1546,14 @@ impl FormatEngine<'_> {
         brace_type
     }
 
+    /// Whether the line being built starts with the capture list of a
+    /// lambda, rather than with code the lambda follows.
+    fn current_line_leads_with_lambda(&self) -> bool {
+        self.current
+            .tokens()
+            .is_none_or(|span| matches!(self.tree.tokens[span.first], Token::Symbol('[')))
+    }
+
     fn open_brace_lambda_context(&mut self) -> OpenBraceLambda {
         let capture_only_lambda = is_lambda_capture_header(self.current.trimmed_end());
         let line_opens_lambda_body = self.current_is_lambda_body_header()
@@ -1579,7 +1587,10 @@ impl FormatEngine<'_> {
             self.layout
                 .continuation_indent
                 .after_one_shot_continuation_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            // A row the lambda opens after its own code keeps its column.
+            if !line_opens_lambda_body || self.current_line_leads_with_lambda() {
+                self.layout.continuation_indent.next_line_indent_spaces = None;
+            }
         }
         if self.current_is_lambda_body_header() && !line_opens_lambda_body {
             self.layout.nesting.clear_continuation_indents();
