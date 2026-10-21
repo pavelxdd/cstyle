@@ -89,8 +89,8 @@ pub(crate) fn format_owned(source: String, options: &FormatOptions) -> String {
         || tokens
             .iter()
             .any(|token| matches!(token, Token::Preprocessor(_)));
-    let (output, fill_sources) = engine.format_owned(tokens).finish();
-    let output = postprocess_brace_style(output, options);
+    let (output, fill_sources, run_in_list_braces) = engine.format_owned(tokens).finish();
+    let output = postprocess_brace_style(output, options, &run_in_list_braces);
     if options.empty_line_fill
         && matches!(
             options.brace_style,

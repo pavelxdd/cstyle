@@ -1,3 +1,4 @@
+use crate::config::BraceStyle;
 use crate::formatter::braces::closing::starts_post_closing_declaration;
 use crate::formatter::constructs::switch_cases::{
     case_label_with_trailing_comment, split_switch_label_statement,
@@ -8,6 +9,7 @@ use crate::formatter::engine::{FormatEngine, SplitLineShift};
 use crate::formatter::lexer::Token;
 use crate::formatter::state::BraceType;
 use crate::formatter::state::PreviousToken;
+use crate::formatter::structure::blocks::{BlockKind, next_code_token};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
@@ -645,9 +647,10 @@ impl FormatEngine<'_> {
         }
     }
 
-    /// The finished text, and where the fill of each of its whitespace-only
-    /// lines came from.
-    pub(crate) fn finish(mut self) -> (String, Vec<EmptyFillSource>) {
+    /// The finished text, where the fill of each of its whitespace-only
+    /// lines came from, and its lines holding a list's lone brace that the
+    /// row closing the list runs into.
+    pub(crate) fn finish(mut self) -> (String, Vec<EmptyFillSource>, Vec<usize>) {
         // Whole-output passes look at every construct.
         self.output.clear_scope();
         self.flush_backslash_body_parts();
@@ -658,6 +661,7 @@ impl FormatEngine<'_> {
         self.fuse_adjacent_braces();
         self.attach_statement_expression_braces();
         self.align_comments_before_case_labels();
+        let run_in_list_braces = self.run_in_list_brace_lines();
         self.retab_output();
         let fill_sources = self.fill_empty_lines();
         let line_break = self.options.line_break();
@@ -665,12 +669,55 @@ impl FormatEngine<'_> {
         let lines = std::mem::take(&mut self.output).into_lines();
         drop(self);
         if lines.is_empty() {
-            (String::new(), fill_sources)
+            (String::new(), fill_sources, run_in_list_braces)
         } else {
             let mut output = lines.join(line_break);
             output.push_str(line_break);
-            (output, fill_sources)
+            (output, fill_sources, run_in_list_braces)
         }
+    }
+
+    /// The lines holding only a list's `{` whose list closes on the next
+    /// line, which the run-in styles bring up to the brace. Pico brings the
+    /// closer up to that line as well. A nested brace leading that line runs
+    /// in as a block's.
+    fn run_in_list_brace_lines(&self) -> Vec<usize> {
+        if !matches!(
+            self.options.brace_style,
+            BraceStyle::Horstmann | BraceStyle::Pico
+        ) {
+            return Vec::new();
+        }
+        let groups = &self.tree.groups;
+        let closes_row = |index: usize, close_line: usize| {
+            close_line == index + 1
+                || self.options.brace_style == BraceStyle::Pico
+                    && close_line == index + 2
+                    && self.output.trimmed(close_line).starts_with('}')
+        };
+        (0..self.output.len())
+            .filter(|&index| {
+                self.output.trimmed(index) == "{"
+                    && self
+                        .output
+                        .line_tokens(index)
+                        .filter(|span| {
+                            next_code_token(&self.tree.tokens, span.first + 1).is_none_or(|next| {
+                                !matches!(self.tree.tokens[next], Token::Symbol('{'))
+                            })
+                        })
+                        .and_then(|span| groups.opened_at(span.first))
+                        .filter(|&group| {
+                            matches!(
+                                self.tree.blocks.kind(group),
+                                Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                            )
+                        })
+                        .and_then(|group| groups.get(group).close)
+                        .and_then(|close| self.output.line_with_token(close))
+                        .is_some_and(|close_line| closes_row(index, close_line))
+            })
+            .collect()
     }
 }
 

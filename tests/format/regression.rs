@@ -19669,3 +19669,35 @@ fn an_else_if_block_after_a_closer_and_a_comment_stands_with_its_chain() {
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn converting_tabs_fills_a_list_brace_run_into_its_row_with_spaces() {
+    // The gap between a list's brace and the row it closes on is no
+    // indentation: converting tabs leaves it spaces when the style runs the
+    // row in, as when the gap was in the source.
+    let input = "void f()\n{\n    result(first, {\n               value},\n           more);\n    result({\n        value},\n        more);\n}\n";
+    for (indent, expected) in [
+        (
+            "--indent=tab=4",
+            "void f()\n{\tresult(first,\n\t{   value },\n\t       more);\n\tresult(\n\t{   value },\n\t    more); }\n",
+        ),
+        (
+            "--indent=force-tab=4",
+            "void f()\n{\tresult(first,\n\t{   value },\n\t\t   more);\n\tresult(\n\t{   value },\n\t\tmore); }\n",
+        ),
+    ] {
+        let args = ["--style=pico", indent, "--convert-tabs"];
+        check(input, &args, expected);
+        check(expected, &args, expected);
+        // Kept tabs fill the run-in row as the block's.
+        let kept = expected.replace("{   value", "{\tvalue");
+        check(input, &["--style=pico", indent], &kept);
+        check(&kept, &["--style=pico", indent], &kept);
+    }
+    // A nested brace leading the row runs in as a block's.
+    let nested = "static const Item items[] = {  /* note */\n    { 1, 2 },\n};\n";
+    let expected = "static const Item items[] =    /* note */\n{\t{ 1, 2 }, };\n";
+    let args = ["--style=pico", "--indent=tab=4", "--convert-tabs"];
+    check(nested, &args, expected);
+    check(expected, &args, expected);
+}

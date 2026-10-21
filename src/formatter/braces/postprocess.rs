@@ -23,14 +23,22 @@ pub(crate) struct MaxLengthBraceRowLayout {
     pub(crate) attaches_lisp_closer: bool,
 }
 
-pub(crate) fn postprocess_brace_style(output: String, options: &FormatOptions) -> String {
+/// `run_in_list_braces` are the output lines holding a list's lone brace
+/// that the row closing the list runs into.
+pub(crate) fn postprocess_brace_style(
+    output: String,
+    options: &FormatOptions,
+    run_in_list_braces: &[usize],
+) -> String {
     match options.brace_style {
         BraceStyle::Pico => {
-            let run_in = run_in_horstmann_opening_braces(&output, options);
+            let run_in = run_in_horstmann_opening_braces(&output, options, run_in_list_braces);
             attach_lisp_closing_braces(&run_in, options.line_break())
         }
         BraceStyle::Lisp => attach_lisp_closing_braces(&output, options.line_break()),
-        BraceStyle::Horstmann => run_in_horstmann_opening_braces(&output, options),
+        BraceStyle::Horstmann => {
+            run_in_horstmann_opening_braces(&output, options, run_in_list_braces)
+        }
         _ => output,
     }
 }
@@ -460,8 +468,22 @@ fn attach_lisp_closing_braces(output: &str, line_break: &str) -> String {
     finish_postprocessed_lines(lines, line_break, output.ends_with(line_break))
 }
 
-fn run_in_horstmann_opening_braces(output: &str, options: &FormatOptions) -> String {
+fn run_in_horstmann_opening_braces(
+    output: &str,
+    options: &FormatOptions,
+    run_in_list_braces: &[usize],
+) -> String {
     let line_break = options.line_break();
+    // The gap before a row closing its list on the brace's line is no
+    // indentation, which converted tabs leave in spaces.
+    let list_fill_options = (options.convert_tabs
+        && options.indent_style != IndentStyle::Spaces
+        && !run_in_list_braces.is_empty())
+    .then(|| {
+        let mut spaced = options.clone();
+        spaced.indent_style = IndentStyle::Spaces;
+        spaced
+    });
     let raw_lines = raw_literal_lines(output, line_break);
     let mut lines = Vec::new();
     let input = split_output_lines(output, line_break);
@@ -513,7 +535,11 @@ fn run_in_horstmann_opening_braces(output: &str, options: &FormatOptions) -> Str
             let mut at = index + 1;
             loop {
                 let next = input[at];
-                let fill = horstmann_run_in_fill(&brace, next, options);
+                let fill_options = list_fill_options
+                    .as_ref()
+                    .filter(|_| run_in_list_braces.binary_search(&(at - 1)).is_ok())
+                    .unwrap_or(options);
+                let fill = horstmann_run_in_fill(&brace, next, fill_options);
                 let next = next.trimmed_start().to_string();
                 joined.push_str(&fill);
                 // A nested brace runs into its block comment as a brace
