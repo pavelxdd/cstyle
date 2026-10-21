@@ -502,7 +502,8 @@ impl FormatEngine<'_> {
                 base_spaces + self.options.continuation_indent * self.options.indent_width,
             );
         }
-        Some(self.apply_min_conditional_indent(base_spaces, base_spaces + open + 1))
+        let pad = for_header_paren_pad(line, open);
+        Some(self.apply_min_conditional_indent(base_spaces, base_spaces + open + 1 + pad))
     }
 
     /// The continuation of the `for` header an output line starts.
@@ -512,7 +513,8 @@ impl FormatEngine<'_> {
         Some(if self.options.indent_after_parens {
             base_spaces + self.options.continuation_indent * self.options.indent_width
         } else {
-            (base_spaces + open + 1).max(base_spaces + min_conditional_indent_spaces(self.options))
+            (base_spaces + open + 1 + for_header_paren_pad(line, open))
+                .max(base_spaces + min_conditional_indent_spaces(self.options))
         })
     }
 
@@ -2230,6 +2232,12 @@ fn for_header_paren(line: &str) -> Option<(usize, usize)> {
         return None;
     }
     Some((line.len() - trimmed.len(), trimmed.find('(')?))
+}
+
+/// The spaces a pad sets right inside the `for` header's paren on `line`.
+fn for_header_paren_pad(line: &str, open: usize) -> usize {
+    let after = &line.trimmed_start()[open + 1..];
+    after.len() - after.trim_start_matches(' ').len()
 }
 
 fn is_nested_template_type(type_prefix: &str) -> bool {

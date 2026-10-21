@@ -19446,3 +19446,24 @@ fn pico_keeps_a_one_line_header_after_a_label_run_into_the_brace() {
     check(input, &args, expected);
     check(expected, &args, expected);
 }
+
+#[test]
+fn a_for_header_padded_inside_its_paren_continues_past_the_pad() {
+    // The header's continuation stands where its text after the paren
+    // starts, the pad included.
+    let input = "void f() {\n  for (auto v : {\n      1, 2\n    }) {\n    go(v);\n  }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void f()\n{\n    for ( auto v : {\n              1, 2\n          } ) {\n        go ( v );\n    }\n}\n",
+        ),
+        (
+            "--style=pico",
+            "void f()\n{   for ( auto v :\n          {   1, 2 } )\n    {   go ( v ); } }\n",
+        ),
+    ] {
+        let args = [style, "--min-conditional-indent=0", "--pad-paren"];
+        check(input, &args, expected);
+        check(expected, &args, expected);
+    }
+}
