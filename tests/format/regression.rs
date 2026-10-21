@@ -18713,3 +18713,17 @@ fn prefix_stripped_rows_of_a_comment_after_a_block_brace_hold_on_a_second_pass()
         check(expected, &options, expected);
     }
 }
+
+#[test]
+fn force_tab_rows_of_a_comment_after_a_block_brace_tab_to_the_body() {
+    let input =
+        "void f()\n{\n    {/* first row\n        second row */\n        int t = 1;\n    }\n}\n";
+    let expected = "void f()\n{\n\t{/* first row\n\t\t    second row */\n\t\tint t = 1;\n\t}\n}\n";
+    let options = [
+        "--style=linux",
+        "--remove-comment-prefix",
+        "--indent=force-tab=4",
+    ];
+    check(input, &options, expected);
+    check(expected, &options, expected);
+}

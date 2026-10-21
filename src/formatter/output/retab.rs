@@ -71,14 +71,9 @@ impl FormatEngine<'_> {
                     // line and align past them in spaces.
                     IndentStyle::ForceTabs => {
                         self.comment_opener(index)
-                            .filter(|&opener| {
-                                self.output.line_tokens(opener).is_none()
-                                    && self.output.trimmed(opener).starts_with("/*")
-                                    && !self.comment_row_indents_with_tab(opener, index)
-                            })
-                            .map_or(width, |opener| {
-                                self.output.lead_width(opener, tab_width).min(width)
-                            })
+                            .filter(|&opener| !self.comment_row_indents_with_tab(opener, index))
+                            .and_then(|opener| self.comment_rows_tab_base(opener, index))
+                            .map_or(width, |base| base.min(width))
                             / tab_width
                             * tab_width
                     }
@@ -355,6 +350,28 @@ impl FormatEngine<'_> {
     fn row_code(&self, row: usize) -> &str {
         let code = self.output.code_before_comment(row).trimmed();
         code.strip_suffix('\\').unwrap_or(code).trimmed()
+    }
+
+    /// The column up to which the rows of the block comment opened on line
+    /// `opener` indent with tabs: the comment's indent when it stands alone,
+    /// the block body's when it runs in after the block's brace.
+    fn comment_rows_tab_base(&self, opener: usize, index: usize) -> Option<usize> {
+        let tab_width = self.options.tab_width.max(1);
+        if self.output.line_tokens(opener).is_none() {
+            return self
+                .output
+                .trimmed(opener)
+                .starts_with("/*")
+                .then(|| self.output.lead_width(opener, tab_width));
+        }
+        if !self.row_code(opener).ends_with('{') {
+            return None;
+        }
+        let body = (index + 1..self.output.len())
+            .find(|&line| self.comment_opener(line) != Some(opener))?;
+        self.output.line_tokens(body)?;
+        let lead = self.output.lead_width(body, tab_width);
+        (lead > self.output.lead_width(opener, tab_width)).then_some(lead)
     }
 
     /// Whether output line `index` continues a standalone comment that
