@@ -71,7 +71,7 @@ pub(crate) fn format_owned(source: String, options: &FormatOptions) -> String {
     engine
         .layout
         .line_adjuster
-        .set_tab_conversion_enabled(false);
+        .set_tab_conversion_enabled(options.convert_tabs);
     if !case_adjustments_needed_for_tokens(&tokens, options) {
         engine
             .layout

@@ -385,6 +385,9 @@ impl FormatEngine<'_> {
     /// Whether the source row of the block comment opened on line `opener`
     /// that output line `index` holds indents past the comment with a tab.
     fn comment_row_indents_with_tab(&self, opener: usize, index: usize) -> bool {
+        if self.options.convert_tabs {
+            return false;
+        }
         let tokens = &self.tree.tokens;
         let Some(comment) = self.output.comment_token(opener) else {
             return false;

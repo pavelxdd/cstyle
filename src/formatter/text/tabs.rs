@@ -31,12 +31,17 @@ impl Converter {
         if !self.enabled {
             return line;
         }
+        let kept = if keep_indent_tabs {
+            KeptTabs::Indent
+        } else {
+            KeptTabs::None
+        };
         let (line, in_block_comment, quote, raw_delimiter) = to_spaces_stateful(
             &line,
             tab_width,
             self.in_block_comment,
             self.quote,
-            keep_indent_tabs,
+            kept,
             self.raw_delimiter.as_deref(),
         );
         self.in_block_comment = in_block_comment;
@@ -46,8 +51,70 @@ impl Converter {
     }
 }
 
+/// `source` with its tabs as spaces, but for the tabs block comment rows are
+/// laid from, which the output converts once the rows stand, and those of
+/// regions with formatting disabled.
 pub(crate) fn source_to_spaces(source: &str, tab_width: usize) -> String {
-    to_spaces_stateful(source, tab_width, false, None, false, None).0
+    to_spaces_stateful(
+        source,
+        tab_width,
+        false,
+        None,
+        KeptTabs::CommentLayout,
+        None,
+    )
+    .0
+}
+
+/// `blanks` starting at `start_column` with each tab as the spaces it spans.
+pub(crate) fn blanks_to_spaces(blanks: &str, start_column: usize, tab_width: usize) -> String {
+    let tab_width = tab_width.max(1);
+    let mut spaces = String::with_capacity(blanks.len());
+    let mut column = start_column;
+    for ch in blanks.chars() {
+        let width = if ch == '\t' {
+            tab_width - column % tab_width
+        } else {
+            1
+        };
+        spaces.extend(std::iter::repeat_n(' ', width));
+        column += width;
+    }
+    spaces
+}
+
+/// The tabs a conversion leaves in place.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum KeptTabs {
+    None,
+    /// The tabs of a line's indent.
+    Indent,
+    /// The tabs of a line's indent and those between a line's leading braces
+    /// and a block comment after them, which a comment's rows are measured
+    /// from, and every tab from a disabling comment that no code precedes on
+    /// its line through the line of the comment enabling formatting again.
+    CommentLayout,
+}
+
+/// The text of the comment opening at `start`, up to its end or its line's.
+fn comment_text(line: &str, start: usize, block: bool) -> &str {
+    let rest = &line[start..];
+    let end = if block {
+        rest.find("*/").map_or(rest.len(), |end| end + 2)
+    } else {
+        rest.find('\n').unwrap_or(rest.len())
+    };
+    &rest[..end]
+}
+
+/// Whether the bytes at `at` hold blanks up to a `/*`.
+fn blanks_reach_block_comment(bytes: &[u8], at: usize) -> bool {
+    let rest = &bytes[at..];
+    let blanks = rest
+        .iter()
+        .take_while(|&&byte| matches!(byte, b' ' | b'\t'))
+        .count();
+    rest[blanks..].starts_with(b"/*")
 }
 
 /// Whether `byte` is an ASCII character one column wide that opens or
@@ -65,7 +132,7 @@ fn to_spaces_stateful(
     tab_width: usize,
     mut in_block_comment: bool,
     start_quote: Option<char>,
-    keep_indent_tabs: bool,
+    kept: KeptTabs,
     start_raw_delimiter: Option<&str>,
 ) -> (String, bool, Option<char>, Option<String>) {
     let tab_width = tab_width.max(1);
@@ -78,6 +145,13 @@ fn to_spaces_stateful(
     let mut raw_delimiter = start_raw_delimiter.map(str::to_string);
     let mut in_line_comment = false;
     let mut at_indent = true;
+    // Whether the line holds only blanks and braces so far.
+    let mut braces_lead = !in_block_comment;
+    let track_disabled = kept == KeptTabs::CommentLayout;
+    // Whether the line holds code outside comments so far.
+    let mut code_on_line = start_quote.is_some();
+    let mut disabled = false;
+    let mut enables_after_line = false;
     let mut previous = 0u8;
     let mut index = 0usize;
 
@@ -102,6 +176,15 @@ fn to_spaces_stateful(
             if bytes[index..index + run].iter().any(|&byte| byte != b' ') {
                 at_indent = false;
             }
+            if bytes[index..index + run]
+                .iter()
+                .any(|&byte| !matches!(byte, b' ' | b'{' | b'}'))
+            {
+                braces_lead = false;
+            }
+            if !in_block_comment && !in_line_comment && !at_indent {
+                code_on_line = true;
+            }
             index += run;
             column += run;
             previous = bytes[index - 1];
@@ -111,6 +194,12 @@ fn to_spaces_stateful(
             column = 0;
             in_line_comment = false;
             at_indent = true;
+            braces_lead = !in_block_comment && quote.is_none();
+            code_on_line = quote.is_some();
+            if enables_after_line {
+                disabled = false;
+                enables_after_line = false;
+            }
             previous = 0;
             index += 1;
             continue;
@@ -135,6 +224,8 @@ fn to_spaces_stateful(
             previous = bytes[span_end - 1];
             index = span_end;
             at_indent = false;
+            braces_lead = false;
+            code_on_line = true;
             if end.is_none() {
                 raw_delimiter = Some(delimiter);
             }
@@ -150,9 +241,22 @@ fn to_spaces_stateful(
         let in_leading_indent = at_indent && blank;
         if !blank {
             at_indent = false;
+            braces_lead = false;
         }
+        let kept_tab = match kept {
+            KeptTabs::None => false,
+            KeptTabs::Indent => in_leading_indent,
+            KeptTabs::CommentLayout => {
+                disabled
+                    || in_leading_indent
+                    || braces_lead
+                        && !in_block_comment
+                        && !in_line_comment
+                        && blanks_reach_block_comment(bytes, index)
+            }
+        };
 
-        if byte == b'\t' && quote.is_none() && !(keep_indent_tabs && in_leading_indent) {
+        if byte == b'\t' && quote.is_none() && !kept_tab {
             output.push_str(&line[copied..index]);
             let spaces = tab_width - (column % tab_width);
             output.extend(std::iter::repeat_n(' ', spaces));
@@ -192,6 +296,18 @@ fn to_spaces_stateful(
             continue;
         }
 
+        let opens_comment = byte == b'/' && matches!(bytes.get(index), Some(b'/' | b'*'));
+        if opens_comment && track_disabled {
+            let text = comment_text(line, index - 1, bytes[index] == b'*');
+            if !disabled && !code_on_line && text.contains("*INDENT-OFF*") {
+                disabled = true;
+            } else if disabled && text.contains("*INDENT-ON*") {
+                enables_after_line = true;
+            }
+        }
+        if !blank && !opens_comment {
+            code_on_line = true;
+        }
         match byte {
             b'"' => quote = Some(byte),
             b'\'' if !is_digit_separator => quote = Some(byte),
@@ -231,15 +347,12 @@ mod tests {
         start_quote: Option<char>,
         keep_indent_tabs: bool,
     ) -> String {
-        to_spaces_stateful(
-            line,
-            tab_width,
-            in_block_comment,
-            start_quote,
-            keep_indent_tabs,
-            None,
-        )
-        .0
+        let kept = if keep_indent_tabs {
+            KeptTabs::Indent
+        } else {
+            KeptTabs::None
+        };
+        to_spaces_stateful(line, tab_width, in_block_comment, start_quote, kept, None).0
     }
 
     #[test]
@@ -299,6 +412,29 @@ mod tests {
         assert_eq!(
             converter.convert("\tb\";\tx".to_string(), 4, false),
             "\tb\"; x"
+        );
+    }
+
+    #[test]
+    fn source_conversion_keeps_the_tabs_comment_rows_are_laid_from() {
+        assert_eq!(
+            source_to_spaces("\t{\t/* a\n\t\t b */\tx;\n\ty;\t{\t/* c */\n", 4),
+            "\t{\t/* a\n\t\t b */   x;\n\ty;  {   /* c */\n"
+        );
+    }
+
+    #[test]
+    fn source_conversion_keeps_a_disabled_region() {
+        assert_eq!(
+            source_to_spaces(
+                "a;\tb;\n// *INDENT-OFF*\nc;\td;\n// *INDENT-ON*\te;\nf;\tg;\n",
+                4
+            ),
+            "a;  b;\n// *INDENT-OFF*\nc;\td;\n// *INDENT-ON*\te;\nf;  g;\n"
+        );
+        assert_eq!(
+            source_to_spaces("x; // *INDENT-OFF*\ny;\tz;\n", 4),
+            "x; // *INDENT-OFF*\ny;  z;\n"
         );
     }
 

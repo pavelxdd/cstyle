@@ -112,9 +112,12 @@ impl FormatEngine<'_> {
             }
             let next_line = self.output.remove(index + 1);
             // The tab pass leaves the fill before a comment alone, so it is
-            // written as the finished output indents.
+            // written as the finished output indents, in spaces when tabs
+            // are converted.
             let next_text = next_line.trimmed_start();
-            let fill = if next_text.starts_with("//") || next_text.starts_with("/*") {
+            let fill = if (next_text.starts_with("//") || next_text.starts_with("/*"))
+                && !self.options.convert_tabs
+            {
                 horstmann_run_in_fill(&self.output[index], &next_line, &self.output_options())
             } else {
                 horstmann_run_in_fill(&self.output[index], &next_line, self.options)

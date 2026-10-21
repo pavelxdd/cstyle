@@ -31,6 +31,7 @@ use crate::formatter::text::line_scan::{
     trailing_comment_split_limit, unmatched_open_brace_content_offset,
 };
 use crate::formatter::text::line_view::LineView;
+use crate::formatter::text::tabs::blanks_to_spaces;
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::disabled_formatting::DisabledFormattingState;
 use crate::formatter::tokens::operators::{
@@ -3581,7 +3582,12 @@ impl FormatEngine<'_> {
                     BraceStyle::Pico | BraceStyle::Horstmann
                 );
                 if let Some(brace_line) = self.output.last_mut() {
-                    brace_line.push_str(&gap);
+                    if self.options.convert_tabs {
+                        let column = visual_width_from(brace_line, 0, tab_width);
+                        brace_line.push_str(&blanks_to_spaces(&gap, column, tab_width));
+                    } else {
+                        brace_line.push_str(&gap);
+                    }
                     run_in_column =
                         element_brace.then(|| visual_width_from(brace_line, 0, tab_width));
                     brace_line.push_str(line.trimmed_end());

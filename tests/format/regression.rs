@@ -9474,6 +9474,55 @@ fn rows_of_a_comment_run_in_after_a_block_brace_follow_its_opener() {
 }
 
 #[test]
+fn convert_tabs_keeps_rows_of_a_comment_after_a_block_brace_on_a_second_pass() {
+    let input = "void f()\n{\n    {/* first row\n        second row */\n      int t = 1;\n    }\n    {  /* first\n       ** second */\n      go();\n    }\n}\n";
+    let expected = "void f()\n{\n\t{/* first row\n\t\t   second row */\n\t\tint t = 1;\n\t}\n\t{  /* first\n\t\t** second */\n\t\tgo();\n\t}\n}\n";
+    for indent in ["--indent=force-tab=4", "--indent=tab=4"] {
+        let args = ["--style=linux", indent, "--convert-tabs"];
+        check(input, &args, expected);
+        check(expected, &args, expected);
+    }
+}
+
+#[test]
+fn convert_tabs_lays_comment_rows_where_they_stand_without_it() {
+    // The rows take the columns the unconverted output shows them at, with
+    // each tab left in a row as the spaces it spans there.
+    let input = "void f()\n{\n\t{ /* first\n\t\t\t* row\n\t\t\t* row */\n\t\tgo();\n\t}\n}\n";
+    let expected =
+        "void f()\n{\n\t{ /* first\n\t\t    * row\n\t\t    * row */\n\t\tgo();\n\t}\n}\n";
+    let args = ["--style=1tbs", "--indent=tab=4", "--convert-tabs"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+
+    // A tab between a brace and the comment after it spans to its tab stop.
+    let input = "void f()\n{\n\t\t{\t/* first\n\t\t ** row\n\t\t   row */\n\t\t\tgo();\n\t\t}\n}\n";
+    check(
+        input,
+        &["--style=java"],
+        "void f() {\n    {\n        /* first\n        ** row\n        row */\n        go();\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=java", "--convert-tabs"],
+        "void f() {\n    {\n        /* first\n        ** row\n        row */\n        go();\n    }\n}\n",
+    );
+    let input = "void f()\n{\n\t{\t/* first\n\t\trow */\n\t\tgo();\n\t}\n}\n";
+    let expected = "void f()\n{\n\t{   /* first\n\t\trow */\n\t\tgo();\n\t}\n}\n";
+    let args = ["--style=kr", "--indent=tab=4", "--convert-tabs"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
+
+#[test]
+fn convert_tabs_keeps_the_tabs_of_a_disabled_region() {
+    let input = "void f()\n{\n\t/* *INDENT-OFF*\t*/\tint\tq;\n\t\treturn;\tx;\n\t/* *INDENT-ON* */\n\tint\tz;\n}\n";
+    let expected = "void f()\n{\n    /* *INDENT-OFF*\t*/\tint\tq;\n\t\treturn;\tx;\n\t/* *INDENT-ON* */\n    int z;\n}\n";
+    check(input, &["--convert-tabs"], expected);
+    check(expected, &["--convert-tabs"], expected);
+}
+
+#[test]
 fn vtk_sets_a_function_try_block_at_the_function_body() {
     let input = "void helper()\ntry {\n    go();\n} catch (...) {\n    stop();\n}\n";
     let expected = "void helper()\ntry\n{\n    go();\n}\ncatch (...)\n{\n    stop();\n}\n";

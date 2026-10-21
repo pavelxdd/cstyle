@@ -1519,19 +1519,13 @@ fn later_spaces_indent_replaces_force_tab_x_state() {
 }
 
 #[test]
-fn converts_leading_tabs_when_requested() {
+fn convert_tabs_leaves_a_disabled_region_as_written() {
     let mut options = FormatOptions::default();
     options.convert_tabs = true;
     options.tab_width = 2;
-    let actual = format_with(
-        fixture!("// *INDENT-OFF*", "\t\treturn;", "// *INDENT-ON*",),
-        &options,
-    );
+    let source = fixture!("// *INDENT-OFF*", "\t\treturn;", "// *INDENT-ON*",);
 
-    assert_eq!(
-        actual,
-        fixture!("// *INDENT-OFF*", "    return;", "// *INDENT-ON*",)
-    );
+    assert_eq!(format_with(source, &options), source);
 }
 
 #[test]
