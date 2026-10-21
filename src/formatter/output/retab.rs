@@ -214,20 +214,24 @@ impl FormatEngine<'_> {
     /// where the statement it continues starts; `None` when the line starts
     /// a statement or stands at its own level.
     fn statement_indent_width(&self, index: usize) -> Option<usize> {
-        if let Some(span) = self.output.line_tokens(index) {
+        // A row closing a comment before code aligns as the comment's rows.
+        let closes_comment = self.continues_comment(index);
+        if let Some(span) = self.output.line_tokens(index)
+            && !closes_comment
+        {
             return self.token_statement_indent_width(span.first, index);
         }
         let text = self.output.trimmed(index);
         // A line the tree does not cover that a brace leads, as one around a
         // statement braces were added to, opens a block.
-        if text.starts_with('{') {
+        if text.starts_with('{') && !closes_comment {
             return None;
         }
         if let Some(opener) = self.comment_opener(index) {
             // A trailing comment's rows align in spaces; a standalone
             // comment's rows keep the tabs of its first line.
-            let trailing = self.output.line_tokens(opener).is_some()
-                || !self.output.trimmed(opener).starts_with("/*");
+            let trailing =
+                self.line_holds_code(opener) || !self.output.trimmed(opener).starts_with("/*");
             // The rows of a comment after a block's brace stand in the block.
             if trailing && self.output.code_trimmed_of(&self.output[opener]).trimmed() == "{" {
                 return Some(
@@ -456,15 +460,27 @@ impl FormatEngine<'_> {
         })
     }
 
-    /// The line opening the block comment that output line `index`, holding
-    /// no code, continues.
-    fn comment_opener(&self, index: usize) -> Option<usize> {
-        // The row ending a comment holds that comment's token and no code.
-        if self.output.line_tokens(index).is_some_and(|span| {
+    /// Whether output line `index` starts inside a block comment opened on
+    /// a line before it.
+    fn continues_comment(&self, index: usize) -> bool {
+        self.output.lead_comment(index).is_some() && self.output.comment_start_index(index) != index
+    }
+
+    /// Whether output line `index` holds a token other than a comment.
+    fn line_holds_code(&self, index: usize) -> bool {
+        self.output.line_tokens(index).is_some_and(|span| {
             self.tree.tokens[span.first..=span.last]
                 .iter()
                 .any(|token| !matches!(token, Token::Comment(..) | Token::Whitespace(_)))
-        }) {
+        })
+    }
+
+    /// The line opening the block comment that output line `index`, holding
+    /// no code, continues.
+    fn comment_opener(&self, index: usize) -> Option<usize> {
+        // The row ending a comment holds that comment's token, and the code
+        // after it.
+        if !self.continues_comment(index) && self.line_holds_code(index) {
             return None;
         }
         let opener = self.output.comment_start_index(index);

@@ -9474,6 +9474,140 @@ fn rows_of_a_comment_run_in_after_a_block_brace_follow_its_opener() {
 }
 
 #[test]
+fn remove_comment_prefix_lays_rows_of_a_comment_after_a_comment_from_the_first() {
+    for (input, expected) in [
+        (
+            "void f()\n{\n  /* a */ /* b\n   * c\n   * d */\n  go();\n}\n",
+            "void f()\n{\n    /* a */ /* b\n        c\n        d */\n    go();\n}\n",
+        ),
+        (
+            "void f()\n{\n  /* a */ /* b\n      c\n      d */\n  go();\n}\n",
+            "void f()\n{\n    /* a */ /* b\n        c\n        d */\n    go();\n}\n",
+        ),
+    ] {
+        check(input, &["--remove-comment-prefix"], expected);
+        check(expected, &["--remove-comment-prefix"], expected);
+    }
+}
+
+#[test]
+fn remove_comment_prefix_strips_rows_whose_tabs_are_converted_as_spaces() {
+    let args = ["--remove-comment-prefix", "--convert-tabs"];
+    for input in [
+        "int g;\n/*\n\t* c*/\nint h;\n",
+        "int g;\n/*\n    * c*/\nint h;\n",
+    ] {
+        check(input, &args, "int g;\n/*\n      c*/\nint h;\n");
+    }
+    check(
+        "int g;\n/*\n\t* c*/\nint h;\n",
+        &["--remove-comment-prefix"],
+        "int g;\n/*\n\t c*/\nint h;\n",
+    );
+}
+
+#[test]
+fn a_row_closing_a_comment_before_code_aligns_as_the_other_rows() {
+    for input in [
+        "void f()\n{\n\t/* b\n\t         c */ x = 1;\n}\n",
+        "void f()\n{\n\t/* a */ /* b\n\t         c */ x = 1;\n}\n",
+        "int g;\n/* a */ /* b\n     c */ x = 1;\nint h;\n",
+    ] {
+        for indent in ["--indent=tab=4", "--indent=force-tab=4"] {
+            check(input, &[indent], input);
+            check(input, &[indent, "--convert-tabs"], input);
+        }
+    }
+    // A row a comment of one line leads continues its statement.
+    let input =
+        "void f()\n{\n\tvalue = helper(first, second,\n\t               /* flag */ true);\n}\n";
+    check(input, &["--style=linux", "--indent=tab=8"], input);
+    let expected = "void f()\n{\n\t/* b\n\t         c */ x = 1;\n}\n";
+    let args = ["--indent=tab=4", "--convert-tabs"];
+    check(
+        "void f()\n{\n\t/* b\n\t\t\t c */ x = 1;\n}\n",
+        &args,
+        expected,
+    );
+    check(expected, &args, expected);
+}
+
+#[test]
+fn rows_of_a_comment_after_a_comment_move_with_their_line() {
+    let cases: [(&str, &[&str], &str); 7] = [
+        (
+            "void f()\n{\n\t/* a */ /* b\n    ** c */\n    go();\n}\n",
+            &["--indent=tab=4"],
+            "void f()\n{\n\t/* a */ /* b\n\t** c */\n\tgo();\n}\n",
+        ),
+        (
+            "void f()\n{\n\t\t/* a */ /* b\n\t\t   c */\n\tx;\n}\n",
+            &[],
+            "void f()\n{\n    /* a */ /* b\n       c */\n    x;\n}\n",
+        ),
+        (
+            "void f()\n{\n  /* a */ /* b\n      c */ x = 1;\n}\n",
+            &[],
+            "void f()\n{\n    /* a */ /* b\n        c */ x = 1;\n}\n",
+        ),
+        (
+            "void f()\n{\n      /* a */ /* b\n  c */\n  x;\n}\n",
+            &[],
+            "void f()\n{\n    /* a */ /* b\n    c */\n    x;\n}\n",
+        ),
+        (
+            "void f()\n{\n /* a */ /* b\n\t\tc */\n x;\n}\n",
+            &[],
+            "void f()\n{\n    /* a */ /* b\n    \tc */\n    x;\n}\n",
+        ),
+        (
+            "void f()\n{\n /* a */ /* b\n\t\tc */\n x;\n}\n",
+            &["--indent=tab=4"],
+            "void f()\n{\n\t/* a */ /* b\n\t\tc */\n\tx;\n}\n",
+        ),
+        (
+            "int g;\n  /* a */ /* b\n      c */\nint h;\n",
+            &[],
+            "int g;\n/* a */ /* b\n    c */\nint h;\n",
+        ),
+    ];
+    for (input, args, expected) in cases {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+    // After a brace broken from them, they follow the line's first comment;
+    // after one the line keeps, as a comment run in after the brace.
+    let input = "void f()\n{\n  {  /* a */ /* b\n        c */\n    x;\n  }\n}\n";
+    let cases: [(&[&str], &str); 4] = [
+        (
+            &["--style=allman"],
+            "void f()\n{\n    {\n        /* a */ /* b\n           c */\n        x;\n    }\n}\n",
+        ),
+        (
+            &["--style=horstmann"],
+            "void f()\n{\n    {   /* a */ /* b\n           c */\n        x;\n    }\n}\n",
+        ),
+        (
+            &["--style=horstmann", "--indent=tab=4"],
+            "void f()\n{\n\t{\t/* a */ /* b\n\t\t   c */\n\t\tx;\n\t}\n}\n",
+        ),
+        (
+            &["--style=kr"],
+            "void f()\n{\n    {  /* a */ /* b\n        c */\n        x;\n    }\n}\n",
+        ),
+    ];
+    for (args, expected) in cases {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+    let input = "void f()\n{\n{\t/* a */ /* b\n\t\tc */\n\tx;\n}\n}\n";
+    let expected = "void f()\n{\n\t{\t/* a */ /* b\n\t\t\tc */\n\t\tx;\n\t}\n}\n";
+    let args = ["--style=horstmann", "--indent=tab=4"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
+
+#[test]
 fn tab_led_rows_of_a_comment_after_a_block_brace_indent_from_the_block() {
     let input = "void f()\n{\n\t{ /* first\n\t\t\t* row\n\t\t\t\t* row\n\t\t  \t* row */\n\t\tgo();\n\t}\n}\n";
     for args in [

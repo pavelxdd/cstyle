@@ -9,7 +9,7 @@ use crate::formatter::constructs::labels;
 use crate::formatter::constructs::switch_cases::find_case_colon;
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::lexer::{CommentKind, Token, token_char_len};
+use crate::formatter::lexer::{CommentKind, Token, token_char_len, token_text};
 use crate::formatter::output::block_spacing::is_break_blocks_closing_header;
 use crate::formatter::output::buffer::LineFilter;
 use crate::formatter::preprocessor::{PreprocessorRegion, is_conditional_preprocessor};
@@ -22,7 +22,9 @@ use crate::formatter::structure::blocks::is_code_token;
 use crate::formatter::structure::blocks::next_code_token;
 use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::language;
-use crate::formatter::text::columns::{leading_visual_width, visual_column_at, visual_width_from};
+use crate::formatter::text::columns::{
+    leading_visual_width, leading_whitespace_len, visual_column_at, visual_width_from,
+};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
     ContainsAnyByte, after_leading_comments, has_unmatched_open_brace,
@@ -3408,19 +3410,46 @@ impl FormatEngine<'_> {
             } else {
                 self.pad_before_trailing_comment(CommentKind::Block, first);
             }
-            let output_column = leading_visual_width(&self.current, self.options.tab_width.max(1));
+            let tab_width = self.options.tab_width.max(1);
+            let output_column = leading_visual_width(&self.current, tab_width);
             self.record_comment_frame(CommentKind::Block, output_column, true);
+            // The rows of a comment that only braces and comments precede
+            // move with the line's first comment, as those of a comment
+            // opening the line do: trimmed up to its column, laid from it.
+            let line_rows = self.comment_line_first_comment_column();
             self.current.push_str(first.trimmed_end());
             if lines.peek().is_some() {
                 self.finish_line();
             }
+            // The column the line's first comment takes.
+            let line_indent = self.output.last().map_or(0, |line| {
+                let first_comment = line.find("/*").unwrap_or(0);
+                visual_width_from(&line[..first_comment], 0, tab_width)
+            });
+            let (first_comment_column, tab_extra) = line_rows.unwrap_or_default();
+            let mut row_trim = first_comment_column;
             let last_line_has_trailing_token = self.token_input.has_next_meaningful_token;
             while let Some(line) = lines.next() {
-                let shifted = if self.options.strip_comment_prefix {
+                let shifted = if line_rows.is_some() && self.options.strip_comment_prefix {
+                    strip_block_comment_line(
+                        self.options,
+                        line,
+                        false,
+                        &" ".repeat(line_indent),
+                        first_comment_column,
+                    )
+                } else if line_rows.is_some() {
+                    if line.trimmed().is_empty() {
+                        String::new()
+                    } else {
+                        let kept =
+                            astyle_comment_row_rest(line, &mut row_trim, tab_extra, tab_width);
+                        format!("{}{}", " ".repeat(line_indent), kept.trimmed_end())
+                    }
+                } else if self.options.strip_comment_prefix {
                     // astyle keeps the text of a row of a comment opened
                     // after code at its column, past a leading `*`, and no
                     // further left than the code.
-                    let tab_width = self.options.tab_width.max(1);
                     let text = line.trimmed_start();
                     let body = if text.starts_with('*') && !text.starts_with("*/") {
                         &text[1..]
@@ -3452,7 +3481,7 @@ impl FormatEngine<'_> {
                 };
                 // astyle writes the rows of a comment opened after code as
                 // they stand.
-                let verbatim = shifted == line.trimmed_end();
+                let verbatim = line_rows.is_none() && shifted == line.trimmed_end();
                 // A case block's unindent leaves them standing too.
                 let unindent = self.layout.line_adjuster.comment_row_case_unindent_depth()
                     * self.options.indent_width;
@@ -3799,6 +3828,36 @@ impl FormatEngine<'_> {
 
     /// Whether only opening braces stand before the active comment on its
     /// source line, which the comment's rows follow as they follow one.
+    /// For a comment that only braces and comments precede on its source
+    /// line, the source column of the line's first comment and the columns
+    /// past their characters that the tabs before it take.
+    fn comment_line_first_comment_column(&self) -> Option<(usize, usize)> {
+        let opener = self.current.active_comment()?;
+        let tokens = &self.tree.tokens;
+        let line_start = tokens[..opener]
+            .iter()
+            .rposition(|token| matches!(token, Token::Newline))
+            .map_or(0, |newline| newline + 1);
+        let before = &tokens[line_start..opener];
+        let first = before
+            .iter()
+            .position(|token| matches!(token, Token::Comment(..)))?;
+        if !before.iter().all(|token| {
+            matches!(
+                token,
+                Token::Whitespace(_) | Token::Comment(..) | Token::Symbol('{' | '}')
+            )
+        }) {
+            return None;
+        }
+        let lead: String = before[..first]
+            .iter()
+            .map(|token| token_text(token))
+            .collect();
+        let column = visual_width_from(&lead, 0, self.options.tab_width.max(1));
+        Some((column, column.saturating_sub(lead.chars().count())))
+    }
+
     fn comment_follows_braces_only(&self) -> bool {
         self.current.active_comment().is_some_and(|opener| {
             let mut before = self.tree.tokens[..opener]
@@ -4765,6 +4824,19 @@ fn strip_block_comment_line(
 ) -> String {
     let indent_len = options.indent_width;
     let tab_width = options.tab_width.max(1);
+    // A row's converted tabs are spaces before its prefix goes.
+    let converted;
+    let line = if options.convert_tabs && !is_opener && line.contains('\t') {
+        let lead = leading_whitespace_len(line);
+        converted = format!(
+            "{}{}",
+            blanks_to_spaces(&line[..lead], 0, tab_width),
+            &line[lead..]
+        );
+        converted.as_str()
+    } else {
+        line
+    };
     let chars: Vec<char> = line.chars().collect();
 
     if is_opener {

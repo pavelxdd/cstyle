@@ -430,3 +430,12 @@ fn a_closing_brace_inside_a_disabled_region_stays_as_written() {
         "void f()\n    {\n// *INDENT-OFF*\nx  =  1;\n}\nint  g;\n"
     );
 }
+
+#[test]
+fn a_marker_in_a_comment_of_several_lines_after_another_comment_changes_nothing() {
+    let input = "void f()\n{\n/* a */ /* *INDENT-OFF*\n */\nx  =  1;\n}\n";
+    assert_eq!(
+        format_exact(input, &FormatOptions::default()),
+        "void f()\n{\n    /* a */ /* *INDENT-OFF*\n     */\n    x  =  1;\n}\n"
+    );
+}
