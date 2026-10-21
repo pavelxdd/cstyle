@@ -936,7 +936,10 @@ impl FormatEngine<'_> {
                 .nesting
                 .current_brace_paren_depth()
                 .is_some_and(|depth| depth == self.layout.nesting.paren_depth);
+            // A `)` inside the header's own parens, as a call's in a list
+            // there, ends no condition.
             if self.layout.command_state.previous_command_char != Some(')')
+                || self.header_paren.depth.is_some()
                 || (self.layout.nesting.paren_depth > 0 && !open_parens_are_outside_current_block)
             {
                 return false;

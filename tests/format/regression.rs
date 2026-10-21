@@ -18897,3 +18897,11 @@ fn the_arguments_after_a_block_among_them_take_no_column_from_its_brace() {
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn a_call_ending_a_row_of_a_range_for_list_leaves_the_header_open() {
+    // The `)` of a call among the list's elements closes no condition:
+    // the body after the header's own `)` stands a level in.
+    let input = "void helper()\n{\n    for (int out : {\n                first(), second()\n            }) {\n        run();\n    }\n    done();\n}\n";
+    check(input, &[], input);
+}
