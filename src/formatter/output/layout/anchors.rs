@@ -991,7 +991,7 @@ impl FormatEngine<'_> {
             // At file scope only: within a block the rows already stand at
             // the indented brace.
             let file_scope_vtk = self.options.brace_style == BraceStyle::Vtk
-                && groups.get(group).parent.is_none()
+                && self.vtk_flush_scope(group)
                 && self.vtk_array_outer(group).is_some();
             let vtk_levels = |brace_alone: bool| {
                 usize::from(file_scope_vtk && brace_alone) * self.options.indent_width
@@ -1254,9 +1254,7 @@ impl FormatEngine<'_> {
     /// Whether VTK keeps the outer braces `outer` of `group` in column one
     /// at file scope.
     fn vtk_flush_outer(&self, group: GroupId, outer: GroupId) -> bool {
-        self.options.brace_style == BraceStyle::Vtk
-            && group == outer
-            && !self.in_code(self.tree.groups.get(group).open)
+        self.options.brace_style == BraceStyle::Vtk && group == outer && self.vtk_flush_scope(group)
     }
 
     /// Whether the row at `first`, an element of `group` in an array laid
@@ -1493,7 +1491,7 @@ impl FormatEngine<'_> {
         let open = groups.get(group).open;
         let previous = self.tree.previous_code_token(first)?;
         if self.tree.blocks.kind(group) != Some(BlockKind::Initializer)
-            || groups.get(group).parent.is_some()
+            || !self.vtk_flush_scope(group)
             || self.in_code(open)
             || self.vtk_array_outer(group).is_some()
             || !(previous == open

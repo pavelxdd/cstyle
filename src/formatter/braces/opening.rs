@@ -3639,6 +3639,16 @@ impl FormatEngine<'_> {
         }
     }
 
+    /// Whether the brace being pushed, either side, is that of a list VTK
+    /// keeps flush with its declaration.
+    fn active_brace_in_vtk_flush_scope(&self) -> bool {
+        let groups = &self.tree.groups;
+        self.current
+            .active_token()
+            .and_then(|brace| groups.opened_at(brace).or_else(|| groups.closed_at(brace)))
+            .is_some_and(|group| self.vtk_flush_scope(group))
+    }
+
     pub(crate) fn should_indent_brace_line(&self, brace_type: BraceType) -> bool {
         if self.options.brace_style == BraceStyle::Whitesmith {
             return brace_type != BraceType::Namespace || self.options.indent_namespaces;
@@ -3649,13 +3659,9 @@ impl FormatEngine<'_> {
                 BraceType::Initializer | BraceType::CompoundLiteral
             )
         {
-            // An initializer at file scope opens flush, however its
+            // An initializer among declarations opens flush, however its
             // declaration continued.
-            let at_file_scope = self
-                .current
-                .active_token()
-                .and_then(|brace| self.tree.groups.opened_at(brace))
-                .is_some_and(|group| self.tree.groups.get(group).parent.is_none());
+            let at_file_scope = self.active_brace_in_vtk_flush_scope();
             return !at_file_scope && self.layout.indentation.indent() > 0;
         }
         if self.options.brace_style == BraceStyle::Ratliff && brace_type == BraceType::Initializer {
@@ -3678,7 +3684,9 @@ impl FormatEngine<'_> {
                         .map_or(!self.layout.nesting.brace_type_stack.is_empty(), |block| {
                             self.tree.groups.get(block).parent.is_some()
                         })
-                    || (brace_type == BraceType::Array && self.layout.indentation.indent() > 0)
+                    || (brace_type == BraceType::Array
+                        && self.layout.indentation.indent() > 0
+                        && !self.active_brace_in_vtk_flush_scope())
                     || vtk_indents_declaration_brace(
                         brace_type,
                         &self.layout.nesting.brace_type_stack,

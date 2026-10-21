@@ -338,13 +338,13 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        // VTK indents only initializer braces nested in a block.
+        // VTK indents only initializer braces nested in code.
         if self.options.brace_style == BraceStyle::Vtk
             && self
                 .output
                 .pending_tokens()
                 .and_then(|span| self.tree.groups.opened_at(span.first))
-                .is_some_and(|group| self.tree.groups.get(group).parent.is_none())
+                .is_some_and(|group| self.vtk_flush_scope(group))
         {
             return None;
         }

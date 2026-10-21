@@ -114,6 +114,18 @@ impl FormatEngine<'_> {
             .is_some_and(|group| groups.get(group).delimiter == Delimiter::Paren)
     }
 
+    /// Whether VTK keeps the braces of the outer list `group` flush with
+    /// its declaration: at file scope, in a namespace or in a class. In code
+    /// or an `extern "C"` block they stand indented.
+    pub(crate) fn vtk_flush_scope(&self, group: GroupId) -> bool {
+        self.tree.groups.get(group).parent.is_none_or(|parent| {
+            matches!(
+                self.tree.blocks.kind(parent),
+                Some(BlockKind::Namespace | BlockKind::Aggregate)
+            )
+        })
+    }
+
     /// Whether the token at `index` stands in a control header's parens, as
     /// a range-for's list does: what it opens continues the header.
     pub(crate) fn token_in_header_parens(&self, index: usize) -> bool {

@@ -18932,3 +18932,13 @@ fn an_enum_among_a_function_s_parameters_heads_no_enumeration_body() {
     let input = "static inline int helper(int first,\n                         enum Kind kind)\n{   return run(first, kind); }\n";
     check(input, &["--style=pico"], input);
 }
+
+#[test]
+fn vtk_lays_out_an_initializer_in_a_namespace_or_class_as_at_file_scope() {
+    // A declaration in a namespace or a class opens its list flush with
+    // it, rows a level in; an `extern "C"` block's lists stand as in code.
+    let input = "namespace ns {\nint values[] = {\n  1, 2,\n};\nnamespace inner {\nint more[] = {\n  3,\n};\n}\n}\nextern \"C\" {\nint other[] = {\n  4,\n};\n}\nclass Item {\n  static constexpr int list[] = {\n    5,\n  };\n};\n";
+    let expected = "namespace ns\n{\nint values[] =\n{\n    1, 2,\n};\nnamespace inner\n{\nint more[] =\n{\n    3,\n};\n}\n}\nextern \"C\" {\n    int other[] =\n        {\n        4,\n        };\n}\nclass Item\n{\n    static constexpr int list[] =\n    {\n        5,\n    };\n};\n";
+    check(input, &["--style=vtk"], expected);
+    check(expected, &["--style=vtk"], expected);
+}
