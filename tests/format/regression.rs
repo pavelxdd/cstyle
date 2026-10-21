@@ -19529,3 +19529,13 @@ fn break_blocks_pads_after_a_braceless_body_whose_header_holds_braces() {
     check(input, &["--style=allman", "--break-blocks"], expected);
     check(expected, &["--style=allman", "--break-blocks"], expected);
 }
+
+#[test]
+fn a_switch_after_a_comment_led_case_block_stands_at_the_statement() {
+    // The comment leading a case label leaves it a label for the switch
+    // after the one that holds it.
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        break;\n    }\n    /*c*/ default: {\n        break;\n    }\n    }\n    LOG(value)\n    switch (kind) {\n    case 1:\n        break;\n    }\n}\n";
+    let expected = "void f() {\n    switch (kind) {\n        case 1: {\n            break;\n            }\n        /*c*/ default: {\n            break;\n            }\n        }\n    LOG(value)\n    switch (kind) {\n        case 1:\n            break;\n        }\n    }\n";
+    check(input, &["--style=ratliff"], expected);
+    check(expected, &["--style=ratliff"], expected);
+}

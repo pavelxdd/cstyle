@@ -1821,7 +1821,8 @@ impl FormatEngine<'_> {
                 statement_block_open: statement_block,
             }));
         }
-        if trimmed.starts_with("case ") || trimmed.starts_with("default:") {
+        let after_comments = after_leading_comments(trimmed);
+        if after_comments.starts_with("case ") || after_comments.starts_with("default:") {
             let indent_spaces = self.output.lead_width(index, tab_width);
             if !closing_indents
                 .iter()
