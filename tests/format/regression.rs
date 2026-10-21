@@ -18905,3 +18905,14 @@ fn a_call_ending_a_row_of_a_range_for_list_leaves_the_header_open() {
     let input = "void helper()\n{\n    for (int out : {\n                first(), second()\n            }) {\n        run();\n    }\n    done();\n}\n";
     check(input, &[], input);
 }
+
+#[test]
+fn a_block_a_style_attaches_to_its_paren_leads_the_arguments_after_it() {
+    // The brace joining the `(` its line ended with is the first argument
+    // there: the arguments after its block stand with it.
+    let input = "void helper()\n{\n    result(\n    {\n        value\n    },\n    more);\n}\n";
+    let expected =
+        "void helper()\n{\n    result( {\n        value\n    },\n            more);\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}

@@ -25,7 +25,7 @@ use crate::formatter::structure::TokenSpan;
 use crate::formatter::structure::blocks::{BlockKind, is_code_token};
 use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::{function_name_start, language, scoped_name_is_constructor};
-use crate::formatter::text::columns::leading_visual_width;
+use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
@@ -2373,6 +2373,17 @@ impl FormatEngine<'_> {
     ) -> bool {
         let (line, tokens) = self.output.pop_with_tokens().unwrap_or_default();
         self.republish_tokens(tokens);
+        // A brace joining the `(` its line ended with leads that paren's
+        // arguments.
+        let line_index = self.output.len();
+        let leads_paren_arguments = line[..trailing_comment_split_limit(&line)]
+            .trimmed_end()
+            .ends_with('(')
+            && self
+                .layout
+                .frame_stack
+                .active_delimiter()
+                .is_some_and(|delimiter| delimiter.opener_output_line == line_index);
         // A brace on its label's source line keeps the gap before it.
         let source_gap = (!self.token_input.token_begins_source_line)
             .then(|| self.token_input.previous_input_whitespace.clone())
@@ -2489,6 +2500,16 @@ impl FormatEngine<'_> {
             self.push_formatted_line_exact(line.trimmed_start(), level, spaces);
         } else {
             self.adjust_and_publish_line(line);
+        }
+        if leads_paren_arguments
+            && let Some(published) = self.output.last()
+            && let Some(brace) = published[..trailing_comment_split_limit(published)].rfind('{')
+        {
+            let column = visual_width_from(&published[..brace], 0, self.options.tab_width);
+            self.layout.nesting.lead_paren_continuation_with(column);
+            if let Some((_, delimiter)) = self.layout.frame_stack.active_delimiter_mut() {
+                delimiter.continuation_indent_column = Some(column);
+            }
         }
         self.update_current_brace_indent_from_last_output_line();
         self.previous_was_newline = false;

@@ -295,6 +295,18 @@ impl NestingState {
         }
     }
 
+    /// Moves the column the innermost paren registered to `spaces`, where
+    /// its first argument came to stand.
+    pub(crate) fn lead_paren_continuation_with(&mut self, spaces: usize) {
+        if let Some(&checkpoint) = self.continuation_indent_checkpoint_stack.last()
+            && self.continuation_indent_spaces_stack.len() == checkpoint + 1
+        {
+            self.continuation_indent_spaces_stack[checkpoint] = spaces;
+            self.continuation_column_origins
+                .retain(|&(origin, _)| origin != checkpoint);
+        }
+    }
+
     pub(crate) fn current_continuation_indent_spaces(&self) -> Option<usize> {
         // A brace list's elements continue nothing of the expression
         // around it.
