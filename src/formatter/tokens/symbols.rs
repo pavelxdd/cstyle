@@ -645,12 +645,6 @@ impl FormatEngine<'_> {
                         .map_or("", |(name, _)| name.trimmed()),
                 )
             });
-        if self.layout.compound_literal.arg_paren_depth == Some(self.layout.nesting.paren_depth) {
-            self.layout.compound_literal.arg_indent_spaces = None;
-            self.layout.compound_literal.arg_paren_depth = None;
-            self.layout.compound_literal.arg_brace_depth = None;
-            self.layout.compound_literal.after_comma = false;
-        }
         self.layout.nesting.exit_paren();
         self.layout.frame_stack.pop_delimiter(self.output.len());
         self.layout.indentation.exit_paren();
@@ -1187,22 +1181,7 @@ impl FormatEngine<'_> {
         }
         self.current.push(',');
         self.layout.command_state.observe_char(',');
-        if after_compound_literal {
-            let indent = self.current_line_indent_spaces();
-            self.layout.nesting.clear_continuation_indents();
-            self.layout.compound_literal.after_comma = true;
-            self.layout.compound_literal.arg_indent_spaces = Some(indent);
-            self.layout.compound_literal.arg_paren_depth = Some(self.layout.nesting.paren_depth);
-            self.layout.compound_literal.arg_brace_depth =
-                Some(self.layout.nesting.brace_header_stack.len());
-        } else if self.layout.compound_literal.arg_indent_spaces.is_some()
-            && self.layout.compound_literal.arg_paren_depth == Some(self.layout.nesting.paren_depth)
-            && self.layout.compound_literal.arg_brace_depth
-                == Some(self.layout.nesting.brace_header_stack.len())
-        {
-            self.layout.nesting.clear_continuation_indents();
-            self.layout.compound_literal.after_comma = true;
-        } else if self.innermost_brace_is_brace_list()
+        if self.innermost_brace_is_brace_list()
             && self.layout.nesting.current_brace_paren_depth()
                 == Some(self.layout.nesting.paren_depth)
         {
@@ -1279,13 +1258,7 @@ impl FormatEngine<'_> {
         {
             return CommaRole::CallArgument;
         }
-        if after_compound_literal
-            || (self.layout.compound_literal.arg_indent_spaces.is_some()
-                && self.layout.compound_literal.arg_paren_depth
-                    == Some(self.layout.nesting.paren_depth)
-                && self.layout.compound_literal.arg_brace_depth
-                    == Some(self.layout.nesting.brace_header_stack.len()))
-        {
+        if after_compound_literal {
             return CommaRole::CompoundLiteralArgument;
         }
         if self.in_initializer_brace()
@@ -1344,7 +1317,6 @@ impl FormatEngine<'_> {
                 .or_else(|| Some(self.current_line_indent_spaces())),
             CommaRole::InitializerSibling | CommaRole::CompoundLiteralArgument => self
                 .current_inline_array_column()
-                .or(self.layout.compound_literal.arg_indent_spaces)
                 .or_else(|| Some(self.current_line_indent_spaces())),
             CommaRole::Other => None,
         }

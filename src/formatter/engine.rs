@@ -2402,26 +2402,14 @@ impl<'a> FormatEngine<'a> {
         let has_array_bound_operator_continuation = self
             .array_bound_operator_continuation_indent_spaces()
             .is_some();
-        let after_compound_literal_comma =
-            std::mem::take(&mut self.layout.compound_literal.after_comma)
-                && self.layout.compound_literal.arg_paren_depth
-                    == Some(self.layout.nesting.paren_depth)
-                && self.layout.compound_literal.arg_brace_depth
-                    == Some(self.layout.nesting.brace_header_stack.len());
         let has_macro_call_argument_continuation =
             matches!(self.layout.previous, PreviousToken::Comma)
-                && !after_compound_literal_comma
                 && self.macro_call_argument_indent_spaces().is_some();
-        let saved_indent = if after_compound_literal_comma {
-            Some(ContinuationIndent::Spaces(
-                self.current_line_indent_spaces(),
-            ))
-        } else {
-            self.layout
-                .continuation_indent
-                .after_one_shot_continuation_indent
-                .take()
-        };
+        let saved_indent = self
+            .layout
+            .continuation_indent
+            .after_one_shot_continuation_indent
+            .take();
         let saved_indent =
             if has_array_bound_operator_continuation || has_macro_call_argument_continuation {
                 None

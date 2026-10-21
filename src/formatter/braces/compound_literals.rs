@@ -11,10 +11,6 @@ use crate::source::lex::{is_word_char, trailing_word};
 pub(crate) struct CompoundLiteralState {
     pub(crate) forced_break_depths: Vec<usize>,
     pub(crate) just_closed: bool,
-    pub(crate) after_comma: bool,
-    pub(crate) arg_indent_spaces: Option<usize>,
-    pub(crate) arg_paren_depth: Option<usize>,
-    pub(crate) arg_brace_depth: Option<usize>,
 }
 
 impl FormatEngine<'_> {

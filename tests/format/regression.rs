@@ -18907,9 +18907,9 @@ fn a_block_a_style_attaches_to_its_paren_leads_the_arguments_after_it() {
 #[test]
 fn a_compound_literal_run_into_one_row_sets_the_arguments_after_it_as_over_rows() {
     // The literal its cast's line ends before stands as a literal there,
-    // on one row or over several: the arguments after it take its row.
+    // on one row or over several: the arguments after it continue the call.
     let input = "void m(void)\n{\n    rc = send(session, &(struct msg) {\n        .len = 1,\n    },\n    timeout);\n}\n";
-    let expected = "void m(void)\n{   rc = send(session, &(struct msg)\n    {   .len = 1, },\n    timeout); }\n";
+    let expected = "void m(void)\n{   rc = send(session, &(struct msg)\n    {   .len = 1, },\n              timeout); }\n";
     check(input, &["--style=pico"], expected);
     check(expected, &["--style=pico"], expected);
 }
@@ -19134,3 +19134,28 @@ fn vtk_keeps_a_block_leading_a_lambda_body_whose_brace_leads_its_line() {
     check(input, &["--style=vtk"], expected);
     check(expected, &["--style=vtk"], expected);
 }
+#[test]
+fn arguments_after_a_compound_literal_on_the_line_of_its_paren_continue_the_call() {
+    // The literal leads its own rows from the statement, as its brace
+    // style sets it; the arguments after its closer continue the call as
+    // after any list among them.
+    let input = "void run(void) {\n  rc = send(session, &(struct msg) {\n    .len = 1,\n  },\n  timeout,\n  flags);\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void run(void)\n{\n    rc = send(session, &(struct msg) {\n        .len = 1,\n    },\n              timeout,\n              flags);\n}\n",
+        ),
+        (
+            "--style=allman",
+            "void run(void)\n{\n    rc = send(session, &(struct msg)\n    {\n        .len = 1,\n    },\n              timeout,\n              flags);\n}\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void run(void)\n    {\n    rc = send(session, &(struct msg)\n        {\n        .len = 1,\n        },\n              timeout,\n              flags);\n    }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
