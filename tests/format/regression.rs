@@ -18916,3 +18916,13 @@ fn a_block_a_style_attaches_to_its_paren_leads_the_arguments_after_it() {
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
+
+#[test]
+fn a_compound_literal_run_into_one_row_sets_the_arguments_after_it_as_over_rows() {
+    // The literal its cast's line ends before stands as a literal there,
+    // on one row or over several: the arguments after it take its row.
+    let input = "void m(void)\n{\n    rc = send(session, &(struct msg) {\n        .len = 1,\n    },\n    timeout);\n}\n";
+    let expected = "void m(void)\n{   rc = send(session, &(struct msg)\n    {   .len = 1, },\n    timeout); }\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+}

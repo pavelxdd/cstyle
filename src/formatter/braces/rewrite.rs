@@ -1376,56 +1376,69 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let brace_type = initializer_brace_type(tokens, start, line_start)
-            .or_else(|| enum_head_ends_previous_line(tokens, start, line_start))
-            .or_else(|| {
-                let previous = previous_non_whitespace(tokens, start, line_start);
-                (previous.is_some_and(|index| matches!(tokens[index], Token::Symbol(':')))
-                    && tokens[line_start..start]
-                        .iter()
-                        .any(|token| matches!(token, Token::Word(word) if word == "for"))
-                    && self.open_lambda_body_indent_spaces().is_some())
-                .then_some(BraceType::Array)
-            })
-            .or_else(|| {
-                // Comments leading the brace's line take no part in it.
-                (after_leading_comments(self.current.trimmed()).is_empty()
-                    && self.previous_output_code_ends_list_head(start))
-                .then_some(BraceType::Initializer)
-            })
-            .or_else(|| {
-                let previous_code = self
-                    .output
-                    .last()
-                    .map(|line| self.output.code_trimmed_of(line).to_string());
-                (self.current_is_blank()
-                    && previous_code
+        // A literal whose cast ends the line of the `(` around it leads its
+        // own row there; one after an argument row follows that row.
+        let brace_type = (self.current_is_blank()
+            && tokens.len() == self.tree.tokens.len()
+            && self.token_in_parens(start)
+            && self.compound_literal_cast(start).is_some_and(|cast| {
+                let groups = &self.tree.groups;
+                groups
+                    .enclosing(start)
+                    .and_then(|paren| self.output.line_with_token(groups.get(paren).open))
+                    .is_some_and(|line| self.output.line_with_token(cast) == Some(line))
+            }))
+        .then_some(BraceType::CompoundLiteral)
+        .or_else(|| initializer_brace_type(tokens, start, line_start))
+        .or_else(|| enum_head_ends_previous_line(tokens, start, line_start))
+        .or_else(|| {
+            let previous = previous_non_whitespace(tokens, start, line_start);
+            (previous.is_some_and(|index| matches!(tokens[index], Token::Symbol(':')))
+                && tokens[line_start..start]
+                    .iter()
+                    .any(|token| matches!(token, Token::Word(word) if word == "for"))
+                && self.open_lambda_body_indent_spaces().is_some())
+            .then_some(BraceType::Array)
+        })
+        .or_else(|| {
+            // Comments leading the brace's line take no part in it.
+            (after_leading_comments(self.current.trimmed()).is_empty()
+                && self.previous_output_code_ends_list_head(start))
+            .then_some(BraceType::Initializer)
+        })
+        .or_else(|| {
+            let previous_code = self
+                .output
+                .last()
+                .map(|line| self.output.code_trimmed_of(line).to_string());
+            (self.current_is_blank()
+                && previous_code
+                    .as_deref()
+                    .is_some_and(|code| code.ends_with(','))
+                && (self.in_initializer_brace()
+                    || previous_code
                         .as_deref()
-                        .is_some_and(|code| code.ends_with(','))
-                    && (self.in_initializer_brace()
-                        || previous_code
-                            .as_deref()
-                            .is_some_and(has_unmatched_open_brace)))
+                        .is_some_and(has_unmatched_open_brace)))
+            .then_some(BraceType::Array)
+        })
+        .or_else(|| {
+            (self.current_is_blank() && self.layout.nesting.paren_depth > 0)
                 .then_some(BraceType::Array)
-            })
-            .or_else(|| {
-                (self.current_is_blank() && self.layout.nesting.paren_depth > 0)
-                    .then_some(BraceType::Array)
-            })
-            .or_else(|| {
-                self.layout
-                    .nesting
-                    .brace_type_stack
-                    .last()
-                    .is_some_and(|brace_type| {
-                        matches!(
-                            brace_type,
-                            BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
-                        )
-                    })
-                    .then_some(BraceType::Array)
-            })
-            .or_else(|| self.bare_scope_one_line_block_type(tokens, start))?;
+        })
+        .or_else(|| {
+            self.layout
+                .nesting
+                .brace_type_stack
+                .last()
+                .is_some_and(|brace_type| {
+                    matches!(
+                        brace_type,
+                        BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
+                    )
+                })
+                .then_some(BraceType::Array)
+        })
+        .or_else(|| self.bare_scope_one_line_block_type(tokens, start))?;
         let close_index = self.matching_brace_on_current_line(start)?;
         let inferred_capture_lambda = self.inferred_capture_lambda_breaks(tokens, start);
 
