@@ -19435,3 +19435,14 @@ fn break_blocks_pads_after_a_header_block_the_style_breaks_after_a_statement() {
     ];
     check(kept, &args, kept);
 }
+
+#[test]
+fn pico_keeps_a_one_line_header_after_a_label_run_into_the_brace() {
+    // The label's statement stays on its line with the label, whether the
+    // label began its line or ran in after the brace.
+    let input = "void f()\n{\n    done: if (ready) { value=0; }\n    go();\n}\n";
+    let expected = "void f()\n{   done: if (ready) { value=0; }\n    go(); }\n";
+    let args = ["--style=pico", "--break-one-line-headers"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}

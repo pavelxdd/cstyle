@@ -676,11 +676,13 @@ impl FormatEngine<'_> {
                 _ => false,
             })
         };
-        // A label before the header leads the line as a statement does.
+        // A label before the header leads the line as a statement does,
+        // after any brace the line runs in from.
         let preceding_label = {
             let mut code = tokens[line_start..start]
                 .iter()
-                .filter(|token| crate::formatter::structure::blocks::is_code_token(token));
+                .filter(|token| crate::formatter::structure::blocks::is_code_token(token))
+                .skip_while(|token| matches!(token, Token::Symbol('{' | '}')));
             match code.next() {
                 Some(Token::Word(word)) if word == "case" || word == "default" => true,
                 Some(Token::Word(_)) => matches!(code.next(), Some(Token::Symbol(':'))),
