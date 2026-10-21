@@ -659,6 +659,31 @@ impl FormatEngine<'_> {
 }
 
 impl FormatEngine<'_> {
+    /// Whether the last code line holds the header word whose parens its
+    /// last `)` closes.
+    fn previous_line_holds_closed_header_word(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        let Some(index) = self.output.last_line_outside_comment_index() else {
+            return false;
+        };
+        self.output
+            .line_tokens(index)
+            .and_then(|span| {
+                (span.first..=span.last.min(tokens.len().saturating_sub(1)))
+                    .rev()
+                    .find(|&at| matches!(tokens[at], Token::Symbol(')')))
+            })
+            .and_then(|close| self.tree.groups.closed_at(close))
+            .and_then(|parens| {
+                self.tree
+                    .previous_code_token(self.tree.groups.get(parens).open)
+            })
+            .filter(
+                |&header| matches!(&tokens[header], Token::Word(word) if language::is_header(word)),
+            )
+            .is_some_and(|header| self.output.line_with_token(header) == Some(index))
+    }
+
     /// Whether the last `)` of the last code line closes a control header's
     /// parens.
     fn previous_line_closes_header_parens(&self) -> bool {
@@ -2178,6 +2203,9 @@ impl FormatEngine<'_> {
                     .last_non_empty_index()
                     .is_some_and(|index| self.output.is_directive_line(index))
                 && self.previous_code_closes_control_condition() != Some(false)
+                // A header the line before holds after a statement there
+                // has its level from the engine, not from a line above.
+                && !self.previous_line_holds_closed_header_word()
                 && let Some(header) =
                     self.output
                         .scoped()

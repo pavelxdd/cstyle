@@ -19497,3 +19497,14 @@ fn an_asm_operand_row_heads_no_constructor_initializers_for_the_statements_after
     check(input, &["--style=pico"], expected);
     check(expected, &["--style=pico"], expected);
 }
+
+#[test]
+fn a_braceless_body_in_a_lambda_argument_leaves_no_level_to_a_header_after_a_statement() {
+    // The lambda's braceless `if` closes with the lambda: a header after a
+    // statement on a later line sets its body a level past that line.
+    let input = "void f() {\n    call([] {\n        if (ready)\n            go(ready);\n    });\n    value=1; if (ready)\n        value=0;\n}\n";
+    let expected = "void f()\n{\n    call([] {\n        if (ready)\n            go(ready);\n    });\n    value=1; if (ready)\n        value=0;\n}\n";
+    let args = ["--style=kr", "--keep-one-line-statements"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
