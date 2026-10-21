@@ -1738,8 +1738,8 @@ impl FormatEngine<'_> {
             && line_ends_compound_literal_cast(self.current.trimmed_end())
             && self
                 .current
-                .active_token()
-                .is_none_or(|brace| self.multiline_literal_argument_parens(brace).is_none())
+                .tokens()
+                .is_none_or(|span| !self.token_in_parens(span.first))
             && self
                 .output
                 .last_non_empty_scoped()

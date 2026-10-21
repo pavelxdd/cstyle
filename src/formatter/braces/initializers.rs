@@ -423,7 +423,7 @@ impl FormatEngine<'_> {
             || self
                 .output
                 .pending_tokens()
-                .is_some_and(|span| self.multiline_literal_argument_parens(span.first).is_some())
+                .is_some_and(|span| self.token_in_parens(span.first))
         {
             return None;
         }

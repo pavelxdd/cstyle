@@ -129,6 +129,11 @@ impl FormatEngine<'_> {
         when(closes_brace || is_word(token, "else"), || {
             self.else_matching_if_indent(first)
         })
+        .or_else(|| {
+            when(in_parens && brace, || {
+                self.literal_brace_in_argument_row_indent(first)
+            })
+        })
         .or_else(|| when(in_parens, || self.literal_argument_indent(first)))
         .or_else(|| when(in_parens, || self.row_around_kept_lambda_body_indent(first)))
         .or_else(|| {
@@ -6639,6 +6644,39 @@ impl FormatEngine<'_> {
                 return None;
             }
             self.token_column(argument)?
+        };
+        Some(column + self.case_unindent_spaces())
+    }
+
+    /// A compound literal's brace leading its line follows the argument row
+    /// that holds the literal's cast: a `{` stands at the row, a `}` at
+    /// the `{` that leads its line, else where the style closes a block the
+    /// row opens.
+    #[inline(never)]
+    fn literal_brace_in_argument_row_indent(&self, first: usize) -> Option<usize> {
+        let open = self
+            .tree
+            .groups
+            .get(self.tree.groups.delimited_by(first)?)
+            .open;
+        let row = self
+            .output
+            .line_with_token(self.compound_literal_cast(open)?)?;
+        if !self.token_in_parens(self.output.line_tokens(row)?.first) {
+            return None;
+        }
+        let lead = self.output.lead_width(row, self.options.tab_width);
+        let column = if first == open {
+            lead
+        } else {
+            let brace_line = self.output.line_with_token(open)?;
+            if self.output.line_tokens(brace_line)?.first == open {
+                self.output.lead_width(brace_line, self.options.tab_width)
+            } else if self.options.brace_style == BraceStyle::Ratliff {
+                lead + self.options.indent_width
+            } else {
+                lead
+            }
         };
         Some(column + self.case_unindent_spaces())
     }

@@ -84,6 +84,36 @@ impl FormatEngine<'_> {
             .then_some(open)
     }
 
+    /// The `(` of the cast before the compound literal braces opened at
+    /// `brace`. A name or a closing delimiter before the parens makes them
+    /// a call's or a header's, not a cast.
+    pub(crate) fn compound_literal_cast(&self, brace: usize) -> Option<usize> {
+        let groups = &self.tree.groups;
+        let literal = groups.opened_at(brace)?;
+        if self.tree.blocks.kind(literal) != Some(BlockKind::CompoundLiteral) {
+            return None;
+        }
+        let cast = groups
+            .get(groups.closed_at(self.tree.previous_code_token(brace)?)?)
+            .open;
+        let follows_name = self.tree.previous_code_token(cast).is_some_and(|before| {
+            matches!(
+                &self.tree.tokens[before],
+                Token::Word(_) | Token::Symbol(')' | ']')
+            )
+        });
+        (!follows_name).then_some(cast)
+    }
+
+    /// Whether the token at `index` stands inside parens. A row it leads
+    /// stands as any argument row, a compound literal opening there or not.
+    pub(crate) fn token_in_parens(&self, index: usize) -> bool {
+        let groups = &self.tree.groups;
+        groups
+            .enclosing(index)
+            .is_some_and(|group| groups.get(group).delimiter == Delimiter::Paren)
+    }
+
     /// The `(` that ends its line and opens the parens holding the token at
     /// `index`, when they hold a compound literal spanning lines. The
     /// arguments of such a call stand a level past the line of its `(`,

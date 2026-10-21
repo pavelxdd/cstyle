@@ -18448,3 +18448,68 @@ fn gnu_a_list_in_a_header_over_lines_adds_no_level_to_the_body() {
     check(input, &["--style=gnu"], expected);
     check(expected, &["--style=gnu"], expected);
 }
+
+#[test]
+fn an_argument_row_holding_a_braced_literal_after_a_paren_ending_its_line_continues_the_call() {
+    // The row stands a level into the call as any argument row does, a
+    // literal's braces in it or not; the literal's rows follow the row.
+    let input = "void run(void)\n{\n    expect(\n    [[maybe_unused]] auto value = make(&(params_t) {\n            .size = 5,\n            .count = 2,\n        }, 0));\n    expect(\n        make(first, second));\n}\n";
+    let expected = "void run(void)\n{\n    expect(\n        [[maybe_unused]] auto value = make(&(params_t) {\n            .size = 5,\n            .count = 2,\n        }, 0));\n    expect(\n        make(first, second));\n}\n";
+    for style in ["--style=1tbs", "--style=kr"] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn an_argument_row_after_a_comma_holding_a_braced_literal_stands_with_the_other_arguments() {
+    let input = "void run(void)\n{\n    expect(\n        first,\n    make(&(params_t) {\n        .size = 5,\n    }),\n        second);\n    expect(first,\n    make(&(params_t) {\n        .size = 5,\n    }),\n           second);\n}\n";
+    let expected = "void run(void)\n{\n    expect(\n        first,\n        make(&(params_t) {\n            .size = 5,\n        }),\n        second);\n    expect(first,\n           make(&(params_t) {\n               .size = 5,\n           }),\n           second);\n}\n";
+    for style in ["--style=1tbs", "--style=kr"] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn a_literal_brace_on_its_own_line_in_an_argument_row_follows_the_row() {
+    // The `{` stands at the row holding the literal's cast, its fields and
+    // `}` with it, whether the literal is the argument or inside one.
+    let input = "void run(void)\n{\n    expect(\n        first,\n        make(&(params_t) {\n            .size = 5,\n        }),\n        second);\n    expect(first,\n           make(&(params_t) {\n               .size = 5,\n           }));\n}\n";
+    for (styles, expected) in [
+        (
+            &["--style=allman", "--style=gnu"][..],
+            "void run(void)\n{\n    expect(\n        first,\n        make(&(params_t)\n        {\n            .size = 5,\n        }),\n        second);\n    expect(first,\n           make(&(params_t)\n           {\n               .size = 5,\n           }));\n}\n",
+        ),
+        (
+            &["--style=whitesmith"][..],
+            "void run(void)\n    {\n    expect(\n        first,\n        make(&(params_t)\n        {\n        .size = 5,\n        }),\n        second);\n    expect(first,\n           make(&(params_t)\n           {\n           .size = 5,\n           }));\n    }\n",
+        ),
+        (
+            &["--style=horstmann"][..],
+            "void run(void)\n{   expect(\n        first,\n        make(&(params_t)\n        {   .size = 5,\n        }),\n        second);\n    expect(first,\n           make(&(params_t)\n           {   .size = 5,\n           }));\n}\n",
+        ),
+    ] {
+        for style in styles {
+            check(input, &[style], expected);
+            check(expected, &[style], expected);
+        }
+    }
+}
+
+#[test]
+fn ratliff_indents_the_closer_of_a_literal_in_an_argument_row_with_its_fields() {
+    let input = "void run(void) {\n    expect(\n        &(params_t) {\n            .size = 5,\n        },\n        second);\n    expect(\n        make(&(params_t) {\n            .size = 5,\n        }));\n}\n";
+    let expected = "void run(void) {\n    expect(\n        &(params_t) {\n            .size = 5,\n            },\n        second);\n    expect(\n        make(&(params_t) {\n            .size = 5,\n            }));\n    }\n";
+    check(input, &["--style=ratliff"], expected);
+    check(expected, &["--style=ratliff"], expected);
+}
+
+#[test]
+fn parens_that_indent_after_them_keep_a_broken_literal_brace_with_its_argument_row() {
+    let input = "void run(void) {\n    expect(\n        &(params_t) {\n            .size = 5,\n        },\n        second);\n    expect(\n        make(&(params_t) {\n            .size = 5,\n        }));\n}\n";
+    let expected = "void run(void)\n{\n    expect(\n        &(params_t)\n        {\n            .size = 5,\n        },\n        second);\n    expect(\n        make(&(params_t)\n        {\n            .size = 5,\n        }));\n}\n";
+    let options = ["--style=allman", "--indent-after-parens"];
+    check(input, &options, expected);
+    check(expected, &options, expected);
+}
