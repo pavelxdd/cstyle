@@ -18576,3 +18576,31 @@ fn a_comment_ending_a_range_for_list_brace_line_stays_after_the_brace() {
         check(&expected, &[style], &expected);
     }
 }
+
+#[test]
+fn breaking_styles_set_a_range_for_list_the_source_breaks_at_the_header_continuation() {
+    // The list's brace stands where the header continues, its rows a level
+    // past it, as a list rather than the loop's block.
+    let input = "void run() {\n    for (bool word : {\n             true, false\n         }) {\n        go(word);\n    }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=gnu",
+            "void run()\n{\n    for (bool word :\n            {\n                true, false\n            })\n        {\n            go(word);\n        }\n}\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void run()\n    {\n    for (bool word :\n            {\n                true, false\n            })\n        {\n        go(word);\n        }\n    }\n",
+        ),
+        (
+            "--style=vtk",
+            "void run()\n{\n    for (bool word :\n            {\n                true, false\n            })\n        {\n        go(word);\n        }\n}\n",
+        ),
+        (
+            "--style=pico",
+            "void run()\n{   for (bool word :\n            {   true, false })\n    {   go(word); } }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}

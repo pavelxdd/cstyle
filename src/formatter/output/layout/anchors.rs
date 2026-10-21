@@ -1209,7 +1209,8 @@ impl FormatEngine<'_> {
             }
             _ => (groups.enclosing(first)?, false),
         };
-        if !is_aggregate(group) {
+        // A list in a control header's parens continues the header.
+        if !is_aggregate(group) || self.token_in_header_parens(groups.get(group).open) {
             return None;
         }
         let open = groups.get(group).open;

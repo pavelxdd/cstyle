@@ -114,6 +114,19 @@ impl FormatEngine<'_> {
             .is_some_and(|group| groups.get(group).delimiter == Delimiter::Paren)
     }
 
+    /// Whether the token at `index` stands in a control header's parens, as
+    /// a range-for's list does: what it opens continues the header.
+    pub(crate) fn token_in_header_parens(&self, index: usize) -> bool {
+        let groups = &self.tree.groups;
+        groups
+            .enclosing(index)
+            .filter(|&group| groups.get(group).delimiter == Delimiter::Paren)
+            .and_then(|group| self.tree.previous_code_token(groups.get(group).open))
+            .is_some_and(|before| {
+                matches!(&self.tree.tokens[before], Token::Word(word) if language::is_header(word))
+            })
+    }
+
     /// The `(` that ends its line and opens the parens holding the token at
     /// `index`, when they hold a compound literal spanning lines. The
     /// arguments of such a call stand a level past the line of its `(`,

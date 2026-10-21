@@ -535,6 +535,7 @@ impl FormatEngine<'_> {
     ) -> Option<usize> {
         if line.trimmed() != "{"
             || self.options.brace_style != BraceStyle::Whitesmith
+            || self.pending_brace_in_header_parens()
             || !self
                 .output
                 .last_line_outside_comment()
@@ -569,6 +570,12 @@ impl FormatEngine<'_> {
 
     /// Whether the `{` the pending line holds opens a value: a compound
     /// literal or an initializer continuing its statement.
+    fn pending_brace_in_header_parens(&self) -> bool {
+        self.output
+            .pending_tokens()
+            .is_some_and(|span| self.token_in_header_parens(span.first))
+    }
+
     fn pending_brace_opens_value(&self) -> bool {
         self.output
             .pending_tokens()
@@ -621,6 +628,7 @@ impl FormatEngine<'_> {
             || self.options.brace_style != BraceStyle::Whitesmith
             // A compound literal's element brace stands at its elements.
             || self.innermost_brace_is_compound_literal()
+            || self.pending_brace_in_header_parens()
         {
             return None;
         }
@@ -1233,6 +1241,14 @@ impl FormatEngine<'_> {
         );
         let lambda = self.open_brace_lambda_context();
         self.prepare_continuation_for_open_brace(brace_header.as_deref(), brace_type);
+        // A list a range-for header's range opens on a line of its own is no
+        // block of the header.
+        let broken_range_for_list = self.broken_range_for_list_brace_spaces(brace_type, next);
+        let brace_type = if broken_range_for_list.is_some() && brace_type == BraceType::Command {
+            BraceType::Array
+        } else {
+            brace_type
+        };
 
         let inline_nested_header_level = self.layout.inline_nested_header_braceless_bias.take();
         let block_indent_extra =
@@ -1305,12 +1321,11 @@ impl FormatEngine<'_> {
             return;
         }
         let attach_case_label_brace = self.should_attach_output_case_label_brace(brace_type);
-        if let Some(spaces) = self.broken_range_for_list_brace_spaces(brace_type, next) {
+        if let Some(spaces) = broken_range_for_list {
             if !self.current_is_blank() {
                 self.finish_line();
             }
             self.layout.continuation_indent.set_next_line_spaces(spaces);
-            // The list is no block of the header.
             self.open_multiline_attached_initializer_brace(
                 None,
                 brace_type,
@@ -3491,7 +3506,12 @@ impl FormatEngine<'_> {
         // A run-in style's brace leading its line holds the first row.
         if !matches!(
             self.options.brace_style,
-            BraceStyle::Allman | BraceStyle::Horstmann
+            BraceStyle::Allman
+                | BraceStyle::Horstmann
+                | BraceStyle::Gnu
+                | BraceStyle::Whitesmith
+                | BraceStyle::Vtk
+                | BraceStyle::Pico
         ) || !matches!(
             brace_type,
             BraceType::Array
