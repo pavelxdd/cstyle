@@ -9474,6 +9474,28 @@ fn rows_of_a_comment_run_in_after_a_block_brace_follow_its_opener() {
 }
 
 #[test]
+fn tab_led_rows_of_a_comment_after_a_block_brace_indent_from_the_block() {
+    let input = "void f()\n{\n\t{ /* first\n\t\t\t* row\n\t\t\t\t* row\n\t\t  \t* row */\n\t\tgo();\n\t}\n}\n";
+    for args in [
+        ["--style=1tbs", "--indent=tab=4"],
+        ["--style=linux", "--indent=force-tab=4"],
+    ] {
+        check(input, &args, input);
+    }
+    // Rows past the `/*` keep their offset from it on a second pass, with
+    // the tabs of their indent where the first pass left them.
+    let expected = "void f()\n{\n    { /* first\n        \t* row\n        \t\t* row\n          \t* row */\n        go();\n    }\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+    // So do rows a tab crossing the `/*` column puts past it.
+    let input = "void f()\n{\n\t{  /* first\n\t\t * row\n\t\t\t\trow */\n\t\tgo();\n\t}\n}\n";
+    let expected = "void f()\n{\n  {  /* first\n    * row\n      \trow */\n    go();\n  }\n}\n";
+    let args = ["--style=linux", "--indent=spaces=2"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
+
+#[test]
 fn convert_tabs_keeps_rows_of_a_comment_after_a_block_brace_on_a_second_pass() {
     let input = "void f()\n{\n    {/* first row\n        second row */\n      int t = 1;\n    }\n    {  /* first\n       ** second */\n      go();\n    }\n}\n";
     let expected = "void f()\n{\n\t{/* first row\n\t\t   second row */\n\t\tint t = 1;\n\t}\n\t{  /* first\n\t\t** second */\n\t\tgo();\n\t}\n}\n";

@@ -3552,7 +3552,7 @@ impl FormatEngine<'_> {
             // Horstmann and pico set the opener at the body later.
             if index == 1
                 && self.token_input.token_line_opens_with_brace
-                && !opener_after_tab
+                && (!opener_after_tab || self.output_indent_style == IndentStyle::Spaces)
                 && !matches!(
                     self.options.brace_style,
                     BraceStyle::Horstmann | BraceStyle::Pico
@@ -3721,21 +3721,23 @@ impl FormatEngine<'_> {
                         match merged_opener_column {
                             // A row past the opener keeps its offset from it
                             // and the others stand at the body.
-                            Some(opener)
-                                if self.output_indent_style == IndentStyle::Spaces
-                                    && !line[..line.len() - line.trimmed_start().len()]
-                                        .contains('\t') =>
-                            {
-                                let column = if row_lead > 0 {
-                                    opener + row_lead
+                            Some(opener) if self.output_indent_style == IndentStyle::Spaces => {
+                                // A tab crossing the `/*` column sets the
+                                // rest of the row past it.
+                                let overshoot = tab_overshoot(line, kept);
+                                if row_lead > 0 || overshoot > 0 {
+                                    format!(
+                                        "{}{}",
+                                        self.comment_row_prefix(opener + overshoot),
+                                        kept.trimmed_end()
+                                    )
                                 } else {
-                                    body_column
-                                };
-                                format!(
-                                    "{}{}",
-                                    self.comment_row_prefix(column),
-                                    trimmed_kept.trimmed_end()
-                                )
+                                    format!(
+                                        "{}{}",
+                                        self.comment_row_prefix(body_column),
+                                        trimmed_kept.trimmed_end()
+                                    )
+                                }
                             }
                             _ => {
                                 let merged_comment_column = self

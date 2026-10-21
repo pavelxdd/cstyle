@@ -55,14 +55,28 @@ impl FormatEngine<'_> {
                     return None;
                 }
                 // A comment row whose own whitespace holds a tab keeps it past
-                // the indent of the comment's first line.
+                // the indent of the comment's first line, or of the block
+                // whose brace the comment follows.
                 if let Some(opener) = self.comment_opener(index)
                     && opener != index
                     && line[..line.len() - text.len()].contains('\t')
                 {
-                    let width = self.output.lead_width(opener, tab_width);
+                    let mut width = self.output.lead_width(opener, tab_width);
+                    let follows_block_brace =
+                        self.output.code_trimmed_of(&self.output[opener]).trimmed() == "{";
+                    if follows_block_brace {
+                        width += indent_width;
+                    }
                     if line.starts_with(&" ".repeat(width)) {
-                        return Some((width, self.tab_columns(opener, width)));
+                        let tab_columns = if follows_block_brace {
+                            match self.output_indent_style {
+                                IndentStyle::ForceTabs => width / tab_width * tab_width,
+                                _ => width / indent_width * indent_width,
+                            }
+                        } else {
+                            self.tab_columns(opener, width)
+                        };
+                        return Some((width, tab_columns));
                     }
                 }
                 let width = self.output.lead_width(index, tab_width);
