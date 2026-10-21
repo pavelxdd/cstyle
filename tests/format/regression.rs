@@ -18513,3 +18513,27 @@ fn parens_that_indent_after_them_keep_a_broken_literal_brace_with_its_argument_r
     check(input, &options, expected);
     check(expected, &options, expected);
 }
+
+#[test]
+fn added_braces_keep_a_comment_running_over_rows_with_the_statement_on_the_header_line() {
+    // The comment stays with its statement inside the added braces, as when
+    // the statement starts its own line; its later rows keep their columns.
+    let input = "void run(void)\n{\n    if (ready) value = 1; /* first row\n                             second row */\n    if (ready)\n        value = 1; /* first row\n                      second row */\n    go();\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void run(void)\n{\n    if (ready) {\n        value = 1; /* first row\n                             second row */\n    }\n    if (ready) {\n        value = 1; /* first row\n                      second row */\n    }\n    go();\n}\n",
+        ),
+        (
+            "--style=allman",
+            "void run(void)\n{\n    if (ready)\n    {\n        value = 1; /* first row\n                             second row */\n    }\n    if (ready)\n    {\n        value = 1; /* first row\n                      second row */\n    }\n    go();\n}\n",
+        ),
+        (
+            "--style=lisp",
+            "void run(void) {\n    if (ready) {\n        value = 1; /* first row\n                             second row */\n    }\n    if (ready) {\n        value = 1; /* first row\n                      second row */\n    }\n    go(); }\n",
+        ),
+    ] {
+        check(input, &[style, "--add-braces"], expected);
+        check(expected, &[style, "--add-braces"], expected);
+    }
+}

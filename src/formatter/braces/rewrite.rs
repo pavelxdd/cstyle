@@ -375,19 +375,28 @@ impl FormatEngine<'_> {
             // source held before the header's `)`.
             self.token_input.previous_input_whitespace = Some(" ".to_string().into());
             self.push_open_brace(None, usize::MAX, false);
+            // A comment running over rows after the statement stays with it
+            // in the block, as when the statement starts its own line.
+            let statement_end = next_non_whitespace(tokens, semicolon + 1, line_end)
+                .filter(|&comment| {
+                    matches!(&tokens[comment], Token::Comment(CommentKind::Block, text) if text.contains('\n'))
+                        && next_non_whitespace(tokens, comment + 1, tokens.len())
+                            .is_none_or(|after| matches!(tokens[after], Token::Newline))
+                })
+                .unwrap_or(semicolon);
             self.push_replayed_statement(
                 tokens,
                 statement_start,
-                semicolon,
+                statement_end,
                 None,
                 statement_start,
                 None,
             );
             // A comment or a statement on a later line follows the block,
             // not the brace; a closing header still joins it.
-            let next = next_statement_token(tokens, semicolon + 1, tokens.len(), true).and_then(
-                |next_index| {
-                    let on_later_line = tokens[semicolon + 1..next_index]
+            let next = next_statement_token(tokens, statement_end + 1, tokens.len(), true)
+                .and_then(|next_index| {
+                    let on_later_line = tokens[statement_end + 1..next_index]
                         .iter()
                         .any(|token| matches!(token, Token::Newline));
                     let closing_header = matches!(&tokens[next_index], Token::Word(word)
@@ -397,8 +406,7 @@ impl FormatEngine<'_> {
                     } else {
                         tokens.get(next_index)
                     }
-                },
-            );
+                });
             self.token_input.previous_input_whitespace = Some(" ".to_string().into());
             // The added brace is no text of the statement's last token.
             self.current.set_active_token(None);
@@ -410,7 +418,7 @@ impl FormatEngine<'_> {
                 .line_state
                 .added_block_semicolons
                 .push(semicolon);
-            self.comments.follows_added_one_line_block = tokens[semicolon + 1..]
+            self.comments.follows_added_one_line_block = tokens[statement_end + 1..]
                 .iter()
                 .find(|token| !matches!(token, Token::Whitespace(_)))
                 .is_some_and(|token| matches!(token, Token::Comment(..)));
@@ -426,6 +434,7 @@ impl FormatEngine<'_> {
                     }
                 }
             }
+            return Some(statement_end + 1);
         }
         Some(semicolon + 1)
     }
