@@ -2266,12 +2266,14 @@ fn else_after_commented_braceless_while_body_matches_if_indent() {
 }
 #[test]
 fn else_after_braceless_body_following_compound_literal_condition_matches_else_if() {
+    // A literal in a call in the condition leaves the header to its body,
+    // which stands a level in as after any condition.
     assert_eq!(
         format_exact(
             "void f(void)\n{\n  if (a)\n    n = 2;\n  else if (!equal (&colors[0], (&(Color) {\n    .x = 1\n  })))\n    n = 1;\n  else\n    n = 0;\n}\n",
             &FormatOptions::default(),
         ),
-        "void f(void)\n{\n    if (a)\n        n = 2;\n    else if (!equal (&colors[0], (&(Color) {\n        .x = 1\n    })))\n    n = 1;\n    else\n        n = 0;\n}\n",
+        "void f(void)\n{\n    if (a)\n        n = 2;\n    else if (!equal (&colors[0], (&(Color) {\n        .x = 1\n    })))\n        n = 1;\n    else\n        n = 0;\n}\n",
     );
 }
 #[test]

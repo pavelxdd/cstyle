@@ -21,6 +21,7 @@ use crate::formatter::output::buffer::{LineFilter, LookBack};
 use crate::formatter::output::line_adjust::macro_call_starts_with;
 use crate::formatter::preprocessor::is_conditional_preprocessor;
 use crate::formatter::state::indentation::LineKind;
+use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::syntax::language;
 use crate::formatter::syntax::language::is_macro_like_word;
 use crate::formatter::text::columns::column_after;
@@ -509,6 +510,31 @@ impl FormatEngine<'_> {
 }
 
 impl FormatEngine<'_> {
+    /// Whether every brace the line being finished opens is the body of a
+    /// header, a function or a lambda, none of them a list's.
+    fn pending_line_opens_only_bodies(&self) -> bool {
+        let Some(span) = self.output.pending_tokens() else {
+            return false;
+        };
+        let tokens = &self.tree.tokens;
+        let mut braces = (span.first..=span.last.min(tokens.len().saturating_sub(1)))
+            .filter(|&index| matches!(tokens[index], Token::Symbol('{')))
+            .peekable();
+        braces.peek().is_some()
+            && braces.all(|brace| {
+                self.tree
+                    .groups
+                    .opened_at(brace)
+                    .and_then(|block| self.tree.blocks.kind(block))
+                    .is_some_and(|kind| {
+                        matches!(
+                            kind,
+                            BlockKind::Control | BlockKind::FunctionBody | BlockKind::Lambda
+                        )
+                    })
+            })
+    }
+
     /// The indent of a line after one whose code ends with `=`: a `using`
     /// alias's right side, or an assignment's after a declarator that is a
     /// pointer or a reference.
@@ -1184,6 +1210,7 @@ impl FormatEngine<'_> {
                 && !current.starts_with_any(b"{}.[")
                 && find_assignment_operator(current).is_none()
                 && previous_open_paren().is_none()
+                && !self.pending_line_opens_only_bodies()
             {
                 return Some(leading_visual_width(previous, tab_width));
             }

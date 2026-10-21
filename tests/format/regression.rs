@@ -19134,6 +19134,7 @@ fn vtk_keeps_a_block_leading_a_lambda_body_whose_brace_leads_its_line() {
     check(input, &["--style=vtk"], expected);
     check(expected, &["--style=vtk"], expected);
 }
+
 #[test]
 fn arguments_after_a_compound_literal_on_the_line_of_its_paren_continue_the_call() {
     // The literal leads its own rows from the statement, as its brace
@@ -19158,6 +19159,27 @@ fn arguments_after_a_compound_literal_on_the_line_of_its_paren_continue_the_call
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn arguments_after_a_list_in_a_call_in_a_header_continue_the_call() {
+    // The `{` of the header's body closes no list row: the arguments
+    // after the list's closer stand with the call's other arguments.
+    let input = "void run() {\n  if (check(first,\n            field<Item>{\n                value},\n            more)) {\n    go();\n  }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void run()\n{\n    if (check(first,\n              field<Item> {\n        value\n    },\n              more)) {\n        go();\n    }\n}\n",
+        ),
+        (
+            "--style=allman",
+            "void run()\n{\n    if (check(first,\n              field<Item>\n    {\n        value\n    },\n              more))\n    {\n        go();\n    }\n}\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
 #[test]
 fn a_template_type_s_list_brace_ending_its_line_takes_a_space_as_on_one_line() {
     // A list's brace after a template's `>` stands apart from it wherever
@@ -19167,6 +19189,17 @@ fn a_template_type_s_list_brace_ending_its_line_takes_a_space_as_on_one_line() {
     check(input, &[], expected);
     check(expected, &[], expected);
 }
+
+#[test]
+fn a_braceless_body_after_a_condition_holding_a_literal_stands_a_level_in() {
+    // Whether the literal's brace leads its line or not, the condition's
+    // `)` ends the header and its body stands a level in.
+    let input = "void f(void)\n{\n  if (!equal (&colors[0], (&(Color) {\n    .x = 1\n  })))\n    n = 1;\n  go();\n}\n";
+    let expected = "void f(void)\n{\n    if (!equal (&colors[0], (&(Color)\n    {\n        .x = 1\n    })))\n        n = 1;\n    go();\n}\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+}
+
 #[test]
 fn arguments_after_a_block_among_a_macro_s_arguments_take_no_column_from_its_brace() {
     // A block among a macro's arguments is no sibling row: the arguments
@@ -19185,7 +19218,7 @@ fn arguments_after_a_block_among_a_macro_s_arguments_take_no_column_from_its_bra
         check(input, &[style], expected);
         check(expected, &[style], expected);
     }
-    let one_row = "void run()\n{\n    EXPECT_THROW(\n    { start(); },\n        std::exception);\n}\n";
+    let one_row =
+        "void run()\n{\n    EXPECT_THROW(\n    { start(); },\n        std::exception);\n}\n";
     check(one_row, &["--style=allman"], one_row);
 }
-

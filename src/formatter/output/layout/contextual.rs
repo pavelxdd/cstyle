@@ -24,7 +24,7 @@ use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::structure::blocks::{BlockKind, is_code_token};
 use crate::formatter::structure::groups::Delimiter;
-use crate::formatter::syntax::language::is_macro_like_word;
+use crate::formatter::syntax::language::{self, is_macro_like_word};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
@@ -659,6 +659,28 @@ impl FormatEngine<'_> {
 }
 
 impl FormatEngine<'_> {
+    /// Whether the last `)` of the last code line closes a control header's
+    /// parens.
+    fn previous_line_closes_header_parens(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        self.output
+            .last_line_outside_comment_index()
+            .and_then(|index| self.output.line_tokens(index))
+            .and_then(|span| {
+                (span.first..=span.last.min(tokens.len().saturating_sub(1)))
+                    .rev()
+                    .find(|&index| matches!(tokens[index], Token::Symbol(')')))
+            })
+            .and_then(|close| self.tree.groups.closed_at(close))
+            .and_then(|parens| {
+                self.tree
+                    .previous_code_token(self.tree.groups.get(parens).open)
+            })
+            .is_some_and(
+                |before| matches!(&tokens[before], Token::Word(word) if language::is_header(word)),
+            )
+    }
+
     pub(crate) fn apply_previous_statement_and_operator_prefix_layout(
         &self,
         line: &LineView<'_>,
@@ -2998,6 +3020,8 @@ impl FormatEngine<'_> {
                     .chars()
                     .next()
                     .is_some_and(is_identifier_start)
+                // A header's condition ends before the body it heads.
+                && !self.previous_line_closes_header_parens()
             {
                 layout.exact_indent_spaces =
                     Some(leading_visual_width(previous, self.options.tab_width));
