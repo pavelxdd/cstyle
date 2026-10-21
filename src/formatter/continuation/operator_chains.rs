@@ -359,7 +359,9 @@ impl FormatEngine<'_> {
             {
                 return Some(spaces);
             }
-            let previous_indent = leading_visual_width(previous, self.options.tab_width);
+            // The case unindent moves this row as it moved the row before.
+            let previous_indent = leading_visual_width(previous, self.options.tab_width)
+                + self.case_unindent_spaces();
             return Some(match find_assignment_operator(previous_trimmed) {
                 Some((0, operator)) => {
                     let after = &previous_trimmed[operator.len()..];
@@ -794,8 +796,9 @@ impl FormatEngine<'_> {
             .layout
             .frame_stack
             .active_stream_on_output_line(previous_line)?;
+        // The case unindent moves the row as it moved the line before.
         (stream.operator_output_column == stream.line_indent_spaces)
-            .then_some(stream.line_indent_spaces)
+            .then(|| stream.line_indent_spaces + self.case_unindent_spaces())
     }
 
     pub(crate) fn stream_after_ternary_colon_frame_indent_spaces(

@@ -19045,3 +19045,22 @@ fn lisp_reads_a_spaced_empty_brace_default_as_the_unspaced_one() {
     check(input, &["--style=lisp"], expected);
     check(expected, &["--style=lisp"], expected);
 }
+
+#[test]
+fn stream_rows_in_a_case_block_stand_under_the_first_operator() {
+    // The case's unindent moves the rows with their statement once.
+    let input = "void helper() {\n  switch (anchor) {\n    case UNANCHORED: {\n      LOG(ERROR) << \"first: \"\n                 << \"second \"\n                 << \"third \";\n      break;\n    }\n  }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void helper()\n{\n    switch (anchor) {\n    case UNANCHORED: {\n        LOG(ERROR) << \"first: \"\n                   << \"second \"\n                   << \"third \";\n        break;\n    }\n    }\n}\n",
+        ),
+        (
+            "--style=allman",
+            "void helper()\n{\n    switch (anchor)\n    {\n    case UNANCHORED:\n    {\n        LOG(ERROR) << \"first: \"\n                   << \"second \"\n                   << \"third \";\n        break;\n    }\n    }\n}\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}

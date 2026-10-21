@@ -2111,19 +2111,22 @@ impl FormatEngine<'_> {
         if stream.line_contains_nested_brace {
             return Some(base + self.options.indent_width * 2);
         }
+        // The output columns a case unindent moved stand past it again, as
+        // the unindent moves this row too.
+        let unindent = self.case_unindent_spaces();
         if stream.line_indent_spaces > base
             && stream.operator_output_column != stream.line_indent_spaces
         {
-            return Some(stream.line_indent_spaces);
+            return Some(stream.line_indent_spaces + unindent);
         }
         if let Some(spaces) = stream.assignment_value_start_column {
-            return Some(spaces);
+            return Some(spaces + unindent);
         }
         if stream.operator_output_column.saturating_sub(base) > self.options.max_continuation_indent
         {
             return Some(base + self.options.indent_width * 2);
         }
-        Some(stream.operator_output_column)
+        Some(stream.operator_output_column + unindent)
     }
 
     /// The level of a statement line here, with a case body's extra level
