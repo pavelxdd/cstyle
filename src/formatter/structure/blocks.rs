@@ -463,9 +463,14 @@ fn classify_after_paren(
             BlockKind::Control
         }
         Token::Word(word) if is_value_keyword(word) => BlockKind::CompoundLiteral,
+        // The `=` of `operator=` names the function; any other assigns a
+        // literal.
         Token::Word(_) | Token::Symbol('>') | Token::Operator(_)
             if BlockKind::is_declaration_scope(parent_block)
-                && !matches!(&tokens[before], Token::Operator(operator) if operator == "=") =>
+                && (!matches!(&tokens[before], Token::Operator(operator) if operator == "=")
+                    || previous_code_token(tokens, before).is_some_and(
+                        |name| matches!(&tokens[name], Token::Word(word) if word == "operator"),
+                    )) =>
         {
             BlockKind::FunctionBody
         }
@@ -703,6 +708,16 @@ mod tests {
                 "void f(void)\n{\n    call(child, &(const T) {\n        x, y\n    }, [](int v) {\n        return v;\n    }, (int[]){1});\n}\n"
             ),
             [FunctionBody, CompoundLiteral, Lambda, CompoundLiteral]
+        );
+    }
+
+    #[test]
+    fn classifies_an_assignment_operator_s_body_as_a_function_body() {
+        assert_eq!(
+            kinds(
+                "void run() {\n  struct Item {\n    auto operator=(char) -> Item& {\n      return *this;\n    }\n    Item& operator=(int) {\n      return *this;\n    }\n  };\n}\n"
+            ),
+            [FunctionBody, Aggregate, FunctionBody, FunctionBody]
         );
     }
 

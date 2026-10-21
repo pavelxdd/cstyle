@@ -18962,3 +18962,11 @@ fn a_list_closer_in_a_body_after_a_pointer_return_type_stands_at_its_list() {
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn vtk_an_assignment_operator_in_a_local_struct_opens_a_function_body() {
+    let input = "void run() {\n  struct Item {\n    int* count;\n\n    auto operator=(char) -> Item& {\n      if (value) throw error();\n      return *this;\n    }\n  };\n}\n";
+    let expected = "void run()\n{\n    struct Item\n        {\n        int* count;\n\n        auto operator=(char) -> Item&\n            {\n            if (value) throw error();\n            return *this;\n            }\n        };\n}\n";
+    check(input, &["--style=vtk"], expected);
+    check(expected, &["--style=vtk"], expected);
+}
