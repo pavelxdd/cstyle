@@ -1292,7 +1292,7 @@ impl FormatEngine<'_> {
             class_block_indent_extra,
             element_row_levels,
         };
-        if self.should_attach_control_paren_init_brace_from_previous_line(brace_type) {
+        if self.should_attach_control_paren_init_brace_from_previous_line(brace_type, token_index) {
             let (line, tokens) = self.output.pop_with_tokens().unwrap_or_default();
             self.current.replace(line);
             self.current.restore_tokens(tokens);
@@ -1531,8 +1531,10 @@ impl FormatEngine<'_> {
         if brace_type == BraceType::Command
             && !matches!(next, None | Some(Token::Newline))
             && ((code.trimmed_end().ends_with('(') && code.trimmed() != "(")
-                || (code.trimmed_start().starts_with("for (")
-                    && !code.trimmed_end().ends_with(')')))
+                || self
+                    .current
+                    .active_token()
+                    .is_some_and(|brace| self.brace_ranges_a_range_for(brace)))
         {
             brace_type = BraceType::Initializer;
         }
@@ -1994,8 +1996,7 @@ impl FormatEngine<'_> {
         let range_for_init_run_in = matches!(
             brace_type,
             BraceType::Command | BraceType::Array | BraceType::Initializer
-        ) && self.current.trimmed_start().starts_with("for (")
-            && self.current.trimmed_end().ends_with(':')
+        ) && self.brace_ranges_a_range_for(token_index)
             && matches!(
                 self.options.brace_style,
                 BraceStyle::None
@@ -3597,6 +3598,7 @@ impl FormatEngine<'_> {
     fn should_attach_control_paren_init_brace_from_previous_line(
         &self,
         brace_type: BraceType,
+        token_index: usize,
     ) -> bool {
         matches!(
             self.options.brace_style,
@@ -3610,10 +3612,11 @@ impl FormatEngine<'_> {
         ) && self.token_input.token_begins_source_line
             && self.current_is_blank()
             && self.layout.nesting.paren_depth > 0
-            && self.output.last().is_some_and(|line| {
-                let trimmed = line.trimmed();
-                trimmed.starts_with("for (") && trimmed.ends_with(':')
-            })
+            && self.brace_ranges_a_range_for(token_index)
+            && self
+                .output
+                .last()
+                .is_some_and(|line| line.trimmed().ends_with(':'))
     }
 
     fn class_block_indent_extra(&self, brace_type: BraceType, token_index: usize) -> usize {

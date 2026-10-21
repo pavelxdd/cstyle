@@ -662,7 +662,7 @@ impl FormatEngine<'_> {
             && !self.token_input.token_begins_source_line
             && self.current.trimmed_end().ends_with(',');
         let range_for_header_initializer =
-            double_brace_initializer && self.current.trimmed_start().starts_with("for (");
+            double_brace_initializer && self.token_in_for_header(token_index);
         // Styles running rows in after braces keep the first element there.
         let runs_in = matches!(
             self.options.brace_style,
@@ -967,10 +967,16 @@ impl FormatEngine<'_> {
             && self.output.get(open_output_len).is_some_and(|line| {
                 line.contains_from_first_byte("{ {") || line.contains_from_first_byte("{{")
             });
-        let range_for_initializer = self.output.get(open_output_len).is_some_and(|line| {
-            let trimmed = line.trimmed_start();
-            trimmed.starts_with("for ") && trimmed.trimmed_end().ends_with('{')
-        });
+        let range_for_initializer = self
+            .current
+            .active_token()
+            .filter(|&close| matches!(self.tree.tokens[close], Token::Symbol('}')))
+            .and_then(|close| self.tree.groups.closed_at(close))
+            .is_some_and(|list| self.token_in_for_header(self.tree.groups.get(list).open))
+            && self
+                .output
+                .get(open_output_len)
+                .is_some_and(|line| line.trimmed_end().ends_with('{'));
         // A compound literal its line opened closes on a line of its own.
         let closing_line_opened_literal = closing_compound_literal
             && (inline_array.is_some_and(|frame| frame.leveled_literal)

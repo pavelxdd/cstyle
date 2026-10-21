@@ -126,23 +126,35 @@ impl FormatEngine<'_> {
     /// a range-for's list does, or in a call among them: what it opens
     /// continues the header.
     pub(crate) fn token_in_header_parens(&self, index: usize) -> bool {
+        self.header_word_of_parens_holding(index).is_some()
+    }
+
+    /// Whether the token at `index` stands in a `for` header's parens.
+    pub(crate) fn token_in_for_header(&self, index: usize) -> bool {
+        self.header_word_of_parens_holding(index).is_some_and(
+            |word| matches!(&self.tree.tokens[word], Token::Word(word) if word == "for"),
+        )
+    }
+
+    /// The header word whose parens hold the token at `index`, through any
+    /// parens or brackets nested in them.
+    fn header_word_of_parens_holding(&self, index: usize) -> Option<usize> {
         let groups = &self.tree.groups;
         let mut enclosing = groups.enclosing(index);
         while let Some(group) = enclosing {
             let group = groups.get(group);
             if group.delimiter == Delimiter::Brace {
-                return false;
+                return None;
             }
             if group.delimiter == Delimiter::Paren
-                && self.tree.previous_code_token(group.open).is_some_and(|before| {
-                    matches!(&self.tree.tokens[before], Token::Word(word) if language::is_header(word))
-                })
+                && let Some(before) = self.tree.previous_code_token(group.open)
+                && matches!(&self.tree.tokens[before], Token::Word(word) if language::is_header(word))
             {
-                return true;
+                return Some(before);
             }
             enclosing = group.parent;
         }
-        false
+        None
     }
 
     /// The `(` that ends its line and opens the parens holding the token at

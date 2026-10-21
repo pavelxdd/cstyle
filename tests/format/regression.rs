@@ -19269,3 +19269,23 @@ fn breaking_styles_keep_a_statement_expression_s_brace_with_its_paren() {
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn a_range_for_list_keeps_its_shape_with_the_for_paren_unpadded() {
+    // The loop's range is a list however the paren after `for` is spaced.
+    let input =
+        "void run() {\n  for (char c : {'a',\n                 'b'}) {\n    go(c);\n  }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void run()\n{\n    for(char c : {'a',\n                  'b'}) {\n        go(c);\n    }\n}\n",
+        ),
+        (
+            "--style=pico",
+            "void run()\n{   for(char c : {'a',\n                  'b' })\n    {   go(c); } }\n",
+        ),
+    ] {
+        check(input, &[style, "--unpad-paren"], expected);
+        check(expected, &[style, "--unpad-paren"], expected);
+    }
+}

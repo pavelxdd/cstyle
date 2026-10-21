@@ -1238,7 +1238,7 @@ impl FormatEngine<'_> {
     /// declarator, that the brace at `brace` opens the list of.
     /// Whether the brace at `brace` opens the range a range-for's `:`
     /// leads.
-    fn brace_ranges_a_range_for(&self, brace: usize) -> bool {
+    pub(super) fn brace_ranges_a_range_for(&self, brace: usize) -> bool {
         let tokens = &self.tree.tokens;
         self.tree
             .previous_code_token(brace)
