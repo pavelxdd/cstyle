@@ -18873,3 +18873,14 @@ fn vtk_an_overloaded_subscript_operator_opens_a_function_body() {
     check(input, &["--style=vtk"], expected);
     check(expected, &["--style=vtk"], expected);
 }
+
+#[test]
+fn break_blocks_pads_a_range_for_block_whose_header_holds_a_list() {
+    // A list inside the header's parens is no block of the header: the
+    // body after it is, and the statement after the body parts from it as
+    // after any range-for.
+    let input = "void helper()\n{\n    first();\n    for (bool word : {true, false}) {\n        run();\n    }\n    done = true;\n}\n";
+    let expected = "void helper()\n{\n    first();\n\n    for (bool word :\n            {true, false})\n    {\n        run();\n    }\n\n    done = true;\n}\n";
+    check(input, &["--style=allman", "--break-blocks"], expected);
+    check(expected, &["--style=allman", "--break-blocks"], expected);
+}

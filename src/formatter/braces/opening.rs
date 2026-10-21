@@ -335,11 +335,13 @@ impl FormatEngine<'_> {
             || ["do", "if", "for", "while", "switch"]
                 .iter()
                 .any(|word| starts_header_word(line_start, word))
-            || self
-                .layout
-                .frame_stack
-                .active_brace()
-                .is_some_and(|frame| frame.header.is_some())
+            // A list in a header's parens continues the header.
+            || self.layout.frame_stack.active_brace().is_some_and(|frame| {
+                frame.header.is_some()
+                    || frame
+                        .open_token
+                        .is_some_and(|open| self.token_in_header_parens(open))
+            })
         {
             return None;
         }
@@ -1232,7 +1234,18 @@ impl FormatEngine<'_> {
             return;
         }
         self.break_source_line_before_open_brace();
-        let brace_header = self.push_pre_brace_header();
+        // A list inside a header's parens leaves the header to its body.
+        let brace_header = if self.token_in_header_parens(token_index)
+            && self
+                .tree
+                .groups
+                .opened_at(token_index)
+                .is_some_and(|group| self.tree.blocks.kind(group) != Some(BlockKind::Lambda))
+        {
+            None
+        } else {
+            self.push_pre_brace_header()
+        };
         self.observe_block_spacing_open_brace();
         let brace_type = self.classify_pushed_open_brace(
             brace_header.as_deref(),
