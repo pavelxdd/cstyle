@@ -19508,3 +19508,24 @@ fn a_braceless_body_in_a_lambda_argument_leaves_no_level_to_a_header_after_a_sta
     check(input, &args, expected);
     check(expected, &args, expected);
 }
+
+#[test]
+fn break_blocks_pads_after_a_range_for_block_whose_list_runs_in_on_its_own_row() {
+    // The list in the header's parens is no block of the header: the body
+    // after it still closes the header's block and parts from what follows.
+    let input = "void f()\n{\n    for (auto v : {\n             1, 2\n         }) {\n        go(v);\n    }\n    LOG(value)\n    go();\n}\n";
+    let expected = "void f()\n{   for (auto v :\n            {   1, 2 })\n    {   go(v); }\n\n    LOG(value)\n    go(); }\n";
+    let args = ["--style=pico", "--break-blocks=all", "--delete-empty-lines"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
+
+#[test]
+fn break_blocks_pads_after_a_braceless_body_whose_header_holds_braces() {
+    // Braces in a header's parens open no block of the header: its
+    // braceless body parts from what follows as when they are not there.
+    let input = "void f()\n{\n    int n = 1;\n    if (check({1, 2}))\n        return;\n    if (n & (Item{1}))\n        return;\n    for (auto v : {1, 2})\n        go(v);\n    n = 0;\n}\n";
+    let expected = "void f()\n{\n    int n = 1;\n\n    if (check({1, 2}))\n        return;\n\n    if (n & (Item{1}))\n        return;\n\n    for (auto v : {1, 2})\n        go(v);\n\n    n = 0;\n}\n";
+    check(input, &["--style=allman", "--break-blocks"], expected);
+    check(expected, &["--style=allman", "--break-blocks"], expected);
+}

@@ -318,6 +318,12 @@ impl FormatEngine<'_> {
         if !self.options.break_blocks {
             return;
         }
+        // A list inside the header's parens leaves the header to its body.
+        if !matches!(brace_type, BraceType::Command | BraceType::NonStatement)
+            && self.layout.nesting.paren_depth > 0
+        {
+            return;
+        }
         // A block of comments alone is as empty once its line ends.
         self.block_spacing.pending_closed_empty_block = Some(holds_no_code);
         // Only a header's block is padded.
