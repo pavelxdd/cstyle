@@ -19487,3 +19487,13 @@ fn break_blocks_pads_a_header_after_a_macro_call_leading_its_block() {
     check(input, &args, expected);
     check(expected, &args, expected);
 }
+
+#[test]
+fn an_asm_operand_row_heads_no_constructor_initializers_for_the_statements_after_it() {
+    // The colons of an asm statement's operands stand inside its parens:
+    // the arguments of a call after it take none of their columns.
+    let input = "void f()\n{\n    __asm__ volatile(\"nop\"\n                     : \"=r\"(value)\n                     : \"r\"(other));\n    EXPECT_THROW(\n        {\n            start();\n        },\n        std::exception);\n}\n";
+    let expected = "void f()\n{   __asm__ volatile(\"nop\"\n                     : \"=r\"(value)\n                     : \"r\"(other));\n    EXPECT_THROW(\n    {   start(); },\n        std::exception); }\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+}

@@ -462,7 +462,7 @@ impl FormatEngine<'_> {
             if (code.ends_with('{') || code.ends_with('}')) && !braced_initializer() {
                 return Some(ConstructorScan::Stop);
             }
-            if self.colon_line_is_ternary_arm(index) {
+            if self.colon_line_is_ternary_arm(index) || self.colon_line_stands_in_parens(index) {
                 return Some(ConstructorScan::Stop);
             }
             let after_colon =
@@ -481,6 +481,18 @@ impl FormatEngine<'_> {
             return Some(ConstructorScan::Stop);
         }
         None
+    }
+
+    /// Whether the colon leading output line `index` stands inside parens,
+    /// as an asm statement's operands do, where no initializer list starts.
+    fn colon_line_stands_in_parens(&self, index: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        self.output
+            .line_tokens(index)
+            .and_then(|span| (span.first..=span.last).find(|&at| is_code_token(&tokens[at])))
+            .filter(|&colon| matches!(tokens[colon], Token::Symbol(':')))
+            .and_then(|colon| self.tree.groups.enclosing(colon))
+            .is_some_and(|group| self.tree.groups.get(group).delimiter == Delimiter::Paren)
     }
 
     fn colon_line_is_ternary_arm(&self, colon_index: usize) -> bool {
