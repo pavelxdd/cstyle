@@ -18784,3 +18784,16 @@ fn a_member_braced_initializer_ending_a_constructor_initializers_leaves_the_body
         expected,
     );
 }
+
+#[test]
+fn a_comment_before_a_constructor_body_stands_with_the_initializer_rows_before_it() {
+    // After a lambda among the initializers the rows stand at the
+    // constructor, the comment with them, whatever lines the lambda takes;
+    // after a braced initializer they stay at the members.
+    let input = "Item::Item(int v)\n    : run_([this]() { go(); })\n      /* note */\n{\n    start();\n}\nItem::Item(int v)\n    : run_([this]() {\n          go();\n      })\n      /* note */\n{\n    start();\n}\nItem::Item(int v)\n    : items_{1, 2}\n      /* note */\n{\n    start();\n}\n";
+    let expected = "Item::Item(int v)\n    : run_([this]() { go(); })\n/* note */\n{   start(); }\nItem::Item(int v)\n    : run_([this]()\n{   go(); })\n/* note */\n{   start(); }\nItem::Item(int v)\n    : items_{1, 2 }\n      /* note */\n{   start(); }\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+    let expected = "Item::Item(int v)\n    : items_{1, 2}\n      /* note */\n{\n    start();\n}\n";
+    check(expected, &["--style=kr"], expected);
+}
