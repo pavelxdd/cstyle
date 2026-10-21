@@ -18807,3 +18807,26 @@ fn a_continuation_row_a_lambda_opens_in_keeps_its_column() {
     check(input, &["--style=allman"], expected);
     check(expected, &["--style=allman"], expected);
 }
+
+#[test]
+fn an_enumeration_with_an_underlying_type_keeps_its_one_line_body() {
+    // An enumeration's `:` gives its underlying type, no base: the body a
+    // line holds stays on it as without the type.
+    let input =
+        "enum class Mode : int { first, second };\nenum class [[deprecated]] Kind { one, two };\n";
+    let expected = "enum class Mode : int\n{ first, second };\nenum class [[deprecated]] Kind\n{ one, two };\n";
+    check(input, &["--style=mozilla"], expected);
+    check(expected, &["--style=mozilla"], expected);
+}
+
+#[test]
+fn an_enumeration_after_a_macro_call_keeps_its_one_line_body() {
+    // A macro call ending no statement before the enumeration takes no
+    // part in its head.
+    let input = "MACRO(value)\n\nEXPORT\nenum class Mode\n{ first, second };\n";
+    for style in ["mozilla", "allman", "kr", "gnu"] {
+        check(input, &[&format!("--style={style}")], input);
+    }
+    let whitesmith = "MACRO(value)\n\nEXPORT\nenum class Mode\n    { first, second };\n";
+    check(input, &["--style=whitesmith"], whitesmith);
+}

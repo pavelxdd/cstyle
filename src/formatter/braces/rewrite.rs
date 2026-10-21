@@ -1332,14 +1332,16 @@ impl FormatEngine<'_> {
         let Some(owner) = self.tree.blocks.owner(body) else {
             return false;
         };
-        // The head may open with its template parameters.
+        // The head may open with its template parameters. An enumeration's
+        // `:` gives its underlying type.
         let level = groups.enclosing(start);
         (owner..start)
             .find(|&index| {
                 groups.enclosing(index) == level
                     && matches!(&tokens[index], Token::Word(word)
-                        if matches!(word.as_str(), "struct" | "class" | "union"))
+                        if matches!(word.as_str(), "struct" | "class" | "union" | "enum"))
             })
+            .filter(|&keyword| !matches!(&tokens[keyword], Token::Word(word) if word == "enum"))
             .is_some_and(|keyword| {
                 (keyword + 1..start).any(|index| {
                     matches!(tokens[index], Token::Symbol(':')) && groups.enclosing(index) == level
@@ -3450,14 +3452,29 @@ fn enum_head_ends_previous_line(
         })
         .unwrap_or(previous);
     let head = &tokens[head_start..=previous];
-    (head
-        .iter()
-        .any(|token| matches!(token, Token::Word(word) if word == "enum"))
-        && !head.iter().any(|token| {
-            matches!(token, Token::Symbol('(' | '='))
-                || matches!(token, Token::Operator(operator) if operator == "=")
-        }))
-    .then_some(BraceType::Enum)
+    // An attribute's arguments take no part in the head.
+    let mut brackets = 0usize;
+    let outside_attributes = head.iter().filter(|token| {
+        match token {
+            Token::Symbol('[') => brackets += 1,
+            Token::Symbol(']') => brackets = brackets.saturating_sub(1),
+            _ => return brackets == 0,
+        }
+        false
+    });
+    // What comes before `enum`, as a macro call ending no statement, takes
+    // no part in the head either.
+    let mut enumeration = false;
+    for token in outside_attributes {
+        if enumeration
+            && (matches!(token, Token::Symbol('(' | '='))
+                || matches!(token, Token::Operator(operator) if operator == "="))
+        {
+            return None;
+        }
+        enumeration |= matches!(token, Token::Word(word) if word == "enum");
+    }
+    enumeration.then_some(BraceType::Enum)
 }
 
 /// Whether the head `tokens[start..end]` declares a trailing return type,
