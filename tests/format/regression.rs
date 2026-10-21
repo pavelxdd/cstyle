@@ -19701,3 +19701,25 @@ fn converting_tabs_fills_a_list_brace_run_into_its_row_with_spaces() {
     check(nested, &args, expected);
     check(expected, &args, expected);
 }
+
+#[test]
+fn a_list_brace_leading_a_row_runs_into_the_line_comment_after_it() {
+    // The run-in styles fill the gap before a line comment after a brace
+    // leading its row as before a block comment there.
+    let input = "static Item items[] =\n{ // note\n    { 1, 2 }, };\n";
+    for style in ["--style=pico", "--style=horstmann"] {
+        let expected = if style == "--style=pico" {
+            "static Item items[] =\n{   // note\n    { 1, 2 }, };\n"
+        } else {
+            "static Item items[] =\n{   // note\n    { 1, 2 },\n};\n"
+        };
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+    // After a function the brace runs in with converted tabs as well.
+    let input = "void f()\n{\n}\nstatic Item items[] = {\n  // note\n  { 1, 2 },\n};\n";
+    let expected = "void f()\n{}\nstatic Item items[] =\n{\t// note\n\t{ 1, 2 }, };\n";
+    let args = ["--style=pico", "--indent=tab=4", "--convert-tabs"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}

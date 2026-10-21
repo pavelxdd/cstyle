@@ -515,8 +515,8 @@ fn run_in_horstmann_opening_braces(
                         && !run_in_next_line_is_access_label(brace, next, options)
                 })
         };
-        // A brace leading a row runs into the block comment after it.
-        if let Some(comment) = brace_led_block_comment(line)
+        // A brace leading a row runs into the comment after it.
+        if let Some(comment) = brace_led_comment(line)
             && !raw_lines[index]
         {
             let brace = &line[..line.len() - line.trimmed_start().len() + 1];
@@ -542,9 +542,9 @@ fn run_in_horstmann_opening_braces(
                 let fill = horstmann_run_in_fill(&brace, next, fill_options);
                 let next = next.trimmed_start().to_string();
                 joined.push_str(&fill);
-                // A nested brace runs into its block comment as a brace
+                // A nested brace runs into its comment as a brace
                 // leading the row does.
-                if let Some(comment) = brace_led_block_comment(&next)
+                if let Some(comment) = brace_led_comment(&next)
                     && !raw_lines[at]
                 {
                     let column = visual_width_from(&joined, 0, options.tab_width.max(1));
@@ -576,16 +576,18 @@ fn run_in_horstmann_opening_braces(
     finish_postprocessed_lines(lines, line_break, output.ends_with(line_break))
 }
 
-/// The block comment after the `{` that leads `line`, when the comment is
-/// all that follows the brace or runs past the line.
-fn brace_led_block_comment(line: &str) -> Option<&str> {
+/// The comment after the `{` that leads `line`: a line comment, or a block
+/// comment that is all that follows the brace or runs past the line.
+fn brace_led_comment(line: &str) -> Option<&str> {
     line.trimmed_start()
         .strip_prefix('{')
         .filter(|rest| rest.starts_with_any(b" \t"))
         .map(str::trim_start)
         .filter(|rest| {
-            rest.starts_with("/*")
-                && (rest.ends_with("*/") && rest.matches("*/").count() == 1 || !rest.contains("*/"))
+            rest.starts_with("//")
+                || rest.starts_with("/*")
+                    && (rest.ends_with("*/") && rest.matches("*/").count() == 1
+                        || !rest.contains("*/"))
         })
 }
 
