@@ -322,15 +322,48 @@ impl FormatEngine<'_> {
                 // not.
                 Token::Word(_) => true,
                 // `template<class T>`
-                Token::Operator(operator) if operator == ">" => {
-                    template_arguments_start(tokens, previous)
-                        .and_then(|open| self.tree.previous_code_token(open))
-                        .is_some_and(
-                            |word| matches!(&tokens[word], Token::Word(word) if word == "template"),
-                        )
+                Token::Operator(operator)
+                    if operator == ">" && self.closes_template_clause(previous) =>
+                {
+                    true
                 }
-                _ => false,
+                // `template<class T> requires C<T>`
+                _ => self.requires_clause_before(head.start),
             })
+    }
+
+    /// Whether the `>` at `close` ends a `template <...>` clause.
+    fn closes_template_clause(&self, close: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        template_arguments_start(tokens, close)
+            .and_then(|open| self.tree.previous_code_token(open))
+            .is_some_and(|word| matches!(&tokens[word], Token::Word(word) if word == "template"))
+    }
+
+    /// Whether a `requires` clause after a template clause ends right before
+    /// `start`. A constraint holds a few tokens, so the walk back is short.
+    fn requires_clause_before(&self, start: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        let mut index = start;
+        for _ in 0..64 {
+            let Some(previous) = self.tree.previous_code_token(index) else {
+                return false;
+            };
+            match &tokens[previous] {
+                Token::Symbol(';' | '{' | '}') => return false,
+                Token::Word(word) if word == "requires" => {
+                    return self
+                        .tree
+                        .previous_code_token(previous)
+                        .is_some_and(|before| {
+                            matches!(&tokens[before], Token::Operator(operator) if operator == ">")
+                                && self.closes_template_clause(before)
+                        });
+                }
+                _ => index = previous,
+            }
+        }
+        false
     }
 
     /// Whether a preprocessor directive splits the parameter list, which

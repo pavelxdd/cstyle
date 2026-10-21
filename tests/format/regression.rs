@@ -19754,3 +19754,20 @@ fn a_call_ending_a_braceless_body_after_a_split_else_leaves_its_level() {
     check(input, &["--style=pico"], expected);
     check(expected, &["--style=pico"], expected);
 }
+
+#[test]
+fn breaking_return_types_reads_a_definition_after_a_requires_clause() {
+    // A requires clause between the template head and the definition is no
+    // part of the declaration: its return type breaks as without it.
+    let input = "template <typename T>\n    requires Sortable<T>\nvoid sort(T &items)\n{\n    go(items);\n}\n";
+    let expected =
+        "template <typename T>\nrequires Sortable<T>\nvoid\nsort(T &items) {\n    go(items);\n}\n";
+    let args = ["--style=google", "--break-return-type"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+    // A parenthesized constraint ends the clause as a named one does.
+    let input = input.replace("Sortable<T>", "(sizeof(T) > 4)");
+    let expected = expected.replace("Sortable<T>", "(sizeof(T) > 4)");
+    check(&input, &args, &expected);
+    check(&expected, &args, &expected);
+}

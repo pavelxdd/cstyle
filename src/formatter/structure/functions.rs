@@ -413,6 +413,11 @@ fn return_type_start(
         }
         match &tokens[previous] {
             Token::Symbol(';' | '{' | '}' | ':') => break,
+            // `template<class T> requires C<T>`: the clause leads the head.
+            Token::Word(word) if word == "requires" => {
+                return requires_constraint_end(tokens, groups, previous)
+                    .filter(|&end| end <= name_start);
+            }
             Token::Word(word) if is_non_type_keyword(word) || is_header(word) => return None,
             // A word above an empty line, such as a macro left without a
             // semicolon, ends what came before.
@@ -484,6 +489,60 @@ fn return_type_start(
         }
     }
     Some(start)
+}
+
+/// The first code token after the constraint of the `requires` at
+/// `keyword`: words with their template arguments or parenthesized
+/// expressions, joined by `&&` or `||`.
+fn requires_constraint_end(tokens: &[Token], groups: &Groups, keyword: usize) -> Option<usize> {
+    let mut index = next_code_token(tokens, keyword + 1)?;
+    loop {
+        index = match &tokens[index] {
+            Token::Symbol('(') => groups.get(groups.opened_at(index)?).close?,
+            Token::Word(_) => {
+                let mut end = index;
+                while let Some(next) = next_code_token(tokens, end + 1) {
+                    end = match &tokens[next] {
+                        Token::Operator(operator) if operator == "::" => {
+                            next_code_token(tokens, next + 1)?
+                        }
+                        Token::Operator(operator) if operator == "<" => {
+                            template_arguments_end(tokens, next)?
+                        }
+                        _ => break,
+                    };
+                }
+                end
+            }
+            _ => return None,
+        };
+        let next = next_code_token(tokens, index + 1)?;
+        match &tokens[next] {
+            Token::Operator(operator) if matches!(operator.as_str(), "&&" | "||") => {
+                index = next_code_token(tokens, next + 1)?;
+            }
+            _ => return Some(next),
+        }
+    }
+}
+
+/// The `>` closing the template arguments opened by the `<` at `open`.
+fn template_arguments_end(tokens: &[Token], open: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    for (index, token) in tokens.iter().enumerate().skip(open) {
+        match token {
+            Token::Operator(operator) if operator == "<" => depth += 1,
+            Token::Operator(operator) if operator == ">" || operator == ">>" => {
+                depth = depth.saturating_sub(if operator == ">>" { 2 } else { 1 });
+                if depth == 0 {
+                    return Some(index);
+                }
+            }
+            Token::Symbol(';' | '{' | '}') => return None,
+            _ => {}
+        }
+    }
+    None
 }
 
 /// For `void (*f(args))(void)`: the group `(*f(args))` and the parameter
