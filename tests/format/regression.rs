@@ -7883,10 +7883,11 @@ fn indented_brace_styles_indent_a_kept_bare_block_as_its_brace_wherever_it_stand
 
 #[test]
 fn break_blocks_leaves_a_one_line_block_after_a_statement_unpadded() {
-    // A header after a statement on its line pads nothing around a block the
-    // source kept on that line, through its `else`; a block written over
-    // lines still takes the blank after it.
+    // A header after a statement on its line pads nothing around a block
+    // kept on that line, through its `else`; a block over rows, as the style
+    // breaks it or as written, takes the blank after it.
     let wrap = |body: &str| format!("void f()\n{{\n    first=1;\n    {body}\n    other=1;\n}}\n");
+    let padded = |body: &str| wrap(body).replace("\n    other=1;", "\n\n    other=1;");
     for options in [
         &["--style=kr", "--break-blocks", "-O", "-o"][..],
         &["--style=kr", "--break-blocks", "-o"][..],
@@ -7896,16 +7897,19 @@ fn break_blocks_leaves_a_one_line_block_after_a_statement_unpadded() {
         let one_expected = if kept {
             one.clone()
         } else {
-            wrap("value=1; if (ready) {\n        value=0;\n    }")
+            padded("value=1; if (ready) {\n        value=0;\n    }")
         };
         check(&one, options, &one_expected);
         let chain = wrap("value=1; if (ready) { value=0; } else { result=0; }");
         let chain_expected = if kept {
             chain.clone()
         } else {
-            wrap("value=1; if (ready) {\n        value=0;\n    } else {\n        result=0;\n    }")
+            padded(
+                "value=1; if (ready) {\n        value=0;\n    } else {\n        result=0;\n    }",
+            )
         };
         check(&chain, options, &chain_expected);
+        check(&chain_expected, options, &chain_expected);
     }
     check(
         &wrap("value=1; if (ready) {\n        value=0;\n    }"),
@@ -19409,4 +19413,25 @@ fn a_comment_after_an_attached_switch_brace_stands_with_the_labels_after_a_macro
     let args = ["--style=kr", "--indent-switches"];
     check(input, &args, expected);
     check(expected, &args, expected);
+}
+
+#[test]
+fn break_blocks_pads_after_a_header_block_the_style_breaks_after_a_statement() {
+    // A block written on one line after a statement on its line stands
+    // over rows once the style breaks it, and pads as a block over rows.
+    let input = "void f()\n{\n    value=1; if (ready) { value=0; }\n    go();\n}\n";
+    let expected =
+        "void f()\n{\n    value=1; if (ready) {\n        value=0;\n    }\n\n    go();\n}\n";
+    let args = ["--style=kr", "--break-blocks", "--keep-one-line-statements"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+    // Kept on one line, it pads nothing.
+    let kept = "void f()\n{\n    value=1; if (ready) { value=0; }\n    go();\n}\n";
+    let args = [
+        "--style=kr",
+        "--break-blocks",
+        "--keep-one-line-statements",
+        "--keep-one-line-blocks",
+    ];
+    check(kept, &args, kept);
 }

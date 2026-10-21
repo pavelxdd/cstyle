@@ -542,12 +542,12 @@ impl FormatEngine<'_> {
         let groups = &self.tree.groups;
         self.current
             .active_token()
-            .and_then(|close| groups.closed_at(close).map(|group| (group, close)))
-            .is_some_and(|(group, close)| {
+            .and_then(|close| groups.closed_at(close))
+            .is_some_and(|group| {
+                // The block stands on one row when its brace is on the line
+                // being built, wherever the source broke it.
                 let open = groups.get(group).open;
-                !self.tree.tokens[open..close]
-                    .iter()
-                    .any(|token| matches!(token, Token::Newline))
+                self.output.line_with_token(open).is_none()
                     && self
                         .tree
                         .blocks
