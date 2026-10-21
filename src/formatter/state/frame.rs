@@ -298,7 +298,9 @@ pub(crate) struct FrameStack {
     /// Whether some stream frame stands on an output line before that of a
     /// frame pushed earlier.
     stream_frames_unordered: bool,
-    constructor_initializer_frame: Option<ConstructorInitializerFrame>,
+    /// The last constructor's initializers and the brace depth of their
+    /// constructor, whose body closing at that depth ends them.
+    constructor_initializer_frame: Option<(ConstructorInitializerFrame, usize)>,
     header_frame: Option<HeaderFrame>,
     braceless_header_frames: Vec<BracelessHeaderFrame>,
     comment_frame: Option<CommentFrame>,
@@ -736,11 +738,13 @@ impl FrameStack {
     }
 
     pub(crate) fn push_constructor_initializer(&mut self, frame: ConstructorInitializerFrame) {
-        self.constructor_initializer_frame = Some(frame);
+        self.constructor_initializer_frame = Some((frame, self.brace_frames.len()));
     }
 
     pub(crate) fn active_constructor_initializer(&self) -> Option<&ConstructorInitializerFrame> {
-        self.constructor_initializer_frame.as_ref()
+        self.constructor_initializer_frame
+            .as_ref()
+            .map(|(frame, _)| frame)
     }
 
     pub(crate) fn push_header(&mut self, frame: HeaderFrame) {
@@ -1177,6 +1181,14 @@ impl FrameStack {
         };
         if frame.semantic_kind == BraceSemanticKind::Command {
             self.header_frame = None;
+        }
+        if frame.semantic_kind == BraceSemanticKind::Definition
+            && self
+                .constructor_initializer_frame
+                .as_ref()
+                .is_some_and(|&(_, depth)| depth == self.brace_frames.len())
+        {
+            self.constructor_initializer_frame = None;
         }
         self.closed_brace_frames.push(frame);
     }

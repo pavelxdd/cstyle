@@ -194,8 +194,8 @@ impl FormatEngine<'_> {
     }
 
     /// Whether the last constructor's initializers may still be read: its
-    /// frame stays recorded past the body, which opens outside any
-    /// function.
+    /// frame stays recorded until its body closes, and the body opens
+    /// outside any function.
     pub(crate) fn in_constructor_initializer(&self) -> bool {
         self.layout
             .frame_stack

@@ -18545,3 +18545,13 @@ fn a_comma_among_template_parameters_with_defaults_parts_no_member_declarators()
     check(&input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
+
+#[test]
+fn a_brace_list_after_a_constructor_takes_no_column_from_its_initializers() {
+    let input = "Item::Item()\n  : first_(false),\n    second_(0) {\n}\n\nvoid run() {\n  if (empty) {\n    for (bool word : {true, false}) {\n      go(word);\n    }\n  }\n}\n";
+    let expected = "Item::Item()\n    : first_(false),\n      second_(0)\n{\n}\n\nvoid run()\n{\n    if (empty)\n    {\n        for (bool word :\n                {true, false})\n        {\n            go(word);\n        }\n    }\n}\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+    let expected = "class Item\n{\npublic:\n    Item()\n        : first_(false),\n          second_(0)\n    {\n    }\n};\n\nvoid run()\n{\n    go(Item{1,\n            2});\n}\n";
+    check(expected, &["--style=kr"], expected);
+}
