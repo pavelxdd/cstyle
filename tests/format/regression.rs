@@ -19241,3 +19241,31 @@ fn a_directive_s_body_after_a_comment_in_a_case_block_keeps_the_comment_s_column
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn breaking_styles_keep_a_statement_expression_s_brace_with_its_paren() {
+    // The `({` of a statement expression opens one value, not a block the
+    // style would break from its paren.
+    let input = "void run() {\n  int x = ({\n    int y = 1;\n    y + 1;\n  });\n}\n";
+    for (style, expected) in [
+        (
+            "--style=allman",
+            "void run()\n{\n    int x = ({\n        int y = 1;\n        y + 1;\n    });\n}\n",
+        ),
+        (
+            "--style=gnu",
+            "void run()\n{\n    int x = ({\n        int y = 1;\n        y + 1;\n    });\n}\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void run()\n    {\n    int x = ({\n        int y = 1;\n        y + 1;\n    });\n    }\n",
+        ),
+        (
+            "--style=horstmann",
+            "void run()\n{   int x = ({\n        int y = 1;\n        y + 1;\n    });\n}\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
