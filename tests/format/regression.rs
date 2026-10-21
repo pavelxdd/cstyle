@@ -19222,3 +19222,22 @@ fn arguments_after_a_block_among_a_macro_s_arguments_take_no_column_from_its_bra
         "void run()\n{\n    EXPECT_THROW(\n    { start(); },\n        std::exception);\n}\n";
     check(one_row, &["--style=allman"], one_row);
 }
+#[test]
+fn a_directive_s_body_after_a_comment_in_a_case_block_keeps_the_comment_s_column() {
+    // The case's unindent moves the comment and the line after the
+    // directive once, with the statements around them.
+    let input = "void f() {\n  switch (op) {\n  case 1: {\n    if (x) {\n      fail:\n      /* note */\n#ifdef DEBUG\n      go(1);\n#endif\n      done();\n    }\n    break;\n  }\n  }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void f()\n{\n    switch (op) {\n    case 1: {\n        if (x) {\nfail:\n            /* note */\n#ifdef DEBUG\n            go(1);\n#endif\n            done();\n        }\n        break;\n    }\n    }\n}\n",
+        ),
+        (
+            "--style=pico",
+            "void f()\n{   switch (op)\n    {   case 1:\n        {   if (x)\n            {   fail:\n                /* note */\n#ifdef DEBUG\n                go(1);\n#endif\n                done(); }\n            break; } } }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}

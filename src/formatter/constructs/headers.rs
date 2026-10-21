@@ -292,12 +292,17 @@ impl FormatEngine<'_> {
             .rposition(|line| !line.trimmed().is_empty())?;
         let before = &self.output[before_index];
         let before_trimmed = self.output.code_body(before_index);
+        // The output columns a case unindent moved stand past it again, as
+        // the unindent moves this line too.
+        let unindent = self.case_unindent_spaces();
         if before_trimmed == "else"
             || before_trimmed.ends_with("} else")
             || before_trimmed.ends_with("}else")
         {
             return Some(
-                leading_visual_width(before, self.options.tab_width) + self.options.indent_width,
+                leading_visual_width(before, self.options.tab_width)
+                    + self.options.indent_width
+                    + unindent,
             );
         }
         // A code line led by `*` holds tokens; a comment line holds none.
@@ -312,6 +317,7 @@ impl FormatEngine<'_> {
                 self.output
                     .comment_indent_width(before_index, self.options.tab_width)
                     + block_indent
+                    + unindent
             })
     }
 
