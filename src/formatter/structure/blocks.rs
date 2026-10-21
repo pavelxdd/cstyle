@@ -183,6 +183,14 @@ fn classify(tokens: &[Token], groups: &Groups, blocks: &Blocks, id: GroupId) -> 
     let Some(previous) = previous else {
         return BlockKind::Block;
     };
+    // The body after a member's braced initializer ending a constructor's
+    // initializers is the constructor's.
+    if BlockKind::is_declaration_scope(parent_block)
+        && let Some(value) = groups.closed_at(previous)
+        && braces_member_initializer(tokens, groups, groups.get(value).open)
+    {
+        return BlockKind::FunctionBody;
+    }
     let head = statement_head(tokens, groups, group.open);
     // Inside parentheses or brackets a brace belongs to an expression.
     if parent.is_some_and(|parent| groups.get(parent).delimiter != Delimiter::Brace) {
@@ -218,6 +226,9 @@ fn classify(tokens: &[Token], groups: &Groups, blocks: &Blocks, id: GroupId) -> 
         return kind;
     }
     if parent.is_some_and(|parent| groups.get(parent).delimiter != Delimiter::Brace) {
+        return BlockKind::Initializer;
+    }
+    if braces_member_initializer(tokens, groups, group.open) {
         return BlockKind::Initializer;
     }
     match &tokens[previous] {
@@ -592,6 +603,47 @@ fn is_function_suffix_word(word: &str) -> bool {
         word,
         "const" | "volatile" | "noexcept" | "override" | "final" | "mutable" | "throw"
     )
+}
+
+/// Whether the brace opened at `open` holds the value of a member that a
+/// constructor's initializers start with or reach after a `,`.
+fn braces_member_initializer(tokens: &[Token], groups: &Groups, open: usize) -> bool {
+    let Some(member) = previous_code_token(tokens, open) else {
+        return false;
+    };
+    if !matches!(tokens[member], Token::Word(_)) {
+        return false;
+    }
+    let level = groups.enclosing(open);
+    let mut index = member;
+    while let Some(before) = previous_code_token(tokens, index) {
+        if groups.enclosing(before) != level {
+            return false;
+        }
+        if let Some(group) = groups.closed_at(before) {
+            let value = groups.get(group).open;
+            // Only another member's braced value stands among the members.
+            if groups.get(group).delimiter == Delimiter::Brace
+                && !braces_member_initializer(tokens, groups, value)
+            {
+                return false;
+            }
+            index = value;
+            continue;
+        }
+        match &tokens[before] {
+            Token::Symbol(':') => {
+                return previous_code_token(tokens, before).is_some_and(|params| {
+                    matches!(tokens[params], Token::Symbol(')'))
+                        && groups.closed_at(params).is_some()
+                        || word_at(tokens, params).is_some_and(is_function_suffix_word)
+                });
+            }
+            Token::Symbol(';' | '{' | '}') => return false,
+            _ => index = before,
+        }
+    }
+    false
 }
 
 fn head_has_code(head: &[usize]) -> bool {

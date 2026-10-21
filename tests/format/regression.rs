@@ -18748,3 +18748,39 @@ fn a_comment_run_in_after_a_switch_brace_stands_with_the_statement_after_it() {
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn a_member_braced_initializer_ending_a_constructor_initializers_leaves_the_body_its_own() {
+    // The last member's braces hold its value; the brace after them opens
+    // the constructor's body, which the style places as any function's.
+    let input = "class Checker {\n  Checker(int fmt)\n      : types_{1, 2},\n        named_{},\n        context_(fmt),\n        funcs_{3} {\n    run();\n  }\n};\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "class Checker\n{\n    Checker(int fmt)\n        : types_{1, 2},\n          named_{},\n          context_(fmt),\n          funcs_{3}\n    {\n        run();\n    }\n};\n",
+        ),
+        (
+            "--style=allman",
+            "class Checker\n{\n    Checker(int fmt)\n        : types_{1, 2},\n          named_{},\n          context_(fmt),\n          funcs_{3}\n    {\n        run();\n    }\n};\n",
+        ),
+        (
+            "--style=gnu",
+            "class Checker\n{\n    Checker(int fmt)\n        : types_{1, 2},\n          named_{},\n          context_(fmt),\n          funcs_{3}\n    {\n        run();\n    }\n};\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+    // A function after a constructor's body heads its own.
+    let input = "Item::Item(int v) : first_(v), second_(false) {\n    start();\n}\n\nvoid Item::Lock() NO_ANALYSIS {\n    run();\n}\n\nvoid Item::Lock2() {\n    run();\n}\n";
+    let expected = "Item::Item(int v) : first_(v), second_(false)\n{\n    start();\n}\n\nvoid\nItem::Lock() NO_ANALYSIS\n{\n    run();\n}\n\nvoid\nItem::Lock2()\n{\n    run();\n}\n";
+    check(
+        input,
+        &[
+            "--style=kr",
+            "--break-return-type",
+            "--break-return-type-decl",
+        ],
+        expected,
+    );
+}

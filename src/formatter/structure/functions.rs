@@ -800,6 +800,11 @@ fn head_end(
         }
         match &tokens[next] {
             Token::Symbol(':') => constructor_initializers = true,
+            // A member's braced initializer comes before the body.
+            Token::Symbol('{')
+                if constructor_initializers
+                    && previous_head_token(tokens, next)
+                        .is_some_and(|member| is_word(tokens, member)) => {}
             Token::Symbol('{') => return Some(HeadEnd::Found(groups.opened_at(next))),
             Token::Symbol(';') => {
                 // `f(a) int a; char *b; {`: declarations between the
