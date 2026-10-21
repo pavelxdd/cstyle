@@ -576,7 +576,6 @@ impl FormatEngine<'_> {
         brace_header: Option<String>,
         block_indent_extra: usize,
         trailing_comment: Option<&str>,
-        source_breaks: bool,
     ) {
         let opening_indent = self
             .for_header_continuation_indent_spaces()
@@ -610,37 +609,6 @@ impl FormatEngine<'_> {
             .set_next_line_spaces(opening_indent + self.options.indent_width);
         self.layout.previous = PreviousToken::Other;
         // The source's own break after the brace ends the line it opened.
-        self.previous_was_newline = !source_breaks;
-    }
-
-    pub(super) fn open_range_for_init_brace(
-        &mut self,
-        _brace_header: Option<String>,
-        _brace_type: BraceType,
-        _block_indent_extra: usize,
-    ) {
-        let opening_indent = self
-            .for_header_continuation_indent_spaces()
-            .unwrap_or_else(|| self.current_line_indent_spaces() + self.options.indent_width * 2);
-        self.finish_line();
-        self.layout
-            .continuation_indent
-            .set_next_line_spaces(opening_indent);
-        self.current.push('{');
-        self.layout.command_state.observe_char('{');
-        self.layout.nesting.enter_brace(None, BraceType::Array, 0);
-        self.layout.indentation.enter_block_without_indent(false);
-        self.inline_array.frames.push(InlineArrayFrame {
-            depth: self.layout.nesting.brace_header_stack.len(),
-            body_column: opening_indent + 1,
-            brace_column: opening_indent,
-            output_line: self.output.len(),
-            aggregate_assignment: true,
-            leveled_literal: false,
-            line_lead: None,
-        });
-        self.update_current_brace_indent_columns(opening_indent + 1, opening_indent);
-        self.layout.previous = PreviousToken::Other;
         self.previous_was_newline = false;
     }
 

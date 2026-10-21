@@ -1532,16 +1532,7 @@ impl FormatEngine<'_> {
             && !matches!(next, None | Some(Token::Newline))
             && ((code.trimmed_end().ends_with('(') && code.trimmed() != "(")
                 || (code.trimmed_start().starts_with("for (")
-                    && !code.trimmed_end().ends_with(')')
-                    && !matches!(
-                        self.options.brace_style,
-                        BraceStyle::Allman
-                            | BraceStyle::Whitesmith
-                            | BraceStyle::Vtk
-                            | BraceStyle::Gnu
-                            | BraceStyle::Horstmann
-                            | BraceStyle::Pico
-                    )))
+                    && !code.trimmed_end().ends_with(')')))
         {
             brace_type = BraceType::Initializer;
         }
@@ -2015,25 +2006,21 @@ impl FormatEngine<'_> {
                     | BraceStyle::Horstmann
                     | BraceStyle::Pico
             );
-        // The list stands as the line held it, wherever the source broke it.
-        if range_for_init_run_in && self.options.brace_style == BraceStyle::None {
-            // A comment ending the brace's line stays after the brace.
-            let trailing_comment = comments.line.or(comments
-                .block
-                .filter(|_| self.comments.next_comment_ends_line));
+        // A comment ending the brace's line stays after the brace.
+        let trailing_comment = comments.line.or(comments
+            .block
+            .filter(|_| self.comments.next_comment_ends_line));
+        // The source's break after the brace opens the list's rows; a row
+        // running in after it keeps the list as any list among arguments.
+        if range_for_init_run_in
+            && self.options.brace_style == BraceStyle::None
+            && (trailing_comment.is_some() || matches!(next, None | Some(Token::Newline)))
+        {
             self.open_attached_range_for_init_brace(
                 brace.header.take(),
                 block_indent_extra,
                 trailing_comment,
-                trailing_comment.is_some() || matches!(next, None | Some(Token::Newline)),
             );
-            return true;
-        }
-        if range_for_init_run_in
-            && !matches!(next, None | Some(Token::Newline))
-            && !self.comments.next_comment_ends_line
-        {
-            self.open_range_for_init_brace(brace.header.take(), brace_type, block_indent_extra);
             return true;
         }
         if !self.is_objc_method_line()

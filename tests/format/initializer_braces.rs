@@ -630,10 +630,8 @@ fn allman_range_for_braced_init_keeps_initializer_brace_attached() {
         fixture!(
             "void f()",
             "{",
-            "    for (char c :",
-            "            {'a',",
-            "             'b'",
-            "            })",
+            "    for (char c : {'a',",
+            "                   'b'})",
             "    {",
             "        g(c);",
             "    }",
@@ -671,10 +669,8 @@ fn gnu_range_for_braced_init_keeps_command_body_indent() {
         fixture!(
             "void f()",
             "{",
-            "    for (char c :",
-            "            {'a',",
-            "             'b'",
-            "            })",
+            "    for (char c : {'a',",
+            "                   'b'})",
             "        {",
             "            g(c);",
             "        }",
@@ -701,30 +697,17 @@ fn run_in_braced_initializer_pair_with_multiline_call_stays_run_in() {
 }
 
 #[test]
-fn range_for_braced_initializer_breaks_run_in_list() {
-    assert_eq!(
-        format_exact(
-            fixture!(
-                "void f()",
-                "{",
-                "    for (int value : {10, 8, 16}) {",
-                "        call(value);",
-                "    }",
-                "}",
-            ),
-            &FormatOptions::default(),
-        ),
-        fixture!(
-            "void f()",
-            "{",
-            "    for (int value : {",
-            "                10, 8, 16",
-            "            }) {",
-            "        call(value);",
-            "    }",
-            "}",
-        )
+fn range_for_braced_initializer_keeps_a_one_line_list() {
+    let source = fixture!(
+        "void f()",
+        "{",
+        "    for (int value : {10, 8, 16}) {",
+        "        call(value);",
+        "    }",
+        "}",
     );
+
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
 
 #[test]

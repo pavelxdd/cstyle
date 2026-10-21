@@ -18433,22 +18433,9 @@ fn an_empty_type_body_after_a_base_clause_over_lines_stays_empty() {
 }
 
 #[test]
-fn a_brace_list_a_range_for_header_breaks_before_stands_there_on_the_next_pass() {
-    let input = "void run() {\n  for (bool word : {true, false}) {\n    go(word);\n  }\n}\n";
-    let expected = "void run()\n{\n    for (bool word :\n            {true, false})\n    {\n        go(word);\n    }\n}\n";
-    check(input, &["--style=allman"], expected);
-    check(expected, &["--style=allman"], expected);
-    let expected = "void run()\n    {\n    for (bool word :\n            {true, false})\n        {\n        go(word);\n        }\n    }\n";
-    check(input, &["--style=whitesmith"], expected);
-    check(expected, &["--style=whitesmith"], expected);
-}
-
-#[test]
 fn gnu_a_list_in_a_header_over_lines_adds_no_level_to_the_body() {
     let input = "void run()\n{\n    for (bool word :\n            list{1})\n        {\n            go(word);\n        }\n    for (bool word : {true, false})\n        {\n            go(word);\n        }\n}\n";
-    let expected = "void run()\n{\n    for (bool word :\n            list{1})\n        {\n            go(word);\n        }\n    for (bool word :\n            {true, false})\n        {\n            go(word);\n        }\n}\n";
-    check(input, &["--style=gnu"], expected);
-    check(expected, &["--style=gnu"], expected);
+    check(input, &["--style=gnu"], input);
 }
 
 #[test]
@@ -18551,7 +18538,7 @@ fn a_comma_among_template_parameters_with_defaults_parts_no_member_declarators()
 #[test]
 fn a_brace_list_after_a_constructor_takes_no_column_from_its_initializers() {
     let input = "Item::Item()\n  : first_(false),\n    second_(0) {\n}\n\nvoid run() {\n  if (empty) {\n    for (bool word : {true, false}) {\n      go(word);\n    }\n  }\n}\n";
-    let expected = "Item::Item()\n    : first_(false),\n      second_(0)\n{\n}\n\nvoid run()\n{\n    if (empty)\n    {\n        for (bool word :\n                {true, false})\n        {\n            go(word);\n        }\n    }\n}\n";
+    let expected = "Item::Item()\n    : first_(false),\n      second_(0)\n{\n}\n\nvoid run()\n{\n    if (empty)\n    {\n        for (bool word : {true, false})\n        {\n            go(word);\n        }\n    }\n}\n";
     check(input, &["--style=allman"], expected);
     check(expected, &["--style=allman"], expected);
     let expected = "class Item\n{\npublic:\n    Item()\n        : first_(false),\n          second_(0)\n    {\n    }\n};\n\nvoid run()\n{\n    go(Item{1,\n            2});\n}\n";
@@ -18559,11 +18546,11 @@ fn a_brace_list_after_a_constructor_takes_no_column_from_its_initializers() {
 }
 
 #[test]
-fn a_range_for_list_the_source_breaks_stands_as_one_the_line_holds() {
-    let expected = "void run() {\n    if (first) {\n        for (bool word : {\n                    true, false\n                }) {\n            go(word);\n        }\n    }\n}\n";
+fn a_range_for_list_keeps_the_rows_the_source_gives_it() {
+    let broken = "void run() {\n    if (first) {\n        for (bool word : {\n                    true, false\n                }) {\n            go(word);\n        }\n    }\n}\n";
     let one_line = "void run() {\n    if (first) {\n        for (bool word : {true, false}) {\n            go(word);\n        }\n    }\n}\n";
-    check(one_line, &[], expected);
-    check(expected, &[], expected);
+    check(one_line, &[], one_line);
+    check(broken, &[], broken);
 }
 
 #[test]
@@ -18880,7 +18867,7 @@ fn break_blocks_pads_a_range_for_block_whose_header_holds_a_list() {
     // body after it is, and the statement after the body parts from it as
     // after any range-for.
     let input = "void helper()\n{\n    first();\n    for (bool word : {true, false}) {\n        run();\n    }\n    done = true;\n}\n";
-    let expected = "void helper()\n{\n    first();\n\n    for (bool word :\n            {true, false})\n    {\n        run();\n    }\n\n    done = true;\n}\n";
+    let expected = "void helper()\n{\n    first();\n\n    for (bool word : {true, false})\n    {\n        run();\n    }\n\n    done = true;\n}\n";
     check(input, &["--style=allman", "--break-blocks"], expected);
     check(expected, &["--style=allman", "--break-blocks"], expected);
 }
@@ -19062,5 +19049,79 @@ fn stream_rows_in_a_case_block_stand_under_the_first_operator() {
     ] {
         check(input, &[style], expected);
         check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn a_range_for_list_on_one_line_stays_in_the_header() {
+    // The list is the loop's range, not its block: no style breaks or
+    // moves it, in a lambda or out of one, and it closes as any list.
+    let input = "void run() {\n  for (bool word : {true, false}) {\n    go(word);\n  }\n  auto f = [] {\n    for (bool word : {true, false}) {\n      go(word);\n    }\n  };\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void run()\n{\n    for (bool word : {true, false}) {\n        go(word);\n    }\n    auto f = [] {\n        for (bool word : {true, false}) {\n            go(word);\n        }\n    };\n}\n",
+        ),
+        (
+            "--style=ratliff",
+            "void run() {\n    for (bool word : {true, false}) {\n        go(word);\n        }\n    auto f = [] {\n        for (bool word : {true, false}) {\n            go(word);\n            }\n        };\n    }\n",
+        ),
+        (
+            "--style=lisp",
+            "void run() {\n    for (bool word : {true, false }) {\n        go(word); }\n    auto f = [] {\n        for (bool word : {true, false }) {\n            go(word); } }; }\n",
+        ),
+        (
+            "--style=allman",
+            "void run()\n{\n    for (bool word : {true, false})\n    {\n        go(word);\n    }\n    auto f = []\n    {\n        for (bool word : {true, false})\n        {\n            go(word);\n        }\n    };\n}\n",
+        ),
+        (
+            "--style=gnu",
+            "void run()\n{\n    for (bool word : {true, false})\n        {\n            go(word);\n        }\n    auto f = []\n    {\n        for (bool word : {true, false})\n            {\n                go(word);\n            }\n    };\n}\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void run()\n    {\n    for (bool word : {true, false})\n        {\n        go(word);\n        }\n    auto f = []\n        {\n        for (bool word : {true, false})\n            {\n            go(word);\n            }\n        };\n    }\n",
+        ),
+        (
+            "--style=horstmann",
+            "void run()\n{   for (bool word : {true, false})\n    {   go(word);\n    }\n    auto f = []\n    {   for (bool word : {true, false})\n        {   go(word);\n        }\n    };\n}\n",
+        ),
+        (
+            "--style=pico",
+            "void run()\n{   for (bool word : {true, false })\n    {   go(word); }\n    auto f = []\n    {   for (bool word : {true, false })\n        {   go(word); } }; }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+    let expected = "void run() {\n    for (bool word : {true, false}) {\n        go(word);\n    }\n    auto f = [] {\n        for (bool word : {true, false}) {\n            go(word);\n        }\n    };\n}\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+}
+
+#[test]
+fn a_range_for_list_running_over_rows_keeps_the_rows_the_source_breaks() {
+    let input =
+        "void run() {\n  for (char c : {'a',\n                 'b'}) {\n    go(c);\n  }\n}\n";
+    for (args, expected) in [
+        (
+            &[][..],
+            "void run() {\n    for (char c : {'a',\n                   'b'}) {\n        go(c);\n    }\n}\n",
+        ),
+        (
+            &["--style=allman"][..],
+            "void run()\n{\n    for (char c : {'a',\n                   'b'})\n    {\n        go(c);\n    }\n}\n",
+        ),
+        (
+            &["--style=gnu"][..],
+            "void run()\n{\n    for (char c : {'a',\n                   'b'})\n        {\n            go(c);\n        }\n}\n",
+        ),
+        (
+            &["--style=whitesmith"][..],
+            "void run()\n    {\n    for (char c : {'a',\n                   'b'})\n        {\n        go(c);\n        }\n    }\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
     }
 }

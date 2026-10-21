@@ -1392,13 +1392,17 @@ impl FormatEngine<'_> {
         .or_else(|| initializer_brace_type(tokens, start, line_start))
         .or_else(|| enum_head_ends_previous_line(tokens, start, line_start))
         .or_else(|| {
-            let previous = previous_non_whitespace(tokens, start, line_start);
-            (previous.is_some_and(|index| matches!(tokens[index], Token::Symbol(':')))
-                && tokens[line_start..start]
-                    .iter()
-                    .any(|token| matches!(token, Token::Word(word) if word == "for"))
-                && self.open_lambda_body_indent_spaces().is_some())
-            .then_some(BraceType::Array)
+            // A range-for's range is a list, whatever the loop is in.
+            let ranges = if tokens.len() == self.tree.tokens.len() {
+                self.brace_ranges_a_range_for(start)
+            } else {
+                previous_non_whitespace(tokens, start, line_start)
+                    .is_some_and(|index| matches!(tokens[index], Token::Symbol(':')))
+                    && tokens[line_start..start]
+                        .iter()
+                        .any(|token| matches!(token, Token::Word(word) if word == "for"))
+            };
+            ranges.then_some(BraceType::Array)
         })
         .or_else(|| {
             // Comments leading the brace's line take no part in it.
