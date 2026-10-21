@@ -2385,7 +2385,8 @@ fn whitesmith_split_do_after_malformed_colon_owns_next_source_line() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=whitesmith".to_owned()])
         .expect("valid options");
-    let expected = b"+:\n    do\n        f";
+    // A label outside any block adds no level to what follows it.
+    let expected = b"+:\ndo\n    f";
 
     assert_eq!(
         format_bytes(b"+:do\nf", &options).expect("format bytes"),

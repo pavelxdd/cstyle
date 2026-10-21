@@ -19723,3 +19723,24 @@ fn a_list_brace_leading_a_row_runs_into_the_line_comment_after_it() {
     check(input, &args, expected);
     check(expected, &args, expected);
 }
+
+#[test]
+fn a_label_outside_any_block_leaves_the_lines_after_it_at_their_level() {
+    // No block holds the label, so it stands out from nothing: the lines
+    // after it stay at the file's level.
+    let input = "x = 1;\nret1:\n\tgo();\n\tgo();\n";
+    let expected = "x = 1;\nret1:\ngo();\ngo();\n";
+    for args in [
+        &["--style=pico"][..],
+        &["--style=lisp"][..],
+        &["--style=kr", "--keep-one-line-statements"][..],
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+    let input = "go();\nret1:\n\tif (ready)\n\t\tgo();\n";
+    let expected = "go();\nret1:\n\nif (ready)\n    go();\n";
+    let args = ["--style=pico", "--break-blocks=all"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}

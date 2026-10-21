@@ -388,7 +388,9 @@ impl FormatEngine<'_> {
         if starts_access_label(line, &self.options.access_labels) {
             return;
         }
-        let mut next_spaces = line_indent_spaces + self.options.indent_width;
+        // Outside any block a label stands out from nothing.
+        let label_level = usize::from(self.layout.indentation.indent() > 0);
+        let mut next_spaces = line_indent_spaces + label_level * self.options.indent_width;
         if kind == LineKind::Label {
             next_spaces = next_spaces.max(
                 (self
