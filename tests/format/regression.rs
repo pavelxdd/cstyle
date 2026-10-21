@@ -18644,3 +18644,47 @@ fn a_split_declaration_value_row_stands_alike_whatever_its_type_names() {
     let input = "void f(void)\n{\n    int a[]\n        = { 1, 2 };\n    struct item b[]\n        = { 1, 2 };\n    int c[]\n    = {\n        1,\n    };\n    struct item d[]\n    = {\n        1,\n    };\n}\n";
     check(input, &[], input);
 }
+
+#[test]
+fn a_comment_past_the_maximum_length_after_a_broken_list_brace_splits_off_its_assignment() {
+    // The comment moves to a line of its own between the `=` and the brace
+    // the style breaks, where a comment line there stands: at the block.
+    let input = "struct Item {\n    int value;\n} items[] = { /* This comment runs well past the configured maximum code length. */\n    {1},\n};\n\nvoid run(void) {\n    struct Item items[] = { /* This comment runs well past the configured maximum code length. */\n        {1},\n    };\n}\n\nint values[] = { /* This comment runs well past the configured maximum code length of 80. */\n    1,\n};\n";
+    for (style, expected) in [
+        (
+            "--style=allman",
+            "struct Item\n{\n    int value;\n} items[] =\n/* This comment runs well past the configured maximum code length. */\n{\n    {1},\n};\n\nvoid run(void)\n{\n    struct Item items[] =\n    /* This comment runs well past the configured maximum code length. */\n    {\n        {1},\n    };\n}\n\nint values[] =\n/* This comment runs well past the configured maximum code length of 80. */\n{\n    1,\n};\n",
+        ),
+        (
+            "--style=whitesmith",
+            "struct Item\n    {\n    int value;\n    } items[] =\n/* This comment runs well past the configured maximum code length. */\n    {\n        {1},\n    };\n\nvoid run(void)\n    {\n    struct Item items[] =\n    /* This comment runs well past the configured maximum code length. */\n        {\n            {1},\n        };\n    }\n\nint values[] =\n/* This comment runs well past the configured maximum code length of 80. */\n    {\n    1,\n    };\n",
+        ),
+        (
+            "--style=horstmann",
+            "struct Item\n{   int value;\n} items[] =\n/* This comment runs well past the configured maximum code length. */\n{   {1},\n};\n\nvoid run(void)\n{   struct Item items[] =\n    /* This comment runs well past the configured maximum code length. */\n    {   {1},\n    };\n}\n\nint values[] =\n/* This comment runs well past the configured maximum code length of 80. */\n{   1,\n};\n",
+        ),
+    ] {
+        let options = [style, "--max-code-length=80"];
+        check(input, &options, expected);
+        check(expected, &options, expected);
+    }
+}
+
+#[test]
+fn a_comment_split_off_an_attached_list_brace_stands_in_the_list_after_an_indented_closer() {
+    let input = "struct Item {\n    int value;\n} items[] = { /* This comment runs well past the configured maximum code length. */\n    {1},\n};\n\nvoid run(void) {\n    struct Item items[] = { /* This comment runs well past the configured maximum code length. */\n        {1},\n    };\n}\n\nint values[] = { /* This comment runs well past the configured maximum code length of 80. */\n    1,\n};\n";
+    for (style, expected) in [
+        (
+            "--style=ratliff",
+            "struct Item {\n    int value;\n    } items[] = {\n    /* This comment runs well past the configured maximum code length. */\n        {1},\n    };\n\nvoid run(void) {\n    struct Item items[] = {\n        /* This comment runs well past the configured maximum code length. */\n            {1},\n        };\n    }\n\nint values[] = {\n    /* This comment runs well past the configured maximum code length of 80. */\n    1,\n    };\n",
+        ),
+        (
+            "--style=lisp",
+            "struct Item {\n    int value; } items[] = {\n    /* This comment runs well past the configured maximum code length. */\n    {1 }, };\n\nvoid run(void) {\n    struct Item items[] = {\n        /* This comment runs well past the configured maximum code length. */\n        {1 }, }; }\n\nint values[] = {\n    /* This comment runs well past the configured maximum code length of 80. */\n    1, };\n",
+        ),
+    ] {
+        let options = [style, "--max-code-length=80"];
+        check(input, &options, expected);
+        check(expected, &options, expected);
+    }
+}

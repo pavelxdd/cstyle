@@ -9,9 +9,10 @@ use crate::formatter::constructs::switch_cases::max_length_inline_case_body_inde
 use crate::formatter::continuation::{ContinuationIndent, min_conditional_indent_spaces};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, token_text, tokenize};
+use crate::formatter::state::indentation::LineKind;
 use crate::formatter::structure::TokenSpan;
 use crate::formatter::structure::blocks::BlockKind;
-use crate::formatter::structure::blocks::is_code_token;
+use crate::formatter::structure::blocks::{is_code_token, next_code_token};
 use crate::formatter::structure::groups::{Delimiter, GroupId};
 use crate::formatter::syntax::language::{self, is_non_type_keyword, is_pointer_type_word};
 use crate::formatter::syntax::{
@@ -197,6 +198,31 @@ impl FormatEngine<'_> {
                 | BraceStyle::Horstmann
         );
         let last_held = LastHeldBytes::of(line);
+        // The brace a style breaks from the `=` ending the line's code.
+        let brace_follows = self.output.pending_tokens().is_some_and(|span| {
+            let tokens = &self.tree.tokens;
+            (span.first..=span.last)
+                .rev()
+                .find(|&index| is_code_token(&tokens[index]))
+                .and_then(|last| {
+                    if matches!(tokens[last], Token::Symbol('{')) {
+                        self.tree.previous_code_token(last)
+                    } else {
+                        Some(last)
+                    }
+                })
+                .is_some_and(|assign| {
+                    matches!(&tokens[assign], Token::Operator(operator) if operator == "=")
+                        && next_code_token(tokens, assign + 1)
+                            .is_some_and(|next| matches!(tokens[next], Token::Symbol('{')))
+                })
+        });
+        let block_spaces = (self
+            .layout
+            .indentation
+            .line_indent(LineKind::Normal, self.options)
+            + self.case_body_indent_extra(LineKind::Normal))
+            * self.options.indent_width;
         let split_indent_inputs = SplitIndentInputs {
             base_indent_width,
             limit_base_indent_width: configured_indent_width,
@@ -210,11 +236,14 @@ impl FormatEngine<'_> {
             indent_after_parens: self.options.indent_after_parens,
             following_split: false,
             break_lambda_parameters,
+            block_spaces,
+            brace_follows,
             held: last_held.from(0),
         };
         let mut next_indent = continuation_indent_for_split(line, &split, &split_indent_inputs)
             .unwrap_or(split_indent);
-        if brace_row_layout.attaches_lisp_closer {
+        // A brace ending the head opens a body the row after it stands in.
+        if brace_row_layout.attaches_lisp_closer && !split.head.trimmed_end().ends_with('{') {
             next_indent = ContinuationIndent::Level(self.layout.indentation.indent());
         }
         let conditional_floor =
@@ -649,6 +678,10 @@ struct SplitIndentInputs {
     indent_after_parens: bool,
     following_split: bool,
     break_lambda_parameters: bool,
+    /// The level of the block holding the line, in spaces.
+    block_spaces: usize,
+    /// A `{` the style breaks from the line's `=` follows it.
+    brace_follows: bool,
     /// What the line split holds.
     held: HeldBytes,
 }
@@ -676,9 +709,20 @@ fn continuation_indent_for_split(
         indent_after_parens,
         following_split,
         break_lambda_parameters,
+        block_spaces,
+        brace_follows,
         held,
         ..
     } = *inputs;
+    // A comment split off an `=` before a brace stands at the block, as a
+    // comment line between them does.
+    if brace_follows
+        && split.head.trimmed_end().ends_with('=')
+        && split.tail.starts_with("/*")
+        && !holds_code(split.tail)
+    {
+        return Some(ContinuationIndent::Spaces(block_spaces));
+    }
     let line_assignment_value_indent = || {
         held.equals
             .then(|| assignment_value_indent(line, base_indent_width))
@@ -753,7 +797,7 @@ fn continuation_indent_for_split(
     }
     // What trails the aggregate's brace ending the head opens its body.
     if head.trimmed_end().ends_with('{') {
-        return Some(ContinuationIndent::Spaces(base_indent_width + indent_width));
+        return Some(ContinuationIndent::Spaces(block_spaces + indent_width));
     }
     // A label split from the labels before it lines up with them.
     if splits_before_label(split) {
@@ -1862,7 +1906,9 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
             end = index + operator.len();
             let next = peek(index + 1);
             let before = index.checked_sub(1).map(|before| bytes[before]);
-            if next != b'/' && unbroken_depth == 0 {
+            // An `=` ending the line's code splits off the comment after it.
+            let ends_code = *operator == "=" && !holds_code(&line[end..]);
+            if (next != b'/' || ends_code) && unbroken_depth == 0 {
                 match *operator {
                     "||" | "&&" => {
                         if break_after_logical {
