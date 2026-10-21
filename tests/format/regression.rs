@@ -18688,3 +18688,28 @@ fn a_comment_split_off_an_attached_list_brace_stands_in_the_list_after_an_indent
         check(expected, &options, expected);
     }
 }
+
+#[test]
+fn prefix_stripped_rows_of_a_comment_after_a_block_brace_hold_on_a_second_pass() {
+    // The rows stand a level past the body the comment opens, measured from
+    // the body's column in the source as well.
+    let input = "void f()\n{\n    {/* first row\n        second row */\n        int t = 1;\n    }\n    { /* first row\n        second row */\n        int t = 1;\n    }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=linux",
+            "void f()\n{\n    {/* first row\n            second row */\n        int t = 1;\n    }\n    { /* first row\n            second row */\n        int t = 1;\n    }\n}\n",
+        ),
+        (
+            "--style=kr",
+            "void f()\n{\n    {/* first row\n            second row */\n        int t = 1;\n    }\n    { /* first row\n            second row */\n        int t = 1;\n    }\n}\n",
+        ),
+        (
+            "--style=1tbs",
+            "void f()\n{\n    {/* first row\n            second row */\n        int t = 1;\n    }\n    { /* first row\n            second row */\n        int t = 1;\n    }\n}\n",
+        ),
+    ] {
+        let options = [style, "--remove-comment-prefix"];
+        check(input, &options, expected);
+        check(expected, &options, expected);
+    }
+}

@@ -3562,12 +3562,23 @@ impl FormatEngine<'_> {
                 {
                     format!("{opener_prefix}{}", line.trimmed_end())
                 } else {
+                    // Rows the brace's line takes the opener back from are
+                    // laid from the body, a level past the brace in the
+                    // source as well.
+                    let source_base = if !opener_on_own_line
+                        && self.token_input.token_line_opens_with_brace
+                        && !self.token_input.token_begins_source_line
+                    {
+                        self.token_input.token_source_line_indent + self.options.indent_width
+                    } else {
+                        trim_amount
+                    };
                     strip_block_comment_line(
                         self.options,
                         line,
                         index == 0,
                         opener_prefix,
-                        trim_amount,
+                        source_base,
                     )
                 }
             } else if index == 0
