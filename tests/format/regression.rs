@@ -18970,3 +18970,9 @@ fn vtk_an_assignment_operator_in_a_local_struct_opens_a_function_body() {
     check(input, &["--style=vtk"], expected);
     check(expected, &["--style=vtk"], expected);
 }
+
+#[test]
+fn a_member_access_among_template_arguments_leaves_the_angles_unpadded() {
+    let input = "template <typename T>\nstruct has_member<T, void_t<decltype(value.begin())>> : base {};\nusing item = holder<decltype(value.size())>;\n";
+    check(input, &["--pad-oper"], input);
+}

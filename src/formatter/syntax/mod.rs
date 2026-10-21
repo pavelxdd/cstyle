@@ -240,8 +240,9 @@ pub(crate) fn template_openers(tokens: &[Token]) -> Vec<bool> {
                 }
                 paren_depth -= 1;
             }
-            Token::Symbol(',' | ':' | '[' | ']') => {}
-            Token::Symbol('.') if in_ellipsis(tokens, cursor) => {}
+            // A member access, as in `decltype(value.size())`, reads as a
+            // name's part.
+            Token::Symbol(',' | ':' | '[' | ']' | '.') => {}
             _ => open.clear(),
         }
     }
@@ -272,16 +273,6 @@ pub(crate) fn known_template_angle_role(
         }
         _ => TemplateAngle::None,
     }
-}
-
-/// Whether the `.` at `index` is one of the three of a `...`, as a pack
-/// expansion among template arguments has.
-fn in_ellipsis(tokens: &[Token], index: usize) -> bool {
-    (index.saturating_sub(2)..=index).any(|start| {
-        tokens
-            .get(start..start + 3)
-            .is_some_and(|run| run.iter().all(|token| *token == Token::Symbol('.')))
-    })
 }
 
 fn looks_like_template_opener(tokens: &[Token], index: usize, end: usize) -> bool {
@@ -332,8 +323,9 @@ fn looks_like_template_opener(tokens: &[Token], index: usize, end: usize) -> boo
                 }
                 paren_depth -= 1;
             }
-            Token::Symbol(',' | ':' | '[' | ']') => {}
-            Token::Symbol('.') if in_ellipsis(tokens, cursor) => {}
+            // A member access, as in `decltype(value.size())`, reads as a
+            // name's part.
+            Token::Symbol(',' | ':' | '[' | ']' | '.') => {}
             _ => return false,
         }
     }
