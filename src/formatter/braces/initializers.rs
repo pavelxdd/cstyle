@@ -575,6 +575,7 @@ impl FormatEngine<'_> {
         &mut self,
         brace_header: Option<String>,
         block_indent_extra: usize,
+        trailing_comment: Option<&str>,
         source_breaks: bool,
     ) {
         let opening_indent = self
@@ -583,6 +584,9 @@ impl FormatEngine<'_> {
         self.emit_source_space_or_ensure();
         self.current.push('{');
         self.layout.command_state.observe_char('{');
+        if let Some(comment) = trailing_comment {
+            self.push_attached_comment_with_source_gap(comment);
+        }
         self.finish_line();
         self.layout
             .nesting

@@ -1295,7 +1295,13 @@ impl FormatEngine<'_> {
         if self.try_open_brace_before_trailing_comment(&mut brace, &comments) {
             return;
         }
-        if self.try_open_initializer_brace(&mut brace, next, token_index, lambda.line_opens_body) {
+        if self.try_open_initializer_brace(
+            &mut brace,
+            next,
+            &comments,
+            token_index,
+            lambda.line_opens_body,
+        ) {
             return;
         }
         let attach_case_label_brace = self.should_attach_output_case_label_brace(brace_type);
@@ -1932,6 +1938,7 @@ impl FormatEngine<'_> {
         &mut self,
         brace: &mut OpenBrace,
         next: Option<&Token>,
+        comments: &OpenBraceComments<'_>,
         token_index: usize,
         line_opens_lambda_body: bool,
     ) -> bool {
@@ -1955,10 +1962,15 @@ impl FormatEngine<'_> {
             );
         // The list stands as the line held it, wherever the source broke it.
         if range_for_init_run_in && self.options.brace_style == BraceStyle::None {
+            // A comment ending the brace's line stays after the brace.
+            let trailing_comment = comments.line.or(comments
+                .block
+                .filter(|_| self.comments.next_comment_ends_line));
             self.open_attached_range_for_init_brace(
                 brace.header.take(),
                 block_indent_extra,
-                matches!(next, None | Some(Token::Newline)),
+                trailing_comment,
+                trailing_comment.is_some() || matches!(next, None | Some(Token::Newline)),
             );
             return true;
         }
@@ -3449,7 +3461,7 @@ impl FormatEngine<'_> {
                 | BraceType::Initializer
                 | BraceType::CompoundLiteral
                 | BraceType::Command
-        ) && matches!(next, None | Some(Token::Newline))
+        ) && (matches!(next, None | Some(Token::Newline)) || self.comments.next_comment_ends_line)
             && self.layout.nesting.paren_depth > 0
             && self.control_paren_init_brace_indent_spaces().is_some()
     }

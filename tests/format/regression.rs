@@ -18563,3 +18563,16 @@ fn a_range_for_list_the_source_breaks_stands_as_one_the_line_holds() {
     check(one_line, &[], expected);
     check(expected, &[], expected);
 }
+
+#[test]
+fn a_comment_ending_a_range_for_list_brace_line_stays_after_the_brace() {
+    let input = "void run() {\n    for (bool word : { // note\n             true, false\n         }) {\n        go(word);\n    }\n    for (bool word : { /* note */\n             true, false\n         }) {\n        go(word);\n    }\n}\n";
+    let expected = "void run() {\n    for (bool word : { // note\n                true, false\n            }) {\n        go(word);\n    }\n    for (bool word : { /* note */\n                true, false\n            }) {\n        go(word);\n    }\n}\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+    for style in ["--style=kr", "--style=1tbs"] {
+        let expected = expected.replace("void run() {", "void run()\n{");
+        check(input, &[style], &expected);
+        check(&expected, &[style], &expected);
+    }
+}
