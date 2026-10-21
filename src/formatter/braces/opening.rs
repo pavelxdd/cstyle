@@ -1953,12 +1953,17 @@ impl FormatEngine<'_> {
                     | BraceStyle::Horstmann
                     | BraceStyle::Pico
             );
+        // The list stands as the line held it, wherever the source broke it.
+        if range_for_init_run_in && self.options.brace_style == BraceStyle::None {
+            self.open_attached_range_for_init_brace(
+                brace.header.take(),
+                block_indent_extra,
+                matches!(next, None | Some(Token::Newline)),
+            );
+            return true;
+        }
         if range_for_init_run_in && !matches!(next, None | Some(Token::Newline)) {
-            if self.options.brace_style == BraceStyle::None {
-                self.open_attached_range_for_init_brace(brace.header.take(), block_indent_extra);
-            } else {
-                self.open_range_for_init_brace(brace.header.take(), brace_type, block_indent_extra);
-            }
+            self.open_range_for_init_brace(brace.header.take(), brace_type, block_indent_extra);
             return true;
         }
         if !self.is_objc_method_line()

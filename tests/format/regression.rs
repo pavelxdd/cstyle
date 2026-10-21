@@ -18555,3 +18555,11 @@ fn a_brace_list_after_a_constructor_takes_no_column_from_its_initializers() {
     let expected = "class Item\n{\npublic:\n    Item()\n        : first_(false),\n          second_(0)\n    {\n    }\n};\n\nvoid run()\n{\n    go(Item{1,\n            2});\n}\n";
     check(expected, &["--style=kr"], expected);
 }
+
+#[test]
+fn a_range_for_list_the_source_breaks_stands_as_one_the_line_holds() {
+    let expected = "void run() {\n    if (first) {\n        for (bool word : {\n                    true, false\n                }) {\n            go(word);\n        }\n    }\n}\n";
+    let one_line = "void run() {\n    if (first) {\n        for (bool word : {true, false}) {\n            go(word);\n        }\n    }\n}\n";
+    check(one_line, &[], expected);
+    check(expected, &[], expected);
+}

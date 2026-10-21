@@ -575,6 +575,7 @@ impl FormatEngine<'_> {
         &mut self,
         brace_header: Option<String>,
         block_indent_extra: usize,
+        source_breaks: bool,
     ) {
         let opening_indent = self
             .for_header_continuation_indent_spaces()
@@ -604,7 +605,8 @@ impl FormatEngine<'_> {
             .continuation_indent
             .set_next_line_spaces(opening_indent + self.options.indent_width);
         self.layout.previous = PreviousToken::Other;
-        self.previous_was_newline = true;
+        // The source's own break after the brace ends the line it opened.
+        self.previous_was_newline = !source_breaks;
     }
 
     pub(super) fn open_range_for_init_brace(
