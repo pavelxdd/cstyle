@@ -228,6 +228,16 @@ impl FormatEngine<'_> {
             return None;
         }
         let index = self.output.last_open_brace_alone_line()?;
+        // Only the closer of that brace stands at it.
+        if let Some(open) = self
+            .output
+            .pending_tokens()
+            .and_then(|span| self.tree.groups.closed_at(span.first))
+            .map(|group| self.tree.groups.get(group).open)
+            && self.output.line_with_token(open) != Some(index)
+        {
+            return None;
+        }
         // Rows of a comment hold no operator.
         let before_open = (0..index).rev().find(|&row| {
             self.output.comment_start_index(row) == row && !self.output.code_trimmed(row).is_empty()

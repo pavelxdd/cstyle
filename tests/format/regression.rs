@@ -18942,3 +18942,23 @@ fn vtk_lays_out_an_initializer_in_a_namespace_or_class_as_at_file_scope() {
     check(input, &["--style=vtk"], expected);
     check(expected, &["--style=vtk"], expected);
 }
+
+#[test]
+fn a_list_closer_in_a_body_after_a_pointer_return_type_stands_at_its_list() {
+    // The `*` ending the head types the return: the list's `}` closes no
+    // brace that head continues into.
+    let input = "auto helper(int value) -> const char* {\n  static const char* names[] = {\"a\", \"b\",\n                                \"c\"};\n  return names[value];\n}\n";
+    for (style, expected) in [
+        (
+            "--style=allman",
+            "auto helper(int value) -> const char*\n{\n    static const char* names[] = {\"a\", \"b\",\n                                  \"c\"\n                                 };\n    return names[value];\n}\n",
+        ),
+        (
+            "--style=whitesmith",
+            "auto helper(int value) -> const char*\n    {\n    static const char* names[] = {\"a\", \"b\",\n                                  \"c\"\n                                 };\n    return names[value];\n    }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
