@@ -2435,14 +2435,25 @@ impl FormatEngine<'_> {
         else {
             return true;
         };
+        let Some(line) = self.output.line_with_token(colon) else {
+            return false;
+        };
         matches!(tokens[colon], Token::Symbol(':'))
             && self
                 .output
-                .line_with_token(colon)
-                .and_then(|line| self.output.line_tokens(line))
+                .line_tokens(line)
                 .and_then(|span| next_code_token(tokens, span.first))
                 .is_some_and(|first| {
-                    let first = if matches!(tokens[first], Token::Symbol('}')) {
+                    // A closer leads the label as nothing does, as does a
+                    // block run into the line and closed on it.
+                    let run_in_block_close = matches!(tokens[first], Token::Symbol('{'))
+                        .then(|| self.tree.groups.opened_at(first))
+                        .flatten()
+                        .and_then(|block| self.tree.groups.get(block).close)
+                        .filter(|&close| self.output.line_with_token(close) == Some(line));
+                    let first = if let Some(close) = run_in_block_close {
+                        next_code_token(tokens, close + 1).unwrap_or(first)
+                    } else if matches!(tokens[first], Token::Symbol('}')) {
                         next_code_token(tokens, first + 1).unwrap_or(first)
                     } else {
                         first

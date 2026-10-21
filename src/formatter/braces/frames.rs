@@ -62,9 +62,15 @@ fn holds_code(line: &str) -> bool {
 }
 
 /// Whether a label after `prefix` stands at the labels' column: after the
-/// brace closing the case before, after comments, or after both.
+/// brace closing the case before, after comments, or after both. A block
+/// run into the line and closed on it leads the label as its closer does.
 fn brace_led(prefix: &str) -> bool {
     let prefix = prefix.trimmed();
+    if prefix.starts_with('{')
+        && let Some((0, end)) = line_scan::inline_brace_pair_range(prefix)
+    {
+        return after_leading_comments(&prefix[end..]).is_empty();
+    }
     !prefix.is_empty() && after_leading_comments(prefix.trim_start_matches('}')).is_empty()
 }
 

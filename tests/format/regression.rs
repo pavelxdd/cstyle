@@ -19575,3 +19575,15 @@ fn a_label_after_a_case_block_closer_and_a_comment_stands_as_a_kept_label() {
         }
     }
 }
+
+#[test]
+fn pico_sets_a_label_after_a_case_block_run_into_its_line_at_the_labels() {
+    // The block closed before the label on its line leads it as the block's
+    // closer alone does.
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        break;\n    } case 2: {\n        go();\n        break;\n    }\n    }\n    go();\n}\n";
+    let expected = "void f()\n{   switch (kind)\n    {   case 1:\n        {   break; } case 2:\n        {   go();\n            break; } }\n    go(); }\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+    let commented = expected.replace("} case 2:", "} /*c*/ case 2:");
+    check(&commented, &["--style=pico"], &commented);
+}
