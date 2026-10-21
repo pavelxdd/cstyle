@@ -3479,8 +3479,9 @@ fn enum_head_ends_previous_line(
         false
     });
     // What comes before `enum`, as a macro call ending no statement, takes
-    // no part in the head either.
+    // no part in the head either; an `enum` in parens types a parameter.
     let mut enumeration = false;
+    let mut parens = 0usize;
     for token in outside_attributes {
         if enumeration
             && (matches!(token, Token::Symbol('(' | '='))
@@ -3488,7 +3489,12 @@ fn enum_head_ends_previous_line(
         {
             return None;
         }
-        enumeration |= matches!(token, Token::Word(word) if word == "enum");
+        match token {
+            Token::Symbol('(') => parens += 1,
+            Token::Symbol(')') => parens = parens.saturating_sub(1),
+            Token::Word(word) if word == "enum" && parens == 0 => enumeration = true,
+            _ => {}
+        }
     }
     enumeration.then_some(BraceType::Enum)
 }

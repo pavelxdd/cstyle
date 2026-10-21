@@ -18926,3 +18926,9 @@ fn a_compound_literal_run_into_one_row_sets_the_arguments_after_it_as_over_rows(
     check(input, &["--style=pico"], expected);
     check(expected, &["--style=pico"], expected);
 }
+
+#[test]
+fn an_enum_among_a_function_s_parameters_heads_no_enumeration_body() {
+    let input = "static inline int helper(int first,\n                         enum Kind kind)\n{   return run(first, kind); }\n";
+    check(input, &["--style=pico"], input);
+}
