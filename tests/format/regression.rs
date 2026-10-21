@@ -18884,3 +18884,16 @@ fn break_blocks_pads_a_range_for_block_whose_header_holds_a_list() {
     check(input, &["--style=allman", "--break-blocks"], expected);
     check(expected, &["--style=allman", "--break-blocks"], expected);
 }
+
+#[test]
+fn the_arguments_after_a_block_among_them_take_no_column_from_its_brace() {
+    // A block's closer inside parens is followed by more arguments, which
+    // continue the call as after a block kept on one row, whether the
+    // brace began its line or not.
+    let input = "void helper()\n{\n    result({\n               value},\n           more);\n    result(\n    { value },\n    more);\n}\n";
+    let expected = "void helper()\n{\n    result(\n    {\n        value\n    },\n        more);\n    result(\n    { value },\n        more);\n}\n";
+    for style in ["--style=allman", "--style=gnu"] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}

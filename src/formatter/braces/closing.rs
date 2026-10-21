@@ -547,10 +547,14 @@ impl FormatEngine<'_> {
             if self.options.brace_style == BraceStyle::Horstmann {
                 return None;
             }
+            // A block among arguments is followed by arguments, no sibling.
             if !matches!(
                 frame.brace_type,
                 BraceType::Command | BraceType::Definition | BraceType::NonStatement
-            ) {
+            ) || frame
+                .open_token
+                .is_some_and(|open| self.token_in_parens(open))
+            {
                 return None;
             }
             // Only the frame's own brace on a line of its own sets the
