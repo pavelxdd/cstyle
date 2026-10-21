@@ -19125,3 +19125,12 @@ fn a_range_for_list_running_over_rows_keeps_the_rows_the_source_breaks() {
         check(expected, args, expected);
     }
 }
+
+#[test]
+fn vtk_keeps_a_block_leading_a_lambda_body_whose_brace_leads_its_line() {
+    // The lambda's brace opens its body whether it leads its line or not.
+    let input = "void run() {\n  auto check = [] {\n    if (ready) {\n      go(ready);\n    }\n  };\n  call([] {\n    if (ready) {\n      go(ready);\n    }\n  });\n}\n";
+    let expected = "void run()\n{\n    auto check = []\n        {\n        if (ready)\n            {\n            go(ready);\n            }\n        };\n    call([]\n        {\n        if (ready)\n            {\n            go(ready);\n            }\n        });\n}\n";
+    check(input, &["--style=vtk"], expected);
+    check(expected, &["--style=vtk"], expected);
+}

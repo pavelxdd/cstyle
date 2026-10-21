@@ -231,8 +231,10 @@ impl FormatEngine<'_> {
             }
             _ => block_word,
         };
+        // A lambda's body brace leading its line opens the body all the same.
         let lambda_header = self.current_is_lambda_body_header()
-            || is_lambda_capture_header(self.current.trimmed_end());
+            || is_lambda_capture_header(self.current.trimmed_end())
+            || self.current_is_blank() && self.pushed_brace_kind() == Some(BlockKind::Lambda);
         // A lambda in a block or a brace list is an expression's.
         let lambda_in_block_scope = lambda_header
             && matches!(
