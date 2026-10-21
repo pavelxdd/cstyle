@@ -1323,6 +1323,10 @@ impl FormatEngine<'_> {
         let attach_case_label_brace = self.should_attach_output_case_label_brace(brace_type);
         if let Some(spaces) = broken_range_for_list {
             if !self.current_is_blank() {
+                // A comment ending the brace's line stays on the header's.
+                if let Some(comment) = comments.line.or(comments.block) {
+                    self.push_trailing_comment_before_broken_brace(comment);
+                }
                 self.finish_line();
             }
             self.layout.continuation_indent.set_next_line_spaces(spaces);
@@ -1989,7 +1993,10 @@ impl FormatEngine<'_> {
             );
             return true;
         }
-        if range_for_init_run_in && !matches!(next, None | Some(Token::Newline)) {
+        if range_for_init_run_in
+            && !matches!(next, None | Some(Token::Newline))
+            && !self.comments.next_comment_ends_line
+        {
             self.open_range_for_init_brace(brace.header.take(), brace_type, block_indent_extra);
             return true;
         }
@@ -3518,13 +3525,17 @@ impl FormatEngine<'_> {
                 | BraceType::Initializer
                 | BraceType::CompoundLiteral
                 | BraceType::Command
-        ) || !(matches!(next, None | Some(Token::Newline)) || self.current_is_blank())
+        ) || !(matches!(next, None | Some(Token::Newline))
+            || self.comments.next_comment_ends_line
+            || self.current_is_blank())
             || self.layout.nesting.paren_depth == 0
         {
             return None;
         }
         if self.current_is_blank() {
-            let header = self.output.last()?.trimmed_end();
+            // A comment the header's line ends with takes no part in it.
+            let header = self.output.code_of(self.output.last()?);
+            let header = header.trimmed_end();
             header
                 .ends_with(':')
                 .then(|| self.output_for_header_continuation_spaces(header))

@@ -18604,3 +18604,33 @@ fn breaking_styles_set_a_range_for_list_the_source_breaks_at_the_header_continua
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn a_comment_ending_a_range_for_list_brace_line_stays_on_the_header_line_a_brace_style_breaks() {
+    let input = "void run() {\n    for (bool word : { // note\n             true, false\n         }) {\n        go(word);\n    }\n    for (bool word : { /* note */\n             true, false\n         }) {\n        go(word);\n    }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=allman",
+            "void run()\n{\n    for (bool word :   // note\n            {\n                true, false\n            })\n    {\n        go(word);\n    }\n    for (bool word :   /* note */\n            {\n                true, false\n            })\n    {\n        go(word);\n    }\n}\n",
+        ),
+        (
+            "--style=gnu",
+            "void run()\n{\n    for (bool word :   // note\n            {\n                true, false\n            })\n        {\n            go(word);\n        }\n    for (bool word :   /* note */\n            {\n                true, false\n            })\n        {\n            go(word);\n        }\n}\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void run()\n    {\n    for (bool word :   // note\n            {\n                true, false\n            })\n        {\n        go(word);\n        }\n    for (bool word :   /* note */\n            {\n                true, false\n            })\n        {\n        go(word);\n        }\n    }\n",
+        ),
+        (
+            "--style=vtk",
+            "void run()\n{\n    for (bool word :   // note\n            {\n                true, false\n            })\n        {\n        go(word);\n        }\n    for (bool word :   /* note */\n            {\n                true, false\n            })\n        {\n        go(word);\n        }\n}\n",
+        ),
+        (
+            "--style=pico",
+            "void run()\n{   for (bool word :   // note\n            {   true, false })\n    {   go(word); }\n    for (bool word :   /* note */\n            {   true, false })\n    {   go(word); } }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
