@@ -751,6 +751,10 @@ fn continuation_indent_for_split(
     if split.tail.starts_with('{') && head.trimmed_end().ends_with('=') {
         return Some(ContinuationIndent::Spaces(base_indent_width));
     }
+    // What trails the aggregate's brace ending the head opens its body.
+    if head.trimmed_end().ends_with('{') {
+        return Some(ContinuationIndent::Spaces(base_indent_width + indent_width));
+    }
     // A label split from the labels before it lines up with them.
     if splits_before_label(split) {
         return Some(ContinuationIndent::Spaces(base_indent_width));
@@ -1883,7 +1887,22 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
                         register((&mut fit, &mut pending), WHITESPACE, index, index <= width);
                     }
                     "=" | ":" => {
-                        let at = if end < width { end } else { index };
+                        // A brace ending the code after it stays on the line
+                        // it fits, where the style attaches it; only what
+                        // trails it moves on.
+                        let rest = &line[end..];
+                        let brace = rest.trimmed_start();
+                        let after_brace = end + rest.len() - brace.len() + 1;
+                        let at = if brace.starts_with('{')
+                            && !holds_code(&brace[1..])
+                            && after_brace <= width
+                        {
+                            after_brace
+                        } else if end < width {
+                            end
+                        } else {
+                            index
+                        };
                         if previous_non_space == b']' {
                             register((&mut fit, &mut pending), WHITESPACE, at, index <= width);
                         } else if before

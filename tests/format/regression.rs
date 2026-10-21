@@ -17678,16 +17678,18 @@ fn a_case_label_sharing_its_line_with_a_goto_label_keeps_the_case_column() {
 }
 
 #[test]
-fn rows_of_a_list_split_off_a_type_closer_by_the_maximum_length_stand_in_the_list() {
+fn a_comment_past_the_maximum_length_after_a_list_brace_moves_into_the_list() {
+    // The brace stays on the line it fits, where the style attaches it on
+    // any later pass; the comment after it opens the list instead.
+    let options = ["--style=google", "--max-code-length=80"];
     let input = "struct Item {\n    char *name;\n} DefaultItems[] = { /* See the configuration notes for details on each one of them. */\n    {\"one\", 1},\n    {\"two\", 2},\n};\n";
-    let expected = "struct Item {\n    char *name;\n} DefaultItems[] =\n{ /* See the configuration notes for details on each one of them. */\n    {\"one\", 1},\n    {\"two\", 2},\n};\n";
-    check(input, &["--style=google", "--max-code-length=80"], expected);
-    let attached = "struct Item {\n    char *name;\n} DefaultItems[] = {\n    /* See the configuration notes for details on each one of them. */\n    {\"one\", 1},\n    {\"two\", 2},\n};\n";
-    check(
-        expected,
-        &["--style=google", "--max-code-length=80"],
-        attached,
-    );
+    let expected = "struct Item {\n    char *name;\n} DefaultItems[] = {\n    /* See the configuration notes for details on each one of them. */\n    {\"one\", 1},\n    {\"two\", 2},\n};\n";
+    check(input, &options, expected);
+    check(expected, &options, expected);
+    let input = "void run(void) {\n    int values[] = { /* This comment runs well past the configured maximum code length. */\n        1,\n    };\n}\n";
+    let expected = "void run(void) {\n    int values[] = {\n        /* This comment runs well past the configured maximum code length. */\n        1,\n    };\n}\n";
+    check(input, &options, expected);
+    check(expected, &options, expected);
 }
 
 #[test]
