@@ -3544,14 +3544,30 @@ impl FormatEngine<'_> {
         // astyle trims each row up to the opener's column, a column it lowers
         // for the rows after one whose text starts left of it past a tab.
         let mut row_trim = trim_amount;
+        // The columns past their characters that the tabs of the line up to
+        // the trim column take.
         let opener_tab_extra = self.current.active_comment().map_or(0, |opener| {
             let tokens = &self.tree.tokens;
-            let chars: usize = tokens[..opener]
+            let line_start = tokens[..opener]
                 .iter()
-                .rev()
-                .take_while(|token| !matches!(token, Token::Newline))
-                .map(token_char_len)
-                .sum();
+                .rposition(|token| matches!(token, Token::Newline))
+                .map_or(0, |newline| newline + 1);
+            let mut column = 0;
+            let mut chars = 0;
+            for ch in tokens[line_start..opener]
+                .iter()
+                .flat_map(|token| token_text(token).chars().collect::<Vec<_>>())
+            {
+                if column >= trim_amount {
+                    break;
+                }
+                column = if ch == '\t' {
+                    (column / tab_width + 1) * tab_width
+                } else {
+                    column + 1
+                };
+                chars += 1;
+            }
             trim_amount.saturating_sub(chars)
         });
         // Rows the brace's line takes the opener back from are laid from the
@@ -3709,17 +3725,35 @@ impl FormatEngine<'_> {
                         // stands past the `/*` column.
                         format!(
                             "{}{}",
-                            self.comment_row_prefix(
-                                opener_output_column + tab_overshoot(line, kept)
-                            ),
+                            self.comment_row_prefix(opener_output_column),
                             kept.trimmed_end()
                         )
                     } else if let Some(column) = run_in_column {
-                        format!(
-                            "{}{}",
-                            self.comment_row_prefix(column + tab_overshoot(line, kept)),
-                            kept.trimmed_end()
-                        )
+                        // As after a block's brace, a row past the `/*`
+                        // keeps its offset from it with spaces, and the
+                        // others, and every row with tabs, stand at the body
+                        // with what stands past the `/*` column.
+                        let overshoot = tab_overshoot(line, kept);
+                        if self.output_indent_style == IndentStyle::Spaces
+                            && (kept.len() > kept.trimmed_start().len() || overshoot > 0)
+                        {
+                            format!(
+                                "{}{}",
+                                self.comment_row_prefix(column + overshoot),
+                                kept.trimmed_end()
+                            )
+                        } else {
+                            let body_column = self
+                                .layout
+                                .frame_stack
+                                .active_brace()
+                                .map_or(column, |frame| frame.body_indent_column);
+                            format!(
+                                "{}{}",
+                                self.comment_row_prefix(body_column),
+                                kept.trimmed_end()
+                            )
+                        }
                     } else if self.token_input.token_line_opens_with_brace {
                         let indent = if self.options.indent_classes
                             && matches!(

@@ -9491,6 +9491,58 @@ fn remove_comment_prefix_lays_rows_of_a_comment_after_a_comment_from_the_first()
 }
 
 #[test]
+fn rows_of_a_comment_after_an_element_brace_left_of_it_stand_at_the_body() {
+    // As after a block's brace, a row past the `/*` keeps its offset from
+    // it and the others stand at the body.
+    for (input, args, expected) in [
+        (
+            "int items[][2] = {\n    {  /* first\n     * row\n           row */\n        1, 2 },\n};\n",
+            &["--style=kr"][..],
+            "int items[][2] = {\n    {  /* first\n        * row\n           row */\n        1, 2\n    },\n};\n",
+        ),
+        (
+            "int items[][2] = {\n    {/* first\nrow\n    * row */\n  1, 2 },\n};\n",
+            &["--style=1tbs", "--indent=tab=4"][..],
+            "int items[][2] = {\n\t{/* first\n\t\trow\n\t\t* row */\n\t\t1, 2\n\t},\n};\n",
+        ),
+        (
+            "int items[][2] = {\n  {  /* first\n\t* row\n ** row */\n 1, 2 },\n};\n",
+            &["--style=gnu", "--indent=spaces=2"][..],
+            "int items[][2] = {\n  {  /* first\n    * row\n    ** row */\n    1, 2\n  },\n};\n",
+        ),
+        (
+            "int items[][2] = {\n {  /* first\n\t\t** row\n\t * row */\n  1, 2 },\n};\n",
+            &["--style=stroustrup", "--indent=force-tab=4"][..],
+            "int items[][2] = {\n\t{  /* first\n\t\t\t** row\n\t\t * row */\n\t\t1, 2\n\t},\n};\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
+fn rows_of_a_comment_broken_from_a_brace_line_lose_whole_tabs_up_to_its_trim() {
+    // The rows drop the line's indent up to the `/*` column, a tab crossing
+    // it whole, and a row whose text starts left of it after a tab lowers
+    // the trim by the tabs of the line's own indent.
+    let args = ["--style=java", "--indent=tab=4"];
+    for (input, expected) in [
+        (
+            "void f()\n{\n  {/* first\n\trow */\n\tgo();\n}\n}\n",
+            "void f() {\n\t{\n\t\t/* first\n\t\trow */\n\t\tgo();\n\t}\n}\n",
+        ),
+        (
+            "void f()\n{\n\t\t    if (a) { /* head\n\t* row\n\t ** row */\n\tgo();\n}\n}\n",
+            "void f() {\n\tif (a) {\n\t\t/* head\n\t\t* row\n\t\t** row */\n\t\tgo();\n\t}\n}\n",
+        ),
+    ] {
+        check(input, &args, expected);
+        check(expected, &args, expected);
+    }
+}
+
+#[test]
 fn remove_comment_prefix_strips_a_row_after_trimming_whole_tabs_up_to_the_opener() {
     for (input, expected) in [
         (
