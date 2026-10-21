@@ -19330,3 +19330,24 @@ fn indented_parens_set_a_range_for_list_brace_where_the_header_continues() {
         check(expected, &[style, "--indent-after-parens"], expected);
     }
 }
+
+#[test]
+fn rows_of_a_range_for_list_whose_brace_ends_its_line_take_the_list_s_column() {
+    // A list whose brace ends its line aligns no row to a first element:
+    // its rows stand a level past the brace, however deep the source set
+    // them, as in any list.
+    let input = "void f()\n{\n    for (auto v : {\n                  1, 2\n         }) {\n        go(v);\n    }\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=kr"][..],
+            "void f()\n{\n    for (auto v : {\n                1, 2\n            }) {\n        go(v);\n    }\n}\n",
+        ),
+        (
+            &["--style=lisp", "--indent-after-parens"][..],
+            "void f() {\n    for (auto v : {\n            1, 2 }) {\n        go(v); } }\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}

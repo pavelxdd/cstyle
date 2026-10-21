@@ -22,6 +22,7 @@ use crate::formatter::preprocessor::layout::SplitElseLineStart;
 use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::BracketFrame;
 use crate::formatter::state::indentation::LineKind;
+use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::text::columns::{column_after, leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::after_leading_comments;
@@ -426,6 +427,28 @@ impl FormatEngine<'_> {
 }
 
 impl FormatEngine<'_> {
+    /// Whether the brace list holding the line being finished ends with its
+    /// brace a source line of code, so no row aligns to a first element.
+    fn pending_row_list_brace_ends_its_line(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let breaks = |range: &[Token]| range.iter().any(|token| matches!(token, Token::Newline));
+        self.output
+            .pending_tokens()
+            .and_then(|span| groups.enclosing(span.first))
+            .filter(|&list| groups.get(list).delimiter == Delimiter::Brace)
+            .map(|list| groups.get(list).open)
+            .is_some_and(|open| {
+                self.tree
+                    .previous_code_token(open)
+                    .is_some_and(|before| !breaks(&tokens[before..open]))
+                    && tokens[open + 1..]
+                        .iter()
+                        .find(|token| !matches!(token, Token::Whitespace(_) | Token::Comment(..)))
+                        .is_some_and(|after| matches!(after, Token::Newline))
+            })
+    }
+
     pub(crate) fn apply_initial_operator_and_header_layout(
         &mut self,
         line: &LineView<'_>,
@@ -1652,6 +1675,7 @@ impl FormatEngine<'_> {
                 || self.layout.nesting.paren_depth > 0)
                 && self.token_input.token_source_line_indent > current_spaces
                 && !block_comment_after_statement
+                && !self.pending_row_list_brace_ends_its_line()
             {
                 layout.exact_indent_spaces = Some(self.token_input.token_source_line_indent);
             } else if let Some(index) = self.output.last_line_outside_comment_index()
