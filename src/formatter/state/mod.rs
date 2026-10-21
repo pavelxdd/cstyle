@@ -276,6 +276,14 @@ impl NestingState {
         }
     }
 
+    pub(crate) fn continuation_count(&self) -> usize {
+        self.continuation_indent_spaces_stack.len()
+    }
+
+    pub(crate) fn truncate_continuations(&mut self, count: usize) {
+        self.continuation_indent_spaces_stack.truncate(count);
+    }
+
     pub(crate) fn current_continuation_indent_spaces(&self) -> Option<usize> {
         // A brace list's elements continue nothing of the expression
         // around it.

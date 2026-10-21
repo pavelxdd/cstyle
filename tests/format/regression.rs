@@ -18820,6 +18820,16 @@ fn an_enumeration_with_an_underlying_type_keeps_its_one_line_body() {
 }
 
 #[test]
+fn a_value_inside_brackets_continues_nothing_after_them() {
+    // An attribute's value aligns rows inside its brackets only; the
+    // enumeration's body after them stands at the head's level.
+    let input = "enum class [[=ns::name]] Mode { first, second };\n";
+    let expected = "enum class [[=ns::name]] Mode\n{ first, second };\n";
+    check(input, &["--style=mozilla"], expected);
+    check(expected, &["--style=mozilla"], expected);
+}
+
+#[test]
 fn an_enumeration_after_a_macro_call_keeps_its_one_line_body() {
     // A macro call ending no statement before the enumeration takes no
     // part in its head.

@@ -792,6 +792,7 @@ impl FormatEngine<'_> {
                 role: bracket_role,
                 parent_objc_message_align,
                 opens_after_selector,
+                continuations: self.layout.nesting.continuation_count(),
             });
         }
         if bracket_role != BracketRole::Other {
@@ -866,6 +867,11 @@ impl FormatEngine<'_> {
             && self.current.contains(':')
             && !self.current.trimmed_start().starts_with('[');
         if !closes_operator_name {
+            if let Some(frame) = self.layout.frame_stack.active_bracket() {
+                self.layout
+                    .nesting
+                    .truncate_continuations(frame.continuations);
+            }
             self.layout.indentation.exit_bracket();
             self.layout.frame_stack.pop_bracket();
         }

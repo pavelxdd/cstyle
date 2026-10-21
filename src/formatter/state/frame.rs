@@ -236,6 +236,9 @@ pub(crate) struct BracketFrame {
     pub(crate) role: BracketRole,
     pub(crate) parent_objc_message_align: Option<usize>,
     pub(crate) opens_after_selector: bool,
+    /// The continuation columns registered before the bracket; the ones
+    /// inside it end with it.
+    pub(crate) continuations: usize,
 }
 
 impl BracketFrame {
