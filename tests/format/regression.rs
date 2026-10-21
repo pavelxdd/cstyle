@@ -18844,7 +18844,7 @@ fn a_list_among_arguments_leaves_the_rows_after_it_at_the_argument_column() {
         ),
         (
             "--style=kr",
-            "void helper()\n{\n    return result(first,\n                  field<Item>{\n        value\n    },\n                  more);\n    result(first, {\n        value\n    },\n           more);\n}\n",
+            "void helper()\n{\n    return result(first,\n                  field<Item> {\n        value\n    },\n                  more);\n    result(first, {\n        value\n    },\n           more);\n}\n",
         ),
     ] {
         check(input, &[style], expected);
@@ -19157,5 +19157,14 @@ fn arguments_after_a_compound_literal_on_the_line_of_its_paren_continue_the_call
         check(input, &[style], expected);
         check(expected, &[style], expected);
     }
+}
+#[test]
+fn a_template_type_s_list_brace_ending_its_line_takes_a_space_as_on_one_line() {
+    // A list's brace after a template's `>` stands apart from it wherever
+    // its rows go; after a plain name it keeps the gap the source left.
+    let input = "void run() {\n  go(vec<int>{1, 2});\n  go(vec<int>{\n      1});\n  auto w = vec<int>{\n      1};\n  go(Item{\n      1});\n}\n";
+    let expected = "void run() {\n    go(vec<int> {1, 2});\n    go(vec<int> {\n        1\n    });\n    auto w = vec<int> {\n        1\n    };\n    go(Item{\n        1\n    });\n}\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
 }
 

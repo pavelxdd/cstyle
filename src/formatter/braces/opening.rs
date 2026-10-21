@@ -3462,15 +3462,16 @@ impl FormatEngine<'_> {
             }
             return;
         }
-        // A brace the style brings up from a line of its own takes a space.
+        // A brace the style brings up from a line of its own takes a space,
+        // as one after a template's `>` does.
         let init_after_declarator = brace_type == BraceType::Initializer
             && !self.token_input.token_begins_source_line
-            && (self
+            && !self.current.trimmed_end().ends_with('>')
+            && self
                 .layout
                 .command_state
                 .previous_command_char
-                .is_some_and(|ch| is_word_char(ch) || ch == ']' || ch == '>')
-                || self.current.trimmed_end().ends_with('>'));
+                .is_some_and(|ch| is_word_char(ch) || ch == ']');
         // A compound literal nested in an aggregate keeps the gap written
         // before its brace, as any brace there does.
         let nested_compound_literal = brace_type == BraceType::CompoundLiteral
