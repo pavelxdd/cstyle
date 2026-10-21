@@ -18864,3 +18864,12 @@ fn a_list_among_arguments_leaves_the_rows_after_it_at_the_argument_column() {
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn vtk_an_overloaded_subscript_operator_opens_a_function_body() {
+    // `operator[]` names the function; its brackets capture nothing.
+    let input = "struct Item {\n  char operator[](size_t) { return data; }\n  char operator()(size_t) { return data; }\n};\n";
+    let expected = "struct Item\n{\n    char operator[](size_t)\n    {\n        return data;\n    }\n    char operator()(size_t)\n    {\n        return data;\n    }\n};\n";
+    check(input, &["--style=vtk"], expected);
+    check(expected, &["--style=vtk"], expected);
+}

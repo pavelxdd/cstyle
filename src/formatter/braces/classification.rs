@@ -30,9 +30,10 @@ pub(crate) fn line_opens_lambda_block(line: &str) -> bool {
     };
     let head = head.trimmed_end();
     is_lambda_body_header(head)
-        || head
-            .rfind('[')
-            .is_some_and(|index| is_lambda_body_header(head[index..].trimmed_start()))
+        || head.rfind('[').is_some_and(|index| {
+            opens_capture_list_after(&head[..index])
+                && is_lambda_body_header(head[index..].trimmed_start())
+        })
         || current_ends_block_literal_header(head)
 }
 
@@ -499,7 +500,8 @@ impl FormatEngine<'_> {
             || self.current.last_open_bracket().is_some_and(|index| {
                 let tail = head[index..].trimmed_start();
                 let skipped = head.len() - index - tail.len();
-                tail.as_bytes().contains(&b']')
+                opens_capture_list_after(&head[..index])
+                    && tail.as_bytes().contains(&b']')
                     && is_lambda_body_header_with_arrow(
                         tail,
                         arrow
