@@ -19612,3 +19612,18 @@ fn an_else_if_kept_after_a_statement_stands_with_its_else() {
     let block = "void f()\n{\n    if (ready)\n        value=0;   else if (other) {\n        result=0;\n    } else\n        result=1;\n    go();\n}\n";
     check(block, &["--style=kr", "--keep-one-line-statements"], block);
 }
+
+#[test]
+fn break_blocks_reads_a_label_after_a_case_block_closer_past_a_comment() {
+    // A comment between the closer and the label on its line leaves the
+    // label to decide the padding, as when the label follows the closer.
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: {\n        break;\n    } /*c*/ case 2: {\n        go();\n        break;\n    } /*d*/ default:\n        break;\n    }\n}\n";
+    let expected = "void f()\n{   switch (kind)\n    {   case 1:\n        {   break; } /*c*/ case 2:\n        {   go();\n            break; } /*d*/ default:\n            break; } }\n";
+    for args in [
+        &["--style=pico", "--break-blocks=all"][..],
+        &["--style=pico", "--break-blocks=all", "--delete-empty-lines"][..],
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}

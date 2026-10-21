@@ -444,13 +444,34 @@ impl FormatEngine<'_> {
                 .is_some_and(|index| {
                     matches!(&self.tree.tokens[index], Token::Word(word) if is_break_blocks_closing_header(word))
                 });
+        let word_goes_on = |word: &str| {
+            !(is_break_blocks_closing_header(word)
+                || word == "while"
+                || is_break_blocks_opening_header(self.options, word))
+        };
+        // A block comment between the brace and an opening header or a label
+        // on its line leaves that to decide; a closing header there keeps
+        // the padding the comment gives it.
+        let word_after_comment = matches!(next, Some(Token::Comment(CommentKind::Block, _)))
+            .then(|| self.current.active_token())
+            .flatten()
+            .and_then(|brace| {
+                let tokens = &self.tree.tokens;
+                next_code_token(tokens, brace + 1)
+                    .filter(|&index| {
+                        !tokens[brace + 1..index]
+                            .iter()
+                            .any(|token| matches!(token, Token::Newline))
+                    })
+                    .and_then(|index| match &tokens[index] {
+                        Token::Word(word) => Some(word.as_str()),
+                        _ => None,
+                    })
+            });
         let line_goes_on = match next {
-            Some(Token::Word(word)) => {
-                !(is_break_blocks_closing_header(word)
-                    || word == "while"
-                    || is_break_blocks_opening_header(self.options, word))
-            }
-            Some(Token::Comment(..)) => true,
+            Some(Token::Word(word)) => word_goes_on(word),
+            Some(Token::Comment(..)) => word_after_comment
+                .is_none_or(|word| !is_break_blocks_opening_header(self.options, word)),
             Some(Token::Symbol(';' | ',' | ')' | '}') | Token::Newline) | None => false,
             Some(_) => true,
         };
