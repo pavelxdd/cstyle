@@ -284,6 +284,17 @@ impl NestingState {
         self.continuation_indent_spaces_stack.truncate(count);
     }
 
+    /// Registers `spaces` again for the innermost paren when nothing of it
+    /// stands on the stack, as after a list inside it dropped its columns.
+    pub(crate) fn restore_paren_continuation(&mut self, spaces: usize) {
+        if self.paren_depth > 0
+            && self.continuation_indent_checkpoint_stack.last().copied()
+                == Some(self.continuation_indent_spaces_stack.len())
+        {
+            self.push_continuation_column(spaces);
+        }
+    }
+
     pub(crate) fn current_continuation_indent_spaces(&self) -> Option<usize> {
         // A brace list's elements continue nothing of the expression
         // around it.

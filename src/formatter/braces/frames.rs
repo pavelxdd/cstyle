@@ -691,6 +691,25 @@ impl FormatEngine<'_> {
             }
         }
         let recovery = self.layout.nesting.exit_brace();
+        // A list among arguments leaves their continuation as it found it.
+        if recovery.parens == 0
+            && matches!(
+                self.layout.nesting.last_closed_brace_type,
+                Some(
+                    BraceType::Array
+                        | BraceType::CompoundLiteral
+                        | BraceType::Initializer
+                        | BraceType::DeferArray
+                )
+            )
+            && let Some(spaces) = self
+                .layout
+                .frame_stack
+                .active_delimiter()
+                .and_then(|delimiter| delimiter.continuation_indent_column)
+        {
+            self.layout.nesting.restore_paren_continuation(spaces);
+        }
         for _ in 0..recovery.parens {
             self.layout.frame_stack.pop_delimiter(self.output.len());
         }

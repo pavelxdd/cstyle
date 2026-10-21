@@ -18840,3 +18840,27 @@ fn an_enumeration_after_a_macro_call_keeps_its_one_line_body() {
     let whitesmith = "MACRO(value)\n\nEXPORT\nenum class Mode\n    { first, second };\n";
     check(input, &["--style=whitesmith"], whitesmith);
 }
+
+#[test]
+fn a_list_among_arguments_leaves_the_rows_after_it_at_the_argument_column() {
+    // The list's own rows stand at its braces; the arguments after its
+    // closer continue at the call's column, as after a one-line list.
+    let input = "void helper() {\n    return result(first,\n                  field<Item>{\n                      value},\n                  more);\n    result(first, {\n               value},\n           more);\n}\n";
+    for (style, expected) in [
+        (
+            "--style=pico",
+            "void helper()\n{   return result(first,\n                  field<Item>\n    {   value },\n                  more);\n    result(first,\n    {   value },\n           more); }\n",
+        ),
+        (
+            "--style=allman",
+            "void helper()\n{\n    return result(first,\n                  field<Item>\n    {\n        value\n    },\n                  more);\n    result(first,\n    {\n        value\n    },\n           more);\n}\n",
+        ),
+        (
+            "--style=kr",
+            "void helper()\n{\n    return result(first,\n                  field<Item>{\n        value\n    },\n                  more);\n    result(first, {\n        value\n    },\n           more);\n}\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
