@@ -332,6 +332,22 @@ impl FormatEngine<'_> {
             .is_some_and(|close| self.tree.has_directive_in(params.open..close))
     }
 
+    /// Whether a `template <...>` clause starting at `first` ends right
+    /// before `start`, as when a head's template parameters lead its line.
+    fn template_clause_before(&self, first: usize, start: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        matches!(&tokens[first], Token::Word(word) if word == "template")
+            && self
+                .tree
+                .previous_code_token(start)
+                .filter(
+                    |&close| matches!(&tokens[close], Token::Operator(operator) if operator == ">"),
+                )
+                .and_then(|close| template_arguments_start(tokens, close))
+                .and_then(|open| self.tree.previous_code_token(open))
+                == Some(first)
+    }
+
     /// Whether the function name line starting at token `first` joins the
     /// return type on the last output line.
     pub(crate) fn attaches_return_type(&self, first: usize) -> bool {
@@ -360,7 +376,8 @@ impl FormatEngine<'_> {
                     // the head starts.
                     // A pointer run such as `**` may record only its first
                     // star as the line's last token.
-                    previous.first >= head.start
+                    (previous.first >= head.start
+                        || self.template_clause_before(previous.first, head.start))
                         && self.tree.previous_code_token(head.name_start).is_some_and(
                             |before_name| {
                                 // Comments after the type stay with it.
@@ -488,6 +505,13 @@ impl FormatEngine<'_> {
                                 |previous| matches!(self.tree.tokens[previous], Token::Word(_)),
                             )
                     })
+            })
+            .or_else(|| {
+                // A template's parameters leading the line stand with the
+                // return type after them.
+                (span.first..=span.last)
+                    .find_map(|token| self.tree.functions.starting_at(token))
+                    .filter(|head| self.template_clause_before(span.first, head.start))
             })
             .cloned()
         else {

@@ -18976,3 +18976,30 @@ fn a_member_access_among_template_arguments_leaves_the_angles_unpadded() {
     let input = "template <typename T>\nstruct has_member<T, void_t<decltype(value.begin())>> : base {};\nusing item = holder<decltype(value.size())>;\n";
     check(input, &["--pad-oper"], input);
 }
+
+#[test]
+fn break_return_type_splits_a_head_after_template_parameters_on_its_line() {
+    // The template's parameters stay with the return type before the name.
+    let input = "struct Item {\n  template <typename U> static auto check(U*) -> int;\n  template <typename T> int helper(T value);\n};\ntemplate <typename T> int helper(T value) {\n  return 0;\n}\n";
+    let expected = "struct Item {\n    template <typename U> static auto\n    check(U*) -> int;\n    template <typename T> int\n    helper(T value);\n};\ntemplate <typename T> int\nhelper(T value)\n{\n    return 0;\n}\n";
+    let args = [
+        "--style=kr",
+        "--break-return-type",
+        "--break-return-type-decl",
+    ];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
+
+#[test]
+fn attach_return_type_joins_a_head_after_template_parameters_on_its_line() {
+    let input = "struct Item {\n    template <typename U> static auto\n    check(U*) -> int;\n    template <typename T> int\n    helper(T value);\n};\ntemplate <typename T> int\nhelper(T value)\n{\n    return 0;\n}\n";
+    let expected = "struct Item {\n    template <typename U> static auto check(U*) -> int;\n    template <typename T> int helper(T value);\n};\ntemplate <typename T> int helper(T value)\n{\n    return 0;\n}\n";
+    let args = [
+        "--style=kr",
+        "--attach-return-type",
+        "--attach-return-type-decl",
+    ];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
