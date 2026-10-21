@@ -429,6 +429,9 @@ pub(crate) struct LineState {
     /// Whether the line's last colon gives a bit-field width.
     pub(crate) bit_field_colon: bool,
     pub(crate) template_angle_depth: usize,
+    /// The continuation columns registered before each open template angle;
+    /// the ones inside it end with it.
+    pub(crate) template_angle_continuations: Vec<usize>,
     /// The `;` of each statement on the line braces were added around.
     pub(crate) added_block_semicolons: Vec<usize>,
 }

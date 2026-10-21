@@ -1909,12 +1909,40 @@ impl FormatEngine<'_> {
         Some(base + value_offset)
     }
 
+    /// Whether the line holds an assignment outside template angles; the
+    /// `=` of a default template argument assigns nothing the line goes on
+    /// with.
+    fn current_assigns_outside_template_angles(&self) -> bool {
+        let Some(span) = self.current.tokens() else {
+            return true;
+        };
+        let tokens = &self.tree.tokens;
+        let mut depth = 0usize;
+        (span.first..=span.last.min(tokens.len().saturating_sub(1))).any(|index| {
+            match &tokens[index] {
+                Token::Operator(operator) if operator == "<" && self.template_opener_at(index) => {
+                    depth += 1;
+                }
+                Token::Operator(operator)
+                    if depth > 0 && matches!(operator.as_str(), ">" | ">>") =>
+                {
+                    depth = depth.saturating_sub(operator.len());
+                }
+                Token::Operator(operator) if depth == 0 => {
+                    return language::is_assignment_operator(operator);
+                }
+                _ => {}
+            }
+            false
+        })
+    }
+
     pub(crate) fn assignment_continuation_indent_spaces(&self) -> Option<usize> {
         if self.in_initializer_brace() {
             return None;
         }
         // Every assignment operator holds `=`.
-        if !self.current.holds_equals() {
+        if !self.current.holds_equals() || !self.current_assigns_outside_template_angles() {
             return None;
         }
         let code = self.current_code_before_trailing_comment();

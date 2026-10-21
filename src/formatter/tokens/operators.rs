@@ -747,7 +747,15 @@ impl FormatEngine<'_> {
             TemplateAngle::Open => {
                 self.emit_source_space();
                 self.current.push('<');
+                if self.layout.line_state.template_angle_depth == 0 {
+                    self.layout.line_state.template_angle_continuations.clear();
+                }
                 self.layout.line_state.template_angle_depth += 1;
+                let continuations = self.layout.nesting.continuation_count();
+                self.layout
+                    .line_state
+                    .template_angle_continuations
+                    .push(continuations);
                 self.emit_trailing_source_space();
                 self.layout.command_state.observe_text(operator);
                 self.layout.previous = PreviousToken::Operator;
@@ -766,6 +774,18 @@ impl FormatEngine<'_> {
                     .line_state
                     .template_angle_depth
                     .saturating_sub(count);
+                let mut outermost = None;
+                for _ in 0..count {
+                    outermost = self
+                        .layout
+                        .line_state
+                        .template_angle_continuations
+                        .pop()
+                        .or(outermost);
+                }
+                if let Some(continuations) = outermost {
+                    self.layout.nesting.truncate_continuations(continuations);
+                }
                 self.emit_trailing_source_space();
                 self.layout.command_state.observe_text(operator);
                 self.layout.previous = PreviousToken::Operator;

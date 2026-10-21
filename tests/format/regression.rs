@@ -19003,3 +19003,15 @@ fn attach_return_type_joins_a_head_after_template_parameters_on_its_line() {
     check(input, &args, expected);
     check(expected, &args, expected);
 }
+
+#[test]
+fn a_template_parameter_s_default_continues_nothing_after_its_angles() {
+    // The `=` of a default template argument aligns rows inside the angles
+    // only; the name a split return type leaves stands at the head.
+    let input = "template <bool B = false> constexpr auto count() -> int { return B ? 1 : 0; }\n";
+    let expected =
+        "template <bool B = false> constexpr auto\ncount() -> int\n{\n    return B ? 1 : 0;\n}\n";
+    let args = ["--style=kr", "--break-return-type"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
