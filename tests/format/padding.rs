@@ -114,6 +114,28 @@ fn pad_operators_keeps_multiplication_padded_after_macro_call() {
     assert_eq!(format_exact(source, &kr_c_options()), source);
 }
 
+// A number ending in a dot owns the dot, so the star after it multiplies;
+// only a dot after an operand forms the member-pointer operator.
+#[test]
+fn pad_operators_pads_multiplication_after_a_number_ending_in_a_dot() {
+    let source = fixture!(
+        "void helper(void)",
+        "{",
+        "    value = 2.*scale + 1.*other;",
+        "    value = item.*member;",
+        "}",
+    );
+    let expected = fixture!(
+        "void helper(void)",
+        "{",
+        "    value = 2. * scale + 1. * other;",
+        "    value = item.*member;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &one_true_brace_c_options()), expected);
+}
+
 #[test]
 fn pad_operators_distinguishes_unary_minus_from_alignof_subtraction() {
     let source = fixture!(

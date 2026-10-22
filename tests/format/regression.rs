@@ -10985,6 +10985,19 @@ fn added_braces_open_after_all_comments_leading_the_statement_line() {
     }
 }
 
+// An added brace takes the place of its statement, so the gap between the
+// leading comment and the brace is the source gap, whatever its width.
+#[test]
+fn added_brace_after_a_comment_keeps_the_source_gap_before_the_statement() {
+    for gap in ["", " ", "   ", "\t"] {
+        let input = format!("void f()\n{{\n    if (b)\n        /* c */{gap}x();\n}}\n");
+        let expected =
+            format!("void f()\n{{\n    if (b)\n        /* c */{gap}{{\n        x();\n    }}\n}}\n");
+        check(&input, &["-j"], &expected);
+        check(&expected, &["-j"], &expected);
+    }
+}
+
 // Pico gives a block added after a comment leading the statement's line the
 // run-in shape of its other added blocks.
 #[test]
