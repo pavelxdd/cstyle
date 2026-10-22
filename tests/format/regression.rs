@@ -20837,3 +20837,21 @@ fn a_type_ending_in_closing_template_angles_continues_no_row() {
     let input = "void f()\n{\n    Box<std::vector<Item>>\n    first;\n    Pair<Box<Item>>\n    second{value};\n    Box<Box<Box<Item>>>\n    third;\n    Box<Box<Item> >\n    fourth;\n}\n";
     check(input, &["--style=allman"], input);
 }
+
+#[test]
+fn a_statement_braced_off_its_header_keeps_its_template_arguments() {
+    let input = "void f()\n{\n    if (full) helper<int>(buf);\n    while (full) static_cast<Item &>(buf).flush();\n}\n";
+    let expected = "void f()\n{\n    if (full) {\n        helper<int>(buf);\n    }\n    while (full) {\n        static_cast<Item &>(buf).flush();\n    }\n}\n";
+    let args = ["--style=kr", "-p", "--add-braces"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
+
+#[test]
+fn a_statement_unbraced_from_a_one_line_block_keeps_its_template_arguments() {
+    let input = "void f()\n{\n    if (full) { helper<int>(buf); }\n}\n";
+    let expected = "void f()\n{\n    if (full)\n        helper<int>(buf);\n}\n";
+    let args = ["-p", "--remove-braces"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}

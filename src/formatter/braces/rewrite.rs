@@ -23,7 +23,9 @@ use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::structure::SourceTree;
 use crate::formatter::structure::blocks::{BlockKind, next_code_token};
 use crate::formatter::syntax::language::is_macro_like_word;
-use crate::formatter::syntax::{TemplateAngle, classify_syntax, language, template_angle_role};
+use crate::formatter::syntax::{
+    TemplateAngle, classify_syntax, known_template_angle_role, language, template_angle_role,
+};
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{
     ContainsAnyByte, after_leading_comments, has_hash_outside_literals, has_unmatched_open_brace,
@@ -2629,13 +2631,24 @@ impl FormatEngine<'_> {
                 self.token_input.previous_input_whitespace = Some(whitespace.to_string().into());
             }
             self.current.set_active_token(Some(index));
+            // The statement's angles are read as in its own line.
+            let template_angle = known_template_angle_role(
+                tokens,
+                index,
+                self.layout.line_state.template_angle_depth,
+                || self.template_opener_at(index),
+            );
             self.push_token(
                 &tokens[index],
                 TokenPushContext {
                     next,
                     next_is_adjacent: next_index == Some(index + 1),
-                    following_operator: None,
-                    template_angle: TemplateAngle::None,
+                    following_operator: following_operator_after_next_word(
+                        tokens,
+                        index + 1,
+                        end_inclusive + 1,
+                    ),
+                    template_angle,
                     token_index: index,
                     starts_initializer_designator: false,
                     inferred_definition_brace: false,
