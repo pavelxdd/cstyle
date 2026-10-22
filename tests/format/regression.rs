@@ -21957,6 +21957,14 @@ fn a_ternary_colon_after_a_brace_in_a_list_or_a_kept_block_keeps_the_statement_w
 }
 
 #[test]
+fn an_argument_row_before_a_block_argument_stands_at_its_stacked_parens() {
+    let input = "void f()\n{\n    CHECK(WRITE(\n              stdout,\n    {\n        go();\n    },\n    \"test\"), \"fail\");\n}\n";
+    check(input, &["--style=allman"], input);
+    let whitesmith = "void f()\n    {\n    CHECK(WRITE(\n              stdout,\n        {\n        go();\n        },\n    \"test\"), \"fail\");\n    }\n";
+    check(input, &["--style=whitesmith"], whitesmith);
+}
+
+#[test]
 fn a_ternary_colon_row_after_angles_stands_at_the_statement_as_after_any_condition() {
     // Template arguments, comparisons and comments among them register no
     // column; a shift does.

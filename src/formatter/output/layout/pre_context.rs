@@ -228,6 +228,7 @@ impl FormatEngine<'_> {
             && self.enclosing_macro_call_output_context()
             && !starts_string_literal_token(line_start)
             && !line_start.starts_with_any(b")}")
+            && !self.line_leads_block_argument()
             && let Some(previous) = self.output.last_line_outside_comment()
         {
             let previous_trimmed = previous.trimmed_start();
@@ -634,5 +635,20 @@ impl FormatEngine<'_> {
                 .last()
                 .and_then(|frame| self.output.get(frame.output_line))
                 .is_some_and(|line| unmatched_open_brace_content_offset(line).is_some())
+    }
+}
+
+impl FormatEngine<'_> {
+    /// Whether the pending row starts with the brace of a block holding
+    /// statements among a call's arguments.
+    fn line_leads_block_argument(&self) -> bool {
+        self.output.pending_tokens().is_some_and(|span| {
+            matches!(self.tree.tokens[span.first], Token::Symbol('{'))
+                && self
+                    .tree
+                    .groups
+                    .opened_at(span.first)
+                    .is_some_and(|block| self.brace_holds_statements(block))
+        })
     }
 }
