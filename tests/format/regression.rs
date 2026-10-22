@@ -21448,4 +21448,13 @@ fn break_blocks_parts_a_bare_block_from_a_header_block_a_comment_follows() {
     let options = ["--style=kr", "--break-blocks", "--keep-one-line-blocks"];
     let expected = "void f()\n{\n    if (ready) { value=0; } // done\n\n    {\n        value = 1;\n    }\n    next();\n}\n";
     check(input, &options, expected);
+    // So does one after a closer add-braces keeps on the statement's line.
+    let added = "void f()\n{\n    if (ready) value=0; // done\n    {\n        value = 1;\n    }\n    next();\n}\n";
+    let options = [
+        "--style=kr",
+        "--break-blocks",
+        "--keep-one-line-blocks",
+        "--add-braces",
+    ];
+    check(added, &options, expected);
 }
