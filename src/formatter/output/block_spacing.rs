@@ -398,10 +398,11 @@ impl FormatEngine<'_> {
     /// or comment between the blocks ends the header.
     fn brace_continues_header_block(&self) -> bool {
         let tokens = &self.tree.tokens;
+        // Comments between them take no part.
         let Some((brace, close)) = self.current.active_token().and_then(|brace| {
             tokens[..brace]
                 .iter()
-                .rposition(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
+                .rposition(is_code_token)
                 .map(|close| (brace, close))
         }) else {
             return false;

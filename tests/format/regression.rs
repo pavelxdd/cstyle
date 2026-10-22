@@ -21403,3 +21403,23 @@ fn pico_aligns_a_joined_closer_rows_paren_by_the_rows_visual_width_under_tabs() 
     check(input, &options, expected);
     check(expected, &options, expected);
 }
+
+#[test]
+fn break_blocks_parts_a_bare_block_after_an_added_block_whatever_comment_trails_its_statement() {
+    let expected = "void f()\n{\n    if (ready) {\n        value=0;{comment}\n    }\n\n    {\n        value = 0;\n    }\n\n    next();\n}\n";
+    for comment in ["", "   // note"] {
+        let input = format!(
+            "void f()\n{{\n    if (ready) value=0;{comment}\n    {{ value = 0; }}\n    next();\n}}\n"
+        );
+        let comment = if comment.is_empty() {
+            ""
+        } else {
+            "    // note"
+        };
+        check(
+            &input,
+            &["--style=kr", "--add-braces", "--break-blocks"],
+            &expected.replace("{comment}", comment),
+        );
+    }
+}
