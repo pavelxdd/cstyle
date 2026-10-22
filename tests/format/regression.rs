@@ -7513,9 +7513,18 @@ fn initializer_rows_in_a_control_block_indent_past_a_declarator_with_a_call_in_i
 }
 
 #[test]
+fn designator_rows_of_a_run_in_list_stand_at_its_elements_whatever_rows_their_values_span() {
+    let input = "void f(void)\n{\n    item it = { .name = \"x\",\n        .text = \"first \"\n            \"second\"\n    };\n    Record sa = { .a = 1, .b = 2,\n        .text = \"first \"\n                \"second\",\n        .count = first +\n                 second,\n        .c = 3\n    };\n}\n";
+    let expected = "void f(void)\n{\n    item it = { .name = \"x\",\n                .text = \"first \"\n                        \"second\"\n              };\n    Record sa = { .a = 1, .b = 2,\n                  .text = \"first \"\n                          \"second\",\n                  .count = first +\n                           second,\n                  .c = 3\n                };\n}\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+}
+
+#[test]
 fn aggregate_with_run_in_first_fields_closes_at_its_statement() {
     let input = "void f(void)\n{\n    struct s sa = { .a = 1, .b = 2,\n        .c = 3\n    };\n    *p = (struct s) { .a = 1,\n        .c = 3\n    };\n    T y = (T) { .a = 1,\n        .b = 2 };\n}\n";
-    let expected = "void f(void)\n{\n    struct s sa = { .a = 1, .b = 2,\n        .c = 3\n    };\n    *p = (struct s) { .a = 1,\n        .c = 3\n    };\n    T y = (T) { .a = 1,\n        .b = 2\n    };\n}\n";
+    // Fields after those run in stand at the first, as in any list.
+    let expected = "void f(void)\n{\n    struct s sa = { .a = 1, .b = 2,\n                    .c = 3\n    };\n    *p = (struct s) { .a = 1,\n        .c = 3\n    };\n    T y = (T) { .a = 1,\n        .b = 2\n    };\n}\n";
     let args = [
         "--style=1tbs",
         "--pad-oper",

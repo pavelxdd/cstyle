@@ -284,6 +284,23 @@ impl FormatEngine<'_> {
     /// Whether the pending line starts a row of an initializer list whose
     /// elements run in after its brace, and opens a list aligned among
     /// them.
+    /// Whether the pending row is an element row of an initializer list
+    /// whose first element follows its brace on the brace's line.
+    fn pending_row_in_run_in_list(&self) -> bool {
+        let groups = &self.tree.groups;
+        self.output
+            .pending_tokens()
+            .and_then(|span| groups.enclosing(span.first))
+            .is_some_and(|list| {
+                self.tree.blocks.kind(list) == Some(BlockKind::Initializer)
+                    && self
+                        .output
+                        .line_with_token(groups.get(list).open)
+                        .and_then(|line| self.output.line_tokens(line))
+                        .is_some_and(|open_span| open_span.last != groups.get(list).open)
+            })
+    }
+
     fn pending_row_of_run_in_list(&self) -> bool {
         let groups = &self.tree.groups;
         let Some(span) = self.output.pending_tokens() else {
@@ -1502,6 +1519,15 @@ impl FormatEngine<'_> {
         // elements, though a list it opens holds the line.
         if designator && has_unmatched_open_brace(line) && self.pending_row_of_run_in_list() {
             return None;
+        }
+        // So does any other designator row of a list whose first element
+        // runs in after its brace, whatever rows its value spans.
+        if designator
+            && !has_unmatched_open_brace(line)
+            && self.pending_row_in_run_in_list()
+            && let Some(column) = self.line_start_inline_array_column()
+        {
+            return Some(column);
         }
         if closing && let Some(spaces) = self.layout.continuation_indent.next_line_indent_spaces {
             return Some(spaces);

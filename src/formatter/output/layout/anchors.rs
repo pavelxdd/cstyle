@@ -2375,7 +2375,20 @@ impl FormatEngine<'_> {
         if self.output.line_with_token(element) != Some(line) {
             return None;
         }
-        Some(self.token_column(element)? + self.case_unindent_spaces())
+        // An `=` in the element continues it from the value after it.
+        let separator = (open..first).rev().find(|&index| {
+            index == open
+                || matches!(tokens[index], Token::Symbol(','))
+                    && groups.enclosing(index) == Some(group)
+        })?;
+        let value = (separator + 1..first)
+            .find(|&index| {
+                matches!(&tokens[index], Token::Operator(operator) if operator == "=")
+                    && groups.enclosing(index) == Some(group)
+            })
+            .and_then(|assign| next_code_token(tokens, assign + 1))
+            .filter(|&value| value < first);
+        Some(self.token_column(value.unwrap_or(element))? + self.case_unindent_spaces())
     }
 
     /// A comma starting its line in an initializer stands at the line where
