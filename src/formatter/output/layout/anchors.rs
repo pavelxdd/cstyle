@@ -5221,13 +5221,27 @@ impl FormatEngine<'_> {
         } else {
             return None;
         };
-        let if_token = self.tree.statements.if_of_else(else_token)?;
+        let mut if_token = self.tree.statements.if_of_else(else_token)?;
         // A `}` closing a block nested in a braceless `if` body keeps the
         // `else` of that `if` at the brace.
         if first != else_token && self.is_dangling_else(else_token) {
             return None;
         }
-        let if_line = self.line_led_by(if_token)?;
+        // An `if` an `else` runs into stands with the chain's first `if`.
+        let if_line = loop {
+            if let Some(line) = self.line_led_by(if_token).filter(|&line| {
+                self.output
+                    .line_tokens(line)
+                    .is_some_and(|span| span.first == if_token)
+            }) {
+                break line;
+            }
+            let before = self.tree.previous_code_token(if_token)?;
+            if !is_else(before) {
+                return None;
+            }
+            if_token = self.tree.statements.if_of_else(before)?;
+        };
         Some(self.output.lead_width(if_line, self.options.tab_width) + self.case_unindent_spaces())
     }
 
@@ -5250,6 +5264,30 @@ impl FormatEngine<'_> {
                             != Some(if_token)
                     })
             })
+    }
+
+    /// The `if` leading its line that heads the chain of the `else` at
+    /// `else_token`, when an `else` of that chain follows a `}` closing a
+    /// block other than its `if`'s body.
+    fn dangling_chain_if(&self, else_token: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let mut else_token = else_token;
+        let mut dangling = false;
+        loop {
+            dangling |= self.is_dangling_else(else_token);
+            let if_token = self.tree.statements.if_of_else(else_token)?;
+            let leads_line = self
+                .line_led_by(if_token)
+                .and_then(|line| self.output.line_tokens(line))
+                .is_some_and(|span| span.first == if_token);
+            if leads_line {
+                return dangling.then_some(if_token);
+            }
+            else_token = self
+                .tree
+                .previous_code_token(if_token)
+                .filter(|&before| matches!(&tokens[before], Token::Word(word) if word == "else"))?;
+        }
     }
 
     /// The keyword before the parens opening at `open`, past a `constexpr`
@@ -5277,13 +5315,20 @@ impl FormatEngine<'_> {
         } else {
             return None;
         };
-        let else_token = self.tree.previous_code_token(groups.get(block).open)?;
-        if !matches!(&tokens[else_token], Token::Word(word) if word == "else")
-            || !self.is_dangling_else(else_token)
-        {
-            return None;
-        }
-        let line = self.line_led_by(self.tree.statements.if_of_else(else_token)?)?;
+        let is_else = |index: usize| matches!(&tokens[index], Token::Word(word) if word == "else");
+        // The `else` opening the block, directly or through an `if` it runs
+        // into.
+        let before = self.tree.previous_code_token(groups.get(block).open)?;
+        let else_token = if is_else(before) {
+            before
+        } else {
+            let condition = groups.closed_at(before)?;
+            let if_token = self.condition_keyword(groups.get(condition).open)?;
+            let before_if = self.tree.previous_code_token(if_token)?;
+            (matches!(&tokens[if_token], Token::Word(word) if word == "if") && is_else(before_if))
+                .then_some(before_if)?
+        };
+        let line = self.line_led_by(self.dangling_chain_if(else_token)?)?;
         // GNU indents the block's braces a level past the `else`, Ratliff
         // its closing brace.
         let braces = if self.options.brace_style == BraceStyle::Gnu

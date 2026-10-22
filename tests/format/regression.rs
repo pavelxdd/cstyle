@@ -12220,6 +12220,31 @@ fn a_comment_led_switch_after_a_macro_line_keeps_its_case_blocks_under_whitesmit
 }
 
 #[test]
+fn an_else_chain_after_a_loop_body_given_braces_stands_with_its_if() {
+    let input = "void f()\n{\n    for (i = 0; i < n; ++i) {\n        if (a)\n            while (b)\n                ++pos;\n        else if (c)\n            break;\n        else\n            ++pos;\n    }\n}\n%s";
+    for (rest, args, expected) in [
+        (
+            "",
+            &["--style=kr", "--add-braces"][..],
+            "void f()\n{\n    for (i = 0; i < n; ++i) {\n        if (a)\n            while (b) {\n                ++pos;\n            } else if (c) {\n            break;\n        } else {\n            ++pos;\n        }\n    }\n}\n",
+        ),
+        (
+            "",
+            &["--style=1tbs", "--add-braces"][..],
+            "void f()\n{\n    for (i = 0; i < n; ++i) {\n        if (a)\n            while (b) {\n                ++pos;\n            } else if (c) {\n            break;\n        } else {\n            ++pos;\n        }\n    }\n}\n",
+        ),
+        (
+            "",
+            &["--style=allman", "--add-braces"][..],
+            "void f()\n{\n    for (i = 0; i < n; ++i)\n    {\n        if (a)\n            while (b)\n            {\n                ++pos;\n            }\n        else if (c)\n        {\n            break;\n        }\n        else\n        {\n            ++pos;\n        }\n    }\n}\n",
+        ),
+    ] {
+        check(&input.replace("%s", rest), args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
 fn any_unconditional_directive_between_a_case_label_and_a_brace_makes_the_brace_a_plain_block() {
     let input = "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n    {\n        pop(state);\n    }\n    break;\n    case 2:\n#pragma once\n    {\n        push(state);\n    }\n    break;\n    }\n}\n";
     check(
