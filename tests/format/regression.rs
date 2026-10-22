@@ -17706,6 +17706,14 @@ fn returned_message_rows_align_at_the_keyword_as_other_message_rows() {
 }
 
 #[test]
+fn indent_after_parens_continues_a_shift_chain_from_a_row_it_leads() {
+    // A shift leading a row with nothing registered stands two levels in;
+    // the rows after it continue a level past that row.
+    let input = "void f()\n{\n    check(x)\n            << a\n                << b\n                << c;\n    cout << a\n        << b\n        << c;\n}\n";
+    check(input, &["--style=allman", "--indent-after-parens"], input);
+}
+
+#[test]
 fn code_after_comment_rows_keeps_its_block_column_whatever_their_text() {
     let input = "namespace n {\n// a.\n// Returns false (if error != NULL) on error.\nbool Item::f(int a,\n             int b) {\n  return a;\n}\n// {{{ part\n// more\nint z;\n}\n";
     let expected = "namespace n\n{\n// a.\n// Returns false (if error != NULL) on error.\n    bool Item::f(int a,\n                 int b)\n    {\n        return a;\n    }\n// {{{ part\n// more\n    int z;\n}\n";

@@ -688,6 +688,11 @@ impl FormatEngine<'_> {
                             replay.continuation = true;
                         }
                     } else if replay.stack.is_empty() {
+                        // A shift leading its line stands two levels in, and
+                        // its chain continues from there.
+                        if starts_line && replay.line_space == 0 {
+                            replay.line_space = 2 * self.options.indent_width;
+                        }
                         self.register(&mut replay, index, next_on_line, false, &relative)?;
                         replay.continuation = true;
                     }
