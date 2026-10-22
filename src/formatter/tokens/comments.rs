@@ -3855,12 +3855,19 @@ impl FormatEngine<'_> {
     }
 
     /// Whether the comment follows a block brace the style broke onto a line
-    /// of its own, where the comment opens the body as one on its own line.
+    /// of its own, where the comment opens the body as one on its own line;
+    /// so does one after a list's brace where braces attach.
     fn comment_follows_broken_block_brace(&self) -> bool {
-        matches!(
-            self.layout.nesting.brace_type_stack.last(),
-            Some(BraceType::Command | BraceType::Definition)
-        ) && self.output.last().is_some_and(|line| line.trimmed() == "{")
+        let opens_body = match self.layout.nesting.brace_type_stack.last() {
+            Some(BraceType::Command | BraceType::Definition) => true,
+            Some(BraceType::Array | BraceType::Initializer) => matches!(
+                self.options.brace_style,
+                BraceStyle::Attach | BraceStyle::Ratliff | BraceStyle::Lisp
+            ),
+            _ => false,
+        };
+        opens_body
+            && self.output.last().is_some_and(|line| line.trimmed() == "{")
             && !self
                 .source_run_in_brace_lines
                 .contains(&self.output.len().wrapping_sub(1))

@@ -12080,6 +12080,32 @@ fn a_multi_line_comment_after_a_list_brace_the_style_breaks_opens_the_list() {
 }
 
 #[test]
+fn rows_of_a_comment_an_attaching_style_breaks_from_an_element_brace_stand_as_after_a_block_brace()
+{
+    let input = "int items[][2] = {\n%s\n    1, 2 },\n};\n";
+    for (rest, args, expected) in [
+        (
+            " { /* first\n\t\trow */",
+            &["--style=java", "--indent=force-tab=4"][..],
+            "int items[][2] = {\n\t{\n\t\t/* first\n\t\t\trow */\n\t\t1, 2\n\t},\n};\n",
+        ),
+        (
+            " {  /* first\n    * row\n\t\t* row */",
+            &["--style=java"][..],
+            "int items[][2] = {\n    {\n        /* first\n        * row\n        \t* row */\n        1, 2\n    },\n};\n",
+        ),
+        (
+            "  { /* first\n\t   row */",
+            &["--style=ratliff", "--indent=tab=4"][..],
+            "int items[][2] = {\n\t\t{\n\t\t/* first\n\t\t   row */\n\t\t1, 2\n\t\t},\n\t};\n",
+        ),
+    ] {
+        check(&input.replace("%s", rest), args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
 fn any_unconditional_directive_between_a_case_label_and_a_brace_makes_the_brace_a_plain_block() {
     let input = "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n    {\n        pop(state);\n    }\n    break;\n    case 2:\n#pragma once\n    {\n        push(state);\n    }\n    break;\n    }\n}\n";
     check(
