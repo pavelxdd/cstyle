@@ -1946,7 +1946,10 @@ impl FormatEngine<'_> {
                 if operator.ends_with('=')
                     && !matches!(operator.as_str(), "==" | "!=" | "<=" | ">="))
         };
-        if matches!(tokens[first], Token::Symbol('{' | '}')) {
+        // A lambda opening its body on the line stands at the statement.
+        if matches!(tokens[first], Token::Symbol('{' | '}'))
+            || self.pending_line_opens_lambda_body()
+        {
             return None;
         }
         let last = self.tree.previous_code_token(first)?;

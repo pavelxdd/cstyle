@@ -21032,3 +21032,13 @@ fn a_member_call_in_a_split_template_argument_row_leaves_the_next_row_continued(
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
+
+#[test]
+fn a_lambda_opening_its_body_after_an_assignment_or_a_conditional_stands_at_the_statement() {
+    let input = "void f()\n{\n    auto handler =\n        [&]() {\n            return 1;\n        };\n    value = cond ? first\n            : [&]() {\n                return 2;\n            }();\n}\n";
+    let expected = "void f()\n{\n    auto handler =\n    [&]() {\n        return 1;\n    };\n    value = cond ? first\n    : [&]() {\n        return 2;\n    }();\n}\n";
+    for style in ["--style=kr", "--style=linux"] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
