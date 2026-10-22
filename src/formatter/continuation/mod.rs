@@ -356,6 +356,8 @@ impl FormatEngine<'_> {
         let trimmed = self.current.trimmed_end();
         (trimmed.ends_with('<') && !trimmed.ends_with("<<"))
             || (trimmed.ends_with('>') && !trimmed.ends_with(">>") && !trimmed.ends_with("->"))
+            // A `>>` closing template angles ends a type as a `>` does.
+            || trimmed.ends_with(">>") && self.previous_was_template_close
     }
 
     fn current_ends_with_pointer_declarator(&self) -> bool {

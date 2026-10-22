@@ -20830,3 +20830,10 @@ fn a_name_aligned_star_attaches_to_a_function_pointer_parameter_group() {
     check(input, &["--align-pointer=name", "-p"], &padded);
     check(&padded, &["--align-pointer=name", "-p"], &padded);
 }
+
+#[test]
+fn a_type_ending_in_closing_template_angles_continues_no_row() {
+    // The angles close the type as `> >` does; no shift continues the line.
+    let input = "void f()\n{\n    Box<std::vector<Item>>\n    first;\n    Pair<Box<Item>>\n    second{value};\n    Box<Box<Box<Item>>>\n    third;\n    Box<Box<Item> >\n    fourth;\n}\n";
+    check(input, &["--style=allman"], input);
+}
