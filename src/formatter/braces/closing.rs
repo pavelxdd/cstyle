@@ -868,10 +868,12 @@ impl FormatEngine<'_> {
             || self.should_attach_post_closing_declaration(next)
             || source_attached_word_after_closing
             || (!self.options.break_one_line_statements
-                && matches!(next, Some(Token::Word(word))
+                && (matches!(next, Some(Token::Word(word))
                     if !(is_attachable_closing_header(word)
                         || word == "while"
-                            && self.layout.nesting.last_closed_brace_header.as_deref() == Some("do"))))
+                            && self.layout.nesting.last_closed_brace_header.as_deref() == Some("do")))
+                    // So does a statement an operator leads.
+                    || matches!(next, Some(Token::Operator(_)))))
         {
             self.ensure_space();
         } else if !matches!(

@@ -21430,3 +21430,12 @@ fn whitesmith_indents_a_label_in_a_switch_after_one_whose_case_block_closed_as_a
     let expected = "void f()\n    {\n    switch (state)\n        {\n        case 2:\n            {\n            push(state);\n            }\n        break;\n        }\n    switch (state)\n        {\n        retry:\n        case 1:\n            value = 1;\n            break;\n        }\n    }\n";
     check(input, &["--style=whitesmith", "--indent-labels"], expected);
 }
+
+#[test]
+fn keep_one_line_statements_keeps_an_operator_led_statement_on_its_closers_line_as_a_word_led_one()
+{
+    let input = "void f()\n{\n    while (a) {\n        b();\n    } -x;\n    if (a) {\n        b();\n    } *p = 1;\n    if (a) {\n        b();\n    } ++i;\n    if (a) {\n        b();\n    } y = 1;\n}\n";
+    check(input, &["--style=kr", "--keep-one-line-statements"], input);
+    let lisp = "void f() {\n    while (a) {\n        b(); } -x;\n    if (a) {\n        b(); } *p = 1;\n    if (a) {\n        b(); } ++i;\n    if (a) {\n        b(); } y = 1; }\n";
+    check(input, &["--style=lisp"], lisp);
+}
