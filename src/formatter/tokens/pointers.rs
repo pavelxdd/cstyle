@@ -39,6 +39,8 @@ pub(crate) struct PointerRunState {
     /// array bound, as in `char* (*get)(void)` or `new char* [count]`, keeps
     /// a space before the group.
     pub(crate) spaces_declarator_group: bool,
+    /// A parenthesized declarator or an array bound follows the run.
+    pub(crate) group_follows_run: bool,
     /// The last run of one operator read: the tokens' address, the token
     /// read from, and the run's last token.
     pub(crate) run_end: Option<(usize, usize, usize)>,
@@ -225,7 +227,8 @@ impl FormatEngine<'_> {
         {
             return false;
         }
-        // A run of stars right before `)` ends a type, as in `(u8**)`.
+        // A run of stars right before `)` ends a type, as in `(u8**)`; one
+        // before an array bound does where a single star would.
         if operator == "*"
             && matches!(self.layout.previous, PreviousToken::Word)
             && (matches!(next, Some(Token::Symbol(')')))
@@ -240,7 +243,11 @@ impl FormatEngine<'_> {
                                         && !matches!(token, Token::Operator(star) if star == "*")
                                 })
                             })
-                            .is_some_and(|token| matches!(token, Token::Symbol(')')))
+                            .is_some_and(|token| match token {
+                                Token::Symbol(')') => true,
+                                Token::Symbol('[') => self.looks_like_pointer_declaration_context(),
+                                _ => false,
+                            })
                     }))
         {
             return true;
@@ -1176,7 +1183,7 @@ impl FormatEngine<'_> {
             .split(|ch: char| !is_identifier_continue(ch))
             .filter(|word| !word.is_empty())
             .collect::<Vec<_>>();
-        matches!(next, Some(Token::Symbol('(' | '[')))
+        (matches!(next, Some(Token::Symbol('(' | '['))) || self.pointer_run.group_follows_run)
             && !words.iter().rev().take(2).any(|word| {
                 *word == "operator"
                         // In a statement astyle leaves a tagged type's star

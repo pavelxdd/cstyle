@@ -1687,6 +1687,7 @@ impl<'a> FormatEngine<'a> {
             });
         self.pointer_run.trailing_ws = None;
         self.pointer_run.next_is_name_like = false;
+        self.pointer_run.group_follows_run = false;
         self.pointer_run.followed_by_reference = false;
         self.pointer_run.reference_has_name = false;
         self.pointer_run.followed_by_comment = false;
@@ -1722,6 +1723,8 @@ impl<'a> FormatEngine<'a> {
             let after_run_index = next_non_whitespace(tokens, last + 1, tokens.len());
             let after_run = after_run_index.and_then(|index| tokens.get(index));
             self.pointer_run.next_is_name_like = pointers::pointer_next_is_name_like(after_run);
+            self.pointer_run.group_follows_run =
+                matches!(after_run, Some(Token::Symbol('(' | '[')));
             self.pointer_run.followed_by_reference = matches!(
                 after_run,
                 Some(Token::Operator(operator)) if matches!(operator.as_str(), "&" | "&&")

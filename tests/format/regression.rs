@@ -20605,3 +20605,26 @@ fn an_aligned_star_before_an_array_bound_keeps_its_gap() {
         check(expected, &[align], expected);
     }
 }
+
+#[test]
+fn a_star_run_before_an_array_bound_or_parameters_declares_pointers() {
+    let input = "void f()\n{\n    a = sizeof(char**[4]);\n    b = new Item**[count];\n    c = new char**();\n}\n";
+    for (args, expected) in [
+        (&["-p"][..], input),
+        (
+            &["--align-pointer=type"][..],
+            "void f()\n{\n    a = sizeof(char** [4]);\n    b = new Item** [count];\n    c = new char** ();\n}\n",
+        ),
+        (
+            &["--align-pointer=middle"][..],
+            "void f()\n{\n    a = sizeof(char ** [4]);\n    b = new Item ** [count];\n    c = new char ** ();\n}\n",
+        ),
+        (
+            &["--align-pointer=name"][..],
+            "void f()\n{\n    a = sizeof(char **[4]);\n    b = new Item **[count];\n    c = new char **();\n}\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
