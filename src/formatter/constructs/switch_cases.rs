@@ -1186,6 +1186,22 @@ pub(crate) struct ActiveCaseLayout {
     statement_block_open: bool,
 }
 
+/// A closing brace read on in a look back, with the line its brace opens on
+/// when the tokens tell it.
+struct PendingCloser {
+    indent: usize,
+    opener_line: Option<usize>,
+}
+
+impl PendingCloser {
+    /// Whether the block this closer ends opens before line `index`, a
+    /// line standing at `indent_spaces`.
+    fn closes_before(&self, index: usize, indent_spaces: usize) -> bool {
+        self.opener_line
+            .map_or(self.indent <= indent_spaces, |line| line < index)
+    }
+}
+
 impl FormatEngine<'_> {
     pub(crate) fn split_else_header_operator_case_compensation_indent_spaces(
         &self,
@@ -1779,7 +1795,7 @@ impl FormatEngine<'_> {
     fn active_case_step(
         &self,
         index: usize,
-        closing_indents: &mut Vec<usize>,
+        closing_indents: &mut Vec<PendingCloser>,
     ) -> Option<Option<ActiveCaseLayout>> {
         let tab_width = self.options.tab_width;
         let trimmed = self.output.code_trimmed(index);
@@ -1826,7 +1842,7 @@ impl FormatEngine<'_> {
             let indent_spaces = self.output.lead_width(index, tab_width);
             if !closing_indents
                 .iter()
-                .any(|closing| *closing <= indent_spaces)
+                .any(|closer| closer.closes_before(index, indent_spaces))
             {
                 let statement_block = statement_block();
                 return Some(Some(ActiveCaseLayout {
@@ -1842,22 +1858,42 @@ impl FormatEngine<'_> {
         }
         if code.ends_with('{') {
             let open_indent = self.output.lead_width(index, tab_width);
-            // The brace closes at the deepest closer not past it.
-            if let Some(index) = closing_indents
+            // The brace closes at the closer its group ends at, or else at
+            // the deepest closer not past it.
+            let matched = closing_indents
                 .iter()
-                .enumerate()
-                .filter(|(_, closing)| **closing <= open_indent)
-                .max_by_key(|(_, closing)| **closing)
-                .map(|(index, _)| index)
-            {
-                closing_indents.remove(index);
+                .position(|closer| closer.opener_line == Some(index))
+                .or_else(|| {
+                    closing_indents
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, closer)| {
+                            closer.opener_line.is_none() && closer.indent <= open_indent
+                        })
+                        .max_by_key(|(_, closer)| closer.indent)
+                        .map(|(position, _)| position)
+                });
+            if let Some(position) = matched {
+                closing_indents.remove(position);
             } else {
                 return Some(None);
             }
         }
         // A `}` before a label or `else` closes a block as a bare one does.
         if trimmed.starts_with('}') {
-            closing_indents.push(self.output.lead_width(index, tab_width));
+            let opener_line = self
+                .output
+                .line_tokens(index)
+                .filter(|span| matches!(self.tree.tokens[span.first], Token::Symbol('}')))
+                .and_then(|span| self.tree.groups.closed_at(span.first))
+                .and_then(|group| {
+                    self.output
+                        .line_with_token(self.tree.groups.get(group).open)
+                });
+            closing_indents.push(PendingCloser {
+                indent: self.output.lead_width(index, tab_width),
+                opener_line,
+            });
         }
         None
     }

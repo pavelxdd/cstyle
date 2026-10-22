@@ -21224,3 +21224,13 @@ fn a_parameter_row_aligned_at_its_paren_opening_a_lambda_body_stands_at_the_stat
     }
     check(expected, &["--style=kr"], expected);
 }
+
+#[test]
+fn a_case_whose_list_closer_stands_past_its_row_stays_in_its_closed_switch() {
+    // A closer standing a level past the row its brace opens matches that
+    // row, so no later row reads the case as open.
+    let input = "void f()\n{\n    switch (op) {\n    case 2:\n        int other[] = {\n            1, 2\n        };\n        break;\n    }\n    LOG(value)\n    switch (kind) {\n    case 1:\n        break;\n    }\n}\n";
+    let expected = "void f() {\n    switch (op) {\n        case 2:\n            int other[] = {\n                1, 2\n                };\n            break;\n        }\n    LOG(value)\n    switch (kind) {\n        case 1:\n            break;\n        }\n    }\n";
+    check(input, &["--style=ratliff"], expected);
+    check(expected, &["--style=ratliff"], expected);
+}
