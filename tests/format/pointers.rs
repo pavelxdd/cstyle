@@ -1403,6 +1403,59 @@ fn pad_operators_distinguishes_adjacent_pointer_stars_from_multiply_then_derefer
     );
 }
 
+// A run of adjacent stars after an operand reads as a pointer to pointer in
+// parentheses and brackets as in a statement; after a number it multiplies.
+#[test]
+fn pad_operators_reads_adjacent_stars_after_an_operand_as_a_pointer_run_everywhere() {
+    let input = fixture!(
+        "void f()",
+        "{",
+        "    if (value **item) go();",
+        "    result = helper(value) **item;",
+        "    call(first, value **item);",
+        "    total = (table[1] **item) + 1;",
+        "    other = (value * *item);",
+        "    scaled = (2 **item);",
+        "    next = (value[i **item]);",
+        "}",
+    );
+    let by_name = fixture!(
+        "void f()",
+        "{",
+        "    if (value **item) go();",
+        "    result = helper(value) **item;",
+        "    call(first, value **item);",
+        "    total = (table[1] **item) + 1;",
+        "    other = (value * *item);",
+        "    scaled = (2 * *item);",
+        "    next = (value[i **item]);",
+        "}",
+    );
+    let by_type = fixture!(
+        "void f()",
+        "{",
+        "    if (value** item) go();",
+        "    result = helper(value)** item;",
+        "    call(first, value** item);",
+        "    total = (table[1]** item) + 1;",
+        "    other = (value * *item);",
+        "    scaled = (2 * *item);",
+        "    next = (value[i** item]);",
+        "}",
+    );
+    for (align, expected) in [
+        (PointerAlign::None, by_name),
+        (PointerAlign::Name, by_name),
+        (PointerAlign::Type, by_type),
+    ] {
+        let mut options = FormatOptions::default();
+        options.pad_operators = true;
+        options.pointer_align = align;
+        assert_eq!(format_with(input, &options), expected, "{align:?}");
+        assert_eq!(format_with(expected, &options), expected, "{align:?}");
+    }
+}
+
 #[test]
 fn pad_operators_keeps_unary_dereference_after_operator_attached() {
     let mut options = FormatOptions::default();

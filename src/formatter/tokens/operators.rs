@@ -1024,7 +1024,8 @@ impl FormatEngine<'_> {
             "*" if matches!(
                 self.layout.previous,
                 PreviousToken::Word | PreviousToken::Literal | PreviousToken::CloseBracket
-            ) && self.active_token_in_brackets() =>
+            ) && self.active_token_in_brackets()
+                && !self.adjacent_stars_follow_operand(next, next_is_adjacent) =>
             {
                 self.push_binary_operator(operator);
             }

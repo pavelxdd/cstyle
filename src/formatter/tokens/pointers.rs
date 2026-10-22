@@ -214,6 +214,25 @@ impl FormatEngine<'_> {
             })
     }
 
+    /// Whether a `*` with another right after it follows an operand that is
+    /// no number: the stars point to a pointer wherever they stand.
+    pub(super) fn adjacent_stars_follow_operand(
+        &self,
+        next: Option<&Token>,
+        next_is_adjacent: bool,
+    ) -> bool {
+        next_is_adjacent
+            && matches!(next, Some(Token::Operator(next)) if next == "*")
+            && matches!(
+                self.layout.previous,
+                PreviousToken::Word | PreviousToken::CloseParen | PreviousToken::CloseBracket
+            )
+            && !self
+                .current
+                .trimmed_end()
+                .ends_with(|ch: char| ch.is_ascii_digit())
+    }
+
     pub(super) fn is_pointer_like(
         &self,
         operator: &str,
@@ -259,6 +278,9 @@ impl FormatEngine<'_> {
                             })
                     }))
         {
+            return true;
+        }
+        if operator == "*" && self.adjacent_stars_follow_operand(next, next_is_adjacent) {
             return true;
         }
         if self.continues_operator_expression()
