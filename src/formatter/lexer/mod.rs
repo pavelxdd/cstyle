@@ -5,7 +5,7 @@ use crate::formatter::syntax::language;
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::preprocessor_directive;
 use crate::formatter::text::trim::Trimmed;
-use crate::source::lex::{is_identifier_continue, is_identifier_start};
+use crate::source::lex::{is_blank, is_identifier_continue, is_identifier_start};
 use std::borrow::Cow;
 
 pub(crate) mod raw_strings;
@@ -198,8 +198,8 @@ pub(crate) fn tokenize_owned(mut source: String) -> Vec<Token> {
                 index += 1;
                 line_start_index = index;
             }
-            ch if ch.is_whitespace() => {
-                let next_index = read_while(source, index, |ch| ch.is_whitespace() && ch != '\n');
+            ch if is_blank(ch) => {
+                let next_index = read_while(source, index, |ch| is_blank(ch) && ch != '\n');
                 tokens.push(Token::Whitespace(text(index, next_index)));
                 index = next_index;
             }
@@ -331,7 +331,7 @@ pub(crate) fn line_comments(line: &str) -> Option<LineComments> {
                 // A prefixed literal reads as its prefix's word and then the
                 // literal, to the same end.
                 let ch = char_at(line, index)?;
-                if ch.is_whitespace() {
+                if is_blank(ch) {
                     index += ch.len_utf8();
                     continue;
                 } else if is_identifier_start(ch) {
@@ -357,7 +357,7 @@ fn line_may_be_raw(rest: &str, assembly_macro_lines: &AssemblyMacroLines) -> boo
     let first = rest
         .chars()
         .take_while(|&ch| ch != '\n')
-        .find(|ch| !ch.is_whitespace());
+        .find(|&ch| !is_blank(ch));
     matches!(first, Some('<' | '=' | '>' | '|'))
         || assembly_macro_lines.may_take_line_starting_with(first)
 }
@@ -790,7 +790,7 @@ pub(crate) fn token_char_len(token: &Token) -> usize {
 pub(crate) fn first_visible_token(tokens: &[Token]) -> Option<&Token> {
     tokens
         .iter()
-        .find(|token| !token_text(token).chars().all(char::is_whitespace))
+        .find(|token| !token_text(token).chars().all(is_blank))
 }
 
 /// The last token of `tokens` that holds more than whitespace.
@@ -798,7 +798,7 @@ pub(crate) fn last_visible_token(tokens: &[Token]) -> Option<&Token> {
     tokens
         .iter()
         .rev()
-        .find(|token| !token_text(token).chars().all(char::is_whitespace))
+        .find(|token| !token_text(token).chars().all(is_blank))
 }
 
 pub(crate) fn token_text(token: &Token) -> Cow<'_, str> {

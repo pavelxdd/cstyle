@@ -88,3 +88,22 @@ fn form_feed_line_is_preserved_under_options_none() {
         source,
     );
 }
+
+#[test]
+fn blanks_outside_ascii_stay_as_text() {
+    // Only ASCII blanks part C tokens; any other blank is text the
+    // formatter keeps, in UTF-8 and in 8-bit sources alike, and text after
+    // a statement on its line starts one of its own.
+    let source = "void f(void)\n{\n    x = 1;\u{a0}\n    \u{a0}y = 2;\n    w = 3;\u{3000}\n}\n";
+    let expected =
+        "void f(void)\n{\n    x = 1;\n    \u{a0}\n    \u{a0}y = 2;\n    w = 3;\n    \u{3000}\n}\n";
+    assert_eq!(
+        format_bytes(source.as_bytes(), &FormatOptions::default()).expect("format bytes"),
+        expected.as_bytes(),
+    );
+    let source = b"void f(void)\n{\n    x = 1;\xa0\n    \xa0y = 2;\n    z = \x85;\n}\n";
+    assert_eq!(
+        format_bytes(source, &FormatOptions::default()).expect("format bytes"),
+        b"void f(void)\n{\n    x = 1;\n    \xa0\n    \xa0y = 2;\n    z = \x85;\n}\n",
+    );
+}
