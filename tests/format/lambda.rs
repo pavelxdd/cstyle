@@ -1166,8 +1166,7 @@ fn default_keeps_ternary_colon_with_closed_auto_lambda_arm() {
         fixture!(
             "auto value = condition ? [] {",
             "    return 1;",
-            "} :",
-            "[] { return 2; };",
+            "} : [] { return 2; };",
         )
     );
 }

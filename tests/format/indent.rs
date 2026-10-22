@@ -2154,28 +2154,16 @@ fn ternary_value_after_colon_aligns_to_previous_arm_indent() {
 }
 
 #[test]
-fn ternary_with_braced_true_arm_breaks_after_colon() {
-    assert_eq!(
-        format_exact(
-            fixture!(
-                "void f()",
-                "{",
-                "    value = cond ? Item{1} : other;",
-                "    return cond ? Item{1} : other;",
-                "}",
-            ),
-            &FormatOptions::default(),
-        ),
-        fixture!(
-            "void f()",
-            "{",
-            "    value = cond ? Item{1} :",
-            "            other;",
-            "    return cond ? Item{1} :",
-            "           other;",
-            "}",
-        )
+fn ternary_with_braced_true_arm_keeps_its_colon_on_the_line() {
+    let source = fixture!(
+        "void f()",
+        "{",
+        "    value = cond ? Item{1} : other;",
+        "    return cond ? Item{1} : other;",
+        "}",
     );
+
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
 
 #[test]

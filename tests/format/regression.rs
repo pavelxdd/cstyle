@@ -21948,6 +21948,25 @@ fn a_one_line_call_operator_body_breaks_whatever_its_parameter_count() {
 }
 
 #[test]
+fn a_ternary_colon_after_a_brace_in_a_list_or_a_kept_block_keeps_the_statement_whole() {
+    let input = "x = {c ? Item{1} : g};\nint values[] = {c ? Item{1} : g, 2};\n";
+    check(input, &[], input);
+    check(input, &["--style=allman"], input);
+    let input = "void f()\n{\n    if (c) { x = c ? f({1}) : g; }\n    if (c) { x = c ? [] { return 1; }() : g; }\n}\n";
+    check(input, &["--keep-one-line-blocks"], input);
+}
+
+#[test]
+fn a_ternary_colon_keeps_its_line_whatever_braces_its_arm_holds() {
+    // Breaking one-line statements splits labels, never a `?:`: a brace
+    // closed in the arm, held in parentheses, or written in a literal
+    // leaves the colon where it stands.
+    let input = "void f()\n{\n    x = c ? f(\"{\") : g;\n    x = c ? f('{') : g;\n    x = c ? f({1}) : g;\n    x = c ? (Item{1}) : g;\n    x = c ? Item{1} + 1 : g;\n    x = c ? a[Item{1}] : g;\n    return c ? Item{1} : g;\n    f(c ? Item{1} : g);\n    value = ready\n            ? Item{1, 2}\n            : other;\n    x = c ? [] {\n        return 1;\n    } : g;\n}\n";
+    check(input, &[], input);
+    check(input, &["--keep-one-line-statements"], input);
+}
+
+#[test]
 fn arguments_after_a_block_spanning_or_leading_rows_in_a_call_stand_at_the_statement() {
     // As after a lambda's body, the rest of the statement stands at it; a
     // block run in on a row of arguments leaves them their column.

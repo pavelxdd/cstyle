@@ -1438,17 +1438,6 @@ impl FormatEngine<'_> {
             self.layout.in_class_base_clause = true;
             self.layout.split_class_export_pending_base = false;
         }
-        let break_after_ternary_colon = is_ternary
-            && !matches!(
-                next,
-                Some(Token::Newline) | Some(Token::Comment(_, _)) | None
-            )
-            && (self.current.last_question().is_some_and(|index| {
-                self.current
-                    .last_open_brace()
-                    .is_some_and(|brace| brace > index)
-            }) || (self.current.trimmed_end().ends_with('}')
-                && self.layout.nesting.last_closed_brace_type.is_some()));
         let colon_output_column = self
             .current_visual_width()
             .max(self.token_input.token_source_line_indent);
@@ -1547,12 +1536,6 @@ impl FormatEngine<'_> {
             self.finish_line();
             self.layout.continuation_indent.next_line_indent = Some(self.statement_level() + 1);
             self.layout.continuation_indent.next_line_indent_spaces = None;
-            self.previous_was_newline = true;
-        } else if break_after_ternary_colon {
-            let spaces = self.ternary_colon_break_indent_spaces();
-            self.finish_line();
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = spaces;
             self.previous_was_newline = true;
         } else if is_label {
             let breaks_statement =
@@ -1788,22 +1771,6 @@ impl FormatEngine<'_> {
             objc_method_definition: is_objc_method_def_colon,
             role: colon_role,
         }
-    }
-
-    fn ternary_colon_break_indent_spaces(&self) -> Option<usize> {
-        let line = self.current.as_str();
-        let trimmed = line.trimmed_start();
-        let leading = self.current_line_indent_spaces();
-        if trimmed.starts_with("return ") {
-            return Some(leading + "return ".len());
-        }
-        let (operator_index, operator) = find_assignment_operator(line)?;
-        let mut end = operator_index + operator.len();
-        let bytes = line.as_bytes();
-        while end < bytes.len() && matches!(bytes[end], b' ' | b'\t') {
-            end += 1;
-        }
-        Some(leading + visual_width_from(&line[..end], 0, self.options.tab_width))
     }
 
     fn is_asm_operand_colon(&self) -> bool {
