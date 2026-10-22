@@ -22893,3 +22893,13 @@ fn a_line_splice_after_a_finished_statement_continues_no_statement() {
     check(input, &["--style=ratliff"], expected);
     check(expected, &["--style=ratliff"], expected);
 }
+
+#[test]
+fn a_value_below_a_line_splice_after_its_operator_continues_as_below_a_line_break() {
+    // The splice is no operand to align the value with.
+    let spliced =
+        "void f()\n{\n    value = \\\n        helper(item\n               + offset);\n}\n";
+    let broken = "void f()\n{\n    value =\n        helper(item\n               + offset);\n}\n";
+    check(spliced, &[], spliced);
+    check(broken, &[], broken);
+}
