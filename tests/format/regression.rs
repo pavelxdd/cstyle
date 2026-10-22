@@ -17706,6 +17706,14 @@ fn returned_message_rows_align_at_the_keyword_as_other_message_rows() {
 }
 
 #[test]
+fn message_rows_align_at_their_own_keyword_after_an_earlier_message_on_the_line() {
+    let input = "@implementation Item\n- (int)total\n{\n    return [[self items] count] + [other countWith:1\n            and:2];\n    x = [a b] + [other countWith:1\n            and:2];\n}\n@end\n";
+    let expected = "@implementation Item\n- (int)total\n{\n    return [[self items] count] + [other countWith:1\n                                         and:2];\n    x = [a b] + [other countWith:1\n                       and:2];\n}\n@end\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
 fn indent_after_parens_continues_a_shift_chain_past_a_directive_a_level_in() {
     let input = "void f()\n{\n    std::cout << first\n#ifdef FEATURE\n              << second\n#endif\n              << third;\n}\n";
     let expected = "void f()\n{\n    std::cout << first\n#ifdef FEATURE\n        << second\n#endif\n        << third;\n}\n";
