@@ -2411,13 +2411,18 @@ impl FormatEngine<'_> {
         // arguments.
         let line_index = self.output.len();
         // A row continuing its statement that the brace makes open a
-        // lambda's body stands at the statement, as one the body opened on
-        // in the source does.
+        // lambda's body, or a block among a call's arguments, stands at the
+        // statement, as one the body opened on in the source does.
         let lambda_row_level = self
             .current
             .active_token()
             .and_then(|open| self.tree.groups.opened_at(open))
-            .filter(|&group| self.tree.blocks.kind(group) == Some(BlockKind::Lambda))
+            .filter(|&group| {
+                self.tree.blocks.kind(group) == Some(BlockKind::Lambda)
+                    || self.tree.groups.get(group).parent.is_some_and(|parent| {
+                        self.tree.groups.get(parent).delimiter == Delimiter::Paren
+                    }) && self.brace_holds_statements(group)
+            })
             .and(self.last_laid_out_statement_level)
             .filter(|&(index, _)| index == line_index)
             .filter(|_| {

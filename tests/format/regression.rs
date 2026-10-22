@@ -9309,7 +9309,7 @@ fn a_line_comment_after_a_block_argument_brace_opens_its_body() {
     // The brace joins the call's line; the comment after it opens the body
     // at the body column, not at the column set for the brace's own line.
     let input = "void f() {\n  CHECK(EXPECT(\n      {  // note\n        a_++;\n        go();\n      },\n      value), other);\n}\n";
-    let expected = "void f()\n{\n    CHECK(EXPECT( {\n        // note\n        a_++;\n        go();\n    },\n          value), other);\n}\n";
+    let expected = "void f()\n{\n    CHECK(EXPECT( {\n        // note\n        a_++;\n        go();\n    },\n    value), other);\n}\n";
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
@@ -12107,10 +12107,10 @@ fn rows_of_a_comment_an_attaching_style_breaks_from_an_element_brace_stand_as_af
 
 #[test]
 fn a_list_brace_on_its_own_line_among_arguments_stands_at_them_under_whitesmith() {
-    // Under whitesmith the list's rows stand at its brace; the argument
-    // after the list keeps the arguments' column.
+    // Under whitesmith the block's rows stand at its brace; the argument
+    // after the block stands at the statement.
     let input = "void f() {\n  call(\n      first,\n      {  // note\n        a_++;\n        go();\n      },\n      (b_++, \"test\"));\n}\n";
-    let expected = "void f()\n    {\n    call(\n        first,\n        {\n        // note\n        a_++;\n        go();\n        },\n        (b_++, \"test\"));\n    }\n";
+    let expected = "void f()\n    {\n    call(\n        first,\n        {\n        // note\n        a_++;\n        go();\n        },\n    (b_++, \"test\"));\n    }\n";
     check(input, &["--style=whitesmith"], expected);
     check(expected, &["--style=whitesmith"], expected);
     check(
@@ -12124,7 +12124,7 @@ fn a_list_brace_on_its_own_line_among_arguments_stands_at_them_under_whitesmith(
 fn rows_after_a_comment_opening_an_argument_list_stand_together_in_a_conditional() {
     // Indenting column-one comments moves none of the list's rows.
     let input = "#if FEATURE\nvoid f() {\n  call(\n      first,\n      {\n        // note\n        a_++;\n        go();\n      },\n      last);\n}\n#endif\n";
-    let expected = "#if FEATURE\nvoid f()\n{\n    call(\n        first, {\n        // note\n        a_++;\n        go();\n    },\n        last);\n}\n#endif\n";
+    let expected = "#if FEATURE\nvoid f()\n{\n    call(\n    first, {\n        // note\n        a_++;\n        go();\n    },\n    last);\n}\n#endif\n";
     check(input, &["--style=kr", "-Y"], expected);
     check(input, &["--style=kr"], expected);
     check(
@@ -12248,7 +12248,7 @@ fn an_else_chain_after_a_loop_body_given_braces_stands_with_its_if() {
 fn a_comment_opening_a_list_among_nested_arguments_stands_with_its_rows() {
     // The comment opens the list's rows, which continue no argument.
     let input = "void f()\n{\n    outer(inner(\n              first,\n              {  // note\n                go();\n                more();\n              },\n              last),\n          end);\n}\n";
-    let expected = "void f()\n{\n    outer(inner(\n              first, {\n        // note\n        go();\n        more();\n    },\n              last),\n          end);\n}\n";
+    let expected = "void f()\n{\n    outer(inner(\n    first, {\n        // note\n        go();\n        more();\n    },\n    last),\n    end);\n}\n";
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
@@ -19935,23 +19935,22 @@ fn a_braceless_body_after_a_condition_holding_a_literal_stands_a_level_in() {
 #[test]
 fn arguments_after_a_block_among_a_macro_s_arguments_take_no_column_from_its_brace() {
     // A block among a macro's arguments is no sibling row: the arguments
-    // after it continue the call as after a list among them.
+    // after it stand at the statement, as after a lambda's body.
     let input = "void run() {\n  EXPECT_THROW(\n      {\n        start();\n      },\n      std::exception);\n}\n";
     for (style, expected) in [
         (
             "--style=allman",
-            "void run()\n{\n    EXPECT_THROW(\n    {\n        start();\n    },\n        std::exception);\n}\n",
+            "void run()\n{\n    EXPECT_THROW(\n    {\n        start();\n    },\n    std::exception);\n}\n",
         ),
         (
             "--style=pico",
-            "void run()\n{   EXPECT_THROW(\n    {   start(); },\n        std::exception); }\n",
+            "void run()\n{   EXPECT_THROW(\n    {   start(); },\n    std::exception); }\n",
         ),
     ] {
         check(input, &[style], expected);
         check(expected, &[style], expected);
     }
-    let one_row =
-        "void run()\n{\n    EXPECT_THROW(\n    { start(); },\n        std::exception);\n}\n";
+    let one_row = "void run()\n{\n    EXPECT_THROW(\n    { start(); },\n    std::exception);\n}\n";
     check(one_row, &["--style=allman"], one_row);
 }
 #[test]
@@ -20023,16 +20022,16 @@ fn a_range_for_list_keeps_its_shape_with_the_for_paren_unpadded() {
 }
 
 #[test]
-fn indented_parens_set_the_arguments_after_a_block_brought_up_to_its_paren_a_level_in() {
+fn indented_parens_set_the_arguments_after_a_block_brought_up_to_its_paren_at_the_statement() {
     // Parens that indent after them take no column from a brace a style
-    // attaches to the paren's line: the arguments after the block stand a
-    // level past the statement on every pass.
+    // attaches to the paren's line: the arguments after the block stand at
+    // the statement on every pass, as after any block among arguments.
     let input = "void f()\n{\n    EXPECT_THROW(\n        {\n            start();\n        },\n        std::exception);\n}\n";
     let expected =
-        "void f()\n{\n    EXPECT_THROW( {\n        start();\n    },\n        std::exception);\n}\n";
+        "void f()\n{\n    EXPECT_THROW( {\n        start();\n    },\n    std::exception);\n}\n";
     let attached =
-        "void f() {\n    EXPECT_THROW( {\n        start();\n    },\n        std::exception);\n}\n";
-    let lisp = "void f() {\n    EXPECT_THROW( {\n        start(); },\n        std::exception); }\n";
+        "void f() {\n    EXPECT_THROW( {\n        start();\n    },\n    std::exception);\n}\n";
+    let lisp = "void f() {\n    EXPECT_THROW( {\n        start(); },\n    std::exception); }\n";
     for (style, expected) in [
         ("--style=kr", expected),
         ("--style=google", attached),
@@ -20218,7 +20217,7 @@ fn an_asm_operand_row_heads_no_constructor_initializers_for_the_statements_after
     // The colons of an asm statement's operands stand inside its parens:
     // the arguments of a call after it take none of their columns.
     let input = "void f()\n{\n    __asm__ volatile(\"nop\"\n                     : \"=r\"(value)\n                     : \"r\"(other));\n    EXPECT_THROW(\n        {\n            start();\n        },\n        std::exception);\n}\n";
-    let expected = "void f()\n{   __asm__ volatile(\"nop\"\n                     : \"=r\"(value)\n                     : \"r\"(other));\n    EXPECT_THROW(\n    {   start(); },\n        std::exception); }\n";
+    let expected = "void f()\n{   __asm__ volatile(\"nop\"\n                     : \"=r\"(value)\n                     : \"r\"(other));\n    EXPECT_THROW(\n    {   start(); },\n    std::exception); }\n";
     check(input, &["--style=pico"], expected);
     check(expected, &["--style=pico"], expected);
 }
@@ -21938,4 +21937,14 @@ fn an_assignment_operator_body_breaks_its_brace_as_any_function_body() {
     let input = "Item& Item::operator=(const Item& other) {\n    if (state_ != other.state_) {\n        go();\n    }\n    return *this;\n}\n";
     let expected = "Item& Item::operator=(const Item& other)\n{\n    if (state_ != other.state_) {\n        go();\n    }\n    return *this;\n}\n";
     check(input, &["--style=kr"], expected);
+}
+
+#[test]
+fn arguments_after_a_block_spanning_or_leading_rows_in_a_call_stand_at_the_statement() {
+    // As after a lambda's body, the rest of the statement stands at it; a
+    // block run in on a row of arguments leaves them their column.
+    let input = "void f()\n{\n    CHECK({\n        go();\n    },\n    first, second);\n    CHECK({  // note\n        go();\n    },\n    first, second);\n    OUTER(CHECK({\n        go();\n    },\n    first),\n    \"text\");\n    call(a, { x(); },\n         b,\n         c);\n    call(a,\n    { x(); },\n    b,\n    c);\n}\n";
+    check(input, &["--style=kr"], input);
+    let indented = input.replace("         b,\n         c);", "        b,\n        c);");
+    check(input, &["--style=kr", "--indent-after-parens"], &indented);
 }

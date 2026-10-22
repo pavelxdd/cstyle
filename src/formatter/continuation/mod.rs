@@ -17,8 +17,9 @@ use crate::formatter::output::buffer::OutputBuffer;
 use crate::formatter::state::frame::{BraceSemanticKind, ColonRole, LogicalOperator};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
+use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::structure::functions::FunctionHead;
-use crate::formatter::structure::groups::Delimiter;
+use crate::formatter::structure::groups::{Delimiter, GroupId};
 use crate::formatter::syntax::language::{is_leading_continuation_operator, is_macro_like_word};
 use crate::formatter::syntax::{
     assignment_declarator_offset, function_head_has_assignment, function_name_start, language,
@@ -916,6 +917,9 @@ impl FormatEngine<'_> {
     /// that a lambda's body spanning lines has passed: those stand at the
     /// statement, as the body's closer does.
     pub(crate) fn continues_arguments_after_lambda_body(&self) -> bool {
+        if self.continues_arguments_after_block_argument() {
+            return true;
+        }
         let Some(lambda) = self.layout.frame_stack.last_lambda_body() else {
             return false;
         };
@@ -949,6 +953,67 @@ impl FormatEngine<'_> {
             && comma
                 .and_then(|comma| groups.enclosing(comma))
                 .is_some_and(|group| groups.get(group).delimiter == Delimiter::Paren)
+    }
+
+    /// Whether the braces of `block` hold statements, which a `;` at their
+    /// own level ends, other than a lambda's body.
+    pub(crate) fn brace_holds_statements(&self, block: GroupId) -> bool {
+        let groups = &self.tree.groups;
+        let Some(close) = groups.get(block).close else {
+            return false;
+        };
+        self.tree.blocks.kind(block) != Some(BlockKind::Lambda)
+            && (groups.get(block).open + 1..close).any(|index| {
+                matches!(self.tree.tokens[index], Token::Symbol(';'))
+                    && groups.enclosing(index) == Some(block)
+            })
+    }
+
+    /// Whether the line ends with a `,` among a call's arguments after a
+    /// block that spans lines closed somewhere in the call: the rest of the
+    /// statement stands at it, as after a lambda's body.
+    pub(crate) fn continues_arguments_after_block_argument(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let Some(comma) = self
+            .current
+            .tokens()
+            .and_then(|span| self.tree.previous_code_token(span.last + 1))
+            .filter(|&comma| matches!(tokens[comma], Token::Symbol(',')))
+        else {
+            return false;
+        };
+        let Some(call) = groups
+            .enclosing(comma)
+            .filter(|&group| groups.get(group).delimiter == Delimiter::Paren)
+        else {
+            return false;
+        };
+        let current = self.current.tokens();
+        let line_of = |index: usize| {
+            self.output.line_with_token(index).or_else(|| {
+                current
+                    .filter(|span| (span.first..=span.last).contains(&index))
+                    .map(|_| self.output.len())
+            })
+        };
+        let leads_row = |open: usize| match self.output.line_with_token(open) {
+            Some(line) => self
+                .output
+                .line_tokens(line)
+                .is_some_and(|span| span.first == open),
+            None => current.is_some_and(|span| span.first == open),
+        };
+        // A block that spans rows or leads one; one run in mid-row leaves
+        // the arguments their column.
+        (groups.get(call).open + 1..comma).any(|index| {
+            matches!(tokens[index], Token::Symbol('}'))
+                && groups.closed_at(index).is_some_and(|block| {
+                    let open = groups.get(block).open;
+                    self.brace_holds_statements(block)
+                        && (line_of(open) != line_of(index) || leads_row(open))
+                })
+        })
     }
 
     pub(crate) fn next_continuation_indent(&self) -> ContinuationIndent {

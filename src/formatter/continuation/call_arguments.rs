@@ -10,6 +10,7 @@ use crate::formatter::lexer::Token;
 use crate::formatter::preprocessor::output_has_active_preprocessor_branch;
 use crate::formatter::state::frame::CommaRole;
 use crate::formatter::state::indentation::LineKind;
+use crate::formatter::structure::blocks::next_code_token;
 use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::language;
 use crate::formatter::syntax::language::is_macro_like_word;
@@ -2212,6 +2213,39 @@ impl FormatEngine<'_> {
     /// stands at the statement however far the parens before it reach.
     pub(crate) fn line_opens_statement_level_lambda(&self, line: &str) -> bool {
         line_opens_attachable_lambda_block(self.options, line) && !self.pending_line_in_message()
+            || self.line_opens_block_argument(line)
+    }
+
+    /// Whether the pending line ends with the brace of a block among a
+    /// call's arguments, which sets the row at the statement as a lambda's
+    /// body does.
+    fn line_opens_block_argument(&self, line: &str) -> bool {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let Some(span) = self.output.pending_tokens() else {
+            return false;
+        };
+        // A brace the style brings up from the next line maps to none of
+        // the line's tokens.
+        let last = self.tree.previous_code_token(span.last + 1);
+        let brace = match last {
+            Some(last) if matches!(tokens[last], Token::Symbol('{')) => Some(last),
+            _ if self.output.code_trimmed_of(line).ends_with('{') => {
+                next_code_token(tokens, span.last + 1)
+                    .filter(|&brace| matches!(tokens[brace], Token::Symbol('{')))
+            }
+            _ => None,
+        };
+        let Some(brace) = brace.filter(|&brace| brace > span.first) else {
+            return false;
+        };
+        groups.opened_at(brace).is_some_and(|block| {
+            groups
+                .get(block)
+                .parent
+                .is_some_and(|parent| groups.get(parent).delimiter == Delimiter::Paren)
+                && self.brace_holds_statements(block)
+        })
     }
 
     pub(crate) fn nested_call_argument_over_max_output_indent_spaces(

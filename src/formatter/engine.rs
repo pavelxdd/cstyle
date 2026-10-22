@@ -2440,12 +2440,15 @@ impl<'a> FormatEngine<'a> {
             .continuation_indent
             .after_one_shot_continuation_indent
             .take();
-        let saved_indent =
-            if has_array_bound_operator_continuation || has_macro_call_argument_continuation {
-                None
-            } else {
-                saved_indent
-            };
+        // A block among the arguments ends what was saved for them.
+        let saved_indent = if has_array_bound_operator_continuation
+            || has_macro_call_argument_continuation
+            || self.continues_arguments_after_block_argument()
+        {
+            None
+        } else {
+            saved_indent
+        };
         let indent = saved_indent.unwrap_or_else(|| self.next_continuation_indent());
         let follows_lambda_body =
             saved_indent.is_none() && self.continues_arguments_after_lambda_body();
