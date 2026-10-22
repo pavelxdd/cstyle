@@ -212,9 +212,11 @@ fn compute_line_brace_meta(
     let open_shape = if trimmed == "{" && line_start.starts_with('{') {
         OpenBraceShape::Isolated
     } else if code.ends_with('{')
-        && trimmed.split_once(':').is_some_and(|(label, _)| {
+        && trimmed.split_once(':').is_some_and(|(label, rest)| {
             let mut chars = label.chars();
-            chars.next().is_some_and(is_identifier_start) && chars.all(is_identifier_continue)
+            !rest.starts_with(':')
+                && chars.next().is_some_and(is_identifier_start)
+                && chars.all(is_identifier_continue)
         })
     {
         OpenBraceShape::Label
@@ -2455,6 +2457,14 @@ mod tests {
         output.push("α$value: {".to_string());
 
         assert_eq!(output.brace_meta(0).open_shape, OpenBraceShape::Label);
+    }
+
+    #[test]
+    fn a_qualified_name_opens_no_label_brace() {
+        let mut output = OutputBuffer::default();
+        output.push("Item::value)) {".to_string());
+
+        assert_eq!(output.brace_meta(0).open_shape, OpenBraceShape::Other);
     }
 
     #[test]

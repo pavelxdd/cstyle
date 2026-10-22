@@ -21833,3 +21833,11 @@ fn an_attached_subscript_operator_body_leaves_the_class_layout_after_it() {
     check(input, &["--style=google", "--indent=spaces=4"], expected);
     check(expected, &["--style=google", "--indent=spaces=4"], expected);
 }
+
+#[test]
+fn a_qualified_name_leading_a_header_row_in_a_case_block_keeps_the_braces_after_it() {
+    let input = "void f() {\n  switch (kind) {\n    case 1: {\n      if (helper(a,\n                 Item::value)) {\n        if (failed) {\n        }\n      }\n    }\n  }\n}\n";
+    let expected = "void f()\n{\n    switch (kind) {\n    case 1: {\n        if (helper(a,\n                   Item::value)) {\n            if (failed) {\n            }\n        }\n    }\n    }\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
