@@ -12212,6 +12212,14 @@ fn a_class_brace_after_a_comment_leading_its_line_stands_at_the_class_past_its_b
 }
 
 #[test]
+fn a_comment_led_switch_after_a_macro_line_keeps_its_case_blocks_under_whitesmith() {
+    let input = "void f()\n{\n  SETUP_BEGIN\n  /* note */ switch (kind)\n    {\n    case FIRST:\n        run(value);\n        { push(value); }\n        break;\n    }\n}\n";
+    let expected = "void f()\n    {\n    SETUP_BEGIN\n    /* note */ switch (kind)\n        {\n        case FIRST:\n            run(value);\n                {\n                push(value);\n                }\n            break;\n        }\n    }\n";
+    check(input, &["--style=whitesmith"], expected);
+    check(expected, &["--style=whitesmith"], expected);
+}
+
+#[test]
 fn any_unconditional_directive_between_a_case_label_and_a_brace_makes_the_brace_a_plain_block() {
     let input = "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n    {\n        pop(state);\n    }\n    break;\n    case 2:\n#pragma once\n    {\n        push(state);\n    }\n    break;\n    }\n}\n";
     check(

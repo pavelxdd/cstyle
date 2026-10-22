@@ -557,13 +557,14 @@ fn statement_head(tokens: &[Token], groups: &Groups, open: usize) -> Vec<usize> 
     head
 }
 
-/// Whether only whitespace stands before `index` on its source line.
+/// Whether only whitespace and comments stand before `index` on its source
+/// line.
 fn begins_line(tokens: &[Token], index: usize) -> bool {
     tokens[..index]
         .iter()
         .rev()
         .take_while(|token| !matches!(token, Token::Newline))
-        .all(|token| matches!(token, Token::Whitespace(_)))
+        .all(|token| matches!(token, Token::Whitespace(_) | Token::Comment(..)))
 }
 
 /// The `)` of a parameter list followed only by function suffixes such as
