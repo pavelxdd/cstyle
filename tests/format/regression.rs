@@ -7653,6 +7653,16 @@ fn designator_rows_of_a_run_in_list_stand_at_its_elements_whatever_rows_their_va
 }
 
 #[test]
+fn bit_field_declarators_after_a_type_line_stand_at_the_first_declarator() {
+    // A bit field leading its line is a declarator, not a label: the
+    // declarators after it stand where it does, as after a type on its line.
+    let input = "struct ref {\n\tchar *name;\n\tunsigned int\n\t\tforce:1,\n\t\tforced:1,\n\t\tdone:1;\n\tunsigned int first:1,\n\t\tsecond:1;\n};\n";
+    let expected = "struct ref {\n    char *name;\n    unsigned int\n    force:1,\n    forced:1,\n    done:1;\n    unsigned int first:1,\n             second:1;\n};\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+}
+
+#[test]
 fn a_struct_declaration_split_before_its_declarator_closes_its_run_in_list_at_the_statement() {
     // The declaration names `struct` on a line before the declarator: its
     // aggregate still closes at the statement.
