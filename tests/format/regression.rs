@@ -17706,6 +17706,15 @@ fn returned_message_rows_align_at_the_keyword_as_other_message_rows() {
 }
 
 #[test]
+fn every_member_of_an_access_modified_struct_takes_the_class_indent_under_broken_braces() {
+    let input = "struct Item {\n  int key;\n  int more;\n private:\n  int next_;\n};\n";
+    let allman = "struct Item\n{\n        int key;\n        int more;\n    private:\n        int next_;\n};\n";
+    check(input, &["--style=allman", "--indent-classes"], allman);
+    let whitesmith = "struct Item\n    {\n        int key;\n        int more;\n    private:\n        int next_;\n    };\n";
+    check(input, &["--style=whitesmith"], whitesmith);
+}
+
+#[test]
 fn a_function_body_after_qualifiers_on_their_own_row_breaks_its_brace() {
     let input = "Node* Item::find()\n    const {\n    go();\n}\nint Item::size()\n    const noexcept {\n    return 1;\n}\n";
     let expected = "Node* Item::find()\nconst\n{\n    go();\n}\nint Item::size()\nconst noexcept\n{\n    return 1;\n}\n";
