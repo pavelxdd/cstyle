@@ -3327,6 +3327,7 @@ fn is_remove_braces_paren_header(tokens: &[Token], close_paren: usize) -> bool {
     let Some(open_paren) = matching_open_paren_global(tokens, close_paren) else {
         return false;
     };
+    let is_header_word = |index: usize| matches!(tokens.get(index), Some(Token::Word(word)) if matches!(word.as_str(), "if" | "for" | "while"));
     previous_non_layout_token_index(tokens, open_paren).is_some_and(|header| {
         match tokens.get(header) {
             Some(Token::Word(word)) if matches!(word.as_str(), "if" | "for" | "while") => true,
@@ -3334,6 +3335,10 @@ fn is_remove_braces_paren_header(tokens: &[Token], close_paren: usize) -> bool {
                 previous_non_layout_token_index(tokens, header).is_some_and(
                     |index| matches!(tokens.get(index), Some(Token::Word(word)) if word == "if"),
                 )
+            }
+            // A macro naming the condition, as `if EQ(x)`.
+            Some(Token::Word(_)) => {
+                previous_non_layout_token_index(tokens, header).is_some_and(is_header_word)
             }
             _ => false,
         }

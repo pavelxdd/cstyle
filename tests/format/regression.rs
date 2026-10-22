@@ -7513,6 +7513,21 @@ fn initializer_rows_in_a_control_block_indent_past_a_declarator_with_a_call_in_i
 }
 
 #[test]
+fn a_case_block_closer_a_comment_follows_stands_at_its_brace_after_a_braceless_body() {
+    // As it does without the comment, and as a block's closer does.
+    let input = "void f(void)\n{\n    switch (mode) {\n    case 0: {\n        if (ready)\n            fail();\n    }  /* note */\n    case 1:\n        break;\n    }\n}\n";
+    check(input, &[], input);
+}
+
+#[test]
+fn remove_braces_takes_the_braces_of_a_header_a_macro_condition_follows() {
+    let input = "void f(void)\n{\n    if EQ(\"\")\n        return 0;\n    else if EQ(\"first\") {\n        push(value);\n    }\n    while MORE(it) {\n        step(it);\n    }\n    for EACH(it) {\n        step(it);\n    }\n}\n";
+    let expected = "void f(void)\n{\n    if EQ(\"\")\n        return 0;\n    else if EQ(\"first\")\n        push(value);\n    while MORE(it)\n        step(it);\n    for EACH(it)\n        step(it);\n}\n";
+    check(input, &["--remove-braces"], expected);
+    check(expected, &["--remove-braces"], expected);
+}
+
+#[test]
 fn designator_rows_of_a_run_in_list_stand_at_its_elements_whatever_rows_their_values_span() {
     let input = "void f(void)\n{\n    item it = { .name = \"x\",\n        .text = \"first \"\n            \"second\"\n    };\n    Record sa = { .a = 1, .b = 2,\n        .text = \"first \"\n                \"second\",\n        .count = first +\n                 second,\n        .c = 3\n    };\n}\n";
     let expected = "void f(void)\n{\n    item it = { .name = \"x\",\n                .text = \"first \"\n                        \"second\"\n              };\n    Record sa = { .a = 1, .b = 2,\n                  .text = \"first \"\n                          \"second\",\n                  .count = first +\n                           second,\n                  .c = 3\n                };\n}\n";
