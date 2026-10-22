@@ -20583,6 +20583,18 @@ fn break_blocks_pads_a_header_after_a_macro_call_leading_its_block() {
 }
 
 #[test]
+fn an_if_after_a_macro_on_its_line_heads_its_body_as_other_headers_do() {
+    let input = "void f(void)\n{\n    for (;;) {\n        MAP(E) if (a)\n        go();\n        else\n        stop();\n        MAP if (a)\n        go();\n        MAP(E) while (a)\n        go();\n    }\n    done();\n}\n";
+    let expected = "void f(void)\n{\n    for (;;) {\n        MAP(E) if (a)\n            go();\n        else\n            stop();\n        MAP if (a)\n            go();\n        MAP(E) while (a)\n            go();\n    }\n    done();\n}\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+    let input = "void f(void)\n{\n    for (;;) {\n        MAP(E) if (a) {\n            go();\n        } else {\n            stop();\n            break;\n        }\n    }\n}\n";
+    let expected = "void f(void)\n{\n    for (;;) {\n        MAP(E) if (a)\n            go();\n        else {\n            stop();\n            break;\n        }\n    }\n}\n";
+    check(input, &["--remove-braces"], expected);
+    check(expected, &["--remove-braces"], expected);
+}
+
+#[test]
 fn an_asm_operand_row_heads_no_constructor_initializers_for_the_statements_after_it() {
     // The colons of an asm statement's operands stand inside its parens:
     // the arguments of a call after it take none of their columns.

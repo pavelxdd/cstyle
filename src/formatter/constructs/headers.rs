@@ -1467,12 +1467,17 @@ impl FormatEngine<'_> {
             let before = before
                 .strip_prefix('}')
                 .map_or(before, after_leading_comments);
-            // A statement or a label may precede it on its line.
+            // A statement, a label or a macro may precede it on its line.
             let follows_statement = before.ends_with(';')
                 || before.ends_with(':')
                     && !before.ends_with("::")
                     && self.layout.nesting.paren_depth == 0
-                    && !self.layout.nesting.has_question_in_current_brace();
+                    && !self.layout.nesting.has_question_in_current_brace()
+                || self.layout.nesting.paren_depth == 0
+                    && before
+                        .chars()
+                        .next_back()
+                        .is_some_and(|ch| ch == ')' || ch == '_' || ch.is_alphanumeric());
             if !(before.is_empty()
                 || before == "else"
                 || follows_statement
