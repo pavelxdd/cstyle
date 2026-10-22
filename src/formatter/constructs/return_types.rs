@@ -465,17 +465,26 @@ impl FormatEngine<'_> {
         let previous_trimmed = previous.trimmed();
         let previous_prefix = &previous[..previous.len() - previous.trimmed_start().len()];
         // A pointer ending the return type joins the name as its alignment
-        // sets it apart.
+        // sets it apart; unaligned, it keeps the side it stands on.
         let separator = match previous_trimmed.as_bytes().last() {
-            Some(&operator @ (b'*' | b'&'))
-                if matches!(
-                    resolved_pointer_align(self.options, if operator == b'&' { "&" } else { "*" }),
-                    PointerAlign::Type | PointerAlign::Middle
-                ) =>
-            {
-                " "
+            Some(&operator @ (b'*' | b'&')) => {
+                match resolved_pointer_align(self.options, if operator == b'&' { "&" } else { "*" })
+                {
+                    PointerAlign::Type | PointerAlign::Middle => " ",
+                    PointerAlign::Name => "",
+                    PointerAlign::None => {
+                        if previous_trimmed
+                            .trim_end_matches(['*', '&'])
+                            .ends_with(char::is_whitespace)
+                        {
+                            ""
+                        } else {
+                            " "
+                        }
+                    }
+                }
             }
-            Some(b'*' | b'&' | b'^') => "",
+            Some(b'^') => "",
             _ => " ",
         };
         self.output.set_pending_tokens(Some(TokenSpan {

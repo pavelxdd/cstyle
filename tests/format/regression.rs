@@ -20769,3 +20769,12 @@ fn a_trailing_requires_clause_leaves_its_head_a_definition() {
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn an_attached_return_type_keeps_its_pointer_on_the_side_it_stands() {
+    // Unaligned, a run spaced off its type stays with the name.
+    let input = "int*\nfirst(void);\nint *\nsecond(void);\nint&\nthird(void);\nconst Item*\nfourth(void);\nint **\nfifth(void);\n";
+    let expected = "int* first(void);\nint *second(void);\nint& third(void);\nconst Item* fourth(void);\nint **fifth(void);\n";
+    check(input, &["--attach-return-type-decl"], expected);
+    check(expected, &["--attach-return-type-decl"], expected);
+}
