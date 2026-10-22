@@ -12121,6 +12121,20 @@ fn a_list_brace_on_its_own_line_among_arguments_stands_at_them_under_whitesmith(
 }
 
 #[test]
+fn rows_after_a_comment_opening_an_argument_list_stand_together_in_a_conditional() {
+    // Indenting column-one comments moves none of the list's rows.
+    let input = "#if FEATURE\nvoid f() {\n  call(\n      first,\n      {\n        // note\n        a_++;\n        go();\n      },\n      last);\n}\n#endif\n";
+    let expected = "#if FEATURE\nvoid f()\n{\n    call(\n        first, {\n        // note\n        a_++;\n        go();\n    },\n        last);\n}\n#endif\n";
+    check(input, &["--style=kr", "-Y"], expected);
+    check(input, &["--style=kr"], expected);
+    check(
+        &input.replace("{\n        // note", "{  // note"),
+        &["--style=kr", "-Y"],
+        expected,
+    );
+}
+
+#[test]
 fn any_unconditional_directive_between_a_case_label_and_a_brace_makes_the_brace_a_plain_block() {
     let input = "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n    {\n        pop(state);\n    }\n    break;\n    case 2:\n#pragma once\n    {\n        push(state);\n    }\n    break;\n    }\n}\n";
     check(

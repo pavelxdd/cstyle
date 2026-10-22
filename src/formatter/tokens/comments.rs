@@ -1834,16 +1834,43 @@ impl FormatEngine<'_> {
             self.layout.continuation_indent.next_line_indent = None;
             self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
         }
+        // Under a conditional, a line comment stands at its level; a
+        // group opened outside the block holding the comment sets no column
+        // there, and the comment stands as without the option.
+        let preprocessor_indent = (kind == CommentKind::Line
+            && standalone_line_comment
+            && self.options.indent_col1_comments)
+            .then(|| {
+                let indent = self
+                    .split_else_preprocessor_branch_body_indent_spaces()
+                    .or_else(|| {
+                        self.layout
+                            .indentation
+                            .current_preprocessor_indent()
+                            .map(|indent| {
+                                indent
+                                    .spaces
+                                    .unwrap_or(indent.level * self.options.indent_width)
+                                    + if self.preprocessor_split_else_active() {
+                                        self.preprocessor.split_else.extra_levels.max(1)
+                                            * self.options.indent_width
+                                    } else {
+                                        0
+                                    }
+                            })
+                    })?;
+                // A group opened outside the block holding the comment, as an
+                // include guard, sets no column inside the block.
+                self.active_body_comment_indent_spaces()
+                    .is_none_or(|body| body <= indent)
+                    .then_some(indent)
+            })
+            .flatten();
         if kind == CommentKind::Line
             && standalone_line_comment
             && !follows_objc_interface
             && constructor_member_comment_indent.is_none()
-            && (self.layout.line_state.column1_line_comment
-                || self
-                    .layout
-                    .indentation
-                    .current_preprocessor_indent()
-                    .is_some())
+            && (self.layout.line_state.column1_line_comment || preprocessor_indent.is_some())
             && self.options.indent_col1_comments
             && line_comment_continuation_indent.is_none()
             && line_comment_stream_chain_indent.is_none()
@@ -1855,30 +1882,6 @@ impl FormatEngine<'_> {
                 .last_line_outside_comment()
                 .is_some_and(|line| line.trimmed_start().starts_with('?'))
         {
-            let preprocessor_indent = self
-                .split_else_preprocessor_branch_body_indent_spaces()
-                .or_else(|| {
-                    self.layout
-                        .indentation
-                        .current_preprocessor_indent()
-                        .map(|indent| {
-                            indent
-                                .spaces
-                                .unwrap_or(indent.level * self.options.indent_width)
-                                + if self.preprocessor_split_else_active() {
-                                    self.preprocessor.split_else.extra_levels.max(1)
-                                        * self.options.indent_width
-                                } else {
-                                    0
-                                }
-                        })
-                });
-            // A group opened outside the block holding the comment, as an
-            // include guard, sets no column inside the block.
-            let preprocessor_indent = preprocessor_indent.filter(|&spaces| {
-                self.active_body_comment_indent_spaces()
-                    .is_none_or(|body| body <= spaces)
-            });
             let spaces = control_header_comment_indent
                 .or(preprocessor_indent)
                 .or(definition_header_comment_indent)
