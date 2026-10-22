@@ -1,5 +1,5 @@
 use crate::config::BraceStyle;
-use crate::formatter::braces::classification::{ExternCGuard, line_opens_lambda_block};
+use crate::formatter::braces::classification::ExternCGuard;
 use crate::formatter::braces::closing::{
     starts_post_closing_declaration, top_level_closing_brace_indent_spaces,
 };
@@ -1646,7 +1646,7 @@ impl FormatEngine<'_> {
         // A lambda argument opening its body stands at the statement.
         if layout.line_kind == LineKind::Normal
             && !line_start.starts_with_any(b"#(){}")
-            && !line_opens_lambda_block(line)
+            && !line.opens_lambda_block()
             && let Some(previous_index) = self.output.last_non_empty_index()
             && self.output[previous_index].trimmed_end().ends_with(',')
         {
@@ -3395,7 +3395,7 @@ impl FormatEngine<'_> {
         }
         if !plain
             && layout.line_kind == LineKind::Normal
-            && line_opens_lambda_block(line)
+            && line.opens_lambda_block()
             && let Some(previous) = self.output.last_line_outside_comment()
             && is_comment_line(previous.trimmed_start())
             && let Some(before_comment) = self

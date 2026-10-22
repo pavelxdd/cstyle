@@ -5,6 +5,9 @@ use std::cell::OnceCell;
 use std::fmt;
 use std::ops::Deref;
 
+use crate::config::FormatOptions;
+use crate::formatter::braces::classification::line_opens_lambda_block;
+use crate::formatter::continuation::call_arguments::line_opens_attachable_lambda_block;
 use crate::formatter::text::line_scan::line_paren_imbalance;
 use crate::formatter::text::trim::Trimmed;
 
@@ -17,6 +20,9 @@ pub(crate) struct LineView<'a> {
     /// Unmatched `)`/`]` and the columns of unmatched `(`/`[`, read once a
     /// rule asks.
     parens: OnceCell<(usize, Vec<usize>)>,
+    /// Whether the line opens a lambda's body, and one the style attaches.
+    opens_lambda: OnceCell<bool>,
+    opens_attachable_lambda: OnceCell<bool>,
 }
 
 impl<'a> LineView<'a> {
@@ -34,6 +40,8 @@ impl<'a> LineView<'a> {
             trimmed,
             end,
             parens: OnceCell::new(),
+            opens_lambda: OnceCell::new(),
+            opens_attachable_lambda: OnceCell::new(),
         }
     }
 
@@ -47,6 +55,21 @@ impl<'a> LineView<'a> {
 
     pub(crate) fn trimmed_end(&self) -> &'a str {
         self.end
+    }
+
+    /// `line_opens_lambda_block` of the line.
+    pub(crate) fn opens_lambda_block(&self) -> bool {
+        *self
+            .opens_lambda
+            .get_or_init(|| line_opens_lambda_block(self.text))
+    }
+
+    /// `line_opens_attachable_lambda_block` of the line under `options`,
+    /// which stay the same for every line.
+    pub(crate) fn opens_attachable_lambda_block(&self, options: &FormatOptions) -> bool {
+        *self
+            .opens_attachable_lambda
+            .get_or_init(|| line_opens_attachable_lambda_block(options, self.text))
     }
 
     /// `line_paren_imbalance` of the line.

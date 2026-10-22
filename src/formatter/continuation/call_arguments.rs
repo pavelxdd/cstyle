@@ -2211,8 +2211,8 @@ impl FormatEngine<'_> {
 
     /// Whether `line` opens a lambda's body outside a message: the row
     /// stands at the statement however far the parens before it reach.
-    pub(crate) fn line_opens_statement_level_lambda(&self, line: &str) -> bool {
-        line_opens_attachable_lambda_block(self.options, line) && !self.pending_line_in_message()
+    pub(crate) fn line_opens_statement_level_lambda(&self, line: &LineView<'_>) -> bool {
+        line.opens_attachable_lambda_block(self.options) && !self.pending_line_in_message()
             || self.line_opens_block_argument(line)
     }
 

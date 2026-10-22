@@ -1,5 +1,4 @@
 use crate::config::BraceStyle;
-use crate::formatter::braces::classification::line_opens_lambda_block;
 use crate::formatter::constructs::headers::{
     is_braceless_header_line, line_is_control_body_header, starts_header_word,
 };
@@ -308,8 +307,7 @@ impl FormatEngine<'_> {
             }
         }
         // So does a row of its parameters that opens the lambda's body.
-        let opens_lambda_block =
-            line_opens_lambda_block(line) || self.pending_line_opens_lambda_body();
+        let opens_lambda_block = line.opens_lambda_block() || self.pending_line_opens_lambda_body();
         if spaces.is_some() && opens_lambda_block {
             spaces = None;
         }
