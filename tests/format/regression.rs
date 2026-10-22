@@ -21890,6 +21890,19 @@ fn code_after_a_conditional_whose_branches_end_differently_goes_on_from_the_firs
 }
 
 #[test]
+fn statements_after_a_conditional_whose_later_branch_opens_a_block_stand_in_the_first_branch_block()
+{
+    // Only the first branch's braces reach past `#endif`, for the first
+    // statement after it as for the next ones.
+    let input = "void f()\n{\n    if (b) {\n#ifdef X\n        go();\n#else\n        if (c) {\n            go();\n#endif\n            done();\n            more();\n        }\n    }\n    after();\n}\n";
+    let expected = "void f()\n{\n    if (b) {\n#ifdef X\n        go();\n#else\n        if (c) {\n            go();\n#endif\n        done();\n        more();\n    }\n}\nafter();\n}\n";
+    for args in [&[][..], &["--style=kr"]] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
 fn a_statement_after_a_conditional_whose_first_branch_ended_a_braceless_body_starts_afresh() {
     // The first branch ended its statement: the code after `#endif` takes
     // no continuation left from it.

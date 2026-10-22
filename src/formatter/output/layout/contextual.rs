@@ -1352,7 +1352,7 @@ impl FormatEngine<'_> {
                     }
                 }
             } else if let Some(directive) = preprocessor_directive(previous_trimmed)
-                && (directive == "else" || directive == "endif" || directive.starts_with("elif"))
+                && (directive == "else" || directive.starts_with("elif"))
                 && let Some(sibling_index) =
                     self.output.scoped_range().rev().skip(1).find(|&index| {
                         let trimmed = self.output[index].trimmed_start();
@@ -1370,34 +1370,13 @@ impl FormatEngine<'_> {
                     && !braceless_body
                     && !is_comment_line(sibling.trimmed_start())
                 {
-                    let sibling_spaces = leading_visual_width(sibling, self.options.tab_width);
-                    let spaces = (directive != "endif")
-                        .then(|| {
-                            self.preprocessor
-                                .branch_stack
-                                .last()
-                                .and_then(|branch| branch.first_body_indent_spaces)
-                        })
-                        .flatten()
-                        .unwrap_or(sibling_spaces);
-                    let has_block_header = directive != "endif"
-                        || self
-                            .output
-                            .scoped()
-                            .iter()
-                            .rev()
-                            .skip(1)
-                            .take(16)
-                            .any(|line| {
-                                let code = self.output.code_trimmed_of(line);
-                                code.ends_with('{')
-                                    && leading_visual_width(line, self.options.tab_width)
-                                        + self.options.indent_width
-                                        == spaces
-                            });
-                    if has_block_header
-                        && layout.exact_indent_spaces.unwrap_or(output_spaces) < spaces
-                    {
+                    let spaces = self
+                        .preprocessor
+                        .branch_stack
+                        .last()
+                        .and_then(|branch| branch.first_body_indent_spaces)
+                        .unwrap_or_else(|| leading_visual_width(sibling, self.options.tab_width));
+                    if layout.exact_indent_spaces.unwrap_or(output_spaces) < spaces {
                         layout.exact_indent_spaces = Some(spaces);
                     }
                 }
