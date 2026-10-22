@@ -2526,8 +2526,9 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
         exact_indent_spaces: Option<usize>,
     ) -> Option<usize> {
-        if self.output.code_of(line).trimmed() != "}" && !self.closing_brace_leads_statement_line()
-        {
+        let closer_alone =
+            line.trimmed_start().starts_with('}') && self.output.code_of(line).trimmed() == "}";
+        if !closer_alone && !self.closing_brace_leads_statement_line() {
             return None;
         }
         let frame = self

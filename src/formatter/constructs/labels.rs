@@ -273,9 +273,9 @@ impl FormatEngine<'_> {
         {
             return None;
         }
+        let body_spaces = self.enclosing_label_block_body_indent_spaces()?;
         // A comment after a closer leaves it the closer of its row.
         let line_trimmed = self.output.code_of(line).trimmed();
-        let body_spaces = self.enclosing_label_block_body_indent_spaces()?;
         if line_trimmed == "}" && self.current_closes_label_block() {
             return Some(
                 self.layout

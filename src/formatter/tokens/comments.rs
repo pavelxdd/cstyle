@@ -98,9 +98,9 @@ struct CommentIndents {
     lambda_parameter: Option<usize>,
     /// The label column, for a comment leading a statement label's line.
     label_line: Option<usize>,
-    /// A lambda's body closes among the constructor's initializers before
-    /// the comment.
-    follows_initializer_lambda: bool,
+    /// The comment's token, which the rules asked only for some comments
+    /// look back from.
+    token: usize,
 }
 
 /// How an own-line multi-line block comment is reindented, decided from its
@@ -1155,7 +1155,7 @@ impl FormatEngine<'_> {
             class_base: self.class_base_comment_position(kind, comment, index),
             lambda_parameter: lambda_parameter_comment_indent,
             label_line,
-            follows_initializer_lambda: self.lambda_closes_among_initializers_before(index),
+            token: index,
         }
     }
 
@@ -1447,9 +1447,9 @@ impl FormatEngine<'_> {
             && self.layout.nesting.paren_depth == 0
             && self.layout.frame_stack.active_constructor_initializer().is_some()
             // Rows after a lambda among them stand at the constructor.
-            && !indents.follows_initializer_lambda)
-            .then(|| self.constructor_initializer_base_indent_spaces())
-            .flatten();
+            && !self.lambda_closes_among_initializers_before(indents.token))
+        .then(|| self.constructor_initializer_base_indent_spaces())
+        .flatten();
         // The bases after a comment among them keep the column their head
         // set.
         if let Some(ClassBaseComment {

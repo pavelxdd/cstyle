@@ -2230,7 +2230,9 @@ impl FormatEngine<'_> {
         let last = self.tree.previous_code_token(span.last + 1);
         let brace = match last {
             Some(last) if matches!(tokens[last], Token::Symbol('{')) => Some(last),
-            _ if self.output.code_trimmed_of(line).ends_with('{') => {
+            _ if line.as_bytes().contains(&b'{')
+                && self.output.code_trimmed_of(line).ends_with('{') =>
+            {
                 next_code_token(tokens, span.last + 1)
                     .filter(|&brace| matches!(tokens[brace], Token::Symbol('{')))
             }

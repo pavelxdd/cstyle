@@ -479,7 +479,6 @@ impl FormatEngine<'_> {
         // Comments leading the line took its code's column; one trailing it
         // takes no part in the label.
         let trimmed = after_leading_comments(line.trimmed_start());
-        let code_end = self.output.code_trimmed_of(line).trimmed_end();
         let lead = leading_visual_width(line, self.options.tab_width);
         let case_unindent = self.case_unindent_spaces();
         if let Some(frame) = self.layout.frame_stack.active_brace_mut().filter(|frame| {
@@ -491,7 +490,7 @@ impl FormatEngine<'_> {
             ) && trimmed.trimmed_end().ends_with('=');
             let opener = if frame.case_block {
                 (trimmed.starts_with("case") || trimmed.starts_with("default"))
-                    && code_end.ends_with(':')
+                    && self.output.code_trimmed_of(line).ends_with(':')
             } else {
                 frame
                     .header

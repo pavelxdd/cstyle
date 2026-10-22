@@ -140,6 +140,14 @@ impl SourceTree {
             let start = self
                 .directives
                 .partition_point(|&directive| directive <= previous);
+            // Most code has no directive between a token and the one before.
+            if self
+                .directives
+                .get(start)
+                .is_none_or(|&directive| directive >= before)
+            {
+                return Some(previous);
+            }
             let end = self
                 .directives
                 .partition_point(|&directive| directive < before);
