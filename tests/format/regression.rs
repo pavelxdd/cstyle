@@ -21841,3 +21841,21 @@ fn a_qualified_name_leading_a_header_row_in_a_case_block_keeps_the_braces_after_
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
+
+#[test]
+fn a_row_opening_a_lambda_stands_at_the_statement_past_the_maximum_continuation() {
+    let input = "void f() {\n  auto value = some_long_function_name_here_x(argument_one, argument_two,\n                                              [=](int kv) -> bool {\n                                                return kv;\n                                              });\n  call(first, some_long_function_name_here_xxxxxxxxxxxxxxxxx(argument_one,\n                                                             [=](int kv) {\n                                                               return kv;\n                                                             }));\n}\n";
+    let expected = "void f() {\n    auto value = some_long_function_name_here_x(argument_one, argument_two,\n    [=](int kv) -> bool {\n        return kv;\n    });\n    call(first, some_long_function_name_here_xxxxxxxxxxxxxxxxx(argument_one,\n    [=](int kv) {\n        return kv;\n    }));\n}\n";
+    check(input, &["--style=google"], expected);
+    check(expected, &["--style=google"], expected);
+}
+
+#[test]
+fn a_lambda_head_its_brace_leaves_stands_with_the_arguments_past_the_maximum_continuation() {
+    let input = "void f()\n{\n    call(first, some_long_function_name_here_xxxxxxxxxxxxxxxxx(argument_one,\n                                                               [=](int kv) {\n        return kv;\n    }));\n}\n";
+    let expected = "void f()\n{\n    call(first, some_long_function_name_here_xxxxxxxxxxxxxxxxx(argument_one,\n            [=](int kv)\n    {\n        return kv;\n    }));\n}\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+    let whitesmith = "void f()\n    {\n    call(first, some_long_function_name_here_xxxxxxxxxxxxxxxxx(argument_one,\n            [=](int kv)\n        {\n        return kv;\n        }));\n    }\n";
+    check(input, &["--style=whitesmith"], whitesmith);
+}

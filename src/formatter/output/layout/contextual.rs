@@ -3214,6 +3214,7 @@ impl FormatEngine<'_> {
                 } else if opens.len() >= 2
                     && let Some(inner) = opens.last().copied()
                     && inner.saturating_sub(base) >= self.options.max_continuation_indent
+                    && !self.line_opens_statement_level_lambda(line)
                 {
                     let outer = opens[opens.len() - 2];
                     layout.exact_indent_spaces = Some(

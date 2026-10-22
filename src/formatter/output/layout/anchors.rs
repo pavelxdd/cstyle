@@ -201,6 +201,7 @@ impl FormatEngine<'_> {
         })
         .or_else(|| when(string, || self.string_concatenation_indent(first)))
         .or_else(|| when(in_parens, || self.stacked_argument_indent(first)))
+        .or_else(|| when(in_parens, || self.lambda_head_argument_indent(first)))
         .or_else(|| {
             when(delimiter == Some(Delimiter::Bracket), || {
                 self.stacked_bracket_row_indent(first)

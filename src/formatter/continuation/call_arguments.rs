@@ -2208,12 +2208,21 @@ impl FormatEngine<'_> {
         depth > 0
     }
 
+    /// Whether `line` opens a lambda's body outside a message: the row
+    /// stands at the statement however far the parens before it reach.
+    pub(crate) fn line_opens_statement_level_lambda(&self, line: &str) -> bool {
+        line_opens_attachable_lambda_block(self.options, line) && !self.pending_line_in_message()
+    }
+
     pub(crate) fn nested_call_argument_over_max_output_indent_spaces(
         &self,
         line: &LineView<'_>,
     ) -> Option<usize> {
         let trimmed = line.trimmed_start();
         if trimmed.is_empty() || trimmed.starts_with_any(b"#(){}") {
+            return None;
+        }
+        if self.line_opens_statement_level_lambda(line) {
             return None;
         }
         // Most lines follow none that leaves a paren open before a `,`;

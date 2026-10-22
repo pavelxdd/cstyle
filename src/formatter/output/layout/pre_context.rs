@@ -1,7 +1,5 @@
 use crate::config::BraceStyle;
-use crate::formatter::continuation::call_arguments::{
-    line_opens_attachable_lambda_block, plain_call_opener_indent_for_closing_line,
-};
+use crate::formatter::continuation::call_arguments::plain_call_opener_indent_for_closing_line;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{self, CommentKind, Token};
 use crate::formatter::output::model::{LineLayout, LineReplayLayout};
@@ -203,8 +201,7 @@ impl FormatEngine<'_> {
             );
         }
         // A message's keyword row stands at its keywords whatever it passes.
-        if line_opens_attachable_lambda_block(self.options, line) && !self.pending_line_in_message()
-        {
+        if self.line_opens_statement_level_lambda(line) {
             if let Some(spaces) = self.lambda_call_argument_after_split_indent_spaces(line) {
                 layout.exact_indent_spaces = Some(spaces);
             } else if !line_start.starts_with("/*") {

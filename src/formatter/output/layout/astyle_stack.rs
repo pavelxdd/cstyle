@@ -119,6 +119,38 @@ impl FormatEngine<'_> {
         self.astyle_stack_indent(first)
     }
 
+    /// A lambda's head on a row its body's brace leaves stands where
+    /// astyle's continuation stack puts any argument.
+    pub(super) fn lambda_head_argument_indent(&self, first: usize) -> Option<usize> {
+        let groups = &self.tree.groups;
+        let tokens = &self.tree.tokens;
+        let group = groups.enclosing(first)?;
+        if groups.get(group).delimiter != Delimiter::Paren
+            || !matches!(tokens[first], Token::Symbol('['))
+        {
+            return None;
+        }
+        let capture = groups.get(groups.opened_at(first)?).close?;
+        let brace = self.paren_braces(group).0.filter(|&brace| brace > first)?;
+        let body = groups.opened_at(brace)?;
+        if self
+            .output
+            .pending_tokens()
+            .is_none_or(|span| span.last >= brace)
+            || self.tree.blocks.kind(body) != Some(BlockKind::Lambda)
+            || tokens[capture..brace]
+                .iter()
+                .enumerate()
+                .any(|(offset, token)| {
+                    matches!(token, Token::Symbol(',' | ';'))
+                        && groups.enclosing(capture + offset) == Some(group)
+                })
+        {
+            return None;
+        }
+        self.replayed_stack_indent(first, false)
+    }
+
     /// The first brace in the parens `group` and the last that is no
     /// compound literal's.
     fn paren_braces(&self, group: GroupId) -> (Option<usize>, Option<usize>) {
@@ -378,6 +410,14 @@ impl FormatEngine<'_> {
         {
             return None;
         }
+        self.replayed_stack_indent(first, closes_stacked_brace)
+    }
+
+    /// The indent astyle's continuation stack gives the line starting at
+    /// `first`, replayed from the start of its statement; the line closes
+    /// a stacked initializer brace when `closes_stacked_brace`.
+    fn replayed_stack_indent(&self, first: usize, closes_stacked_brace: bool) -> Option<usize> {
+        let tokens = &self.tree.tokens;
         let start = self.stack_statement_start(first)?;
         // Lambda bodies continue their statements past astyle's stack.
         if let Some(group) = self.tree.groups.enclosing(start)
