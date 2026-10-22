@@ -3535,6 +3535,39 @@ fn enum_run_in_after_its_brace_indents_a_block_level_after_parens() {
 }
 
 #[test]
+fn list_rows_opening_parens_stand_at_the_list_column_whatever_their_source_indent() {
+    let input = "int a[] = { 1,\n  f(2,\n 3),\n  g(4,\n 5),\n  h };\nenum { A = 1,\n  C = f(2,\n 3),\n  D = g(2,\n 3)\n} y;\nenum { A = 1,\n           C = f(2,\n 3),\n           D = g(2,\n 3)\n} z;\n";
+    let expected = "int a[] = { 1,\n            f(2,\n              3),\n            g(4,\n              5),\n            h\n          };\nenum { A = 1,\n       C = f(2,\n             3),\n       D = g(2,\n             3)\n     } y;\nenum { A = 1,\n       C = f(2,\n             3),\n       D = g(2,\n             3)\n     } z;\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+    let expected = "int a[] = { 1,\n        f(2,\n            3),\n        g(4,\n            5),\n        h\n    };\nenum { A = 1,\n    C = f(2,\n            3),\n    D = g(2,\n            3)\n} y;\nenum { A = 1,\n    C = f(2,\n            3),\n    D = g(2,\n            3)\n} z;\n";
+    check(input, &["--indent-after-parens"], expected);
+    check(expected, &["--indent-after-parens"], expected);
+    let input = "int b[] = { 1,\n               f(2,\n 3),\n               g };\n";
+    let expected =
+        "int b[] = { 1,\n            f(2,\n              3),\n            g\n          };\n";
+    check(input, &[], expected);
+    let expected = "int b[] = { 1,\n        f(2,\n            3),\n        g\n    };\n";
+    check(input, &["--indent-after-parens"], expected);
+}
+
+#[test]
+fn enum_run_in_after_its_brace_indents_by_the_continuation_after_parens() {
+    let input = "struct s {\n    enum e { A,\n        B, C,\n        D\n    };\n    int x;\n};\nvoid f(void)\n{\n    enum { ADD,\n           SUBTRACT } operator;\n}\nenum { A = 1,\n    B = (2 +\n            3),\n    C = f(2,\n            3)\n} y;\n";
+    let expected = "struct s {\n    enum e { A,\n            B, C,\n            D\n    };\n    int x;\n};\nvoid f(void)\n{\n    enum { ADD,\n            SUBTRACT\n    } operator;\n}\nenum { A = 1,\n        B = (2 +\n                        3),\n        C = f(2,\n                        3)\n} y;\n";
+    check(
+        input,
+        &["--indent-after-parens", "--indent-continuation=2"],
+        expected,
+    );
+    check(
+        expected,
+        &["--indent-after-parens", "--indent-continuation=2"],
+        expected,
+    );
+}
+
+#[test]
 fn statement_led_by_a_call_or_cast_continues_nothing_past_its_comma() {
     let input = "int f(int a)\n{\n    (void)file, (void)a,\n    (void)b;\n    g(a),\n    c;\n    int d(1),\n        e;\n    return 0;\n}\n";
     check(input, &[], input);

@@ -762,7 +762,7 @@ impl FormatEngine<'_> {
         self.current.push('{');
         self.layout.command_state.observe_char('{');
         // Parens that indent after them make an enum body run in after its
-        // brace a block level past its line.
+        // brace a continuation past its line.
         let enum_block_level = self.options.indent_after_parens
             && brace_type == BraceType::Enum
             && !nested
@@ -788,7 +788,7 @@ impl FormatEngine<'_> {
             self.emit_trailing_source_space();
         }
         let mut column = if enum_block_level {
-            base_indent + self.options.indent_width
+            base_indent + self.options.continuation_indent * self.options.indent_width
         } else if nested {
             if double_brace_initializer {
                 base_indent + self.options.indent_width * 2

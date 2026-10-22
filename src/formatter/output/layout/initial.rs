@@ -1629,11 +1629,21 @@ impl FormatEngine<'_> {
                 .last_line_outside_comment()
                 .is_some_and(|previous| previous.trimmed_start().starts_with(':'))
         {
+            let mut placed_in_list = false;
             if let Some(column) = self.line_start_inline_array_column()
                 && let Some(previous) = self.output.last_non_empty_scoped()
             {
                 let previous_code = self.output.code_trimmed_of(previous);
-                if self.layout.nesting.paren_depth == 0
+                // A row opening parens still starts among the list's rows.
+                let starts_in_list = self.output.pending_tokens().map_or(
+                    self.layout.nesting.paren_depth == 0,
+                    |span| {
+                        self.tree.groups.enclosing(span.first).is_some_and(|group| {
+                            self.tree.groups.get(group).delimiter == Delimiter::Brace
+                        })
+                    },
+                );
+                if starts_in_list
                     && previous_code.ends_with(',')
                     && !line_start.starts_with('}')
                     && let Some(open) = first_unmatched_open_brace(previous_code)
@@ -1667,6 +1677,7 @@ impl FormatEngine<'_> {
                     let within = |column: &usize| {
                         column.saturating_sub(base) <= self.options.max_continuation_indent
                     };
+                    placed_in_list = true;
                     layout.exact_indent_spaces = Some(if within(&spaces) {
                         spaces
                     } else {
@@ -1674,10 +1685,11 @@ impl FormatEngine<'_> {
                             .or_else(|| self.enclosing_inline_array_column().filter(within))
                             .unwrap_or(spaces)
                     });
-                } else if self.layout.nesting.paren_depth == 0
+                } else if starts_in_list
                     && (previous_code.ends_with(',')
                         || (previous_code.contains('{') && previous.len() != previous_code.len()))
                 {
+                    placed_in_list = true;
                     layout.exact_indent_spaces = Some(column);
                 }
             }
@@ -1689,8 +1701,9 @@ impl FormatEngine<'_> {
                     let code = self.output.code_trimmed_of(previous);
                     code.ends_with(';') && self.open_paren_column_of(code).is_none()
                 });
-            if (self.layout.indentation.statement_depth() > 0
-                || self.layout.nesting.paren_depth > 0)
+            if !placed_in_list
+                && (self.layout.indentation.statement_depth() > 0
+                    || self.layout.nesting.paren_depth > 0)
                 && self.token_input.token_source_line_indent > current_spaces
                 && !block_comment_after_statement
                 && !self.pending_row_list_brace_ends_its_line()
