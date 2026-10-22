@@ -306,10 +306,6 @@ impl FormatEngine<'_> {
             None => self.align_isolated_closing_brace_line(&view),
         };
         let view = closing.as_deref().map_or(view, LineView::new);
-        let header = self
-            .ready_non_paren_header_indent_spaces(&view)
-            .map(|spaces| reindented(spaces, &view));
-        let view = header.as_deref().map_or(view, LineView::new);
         let embedded = self
             .ready_embedded_preprocessor_return_indent_spaces(&view)
             .map(|spaces| reindented(spaces, &view));
@@ -337,12 +333,7 @@ impl FormatEngine<'_> {
             self.output.push(tail);
         } else {
             let laid_out = leading_visual_width(&line, self.options.tab_width);
-            let line = tail
-                .or(embedded)
-                .or(header)
-                .or(closing)
-                .or(normalized)
-                .unwrap_or(line);
+            let line = tail.or(embedded).or(closing).or(normalized).unwrap_or(line);
             self.published_line_shift =
                 leading_visual_width(&line, self.options.tab_width) as isize - laid_out as isize;
             self.output.push_with_hints(line, output_line_hints);

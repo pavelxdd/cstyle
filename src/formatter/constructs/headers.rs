@@ -154,28 +154,6 @@ pub(crate) struct ElseBodyLayout {
 }
 
 impl FormatEngine<'_> {
-    pub(crate) fn ready_non_paren_header_indent_spaces(
-        &self,
-        line: &LineView<'_>,
-    ) -> Option<usize> {
-        let line_start = line.trimmed_start();
-        if !["for ", "while ", "switch "]
-            .iter()
-            .any(|header| line_start.starts_with(header))
-            || line_start.contains('(')
-        {
-            return None;
-        }
-        let previous_index = (0..self.output.len())
-            .rev()
-            .find(|&index| !self.output.trimmed(index).is_empty())?;
-        let previous_spaces = self
-            .output
-            .lead_width(previous_index, self.options.tab_width);
-        (previous_spaces > leading_visual_width(line, self.options.tab_width))
-            .then_some(previous_spaces)
-    }
-
     pub(crate) fn maximum_length_conditional_continuation_floor(
         &self,
         line: &str,

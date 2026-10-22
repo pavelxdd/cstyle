@@ -21819,3 +21819,9 @@ fn attaching_return_types_leaves_a_type_an_attribute_row_parts_from_its_name() {
     let input = "static inline Item *\n__attribute((always_inline)) internal_function\nhelper (int value)\n{\n    return 0;\n}\nstatic inline Item *\n__attribute__((always_inline))\nother (int value)\n{\n    return 0;\n}\n";
     check(input, &["--style=1tbs", "--attach-return-type"], input);
 }
+
+#[test]
+fn rows_of_a_block_comment_keep_their_columns_whatever_word_leads_them() {
+    let input = "/*\n     header information passed to the routines.  See the notes\n  for more details on the meanings of these fields.\n*/\ntypedef int value_t;\nint other;\n/*\n     first row\n  while waiting\n  for the rest\n*/\n";
+    check(input, &[], input);
+}
