@@ -157,7 +157,7 @@ fn indent_preproc_define_preserves_source_indented_closing_parenthesis() {
 }
 
 #[test]
-fn indent_preproc_define_preserves_source_indented_ternary_arm() {
+fn indent_preproc_define_aligns_a_ternary_arm_in_a_list_at_its_value() {
     let source = fixture!(
         "#define ITEM(args) \\",
         "    static const Item item = { \\",
@@ -165,8 +165,19 @@ fn indent_preproc_define_preserves_source_indented_ternary_arm() {
         "                  ? (int)(sizeof(args) - 1) : -1, \\",
         "    };",
     );
+    let expected = fixture!(
+        "#define ITEM(args) \\",
+        "    static const Item item = { \\",
+        "                               .value = ((const void *)(args) != nullptr) \\",
+        "                                        ? (int)(sizeof(args) - 1) : -1, \\",
+        "                             };",
+    );
 
-    assert_eq!(format_exact(source, &one_true_brace_c_options()), source);
+    assert_eq!(format_exact(source, &one_true_brace_c_options()), expected);
+    assert_eq!(
+        format_exact(expected, &one_true_brace_c_options()),
+        expected
+    );
 }
 
 #[test]

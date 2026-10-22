@@ -21668,3 +21668,19 @@ fn a_directive_continuation_row_in_a_case_block_keeps_its_source_column() {
     check(input, &["--indent-switches"], expected);
     check(expected, &["--indent-switches"], expected);
 }
+
+#[test]
+fn a_list_brace_in_a_define_body_aligns_its_rows_as_a_paren_does() {
+    let input = "#define LIST(n) int values[] = {   \\\n    n,                          \\\n    n                           \\\n}\n#define TABLE(n) {                   \\\n    n,                               \\\n    {                                \\\n        {0},                         \\\n        {n},                         \\\n    }                                \\\n}\n#define ITEM(n) struct Item item = {   \\\n    .other = {                         \\\n        n,                             \\\n        n,                             \\\n    },                                 \\\n    .value = n,                        \\\n}\n";
+    let expected = "#define LIST(n) int values[] = {   \\\n                                   n,                          \\\n                                   n                           \\\n                               }\n#define TABLE(n) {                   \\\n        n,                               \\\n        {                                \\\n                                         {0},                         \\\n                                         {n},                         \\\n        }                                \\\n    }\n#define ITEM(n) struct Item item = {   \\\n        .other = {                         \\\n                                           n,                             \\\n                                           n,                             \\\n                 },                                 \\\n        .value = n,                        \\\n    }\n";
+    check(input, &["--indent-preproc-define"], expected);
+    check(expected, &["--indent-preproc-define"], expected);
+}
+
+#[test]
+fn a_list_brace_an_assignment_opens_in_a_define_body_aligns_its_rows_past_the_maximum() {
+    let input = "#define TABLE(first, second, third) .values = { \\\n    .first = (first), \\\n    .second = (second) \\\n},\n#define LIST(first, second, third) helper(first, \\\n    second)\n";
+    let expected = "#define TABLE(first, second, third) .values = { \\\n                                                .first = (first), \\\n                                                .second = (second) \\\n                                              },\n#define LIST(first, second, third) helper(first, \\\n        second)\n";
+    check(input, &["--indent-preproc-define"], expected);
+    check(expected, &["--indent-preproc-define"], expected);
+}
