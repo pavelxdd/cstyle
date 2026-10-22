@@ -21157,3 +21157,18 @@ fn a_template_argument_row_leading_with_a_type_word_continues_the_arguments() {
     let input = "void f()\n{\n    check<char, bool, signed char,\n          unsigned short, int,\n          long long, unsigned long long,\n          long double, void *>();\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_joined_closer_moves_no_row_of_its_parens_when_parens_indent() {
+    // The rows take an indent from the statement, not the paren's column.
+    let input = "void f()\n{\n    do {\n        value++;\n    } while (value < count &&\n             ready);\n}\n";
+    let expected =
+        "void f()\n{   do\n    {   value++; } while (value < count &&\n        ready); }\n";
+    let options = [
+        "--style=pico",
+        "--attach-closing-while",
+        "--indent-after-parens",
+    ];
+    check(input, &options, expected);
+    check(expected, &options, expected);
+}

@@ -34,9 +34,9 @@ pub(crate) fn postprocess_brace_style(
     match options.brace_style {
         BraceStyle::Pico => {
             let run_in = run_in_horstmann_opening_braces(&output, options, run_in_list_braces);
-            attach_lisp_closing_braces(&run_in, options.line_break())
+            attach_lisp_closing_braces(&run_in, options)
         }
-        BraceStyle::Lisp => attach_lisp_closing_braces(&output, options.line_break()),
+        BraceStyle::Lisp => attach_lisp_closing_braces(&output, options),
         BraceStyle::Horstmann => {
             run_in_horstmann_opening_braces(&output, options, run_in_list_braces)
         }
@@ -406,7 +406,8 @@ fn raw_literal_lines(output: &str, line_break: &str) -> Vec<bool> {
     raw_lines
 }
 
-fn attach_lisp_closing_braces(output: &str, line_break: &str) -> String {
+fn attach_lisp_closing_braces(output: &str, options: &FormatOptions) -> String {
+    let line_break = options.line_break();
     let raw_lines = raw_literal_lines(output, line_break);
     let mut lines: Vec<String> = Vec::new();
     // The columns rows of a paren a joined closer's line opens move by, and
@@ -450,12 +451,15 @@ fn attach_lisp_closing_braces(output: &str, line_break: &str) -> String {
             // astyle measures a paren the line leaves open from the joined
             // line's text at the closer's level.
             let (_, opens) = line_paren_imbalance(trimmed);
-            // A paren that ends the line takes an indent, not its column.
-            if opens.last().is_some_and(|&column| {
-                !trimmed[column + 1..trailing_comment_split_limit(trimmed).max(column + 1)]
-                    .trim()
-                    .is_empty()
-            }) {
+            // A paren that ends the line takes an indent, not its column,
+            // as every paren does when parens indent.
+            if !options.indent_after_parens
+                && opens.last().is_some_and(|&column| {
+                    !trimmed[column + 1..trailing_comment_split_limit(trimmed).max(column + 1)]
+                        .trim()
+                        .is_empty()
+                })
+            {
                 paren_shift = Some((previous.trimmed_start().len(), opens.len()));
             }
             // The brace moves up a column and its comment follows it.
