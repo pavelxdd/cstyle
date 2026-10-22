@@ -990,8 +990,12 @@ impl FormatEngine<'_> {
             return None;
         }
         let trimmed_end = line.trimmed_end();
-        let closes_enclosing_call = line.paren_imbalance().0 > 0;
-        if self.layout.nesting.paren_depth == 0 && !closes_enclosing_call {
+        let (closes, opens) = line.paren_imbalance();
+        // The row stands among a call's arguments only when a paren before
+        // it is open, not one it opens itself.
+        let depth_before_row =
+            (self.layout.nesting.paren_depth + closes).saturating_sub(opens.len());
+        if depth_before_row == 0 && closes == 0 {
             return None;
         }
         let trimmed = line.trimmed_start();

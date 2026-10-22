@@ -20898,6 +20898,19 @@ fn an_equality_test_in_template_arguments_keeps_the_angles_a_template() {
 }
 
 #[test]
+fn template_parameter_rows_after_a_definition_stand_with_the_parameters() {
+    let input = "void f() {\n  go();\n}\ntemplate <typename OutputIt,\n          ENABLE_IF(is_back<OutputIt>::value&&\n                    is_contiguous<OutputIt>::value)>\nauto reserve(OutputIt it) -> int {\n  return 0;\n}\n";
+    let expected = "void f()\n{\n    go();\n}\ntemplate <typename OutputIt,\n          ENABLE_IF(is_back<OutputIt>::value&&\n                    is_contiguous<OutputIt>::value)>\nauto reserve(OutputIt it) -> int\n{\n    return 0;\n}\n";
+    let args = [
+        "--style=kr",
+        "--break-after-logical",
+        "--min-conditional-indent=0",
+    ];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
+
+#[test]
 fn a_comparison_among_template_parameters_closes_with_its_clause() {
     // The clause's angles close; the class after it opens its own body.
     let input = "template <size_t I, typename... T, ENABLE_IF(I < sizeof...(T))>\nvoid make(int a)\n{\n    go();\n}\ntemplate <typename Range, typename... T> class Data\n{\npublic:\n    auto range() const -> Range { return range_; }\n};\n";
