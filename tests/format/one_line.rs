@@ -1404,12 +1404,12 @@ fn break_one_line_headers_malformed_catch_word_continuation_is_idempotent() {
 fn unmatched_close_after_commented_header_keeps_physical_row() {
     let mut options = FormatOptions::default();
     options.break_one_line_headers = true;
-    let source = b"/**/for\n)d";
-
-    assert_eq!(
-        format_bytes(source, &options).expect("format bytes"),
-        source,
-    );
+    for source in [&b"/**/for\n)d"[..], b"for\n)d"] {
+        assert_eq!(
+            format_bytes(source, &options).expect("format bytes"),
+            source,
+        );
+    }
 }
 
 #[test]

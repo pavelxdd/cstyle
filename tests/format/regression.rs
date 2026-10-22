@@ -12190,6 +12190,13 @@ fn an_enum_closer_after_a_comment_leading_its_line_stays_after_it_as_a_list_clos
 }
 
 #[test]
+fn a_comment_led_header_continued_by_a_backslash_keeps_its_body_a_level_in() {
+    let input = "void f()\n{\n    /* note */ if (ready) \\\n        fail();\n}\n";
+    check(input, &["--style=allman"], input);
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
 fn any_unconditional_directive_between_a_case_label_and_a_brace_makes_the_brace_a_plain_block() {
     let input = "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n    {\n        pop(state);\n    }\n    break;\n    case 2:\n#pragma once\n    {\n        push(state);\n    }\n    break;\n    }\n}\n";
     check(

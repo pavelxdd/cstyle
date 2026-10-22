@@ -29,9 +29,10 @@ use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
-    code_holds_word, has_unmatched_open_brace, holds_code_after_leading_comments,
-    is_bare_comment_line, is_comment_line, last_unmatched_open_brace, preprocessor_directive,
-    trailing_comment_split_limit, unmatched_open_bracket_column, unmatched_open_paren_columns,
+    after_leading_comments, code_holds_word, has_unmatched_open_brace,
+    holds_code_after_leading_comments, is_bare_comment_line, is_comment_line,
+    last_unmatched_open_brace, preprocessor_directive, trailing_comment_split_limit,
+    unmatched_open_bracket_column, unmatched_open_paren_columns,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -2164,8 +2165,10 @@ impl FormatEngine<'_> {
         }
         if !plain && let Some(previous) = self.output.last_line_outside_comment() {
             let code = self.output.code_trimmed_of(previous);
-            let trimmed = code.trimmed_start();
-            if !line_start.starts_with_any(b"{}#")
+            // Comments leading the line before lead no header away; a
+            // closing paren starts no body.
+            let trimmed = after_leading_comments(code.trimmed_start());
+            if !line_start.starts_with_any(b"{}#)")
                 && ((code.ends_with('{')
                     && (starts_header_word(trimmed, "if")
                         || starts_header_word(trimmed, "while")
