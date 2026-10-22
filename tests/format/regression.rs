@@ -21978,6 +21978,9 @@ fn a_comment_opening_a_block_under_a_case_label_inside_a_case_block_stands_at_th
     check(input, &["--indent-switches"], input);
     let input = "void f() {\n    switch (kind) {\n    case 1: {\n        go();\n        case 3:\n            if (first) {\n                /* note */\n                second();\n            }\n            third();\n    }\n    }\n}\n";
     check(input, &[], input);
+    // A comment leading such a label stands at it, as before any label.
+    let input = "void f() {\n    switch (kind) {\n    case 1: {\n        go();\n        /* note */\n        case 3:\n            third();\n    }\n    }\n}\n";
+    check(input, &[], input);
 }
 
 #[test]
