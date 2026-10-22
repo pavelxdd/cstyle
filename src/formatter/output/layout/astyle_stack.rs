@@ -69,8 +69,10 @@ pub(crate) struct ReplayCache {
     /// Whether a shift outside parens stacked before `index`; a line
     /// leading with a shift ends the replay there.
     shift_stacked: bool,
+    conditionals: Vec<ReplayConditional>,
 }
 
+#[derive(Clone, Default)]
 struct Replay {
     stack: Vec<usize>,
     sizes: Vec<usize>,
@@ -81,6 +83,14 @@ struct Replay {
     line_space: usize,
     assigned_this_line: bool,
     header_paren: Option<usize>,
+}
+
+/// A conditional the replay is inside: the state at its `#if` and at the
+/// end of its first branch, which astyle goes on from after `#endif`.
+#[derive(Clone)]
+struct ReplayConditional {
+    at_if: (Replay, bool),
+    first_branch_end: Option<(Replay, bool)>,
 }
 
 impl FormatEngine<'_> {
@@ -441,36 +451,27 @@ impl FormatEngine<'_> {
         let version = self.output.version();
         let first_is_shift = matches!(&tokens[first], Token::Operator(shift) if matches!(shift.as_str(), "<<" | ">>"));
         // The tokens before an earlier line replay as they did then.
-        let (mut replay, mut line, mut saw_question, mut index, mut shift_stacked) =
-            match self.astyle_replay_cache.take().filter(|cached| {
-                (cached.address, cached.start, cached.version) == (address, start, version)
-                    && cached.index <= first
-            }) {
-                Some(cached) => (
-                    cached.replay,
-                    cached.line,
-                    cached.saw_question,
-                    cached.index,
-                    cached.shift_stacked,
-                ),
-                None => (
-                    Replay {
-                        stack: Vec::new(),
-                        sizes: Vec::new(),
-                        parens: Vec::new(),
-                        paren_statements: Vec::new(),
-                        continuation: false,
-                        depth: 0,
-                        line_space: 0,
-                        assigned_this_line: false,
-                        header_paren: None,
-                    },
-                    None,
-                    false,
-                    start,
-                    false,
-                ),
-            };
+        let (
+            mut replay,
+            mut line,
+            mut saw_question,
+            mut index,
+            mut shift_stacked,
+            mut conditionals,
+        ) = match self.astyle_replay_cache.take().filter(|cached| {
+            (cached.address, cached.start, cached.version) == (address, start, version)
+                && cached.index <= first
+        }) {
+            Some(cached) => (
+                cached.replay,
+                cached.line,
+                cached.saw_question,
+                cached.index,
+                cached.shift_stacked,
+                cached.conditionals,
+            ),
+            None => (Replay::default(), None, false, start, false, Vec::new()),
+        };
         if shift_stacked && first_is_shift {
             return None;
         }
@@ -497,6 +498,42 @@ impl FormatEngine<'_> {
         };
         while index < first {
             let token = &tokens[index];
+            // A branch after the first starts from the state at `#if`, and
+            // the code after `#endif` goes on from the first branch's end.
+            if let Token::Preprocessor(directive) = token {
+                match preprocessor_directive(&directive.text) {
+                    Some("if" | "ifdef" | "ifndef") => conditionals.push(ReplayConditional {
+                        at_if: (replay.clone(), saw_question),
+                        first_branch_end: None,
+                    }),
+                    Some("else" | "elif" | "elifdef" | "elifndef") => {
+                        // A conditional opened before the statement held
+                        // none of it at `#if`.
+                        if conditionals.is_empty() {
+                            conditionals.push(ReplayConditional {
+                                at_if: (Replay::default(), false),
+                                first_branch_end: None,
+                            });
+                        }
+                        if let Some(conditional) = conditionals.last_mut() {
+                            if conditional.first_branch_end.is_none() {
+                                conditional.first_branch_end = Some((replay.clone(), saw_question));
+                            }
+                            (replay, saw_question) = conditional.at_if.clone();
+                        }
+                    }
+                    Some("endif") => {
+                        if let Some(ReplayConditional {
+                            first_branch_end: Some(end),
+                            ..
+                        }) = conditionals.pop()
+                        {
+                            (replay, saw_question) = end;
+                        }
+                    }
+                    _ => {}
+                }
+            }
             if !is_code_token(token) {
                 index += 1;
                 continue;
@@ -699,6 +736,7 @@ impl FormatEngine<'_> {
             line,
             saw_question,
             shift_stacked,
+            conditionals,
         }));
         let top = top?;
         Some(

@@ -21612,3 +21612,9 @@ fn a_conditional_row_continuing_a_return_in_a_define_body_takes_the_value_column
         expected,
     );
 }
+
+#[test]
+fn arguments_after_a_call_head_split_by_a_conditional_continue_from_its_first_branch() {
+    let input = "void f() {\n#if A\n    first(L,\n#else\n    second(L,\n#endif\n          value |\n          other);\n    next();\n}\n";
+    check(input, &[], input);
+}
