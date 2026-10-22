@@ -4557,3 +4557,14 @@ fn indent_preproc_define_keeps_operator_led_body_rows_at_one_column() {
         .expect("valid options");
     assert_eq!(format_exact(input, &options), input);
 }
+
+#[test]
+fn indent_preproc_define_sets_a_case_label_in_a_body_inside_a_function_as_at_file_scope() {
+    // A define body stands on its own: its label takes the body's column
+    // wherever the define stands.
+    let input = "void f(void)\n{\n    do {\n#define X(type, action) \\\n    case FS_ ## type: \\\n    r = action; \\\n    break;\n\n        switch (kind) {\n            X(A, a());\n        }\n    } while (0);\n}\n#define Y(type, action) \\\n    case FS_ ## type: \\\n    r = action; \\\n    break;\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--indent-preproc-define".to_owned()])
+        .expect("valid options");
+    assert_eq!(format_exact(input, &options), input);
+}
