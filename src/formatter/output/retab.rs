@@ -787,8 +787,14 @@ impl FormatEngine<'_> {
                 || self.ends_access_label(previous)
                 || self.ends_case_label(previous)
                 || self.ends_user_label(previous)
-                // An Objective-C directive such as `@property` starts anew.
+                // An Objective-C directive such as `@property` starts anew,
+                // and so does what follows an `@end`.
                 || matches!(tokens[start], Token::Symbol('@'))
+                || matches!(&tokens[previous], Token::Word(word) if word == "end")
+                    && self
+                        .tree
+                        .previous_code_token(previous)
+                        .is_some_and(|at| matches!(tokens[at], Token::Symbol('@')))
                 || matches!(&tokens[previous], Token::Word(word) if matches!(word.as_str(), "else" | "do"))
                 || self.closes_control_condition(previous)
             {

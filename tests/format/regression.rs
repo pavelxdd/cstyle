@@ -21386,3 +21386,10 @@ fn break_blocks_parts_nothing_inside_a_block_add_braces_gives_a_do() {
         check(input, &["--style=kr", "--add-braces", blocks], expected);
     }
 }
+
+#[test]
+fn a_declaration_after_an_objective_c_end_starts_anew_under_tabs() {
+    let input = "@interface Item\n@end\n\nstatic const struct Item\n    first =\n{\n    1, 2\n};\n";
+    let expected = "@interface Item\n@end\n\nstatic const struct Item\n\tfirst =\n{\n\t1, 2\n};\n";
+    check(input, &["--indent=tab=4"], expected);
+}
