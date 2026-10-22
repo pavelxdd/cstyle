@@ -21311,3 +21311,10 @@ fn a_list_leading_an_argument_row_with_its_first_element_breaks_its_elements_as_
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn a_member_braced_initializer_split_across_rows_continues_past_its_brace_as_a_local_one() {
+    // astyle drops the rows of a member's list to unrelated columns.
+    let input = "struct Config {\n    std::vector<int> items{1, 2,\n                           3};\n    Item item{1,\n              2};\n};\nvoid f()\n{\n    std::vector<int> items{1, 2,\n                           3};\n    Item item{1,\n              2};\n}\n";
+    check(input, &[], input);
+}
