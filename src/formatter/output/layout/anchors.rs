@@ -3246,7 +3246,8 @@ impl FormatEngine<'_> {
         }
         self.declarator_start_cache
             .set(Some((address, comma, start)));
-        if matches!(&tokens[start], Token::Word(word) if word == "return" || is_header(word))
+        // A template head's commas part its parameters, not declarators.
+        if matches!(&tokens[start], Token::Word(word) if word == "return" || word == "template" || is_header(word))
             || self.tree.has_directive_in(start..first)
         {
             return None;

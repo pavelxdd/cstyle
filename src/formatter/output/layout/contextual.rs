@@ -1117,9 +1117,11 @@ impl FormatEngine<'_> {
                 if template_declaration_line_complete(previous_trimmed) {
                     layout.exact_indent_spaces =
                         Some(leading_visual_width(previous, self.options.tab_width));
-                } else if let Some(spaces) =
-                    template_continuation_indent_spaces(previous, self.template_angle_step())
-                {
+                } else if let Some(spaces) = template_continuation_indent_spaces(
+                    previous,
+                    self.template_angle_step(),
+                    self.options.indent_width,
+                ) {
                     layout.exact_indent_spaces = Some(spaces);
                 }
             }

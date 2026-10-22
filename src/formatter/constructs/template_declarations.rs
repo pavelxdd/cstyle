@@ -1,7 +1,9 @@
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
-use crate::formatter::text::line_scan::{ContainsAnyByte, has_hash_outside_literals};
+use crate::formatter::text::line_scan::{
+    ContainsAnyByte, has_hash_outside_literals, is_comment_line,
+};
 use crate::formatter::text::line_scan::{
     after_leading_comments, trailing_comment_split_limit, unmatched_open_paren_column,
 };
@@ -87,6 +89,7 @@ fn angle_chars(line: &str) -> impl Iterator<Item = (usize, char)> + '_ {
 pub(crate) fn template_continuation_indent_spaces(
     line: &str,
     angle_step: Option<usize>,
+    indent_width: usize,
 ) -> Option<usize> {
     // Comments leading the line keep the columns of the head after them;
     // a step counts from the line's own indent.
@@ -107,7 +110,7 @@ pub(crate) fn template_continuation_indent_spaces(
             "{}{code}",
             " ".repeat(line[..line.len() - code.len()].chars().count())
         );
-        return template_continuation_indent_spaces(&masked, angle_step);
+        return template_continuation_indent_spaces(&masked, angle_step, indent_width);
     }
     let trimmed = line.trimmed_start();
     let code = line[..trailing_comment_split_limit(line)].trimmed_end();
@@ -132,20 +135,63 @@ pub(crate) fn template_continuation_indent_spaces(
     {
         return Some(line.len() - trimmed.len() + stack.len() * step);
     }
-    stack
-        .into_iter()
-        .rev()
-        .find_map(|column| {
+    template_rows_continuation_indent_spaces(&[line], indent_width)
+}
+
+/// The indent of the row after `rows`, the rows of a template head that
+/// leave angles open: past the innermost `<` when code follows it on its
+/// row, else an indent past where the angle it stands in puts its rows.
+fn template_rows_continuation_indent_spaces(rows: &[&str], indent_width: usize) -> Option<usize> {
+    let mut open = Vec::new();
+    for (row, line) in rows.iter().enumerate() {
+        let code = line[..trailing_comment_split_limit(line)].trimmed_end();
+        for (column, ch) in angle_chars(code) {
+            if ch == '<' {
+                open.push((row, column));
+            } else {
+                open.pop();
+            }
+        }
+    }
+    open.iter()
+        .fold(None, |outer: Option<usize>, &(row, column)| {
+            let line = rows[row];
             let after = line.chars().skip(column + 1).collect::<String>();
-            after
-                .chars()
-                .any(|ch| !ch.is_whitespace())
-                .then(|| column + 1 + after.chars().take_while(|ch| ch.is_whitespace()).count())
+            Some(if after.chars().any(|ch| !ch.is_whitespace()) {
+                column + 1 + after.chars().take_while(|ch| ch.is_whitespace()).count()
+            } else {
+                outer.unwrap_or(line.len() - line.trimmed_start().len()) + indent_width
+            })
         })
-        .or_else(|| Some(line.len() - trimmed.len() + 4))
 }
 
 impl FormatEngine<'_> {
+    /// The rows of the template head the last code rows in scope continue,
+    /// from its `template` row on.
+    fn open_template_head_rows(&self) -> Option<Vec<&str>> {
+        let mut rows = Vec::new();
+        for index in self.output.scoped_range().rev().take(32) {
+            let trimmed = self.output.trimmed(index);
+            if trimmed.is_empty()
+                || is_comment_line(trimmed)
+                || self.output.comment_start_index(index) != index
+                || self.output.is_directive_line(index)
+            {
+                continue;
+            }
+            let line = self.output[index].as_str();
+            rows.push(line);
+            if trimmed.starts_with("template") {
+                rows.reverse();
+                return Some(rows);
+            }
+            if trimmed.ends_with_any(b";{}") {
+                return None;
+            }
+        }
+        None
+    }
+
     pub(crate) fn is_template_declaration_line(&self) -> bool {
         self.current.trimmed_start().starts_with("template")
     }
@@ -256,25 +302,43 @@ impl FormatEngine<'_> {
         }
         let spaces = previous
             .and_then(|line| {
-                template_continuation_indent_spaces(line, self.template_angle_step())
-                    .or_else(|| {
-                        // Stepping after the angles, a row of the head goes
-                        // on from the row before it.
-                        let step = self.template_angle_step()?;
-                        let code = self.output.code_trimmed_of(line);
-                        let lead = leading_visual_width(line, self.options.tab_width);
-                        let delta = angle_depth_delta(code);
-                        Some(if delta >= 0 {
-                            lead + delta.unsigned_abs() * step
-                        } else {
-                            lead.saturating_sub(delta.unsigned_abs() * step)
+                template_continuation_indent_spaces(
+                    line,
+                    self.template_angle_step(),
+                    self.options.indent_width,
+                )
+                .or_else(|| {
+                    // The angles every row of the head leaves open
+                    // hold the row after them, as a call's parens do.
+                    self.template_angle_step()
+                        .is_none()
+                        .then(|| self.open_template_head_rows())
+                        .flatten()
+                        .and_then(|rows| {
+                            template_rows_continuation_indent_spaces(
+                                &rows,
+                                self.options.indent_width,
+                            )
                         })
+                })
+                .or_else(|| {
+                    // Stepping after the angles, a row of the head goes
+                    // on from the row before it.
+                    let step = self.template_angle_step()?;
+                    let code = self.output.code_trimmed_of(line);
+                    let lead = leading_visual_width(line, self.options.tab_width);
+                    let delta = angle_depth_delta(code);
+                    Some(if delta >= 0 {
+                        lead + delta.unsigned_abs() * step
+                    } else {
+                        lead.saturating_sub(delta.unsigned_abs() * step)
                     })
-                    .or_else(|| {
-                        (source_column == 0)
-                            .then(|| leading_visual_width(line, self.options.tab_width))
-                            .filter(|&spaces| spaces > 0)
-                    })
+                })
+                .or_else(|| {
+                    (source_column == 0)
+                        .then(|| leading_visual_width(line, self.options.tab_width))
+                        .filter(|&spaces| spaces > 0)
+                })
             })
             .unwrap_or(source_column);
         self.layout.continuation_indent.set_next_line_spaces(spaces);
@@ -367,9 +431,11 @@ impl FormatEngine<'_> {
         {
             self.layout.template_declaration.uses_source_indent = true;
             self.layout.template_declaration.angle_depth = angle_delta;
-            if let Some(spaces) =
-                template_continuation_indent_spaces(line, self.template_angle_step())
-            {
+            if let Some(spaces) = template_continuation_indent_spaces(
+                line,
+                self.template_angle_step(),
+                self.options.indent_width,
+            ) {
                 self.layout.continuation_indent.set_next_line_spaces(spaces);
             }
         } else if self.layout.template_declaration.uses_source_indent {

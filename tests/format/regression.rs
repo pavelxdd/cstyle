@@ -21062,3 +21062,40 @@ fn an_initializer_after_one_holding_a_conditional_on_a_scoped_name_stands_with_t
         check(input, &[style], input);
     }
 }
+
+#[test]
+fn rows_of_a_template_head_stand_past_the_innermost_open_angle() {
+    // Every row, not only the one after the head's first, as the rows of
+    // a call's arguments stand past its paren.
+    let input = "template <typename T,\n   typename U,\n      typename V>\nvoid run();\ntemplate <typename T, typename U = Pair<int,\n   long>,\n      typename V>\nvoid other();\nclass Item {\n  template <bool first,\n bool second,\n                 bool third>\n  bool check();\n};\n";
+    let expected = "template <typename T,\n          typename U,\n          typename V>\nvoid run();\ntemplate <typename T, typename U = Pair<int,\n                                        long>,\n          typename V>\nvoid other();\nclass Item\n{\n    template <bool first,\n              bool second,\n              bool third>\n    bool check();\n};\n";
+    for style in ["--style=kr", "--style=allman"] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn a_default_template_argument_split_across_rows_continues_past_its_angle() {
+    // The head's commas part its parameters; none ends a declarator.
+    let input = "template <typename T, typename U = Pair<int,\n   long>>\nvoid other();\n";
+    let expected = "template <typename T, typename U = Pair<int,\n                                        long>>\nvoid other();\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn an_angle_ending_a_template_head_row_steps_an_indent_past_the_angle_around_it() {
+    let input =
+        "template <typename T, typename I = Type<\n    Other<T>::value>>\nauto call(T value);\n";
+    check(
+        input,
+        &["--indent=spaces=4"],
+        "template <typename T, typename I = Type<\n              Other<T>::value>>\nauto call(T value);\n",
+    );
+    check(
+        input,
+        &["--indent=spaces=2"],
+        "template <typename T, typename I = Type<\n            Other<T>::value>>\nauto call(T value);\n",
+    );
+}
