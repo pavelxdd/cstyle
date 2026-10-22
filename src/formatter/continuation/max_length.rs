@@ -118,7 +118,7 @@ impl FormatEngine<'_> {
                 .as_ref()
                 .map_or(0, String::len),
         );
-        if line.len() + suffix_room <= brace_row_layout.first_width {
+        if line.trimmed_end().len() + suffix_room <= brace_row_layout.first_width {
             self.push_output_line_with_indent(line, structural_level, indent);
             return;
         }

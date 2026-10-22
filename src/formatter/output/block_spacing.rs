@@ -639,7 +639,10 @@ impl FormatEngine<'_> {
         self.tree
             .previous_code_token(header)
             .and_then(|close| self.tree.groups.closed_at(close))
-            .and_then(|body| self.tree.previous_code_token(self.tree.groups.get(body).open))
+            .and_then(|body| {
+                self.tree
+                    .previous_code_token(self.tree.groups.get(body).open)
+            })
             .is_some_and(|before| matches!(&tokens[before], Token::Word(word) if word == "do"))
     }
 

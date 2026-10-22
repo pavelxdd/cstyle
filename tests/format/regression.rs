@@ -21361,3 +21361,10 @@ fn break_blocks_pads_a_while_after_an_added_block_as_any_header_after_a_do() {
     check(input, &options, expected);
     check(expected, &options, expected);
 }
+
+#[test]
+fn lisp_keeps_a_closing_while_row_that_fits_with_its_closers() {
+    // The blank before the closer joining the row is the closer's.
+    let input = "void f() {\n    do {\n        value = 0; } /* again */ while (ready); }\n";
+    check(input, &["--style=lisp", "--max-code-length=50"], input);
+}
