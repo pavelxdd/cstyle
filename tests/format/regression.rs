@@ -12135,6 +12135,19 @@ fn rows_after_a_comment_opening_an_argument_list_stand_together_in_a_conditional
 }
 
 #[test]
+fn a_marker_comment_that_switches_nothing_stands_as_any_comment() {
+    // An enabling marker outside a disabled region leaves formatting on, so
+    // its line stands as any comment's before the block's closer.
+    let input = "void f()\n{\n    x = 0; /* note\n */  w();\n    /* *INDENT-ON* */\n}\n";
+    check(input, &["--style=kr"], input);
+    check(
+        &input.replace("    ", "\t"),
+        &["--style=gnu", "--indent=force-tab=4"],
+        "void f()\n{\n\tx = 0; /* note\n */  w();\n\t/* *INDENT-ON* */\n}\n",
+    );
+}
+
+#[test]
 fn any_unconditional_directive_between_a_case_label_and_a_brace_makes_the_brace_a_plain_block() {
     let input = "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n    {\n        pop(state);\n    }\n    break;\n    case 2:\n#pragma once\n    {\n        push(state);\n    }\n    break;\n    }\n}\n";
     check(

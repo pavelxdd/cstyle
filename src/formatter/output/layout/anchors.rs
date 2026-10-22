@@ -4856,9 +4856,10 @@ impl FormatEngine<'_> {
             }
             let start = self.output.comment_start_index(index);
             let opener = self.output.trimmed(start);
+            // A marker that switches formatting keeps its line as written.
             if self.output.line_tokens(start).is_some()
                 || !(opener.starts_with("//") || opener.starts_with("/*"))
-                || opener.contains("*INDENT-")
+                || self.output.is_verbatim(start)
                 || self.comment_runs_into_brace(start)
             {
                 break;
