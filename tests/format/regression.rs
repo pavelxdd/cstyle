@@ -12114,6 +12114,16 @@ fn a_case_block_holding_case_labels_closes_under_its_brace_and_keeps_its_comment
 }
 
 #[test]
+fn rows_of_a_comment_after_an_element_brace_move_as_far_as_the_comment_does() {
+    // The brace keeps the comment one space after it; the comment's rows
+    // move with its opener.
+    let input = "static const struct Item items[] = {\n  {\"first\",\n  },\n  { /* note that\n       more */\n    \"second\",\n  },\n};\n";
+    let expected = "static const struct Item items[] = {\n    {\n        \"first\",\n    },\n    { /* note that\n         more */\n        \"second\",\n    },\n};\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
 fn a_comment_after_an_element_brace_runs_in_breaks_or_stays_by_brace_style() {
     let input = "static const struct Item items[] = {\n  {\"first\",\n   \"one\", 0, 1},\n  { /* second item */\n    \"second\",\n    \"two\", 0, 2 },\n};\n";
     let run_in = "static const struct Item items[] = {\n    {   \"first\",\n        \"one\", 0, 1\n    },\n    {   /* second item */\n        \"second\",\n        \"two\", 0, 2\n    },\n};\n";
