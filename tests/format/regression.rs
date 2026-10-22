@@ -21213,3 +21213,14 @@ fn add_braces_braces_a_header_in_a_lambda_argument_whatever_its_parameters() {
     let expected = "void f()\n{\n    call(a, [=](int it) {\n        if (x) {\n            go();\n        }\n    });\n    call([&] {\n        if (x) {\n            go();\n        }\n    });\n}\n";
     check(input, &["--style=kr", "--add-braces"], expected);
 }
+
+#[test]
+fn a_parameter_row_aligned_at_its_paren_opening_a_lambda_body_stands_at_the_statement() {
+    // Wherever the source holds the row, as a row at any other column does.
+    let input = "void f()\n{\n    auto handler = [this](int value,\n                          int other) {\n        return value + other;\n    };\n    result = [&](int first,\n                 int second) mutable {\n        return first;\n    };\n}\n";
+    let expected = "void f()\n{\n    auto handler = [this](int value,\n    int other) {\n        return value + other;\n    };\n    result = [&](int first,\n    int second) mutable {\n        return first;\n    };\n}\n";
+    for style in ["--style=kr", "--style=linux"] {
+        check(input, &[style], expected);
+    }
+    check(expected, &["--style=kr"], expected);
+}

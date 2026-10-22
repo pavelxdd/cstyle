@@ -1438,8 +1438,7 @@ impl FormatEngine<'_> {
                         | BraceStyle::Gnu
                         | BraceStyle::Horstmann
                         | BraceStyle::Pico
-                ) || self.token_input.token_source_line_indent == aligned
-                {
+                ) {
                     return Some(aligned);
                 }
                 return Some(leading_visual_width(previous, tab_width));
