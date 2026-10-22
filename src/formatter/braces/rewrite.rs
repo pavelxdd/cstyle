@@ -2166,8 +2166,20 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let next =
-            next_non_whitespace(tokens, start + 1, close_index).and_then(|index| tokens.get(index));
+        // Code before the directive stands on a row of its own in the block,
+        // so the brace ends its line.
+        let body = next_non_whitespace(tokens, start + 1, hash_index).map(|first| {
+            let last = (first..hash_index)
+                .rev()
+                .find(|&index| !matches!(tokens[index], Token::Whitespace(_)))
+                .unwrap_or(first);
+            (first, last)
+        });
+        let next = match body {
+            None => next_non_whitespace(tokens, start + 1, close_index)
+                .and_then(|index| tokens.get(index)),
+            Some(_) => Some(&Token::Newline),
+        };
         self.set_input_whitespace(tokens, start, 0);
         self.token_input.token_begins_source_line = token_begins_line(tokens, start);
         self.push_open_brace(next, start, self.inferred_definition_brace(tokens, start));
@@ -2176,7 +2188,13 @@ impl FormatEngine<'_> {
             self.source_run_in_brace_lines
                 .retain(|index| *index != brace_line);
         }
-
+        if let Some((first, last)) = body {
+            if !self.current_is_blank() {
+                self.finish_line();
+            }
+            self.push_replayed_statement(tokens, first, last, None, first, None);
+            self.finish_line();
+        }
         let line = tokens[hash_index..close_index]
             .iter()
             .map(token_text)

@@ -21234,3 +21234,11 @@ fn a_case_whose_list_closer_stands_past_its_row_stays_in_its_closed_switch() {
     check(input, &["--style=ratliff"], expected);
     check(expected, &["--style=ratliff"], expected);
 }
+
+#[test]
+fn code_before_a_directive_in_a_one_line_block_stays_in_the_block() {
+    let input = "void f()\n{\n    {value; #if A}\n    do{value#if A}\n}\n";
+    let expected = "void f()\n{\n    {\n        value;\n#if A\n    }\n    do {\n        value\n#if A\n    }\n}\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+}
