@@ -20797,3 +20797,13 @@ fn the_comment_gap_add_braces_sets_stands_whatever_padding_adds() {
     check(input, &["--add-braces", "-p"], expected);
     check(expected, &["--add-braces", "-p"], expected);
 }
+
+#[test]
+fn a_padded_product_of_a_value_keeps_its_operand_apart() {
+    // No declarator follows a value.
+    let input = "void f()\n{\n    Array<Job> jobs(2*count);\n    Item item(4 *count);\n    int value(2*count);\n}\n";
+    let expected = "void f()\n{\n    Array<Job> jobs(2 * count);\n    Item item(4 * count);\n    int value(2 * count);\n}\n";
+    let args = ["-p", "--align-pointer=name"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}

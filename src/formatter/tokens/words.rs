@@ -18,6 +18,21 @@ use crate::formatter::tokens::pointers::resolved_pointer_align;
 use crate::source::lex::leading_identifier;
 
 impl FormatEngine<'_> {
+    /// Whether a value stands before the operator before the word being
+    /// pushed, which makes that operator no declarator's.
+    fn star_follows_value(&self) -> bool {
+        self.current
+            .active_token()
+            .and_then(|word| self.tree.previous_code_token(word))
+            .and_then(|operator| self.tree.previous_code_token(operator))
+            .is_some_and(|value| {
+                matches!(
+                    self.tree.tokens[value],
+                    Token::Number(_) | Token::CharLiteral(_) | Token::StringLiteral(_)
+                )
+            })
+    }
+
     pub(crate) fn push_word(&mut self, word: &str, next: Option<&Token>) {
         self.break_line_before_word(word, next);
         let previous_non_ws_char = self.layout.command_state.previous_non_ws_char;
@@ -448,6 +463,7 @@ impl FormatEngine<'_> {
         };
         let attaches_after_name_aligned_pointer = self.layout.previous == PreviousToken::Operator
             && current_ends_pointer_operator
+            && !self.star_follows_value()
             && (resolved_pointer_align(self.options, trailing_operator) == PointerAlign::Name
                 || pointer_name_aligns_mixed_declarator)
             && self.current_paren_context_is_declaration()
