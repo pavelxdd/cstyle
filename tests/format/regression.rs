@@ -7686,6 +7686,20 @@ fn designator_rows_of_a_run_in_list_stand_at_its_elements_whatever_rows_their_va
 }
 
 #[test]
+fn a_value_row_after_a_struct_type_takes_the_continuation_as_after_any_type() {
+    let input = "const struct Item *value =\n  &other;\nconst Item *value =\n  &other;\nvoid f(void)\n{\n  const struct Item *value =\n    &other;\n  const Item *value =\n    &other;\n}\n";
+    let expected = "const struct Item *value =\n    &other;\nconst Item *value =\n    &other;\nvoid f(void)\n{\n    const struct Item *value =\n        &other;\n    const Item *value =\n        &other;\n}\n";
+    check(input, &[], expected);
+    check(input, &["--indent-after-parens"], expected);
+    let expected = "const struct Item *value =\n        &other;\nconst Item *value =\n        &other;\nvoid f(void)\n{\n    const struct Item *value =\n            &other;\n    const Item *value =\n            &other;\n}\n";
+    check(
+        input,
+        &["--indent-after-parens", "--indent-continuation=2"],
+        expected,
+    );
+}
+
+#[test]
 fn declarators_after_a_struct_type_or_a_ternary_value_stand_at_the_first_declarator() {
     // The type a declaration names and the values its declarators hold
     // leave the rows after them at the first declarator.
