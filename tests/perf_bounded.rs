@@ -436,6 +436,13 @@ fn runs_that_each_line_looked_across_stay_bounded() {
             FormatOptions::default(),
         ),
         (
+            "a run of directives",
+            (0..n)
+                .map(|i| format!("#define M{i} {i}\n"))
+                .collect::<String>(),
+            FormatOptions::default(),
+        ),
+        (
             "a chain of shifts",
             format!("void f() {{ std::cout{}; }}\n", " << a".repeat(n)),
             FormatOptions::default(),

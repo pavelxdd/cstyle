@@ -255,6 +255,8 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) paren_alone_look: crate::formatter::output::buffer::LineLook,
     /// The look back for a line whose code is `else` or ends with `} else`.
     pub(crate) else_code_look: crate::formatter::output::buffer::LineLook,
+    /// The look back for a line no directive holds.
+    non_directive_look: crate::formatter::output::buffer::LineLook,
     /// The look back for a line ending the lines of a `new` call.
     pub(crate) new_call_lines_end_look: crate::formatter::output::buffer::LineLook,
     /// The look back for a line ending with `,` in an over-long `new` call.
@@ -456,6 +458,7 @@ impl<'a> FormatEngine<'a> {
             empty_new_call_look: Default::default(),
             paren_alone_look: Default::default(),
             else_code_look: Default::default(),
+            non_directive_look: Default::default(),
             constructor_context_look: Default::default(),
             brace_code_look: Default::default(),
             argument_end_look: Default::default(),
@@ -1389,9 +1392,11 @@ impl<'a> FormatEngine<'a> {
             .iter()
             .find(|token| !matches!(token, Token::Whitespace(_)))
             .is_some_and(|token| matches!(token, Token::Preprocessor(_)))
-            && (0..self.output.len())
-                .rev()
-                .find(|&index| !self.output.is_directive_line(index))
+            && self
+                .output
+                .last_line_looked(&self.non_directive_look, 0, self.output.len(), |index| {
+                    !self.output.is_directive_line(index)
+                })
                 .is_some_and(|index| {
                     self.output.comment_start_index(index) == index
                         && !self.output.code_before_comment_trimmed(index).is_empty()
