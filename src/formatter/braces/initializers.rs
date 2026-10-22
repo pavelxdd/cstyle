@@ -727,9 +727,9 @@ impl FormatEngine<'_> {
         // aggregate is.
         let aggregate_assign = self.current.trimmed_end().ends_with('=')
             || brace_type == BraceType::CompoundLiteral && self.layout.nesting.paren_depth == 0;
-        let struct_declaration = !nested
-            && self.current.trimmed_end().ends_with('=')
+        let declares_struct = self.current.trimmed_end().ends_with('=')
             && statement_declares_struct(&self.tree.tokens, token_index);
+        let struct_declaration = !nested && declares_struct;
         if self.current_is_lambda_body_header()
             || is_lambda_capture_header(self.current.trimmed_end())
         {
@@ -787,9 +787,24 @@ impl FormatEngine<'_> {
         if !break_first {
             self.emit_trailing_source_space();
         }
+        let statement_base = ContinuationIndent::Level(
+            self.layout
+                .indentation
+                .line_indent(LineKind::Normal, self.options)
+                + self.case_body_indent_extra(LineKind::Normal),
+        )
+        .columns(self.options.indent_width);
+        // A declarator on a line after its struct type levels the rows from
+        // the statement, as on the type's line.
+        let rows_base = if nested && declares_struct {
+            base_indent.min(statement_base)
+        } else {
+            base_indent
+        };
         let mut column = if enum_block_level {
             base_indent + self.options.continuation_indent * self.options.indent_width
         } else if nested {
+            let base_indent = rows_base;
             if double_brace_initializer {
                 base_indent + self.options.indent_width * 2
             } else {
@@ -829,13 +844,6 @@ impl FormatEngine<'_> {
         if leveled_literal {
             column = base_indent + self.options.indent_width;
         }
-        let statement_base = ContinuationIndent::Level(
-            self.layout
-                .indentation
-                .line_indent(LineKind::Normal, self.options)
-                + self.case_body_indent_extra(LineKind::Normal),
-        )
-        .columns(self.options.indent_width);
         // Elements after a brace past the maximum continuation indent stand
         // two levels past their line, or at the parens or list around them;
         // an assigned value's list keeps them at its brace.
@@ -911,8 +919,8 @@ impl FormatEngine<'_> {
             );
         } else {
             self.update_current_brace_indent_columns(
-                base_indent + self.options.indent_width,
-                base_indent,
+                rows_base + self.options.indent_width,
+                rows_base,
             );
         }
         if break_first {
@@ -1529,11 +1537,21 @@ impl FormatEngine<'_> {
             .iter()
             .find(|token| !matches!(token, Token::Whitespace(_) | Token::Comment(..)))
             .is_none_or(|token| matches!(token, Token::Newline));
-        if group.delimiter != Delimiter::Brace
-            || !ends_line
-            || !brace_follows_assignment(tokens, brace)
-            || !statement_declares_struct(tokens, brace)
-        {
+        if group.delimiter != Delimiter::Brace || !ends_line {
+            return None;
+        }
+        Some(
+            self.struct_declaration_statement_lead(brace)?
+                + self.options.indent_width
+                + self.case_unindent_spaces(),
+        )
+    }
+
+    /// The lead of the line starting the `struct` declaration whose value
+    /// `brace` opens, though its declarator stands on a later line.
+    pub(crate) fn struct_declaration_statement_lead(&self, brace: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        if !brace_follows_assignment(tokens, brace) || !statement_declares_struct(tokens, brace) {
             return None;
         }
         // The statement starts after the one before it and any label.
@@ -1546,11 +1564,7 @@ impl FormatEngine<'_> {
             .find(|&index| self.tree.statements.starts_block_statement(index))
             .or_else(|| (after..brace).find(|&index| is_code_token(&tokens[index])))?;
         let line = self.output.line_with_token(start)?;
-        Some(
-            self.output.lead_width(line, self.options.tab_width)
-                + self.options.indent_width
-                + self.case_unindent_spaces(),
-        )
+        Some(self.output.lead_width(line, self.options.tab_width))
     }
 
     pub(crate) fn initializer_member_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {

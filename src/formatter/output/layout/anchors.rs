@@ -1893,7 +1893,22 @@ impl FormatEngine<'_> {
         let lead = if comment_led {
             lead.saturating_sub(leading_closers * self.options.indent_width)
         } else {
-            lead
+            // The braces a declarator after its struct type's line leaves
+            // open count from the statement, as on the type's line.
+            let mut opened = Vec::new();
+            for (index, token) in tokens.iter().enumerate().take(open + 1).skip(span.first) {
+                match token {
+                    Token::Symbol('{') => opened.push(index),
+                    Token::Symbol('}') => {
+                        opened.pop();
+                    }
+                    _ => {}
+                }
+            }
+            opened
+                .first()
+                .and_then(|&outer| self.struct_declaration_statement_lead(outer))
+                .map_or(lead, |statement| statement.min(lead))
         };
         Some((lead, levels.max(0) as usize, leading_closers))
     }

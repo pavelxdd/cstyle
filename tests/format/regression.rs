@@ -12787,6 +12787,31 @@ fn designator_rows_of_a_list_after_a_continued_declarator_stand_as_its_other_row
 }
 
 #[test]
+fn nested_list_rows_of_a_run_in_list_after_a_struct_type_line_stand_as_on_one_line() {
+    // A declarator continuing its struct type on a line of its own sets
+    // the rows of a list run in after its brace as the one-line
+    // declaration does: a nested list's rows a level past the statement.
+    let input = "void f(void)\n{\n\tstruct Item\n\t\tvalue = { .type = KIND,\n\t\t\t.u.obj = {\n\t\t\t\t.first = 1,\n\t\t\t} };\n\tstruct Item\n\t\tvalue = { .type = KIND, .u.obj = {\n\t\t\t\t.first = 1,\n\t\t\t} };\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void f(void)\n{\n    struct Item\n        value = { .type = KIND,\n        .u.obj = {\n            .first = 1,\n        }\n    };\n    struct Item\n        value = { .type = KIND, .u.obj = {\n            .first = 1,\n        }\n    };\n}\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void f(void)\n    {\n    struct Item\n        value = { .type = KIND,\n        .u.obj = {\n            .first = 1,\n            }\n        };\n    struct Item\n        value = { .type = KIND, .u.obj = {\n            .first = 1,\n            }\n        };\n    }\n",
+        ),
+        (
+            "--style=pico",
+            "void f(void)\n{   struct Item\n        value = { .type = KIND,\n        .u.obj = {\n            .first = 1, } };\n    struct Item\n        value = { .type = KIND, .u.obj = {\n            .first = 1, } }; }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
 fn a_declarator_after_an_initializer_stands_at_its_declaration_in_a_function() {
     let input = "void f()\n{\n    static const struct Item\n        first = {\n            1, 2\n        },\n        __attribute__((unused))\n        second = {\n            3, 4\n        };\n}\n";
     check(
@@ -16054,7 +16079,7 @@ fn a_brace_ending_its_line_inside_an_element_list_stands_the_outer_list_rows_a_l
     check(
         input,
         &["--style=ratliff"],
-        "void f(void) {\n    struct Record\n        record = { .name = 1,\n            .value = {\n                .update = {\n                    .first = 1,\n                    }\n                }\n        };\n    }\n",
+        "void f(void) {\n    struct Record\n        record = { .name = 1,\n        .value = {\n            .update = {\n                .first = 1,\n                }\n            }\n        };\n    }\n",
     );
 }
 
