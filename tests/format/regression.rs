@@ -21948,3 +21948,13 @@ fn arguments_after_a_block_spanning_or_leading_rows_in_a_call_stand_at_the_state
     let indented = input.replace("         b,\n         c);", "        b,\n        c);");
     check(input, &["--style=kr", "--indent-after-parens"], &indented);
 }
+
+#[test]
+fn a_comment_after_a_statement_expression_brace_stays_after_it_in_breaking_styles() {
+    // The `({` stays whole, so the comment after its brace keeps its place
+    // rather than moving before a brace it would swallow.
+    let input = "void f()\n{\n    CHECK({  // note\n        go();\n    });\n    CHECK({ /* note */\n        go();\n    });\n}\n";
+    for style in ["--style=allman", "--style=gnu", "--style=vtk"] {
+        check(input, &[style], input);
+    }
+}

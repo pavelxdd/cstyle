@@ -2,6 +2,7 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::structure::blocks::{BlockKind, next_code_token};
 use crate::formatter::structure::groups::GroupId;
+use crate::formatter::text::line_scan::trailing_comment_split_limit;
 use crate::formatter::text::trim::Trimmed;
 
 impl FormatEngine<'_> {
@@ -58,7 +59,22 @@ impl FormatEngine<'_> {
                 && self.output.code_trimmed(line - 1).ends_with('(')
                 && !self.output.is_verbatim(line - 1)
             {
+                // A comment the broken brace moved before it goes back after
+                // the brace, at its column.
+                let previous = &self.output[line - 1];
+                let code_end = trailing_comment_split_limit(previous);
+                let attached = (code_end < previous.len()).then(|| {
+                    let rest = &previous[code_end..];
+                    let rest = rest
+                        .strip_prefix(' ')
+                        .filter(|rest| rest.starts_with(' '))
+                        .unwrap_or(rest);
+                    format!("{}{{{rest}", &previous[..code_end])
+                });
                 self.output.join_into(line - 1, line, "");
+                if let Some(attached) = attached {
+                    self.output.set(line - 1, attached);
+                }
             }
         }
     }
