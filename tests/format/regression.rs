@@ -20538,3 +20538,18 @@ fn indenting_define_bodies_leaves_a_case_block_after_a_conditional_alone() {
         check(expected, args, expected);
     }
 }
+
+#[test]
+fn literal_template_arguments_keep_their_angles_unpadded() {
+    let input = "void f()\n{\n    auto b = Helper<'s'>(value);\n    auto c = Helper<\"s\">(value);\n    auto d = Helper<'s', 2>::make(value);\n    auto h = Helper<u8'x'>(value);\n    Helper<'s'> *ptr;\n    if (value<'a' || value>'z') return;\n    bool m = value<'a' && other>'z';\n}\n";
+    let expected = "void f()\n{\n    auto b = Helper<'s'>(value);\n    auto c = Helper<\"s\">(value);\n    auto d = Helper<'s', 2>::make(value);\n    auto h = Helper<u8'x'>(value);\n    Helper<'s'> *ptr;\n    if (value < 'a' || value > 'z') return;\n    bool m = value < 'a' && other > 'z';\n}\n";
+    check(input, &["-p"], expected);
+    check(expected, &["-p"], expected);
+}
+
+#[test]
+fn a_logical_and_between_template_arguments_keeps_the_angles_a_template() {
+    // An rvalue reference or a boolean argument does not end the arguments.
+    let input = "using Pick = std::conditional_t<Big && Fast, Item, Other>;\nstatic_assert(Check<A && B>::value);\nauto q = std::forward<T&&>(value);\nvoid g(Box<Item&&, Other&&> pair);\n";
+    check(input, &["-p"], input);
+}

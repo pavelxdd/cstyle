@@ -194,7 +194,7 @@ pub(crate) fn template_openers(tokens: &[Token]) -> Vec<bool> {
     let closing_follows = |cursor: usize| {
         next_non_whitespace(tokens, cursor + 1, end)
             .and_then(|next| tokens.get(next))
-            .is_none_or(|token| !matches!(token, Token::Number(_)))
+            .is_none_or(|token| !is_literal(token))
     };
     // The `<`s still open, innermost last, with the paren depth each stands
     // at and whether what follows it lets it open at all.
@@ -207,7 +207,8 @@ pub(crate) fn template_openers(tokens: &[Token]) -> Vec<bool> {
             | Token::Newline
             | Token::Comment(_, _)
             | Token::Preprocessor(_) => {}
-            Token::Word(_) | Token::Number(_) => {}
+            Token::Word(_) | Token::Number(_) | Token::CharLiteral(_) | Token::StringLiteral(_) => {
+            }
             Token::Operator(operator) if operator == "<" => {
                 let first_after_open =
                     next_non_whitespace(tokens, cursor + 1, end).and_then(|next| tokens.get(next));
@@ -275,6 +276,14 @@ pub(crate) fn known_template_angle_role(
     }
 }
 
+/// A literal right after a `>` makes it a comparison, never a template's end.
+fn is_literal(token: &Token) -> bool {
+    matches!(
+        token,
+        Token::Number(_) | Token::CharLiteral(_) | Token::StringLiteral(_)
+    )
+}
+
 fn looks_like_template_opener(tokens: &[Token], index: usize, end: usize) -> bool {
     if !matches!(tokens.get(index), Some(Token::Operator(operator)) if operator == "<") {
         return false;
@@ -291,7 +300,8 @@ fn looks_like_template_opener(tokens: &[Token], index: usize, end: usize) -> boo
     for (cursor, token) in tokens.iter().enumerate().take(end).skip(index) {
         match token {
             Token::Whitespace(_) | Token::Newline | Token::Comment(_, _) => {}
-            Token::Word(_) | Token::Number(_) => {}
+            Token::Word(_) | Token::Number(_) | Token::CharLiteral(_) | Token::StringLiteral(_) => {
+            }
             Token::Operator(operator) if operator == "<" => depth += 1,
             Token::Operator(operator) if operator == ">" => {
                 depth = depth.saturating_sub(1);
@@ -299,7 +309,7 @@ fn looks_like_template_opener(tokens: &[Token], index: usize, end: usize) -> boo
                     return paren_depth == 0
                         && next_non_whitespace(tokens, cursor + 1, end)
                             .and_then(|next| tokens.get(next))
-                            .is_none_or(|token| !matches!(token, Token::Number(_)));
+                            .is_none_or(|token| !is_literal(token));
                 }
             }
             Token::Operator(operator) if operator == ">>" => {
@@ -308,7 +318,7 @@ fn looks_like_template_opener(tokens: &[Token], index: usize, end: usize) -> boo
                     return paren_depth == 0
                         && next_non_whitespace(tokens, cursor + 1, end)
                             .and_then(|next| tokens.get(next))
-                            .is_none_or(|token| !matches!(token, Token::Number(_)));
+                            .is_none_or(|token| !is_literal(token));
                 }
             }
             Token::Operator(operator)
