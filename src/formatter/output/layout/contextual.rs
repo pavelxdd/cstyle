@@ -1667,8 +1667,10 @@ impl FormatEngine<'_> {
                 }
             }
         }
+        // A lambda argument opening its body stands at the statement.
         if layout.line_kind == LineKind::Normal
             && !line_start.starts_with_any(b"#(){}")
+            && !line_opens_lambda_block(line)
             && let Some(previous_index) = self.output.last_non_empty_index()
             && self.output[previous_index].trimmed_end().ends_with(',')
         {

@@ -20979,3 +20979,13 @@ fn a_comma_led_initializer_after_a_split_conditional_stands_with_the_list() {
         check(input, &[style], input);
     }
 }
+
+#[test]
+fn a_lambda_argument_after_a_string_argument_stands_at_the_statement() {
+    let input = "void f()\n{\n    run(value, \"name\",\n        [](const char *input, size_t length) {\n            return go(input, length);\n        }, last);\n}\n";
+    let expected = "void f()\n{\n    run(value, \"name\",\n    [](const char *input, size_t length) {\n        return go(input, length);\n    }, last);\n}\n";
+    for style in ["--style=kr", "--style=linux"] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
