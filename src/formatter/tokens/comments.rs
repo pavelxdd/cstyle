@@ -19,6 +19,7 @@ use crate::formatter::state::frame::{
 };
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
+use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::structure::blocks::is_code_token;
 use crate::formatter::structure::blocks::next_code_token;
 use crate::formatter::structure::groups::Delimiter;
@@ -4320,6 +4321,26 @@ impl FormatEngine<'_> {
             })
     }
 
+    /// Whether the current line opens with the brace of an aggregate's body
+    /// that the style broke off the code before it on its source line.
+    fn current_line_broke_off_aggregate_head(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        let Some(first) = self.current.tokens().map(|span| span.first) else {
+            return false;
+        };
+        matches!(tokens.get(first), Some(Token::Symbol('{')))
+            && self
+                .tree
+                .groups
+                .opened_at(first)
+                .is_some_and(|group| self.tree.blocks.kind(group) == Some(BlockKind::Aggregate))
+            && self.tree.previous_code_token(first).is_some_and(|before| {
+                !tokens[before + 1..first]
+                    .iter()
+                    .any(|token| matches!(token, Token::Newline))
+            })
+    }
+
     /// Whether the comment being pushed is a block comment that code follows
     /// on its source line: padding moves no such comment.
     fn block_comment_precedes_code_on_its_line(&self, kind: CommentKind) -> bool {
@@ -4678,11 +4699,14 @@ impl FormatEngine<'_> {
             return;
         }
         // A statement broken off its header's line, or off a block's
-        // closer, keeps the gap before its comment.
+        // closer, keeps the gap before its comment, as does a list broken
+        // off its declaration's head.
         if target_column.is_some()
             && !gap.is_empty()
             && !gap.contains('\t')
-            && (self.current_line_broke_off_header() || self.current_line_broke_off_block_closer())
+            && (self.current_line_broke_off_header()
+                || self.current_line_broke_off_block_closer()
+                || self.current_line_broke_off_aggregate_head())
         {
             // Padding the statement takes from the gap as on any line; a
             // closer added before a closing header gave the gap its columns.

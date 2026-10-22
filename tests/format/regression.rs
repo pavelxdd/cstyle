@@ -22755,3 +22755,13 @@ fn a_member_name_a_comma_continued_assignment_sets_starts_at_its_dotted_run() {
     check(input, &[], expected);
     check(expected, &[], expected);
 }
+
+#[test]
+fn a_comment_after_an_enum_list_its_brace_breaks_from_keeps_its_gap() {
+    // Breaking the brace off the enum head moves the list; the comment after
+    // it keeps the gap written before it, as after any list.
+    let input = "enum Kind {ONE, TWO};  /* kind */\nenum class Mode {A, B};\t/* mode */\n";
+    let expected = "enum Kind\n{ONE, TWO};  /* kind */\nenum class Mode\n{A, B};\t/* mode */\n";
+    check(input, &["--style=mozilla"], expected);
+    check(expected, &["--style=mozilla"], expected);
+}
