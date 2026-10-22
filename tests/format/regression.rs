@@ -21346,3 +21346,18 @@ fn break_blocks_parts_a_one_line_case_block_from_a_statement_after_it_as_a_longe
     let second = format_bytes(&first, &options).expect("format bytes");
     assert_eq!(String::from_utf8(second), String::from_utf8(first));
 }
+
+#[test]
+fn break_blocks_pads_a_while_after_an_added_block_as_any_header_after_a_do() {
+    // Only the `while` a `do` closes with goes on with it.
+    let input = "void f()\n{\n    do { value=0; } while (ready);\n    if (ready)\n        /* note */ helper();\n    while (ready)\n        helper();\n}\n";
+    let expected = "void f()\n{\n    do { value=0; }\n    while (ready);\n\n    if (ready)\n        /* note */ { helper(); }\n\n    while (ready) {\n        helper();\n    }\n}\n";
+    let options = [
+        "--style=kr",
+        "--add-braces",
+        "--keep-one-line-blocks",
+        "--break-blocks",
+    ];
+    check(input, &options, expected);
+    check(expected, &options, expected);
+}

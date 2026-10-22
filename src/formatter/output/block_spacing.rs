@@ -49,10 +49,7 @@ impl FormatEngine<'_> {
         if self.previous_block_spacing_line_is_comment_only() {
             return;
         }
-        if word == "while"
-            && self.layout.nesting.last_closed_brace_header.as_deref() == Some("do")
-            && self.layout.command_state.previous_command_char == Some('}')
-        {
+        if word == "while" && self.while_closes_braced_do() {
             // A `do` the line starts keeps the blank due before it, as an
             // `if` whose `else` joins its line does.
             let prepend = self.block_spacing.prepend_blank
@@ -625,6 +622,25 @@ impl FormatEngine<'_> {
                     .line_with_token(before)
                     .is_some_and(|line| self.output.line_with_token(header) == Some(line))
             }
+    }
+
+    /// Whether the `while` being pushed closes the braced body of a `do`
+    /// before it.
+    fn while_closes_braced_do(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        let Some(header) = self
+            .current
+            .active_token()
+            .filter(|&index| matches!(&tokens[index], Token::Word(word) if word == "while"))
+        else {
+            return self.layout.nesting.last_closed_brace_header.as_deref() == Some("do")
+                && self.layout.command_state.previous_command_char == Some('}');
+        };
+        self.tree
+            .previous_code_token(header)
+            .and_then(|close| self.tree.groups.closed_at(close))
+            .and_then(|body| self.tree.previous_code_token(self.tree.groups.get(body).open))
+            .is_some_and(|before| matches!(&tokens[before], Token::Word(word) if word == "do"))
     }
 
     /// The `do` whose braceless body the `while` at `index` follows.
