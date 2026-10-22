@@ -2033,6 +2033,7 @@ impl FormatEngine<'_> {
             || value.starts_with(':') && !value.starts_with("::")
             || code.ends_with('}') && rest.contains(';')
             || unmatched_open_paren_column(&code[..operator_start]).is_none()
+                && rest.contains(';')
                 && has_top_level_char(rest, ';')
         {
             return None;
