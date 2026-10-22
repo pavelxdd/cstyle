@@ -21108,3 +21108,11 @@ fn a_statement_continued_after_an_assignment_in_a_lambda_body_keeps_its_continua
         check(input, &[style], input);
     }
 }
+
+#[test]
+fn a_union_member_function_breaks_its_brace_as_a_struct_member_function_does() {
+    let input = "union Hook {\n  void Store(int cb) {\n    go();\n  }\n};\nstruct Item {\n  void Store(int cb) {\n    go();\n  }\n};\n";
+    let expected = "union Hook {\n    void Store(int cb)\n    {\n        go();\n    }\n};\nstruct Item {\n    void Store(int cb)\n    {\n        go();\n    }\n};\n";
+    check(input, &["--style=1tbs"], expected);
+    check(expected, &["--style=1tbs"], expected);
+}
