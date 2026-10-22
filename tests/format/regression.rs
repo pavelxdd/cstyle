@@ -4251,6 +4251,24 @@ fn vtk_statement_after_nested_added_one_line_block() {
 }
 
 #[test]
+fn break_blocks_all_lays_out_a_one_line_if_else_as_a_multi_line_one() {
+    // The `else` the source keeps by the closer stays there, and the
+    // condition of a do-while takes no blank line among its rows.
+    let input = "void f()\n{\n    if (ready) { value=0; } else { result=0; }\n    do {\n        value++;\n    } while (value < count &&\n             ready);\n}\n";
+    let expected = "void f()\n{\n    if (ready) {\n        value=0;\n\n    } else {\n        result=0;\n    }\n\n    do {\n        value++;\n    } while (value < count &&\n             ready);\n}\n";
+    check(
+        input,
+        &["--break-blocks=all", "--attach-closing-while"],
+        expected,
+    );
+    check(
+        expected,
+        &["--break-blocks=all", "--attach-closing-while"],
+        expected,
+    );
+}
+
+#[test]
 fn break_blocks_keeps_an_empty_block_closed_up_to_its_closing_header() {
     let input = "void f()\n{\n\tif (a) {\n\t\tb();\n\t} else if (x) {\n\t\ty();\n\t}\n\tif (a) {\n\t} else if (x) {\n\t\ty();\n\t}\n\tif (a) {\n\t\t;\n\t} else {\n\t\ty();\n\t}\n}\n";
     let expected = "void f()\n{\n    if (a)\n    {\n        b();\n    }\n\n    else if (x)\n    {\n        y();\n    }\n\n    if (a)\n    {\n    }\n    else if (x)\n    {\n        y();\n    }\n\n    if (a)\n    {\n        ;\n    }\n\n    else\n    {\n        y();\n    }\n}\n";
