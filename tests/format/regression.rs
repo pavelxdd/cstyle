@@ -21327,3 +21327,22 @@ fn add_one_line_braces_sets_an_else_block_joined_to_a_closer_at_its_if() {
     check(input, &["--style=kr", "-J"], expected);
     check(expected, &["--style=kr", "-J"], expected);
 }
+
+#[test]
+fn break_blocks_parts_a_one_line_case_block_from_a_statement_after_it_as_a_longer_one() {
+    let input = "void f()\n{\n    switch (state) {\n    case 1: { first(); }\n    second();\n    break;\n    case 4: { fourth(); } next();\n    break;\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (state) {\n    case 1:\n    { first(); }\n\n    second();\n    break;\n\n    case 4:\n    { fourth(); }\n\n    next();\n    break;\n    }\n}\n";
+    let options = ["--style=kr", "--break-blocks", "--keep-one-line-blocks"];
+    check(input, &options, expected);
+    check(expected, &options, expected);
+    // A block the style runs onto one line keeps the blank deleted lines
+    // leave it.
+    let pico = ["--style=pico", "--break-blocks", "--delete-empty-lines"];
+    let input = "void f()\n{\n    switch (state) {\n    case 1: {\n        first();\n    }\n    second();\n    break;\n    }\n}\n";
+    let mut options = FormatOptions::default();
+    let pico: Vec<String> = pico.iter().map(|arg| arg.to_string()).collect();
+    apply_command_line_args(&mut options, &pico).expect("valid options");
+    let first = format_bytes(input.as_bytes(), &options).expect("format bytes");
+    let second = format_bytes(&first, &options).expect("format bytes");
+    assert_eq!(String::from_utf8(second), String::from_utf8(first));
+}

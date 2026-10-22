@@ -351,16 +351,26 @@ impl FormatEngine<'_> {
         // A block of comments alone is as empty once its line ends.
         self.block_spacing.pending_closed_empty_block = Some(holds_no_code);
         // A case label's block kept on one line parts from a directive
-        // after it as one spanning rows does.
+        // after it, and from what follows save the break ending the case, as
+        // one spanning rows does.
         let tokens = &self.tree.tokens;
-        self.block_spacing.pending_case_block_before_directive = self
+        let case_block = self
             .current
             .active_token()
             .filter(|&open| matches!(tokens[open], Token::Symbol('{')))
             .and_then(|open| self.tree.groups.opened_at(open))
-            .and_then(|group| self.tree.blocks.owner(group))
-            .is_some_and(|owner| {
-                matches!(&tokens[owner], Token::Word(word) if matches!(word.as_str(), "case" | "default"))
+            .filter(|&group| {
+                self.tree.blocks.owner(group).is_some_and(|owner| {
+                    matches!(&tokens[owner], Token::Word(word) if matches!(word.as_str(), "case" | "default"))
+                })
+            });
+        self.block_spacing.pending_case_block_before_directive = case_block.is_some();
+        let case_block_parts = case_block
+            .and_then(|group| self.tree.groups.get(group).close)
+            .and_then(|close| next_code_token(tokens, close + 1))
+            .is_some_and(|next| {
+                !matches!(&tokens[next], Token::Word(word) if matches!(word.as_str(), "break" | "case" | "default"))
+                    && !matches!(tokens[next], Token::Symbol('}'))
             });
         // Only a header's block is padded.
         let header_block = self
@@ -371,7 +381,8 @@ impl FormatEngine<'_> {
         self.block_spacing.pending_one_line_block =
             matches!(brace_type, BraceType::Command | BraceType::NonStatement)
                 && (header_block && !self.block_spacing.header_follows_statement
-                    || self.brace_continues_header_block());
+                    || self.brace_continues_header_block()
+                    || case_block_parts);
         self.clear_block_spacing_header();
     }
 
