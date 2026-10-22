@@ -1555,6 +1555,23 @@ impl FormatEngine<'_> {
         Some(outer)
     }
 
+    /// Whether VTK sets the rows of the element brace at `open` a level past
+    /// it, as in an array it lays out unlike blocks.
+    pub(crate) fn vtk_element_rows_past_brace(&self, open: usize) -> bool {
+        let groups = &self.tree.groups;
+        let is_aggregate = |id: GroupId| {
+            matches!(
+                self.tree.blocks.kind(id),
+                Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+            )
+        };
+        groups.opened_at(open).is_some_and(is_aggregate)
+            && groups
+                .enclosing(open)
+                .filter(|&list| is_aggregate(list))
+                .is_some_and(|list| self.vtk_block_like_outer(list).is_none())
+    }
+
     /// The outermost initializer around `group` that VTK lays out like
     /// blocks: one in code, or the assigned initializer of a declaration
     /// without an aggregate keyword.
@@ -2724,8 +2741,20 @@ impl FormatEngine<'_> {
             return None;
         }
         // Rows stand at an indented brace starting its line, and at the
-        // indented closing brace of a struct body before them.
+        // indented closing brace of a struct body before them. VTK sets an
+        // element's brace by the array around it.
         let indented_brace = match &self.tree.tokens[span.first] {
+            Token::Symbol('{')
+                if self.options.brace_style == BraceStyle::Vtk
+                    && groups.enclosing(span.first).is_some_and(|list| {
+                        matches!(
+                            self.tree.blocks.kind(list),
+                            Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                        )
+                    }) =>
+            {
+                self.line_brace_stands_past_body(line)
+            }
             Token::Symbol('{') => self.should_indent_brace_line(BraceType::Initializer),
             Token::Symbol('}') => matches!(
                 self.options.brace_style,

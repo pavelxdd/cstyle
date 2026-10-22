@@ -11956,6 +11956,51 @@ fn a_block_comment_after_a_list_brace_leading_its_line_keeps_the_row_where_brace
 }
 
 #[test]
+fn rows_of_an_element_brace_a_block_comment_leads_stand_a_level_in_under_vtk() {
+    let input = "static const struct Item items[] = {\n  {\"first\",\n   \"one\", 0, 1},\n  %s\n    \"third\", 3 },\n};\n";
+    for (rest, args, expected) in [
+        (
+            "{\n    /* note */ \"zero\",",
+            &["--style=vtk"][..],
+            "static const struct Item items[] = {\n    {\n        \"first\",\n        \"one\", 0, 1\n    },\n    {\n        /* note */ \"zero\",\n        \"third\", 3\n    },\n};\n",
+        ),
+        (
+            "{ /* note */ \"zero\",",
+            &["--style=vtk"][..],
+            "static const struct Item items[] = {\n    {\n        \"first\",\n        \"one\", 0, 1\n    },\n    { /* note */ \"zero\",\n        \"third\", 3\n    },\n};\n",
+        ),
+        (
+            "{\n    /* note */ \"zero\",",
+            &["--style=vtk", "--indent=tab"][..],
+            "static const struct Item items[] = {\n\t{\n\t\t\"first\",\n\t\t\"one\", 0, 1\n\t},\n\t{\n\t\t/* note */ \"zero\",\n\t\t\"third\", 3\n\t},\n};\n",
+        ),
+    ] {
+        check(&input.replace("%s", rest), args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
+fn rows_of_a_comment_after_an_element_brace_take_its_body_under_vtk_with_tabs() {
+    let input = "static const struct Item items[] = {\n  {\"first\",\n   \"one\", 0, 1},\n  %s\n    \"third\", 3 },\n};\n";
+    for (rest, args, expected) in [
+        (
+            "{ /* note\n       more */",
+            &["--style=vtk", "--indent=tab"][..],
+            "static const struct Item items[] = {\n\t{\n\t\t\"first\",\n\t\t\"one\", 0, 1\n\t},\n\t{ /* note\n\t\t   more */\n\t\t\"third\", 3\n\t},\n};\n",
+        ),
+        (
+            "{ /* note\n       more */",
+            &["--style=vtk", "--indent=force-tab=4"][..],
+            "static const struct Item items[] = {\n\t{\n\t\t\"first\",\n\t\t\"one\", 0, 1\n\t},\n\t{ /* note\n\t\t   more */\n\t\t\"third\", 3\n\t},\n};\n",
+        ),
+    ] {
+        check(&input.replace("%s", rest), args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
 fn any_unconditional_directive_between_a_case_label_and_a_brace_makes_the_brace_a_plain_block() {
     let input = "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n    {\n        pop(state);\n    }\n    break;\n    case 2:\n#pragma once\n    {\n        push(state);\n    }\n    break;\n    }\n}\n";
     check(

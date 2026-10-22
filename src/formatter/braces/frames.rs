@@ -635,6 +635,13 @@ impl FormatEngine<'_> {
                     // A block's own brace line stands at its body.
                     || self.options.brace_style == BraceStyle::Ratliff
                         && frame.semantic_kind == BraceSemanticKind::Command
+            })
+            // VTK sets an element's rows by the array around it.
+            && !self.layout.frame_stack.active_brace().is_some_and(|frame| {
+                self.options.brace_style == BraceStyle::Vtk
+                    && frame
+                        .open_token
+                        .is_some_and(|open| self.vtk_element_rows_past_brace(open))
             });
         // Ratliff closes the aggregate a declaration defines at its body:
         // an initializer opened on that line nests from the declaration.
