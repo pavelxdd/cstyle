@@ -419,7 +419,7 @@ fn unmatched_close_recovery_overrides_whitesmith_return_continuation() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=whitesmith".to_owned()])
         .expect("valid options");
-    let expected = b"}\nreturn +:\no";
+    let expected = b"    }\nreturn +:\no";
 
     assert_eq!(
         format_bytes(b"}return +:o", &options).expect("format bytes"),
@@ -439,6 +439,29 @@ fn gnu_malformed_close_before_operator_chain_is_idempotent() {
     let first = format_exact(input, &options);
 
     assert_eq!(format_exact(&first, &options), first);
+}
+
+// A closing brace no block opened stands where its style puts the closer of
+// a file scope block.
+#[test]
+fn unmatched_closing_brace_at_file_scope_takes_the_style_closer_column() {
+    let input = "void f()\n{\n    go();\n}\n}\nint value;\n";
+    for (style, closer) in [
+        ("whitesmith", "    }"),
+        ("ratliff", "    }"),
+        ("vtk", "}"),
+        ("gnu", "}"),
+        ("allman", "}"),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[format!("--style={style}")])
+            .expect("valid options");
+        let output = format_exact(input, &options);
+        let rows: Vec<&str> = output.lines().collect();
+        assert_eq!(rows[rows.len() - 2], closer, "{style}:\n{output}");
+        assert_eq!(rows[rows.len() - 1], "int value;", "{style}:\n{output}");
+        assert_eq!(format_exact(&output, &options), output, "{style}");
+    }
 }
 
 #[test]

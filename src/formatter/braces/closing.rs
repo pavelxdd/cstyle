@@ -95,7 +95,12 @@ impl FormatEngine<'_> {
         &self,
         line: &LineView<'_>,
     ) -> Option<usize> {
-        (line.trimmed() == "}" && self.layout.nesting.last_closed_brace_type.is_none()).then_some(0)
+        let column = match self.options.brace_style {
+            BraceStyle::Whitesmith | BraceStyle::Ratliff => self.options.indent_width,
+            _ => 0,
+        };
+        (line.trimmed() == "}" && self.layout.nesting.last_closed_brace_type.is_none())
+            .then_some(column)
     }
 
     /// With `emitted`, a label's block reads as its rows stand after their
