@@ -21765,3 +21765,11 @@ fn pad_oper_leaves_an_address_of_leading_a_branch_unpadded_in_every_branch() {
     let input = "int *current =\n#ifdef FIRST\n    &first;\n#elif defined(SECOND)\n    &second;\n#else\n    &third;\n#endif\n";
     check(input, &["--pad-oper"], input);
 }
+
+#[test]
+fn a_nested_list_after_a_conditional_breaks_its_closer_off_as_its_siblings_do() {
+    let input = "static Item items[] = {\n\n    { first,\n      NULL },\n\n#if (FEATURE)\n\n    { second,\n      NULL },\n\n#endif\n\n    { third,\n      NULL },\n\n    { fourth,\n      NULL },\n\n    null_item\n};\n";
+    let expected = "static Item items[] = {\n\n    {\n        first,\n        NULL\n    },\n\n#if (FEATURE)\n\n    {\n        second,\n        NULL\n    },\n\n#endif\n\n    {\n        third,\n        NULL\n    },\n\n    {\n        fourth,\n        NULL\n    },\n\n    null_item\n};\n";
+    check(input, &["--style=1tbs"], expected);
+    check(expected, &["--style=1tbs"], expected);
+}
