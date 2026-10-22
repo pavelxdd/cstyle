@@ -392,7 +392,10 @@ impl FormatEngine<'_> {
                 )
         {
             BraceType::Command
-        } else if self.current_ends_definition_header() {
+        } else if self.current_ends_definition_header()
+            // A head a line splice ends stands on the line before the brace.
+            || self.current_is_blank() && self.brace_opens_function_body()
+        {
             BraceType::Definition
         } else if matches!(
             self.layout.command_state.previous_command_char,

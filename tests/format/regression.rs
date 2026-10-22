@@ -22765,3 +22765,131 @@ fn a_comment_after_an_enum_list_its_brace_breaks_from_keeps_its_gap() {
     check(input, &["--style=mozilla"], expected);
     check(expected, &["--style=mozilla"], expected);
 }
+
+#[test]
+fn a_function_head_its_line_splice_ends_opens_its_body_on_the_next_line() {
+    // A backslash ending the head splices the brace's line on: the body
+    // opens as after any head, its brace below the splice.
+    let input = "void f() \\\n{\n    if (x) \\\n    {\n        y();\n    }\n}\n";
+    for (style, expected) in [
+        ("--style=kr", input),
+        (
+            "--style=whitesmith",
+            "void f() \\\n    {\n    if (x) \\\n        {\n        y();\n        }\n    }\n",
+        ),
+        (
+            "--style=gnu",
+            "void f() \\\n{\n    if (x) \\\n        {\n            y();\n        }\n}\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn a_one_line_block_a_line_splice_runs_its_head_into_stays_as_written() {
+    let input = "void f() \\\n    {g();}\nvoid h() \\\n  {  first(); second();  }\nint z;\n";
+    let expected = "void f() \\\n{g();}\nvoid h() \\\n{  first(); second();  }\nint z;\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+}
+
+#[test]
+fn a_one_line_body_a_line_splice_runs_its_head_into_is_set_in_under_ratliff() {
+    let input = "void f() \\\n{ g(); }\n";
+    let expected = "void f() \\\n    { g(); }\n";
+    check(input, &["--style=ratliff"], expected);
+    check(expected, &["--style=ratliff"], expected);
+}
+
+#[test]
+fn a_body_a_line_splice_runs_its_head_into_reads_as_a_function_body() {
+    // A line splice is a blank between the head and its brace: the body's
+    // blocks take the style's braces as in any function body, and a block
+    // kept on its row gains no padding before its closing brace.
+    let input = "void f() \\\n{\n    if (x) {\n        y();\n    }\n}\n";
+    let plain = "void f()\n{\n    if (x) {\n        y();\n    }\n}\n";
+    for style in [
+        "--style=kr",
+        "--style=linux",
+        "--style=1tbs",
+        "--style=mozilla",
+        "--style=stroustrup",
+    ] {
+        check(input, &[style], input);
+        check(plain, &[style], plain);
+    }
+    let input = "void f() \\\n{g();}\n";
+    for style in ["--style=pico", "--style=lisp"] {
+        check(input, &[style], input);
+    }
+}
+
+#[test]
+fn a_line_splice_after_a_block_kept_on_its_row_stays_on_that_row() {
+    let input =
+        "int g() \\\n{ return 1; } \\\nint q;\nvoid f()\n{\n    { h(); } \\\n    { k(); }\n}\n";
+    check(input, &["--keep-one-line-blocks"], input);
+    let expected = "int g() \\\n{ return 1; } \\\nint q;\nvoid f()\n{\n    {\n        h();\n    } \\\n    { k(); }\n}\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+}
+
+#[test]
+fn a_type_body_below_a_line_splice_lays_out_as_below_any_head() {
+    let input = "struct S \\\n{ int a; };\nclass C \\\n{ int a; };\nnamespace N \\\n{ int a; }\nextern \"C\" \\\n{ int a; }\nenum E \\\n{ A, B };\n";
+    let expected = "struct S \\\n{\n    int a;\n};\nclass C \\\n{\n    int a;\n};\nnamespace N \\\n{\nint a;\n}\nextern \"C\" \\\n{\n    int a;\n}\nenum E \\\n{ A, B };\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+    // An attaching style leaves the brace below the splice: joining it would
+    // leave the backslash inside the line.
+    let input = "struct S \\\n{\n    int a;\n};\n";
+    for style in ["--style=kr", "--style=java", "--style=ratliff"] {
+        let expected = if style == "--style=ratliff" {
+            "struct S \\\n    {\n    int a;\n    };\n"
+        } else {
+            input
+        };
+        check(input, &[style], expected);
+    }
+}
+
+#[test]
+fn a_brace_below_a_line_splice_takes_the_kind_its_head_gives_it() {
+    let input = "void f()\n{\n    if (x) \\\n    { g(); }\n}\nint v[] = \\\n{ 1, 2 };\n";
+    for (style, expected) in [
+        (
+            "--style=whitesmith",
+            "void f()\n    {\n    if (x) \\\n        { g(); }\n    }\nint v[] = \\\n    { 1, 2 };\n",
+        ),
+        (
+            "--style=gnu",
+            "void f()\n{\n    if (x) \\\n        { g(); }\n}\nint v[] = \\\n{ 1, 2 };\n",
+        ),
+        (
+            "--style=ratliff",
+            "void f() {\n    if (x) \\\n        { g(); }\n    }\nint v[] = \\\n    { 1, 2 };\n",
+        ),
+        ("--style=kr", input),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn pico_keeps_a_one_line_block_below_a_line_splice_as_written() {
+    let input = "void f()\n{   if (x) \\\n    { g(); }\n    y(); }\n";
+    check(input, &["--style=pico"], input);
+}
+
+#[test]
+fn a_line_splice_after_a_finished_statement_continues_no_statement() {
+    let input =
+        "int g() \\\n{ return 1; } \\\nint q;\nvoid f() {\n    a = b + \\\n        c;\n    }\n";
+    let expected =
+        "int g() \\\n    { return 1; } \\\nint q;\nvoid f() {\n    a = b + \\\n        c;\n    }\n";
+    check(input, &["--style=ratliff"], expected);
+    check(expected, &["--style=ratliff"], expected);
+}

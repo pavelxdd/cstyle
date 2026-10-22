@@ -1866,8 +1866,14 @@ impl FormatEngine<'_> {
             || token_begins_line(tokens, start)
                 && self.current_is_blank()
                 && self.macro_line_before_directives();
-        let backslash_continuation_block =
-            !token_begins_line(tokens, start) && self.current.trimmed_end().ends_with('\\');
+        // A type or namespace body below a line splice lays out as below any
+        // head; another block stays on its row.
+        let backslash_continuation_block = if token_begins_line(tokens, start) {
+            line_follows_splice(tokens, start)
+                && self.layout.command_state.pending_block_word.is_none()
+        } else {
+            self.current.trimmed_end().ends_with('\\')
+        };
         // A trailing return type split onto a line of its own goes on from
         // the lambda's header above it.
         let split_trailing_return = self.current.trimmed_start().starts_with("->");
@@ -1995,6 +2001,7 @@ impl FormatEngine<'_> {
             .is_some_and(|group| self.tree.blocks.kind(group) == Some(BlockKind::Block));
         let opening_body_gap = (self.options.brace_style == BraceStyle::Pico
             && self.current_is_blank()
+            && !backslash_continuation_block
             && (self.layout.command_state.current_header.is_some()
                 || statement_block
                 || self.current_ends_definition_header()
@@ -2142,6 +2149,8 @@ impl FormatEngine<'_> {
                 || !self.should_attach_closing_header(next))
             && !matches!(next, Some(Token::Symbol(';' | ',')))
             && !matches!(next, Some(Token::Comment(_, _)))
+            // A line splice stays at the end of the line it continues.
+            && !matches!(next, Some(Token::Symbol('\\')))
         {
             self.finish_line();
             if brace_type == BraceType::Command {
@@ -3957,6 +3966,19 @@ pub(crate) fn token_begins_line(tokens: &[Token], index: usize) -> bool {
         .rev()
         .take_while(|token| !matches!(token, Token::Newline))
         .all(|token| matches!(token, Token::Whitespace(_)))
+}
+
+/// Whether the line `index` begins follows a line a `\` splice ends.
+fn line_follows_splice(tokens: &[Token], index: usize) -> bool {
+    let mut previous = tokens[..index]
+        .iter()
+        .rev()
+        .skip_while(|token| matches!(token, Token::Whitespace(_)));
+    matches!(previous.next(), Some(Token::Newline))
+        && matches!(
+            previous.find(|token| !matches!(token, Token::Whitespace(_))),
+            Some(Token::Symbol('\\'))
+        )
 }
 
 fn is_empty_one_line_block_tokens(tokens: &[Token]) -> bool {

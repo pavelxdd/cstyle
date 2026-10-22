@@ -2212,6 +2212,11 @@ impl<'a> FormatEngine<'a> {
             self.previous_was_newline = true;
         } else if self.current.trimmed_end().ends_with('\\')
             && self.layout.nesting.paren_depth == 0
+            // A finished statement leaves the splice nothing to continue.
+            && !matches!(
+                self.layout.command_state.previous_command_char,
+                Some(';' | '}')
+            )
             && self.current_line_indent_spaces()
                 > self.continuation_base_indent() * self.options.indent_width
         {

@@ -193,7 +193,10 @@ impl FormatEngine<'_> {
                     self.emit_source_space();
                 }
                 self.current.push('\\');
-                self.layout.command_state.observe_char('\\');
+                // A line splice joins its line to the next as a blank does.
+                if !matches!(next, Some(Token::Newline) | None) {
+                    self.layout.command_state.observe_char('\\');
+                }
                 self.layout.previous = PreviousToken::Other;
                 self.previous_was_newline = false;
             }

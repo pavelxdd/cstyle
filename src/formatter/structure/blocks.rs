@@ -137,12 +137,16 @@ impl Blocks {
     }
 }
 
-/// Whether a token carries code, as opposed to layout, comments, and
-/// directives.
+/// Whether a token carries code, as opposed to layout (blanks and line
+/// splices), comments, and directives.
 pub(crate) fn is_code_token(token: &Token) -> bool {
     !matches!(
         token,
-        Token::Whitespace(_) | Token::Newline | Token::Comment(_, _) | Token::Preprocessor(_)
+        Token::Whitespace(_)
+            | Token::Newline
+            | Token::Comment(_, _)
+            | Token::Preprocessor(_)
+            | Token::Symbol('\\')
     )
 }
 
