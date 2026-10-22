@@ -21280,3 +21280,15 @@ fn rows_of_a_list_in_a_continued_expression_stand_in_the_list_and_the_next_row_c
         check(input, &[style], input);
     }
 }
+
+#[test]
+fn an_assignment_row_opening_a_list_on_its_row_continues_the_declaration_first_in_a_block() {
+    // As it does after another statement, whatever the brace style.
+    let input = "void f()\n{\n    int values[]\n        = {1,\n           2\n          };\n}\n";
+    for style in ["--style=kr", "--style=allman", "--style=gnu", "--style=vtk"] {
+        check(input, &[style], input);
+    }
+    let whitesmith =
+        "void f()\n    {\n    int values[]\n        = {1,\n           2\n          };\n    }\n";
+    check(input, &["--style=whitesmith"], whitesmith);
+}

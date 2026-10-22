@@ -3930,9 +3930,16 @@ impl FormatEngine<'_> {
     fn leading_assignment_indent(&self, first: usize) -> Option<usize> {
         let groups = &self.tree.groups;
         let tokens = &self.tree.tokens;
+        // An initializer's `{` ending its line continues nothing.
         if !matches!(&tokens[first], Token::Operator(operator) if operator == "=")
-            || next_code_token(tokens, first + 1)
-                .is_some_and(|value| matches!(tokens[value], Token::Symbol('{')))
+            || next_code_token(tokens, first + 1).is_some_and(|value| {
+                matches!(tokens[value], Token::Symbol('{'))
+                    && next_code_token(tokens, value + 1).is_none_or(|next| {
+                        tokens[value + 1..next]
+                            .iter()
+                            .any(|token| matches!(token, Token::Newline))
+                    })
+            })
         {
             return None;
         }
