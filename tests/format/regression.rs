@@ -4251,6 +4251,23 @@ fn vtk_statement_after_nested_added_one_line_block() {
 }
 
 #[test]
+fn indent_after_parens_continues_a_header_condition_alike_with_a_maximum_length() {
+    let input = "void f()\n{\n    if (check(first,\n              field<Item>{\n                  value},\n              more)) {\n        go();\n    }\n}\n";
+    let expected = "void f()\n{\n    if (check(first,\n            field<Item>\n    {\n        value\n    },\n            more))\n        {\n            go();\n        }\n}\n";
+    for args in [
+        &["--style=gnu", "--indent-after-parens"][..],
+        &[
+            "--style=gnu",
+            "--indent-after-parens",
+            "--max-code-length=50",
+        ][..],
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
 fn break_one_line_headers_breaks_a_block_after_a_closer_ending_a_statement_row() {
     // The statements before a closer of a block opened on an earlier row
     // stand on a row of their own, so the header's block shares its row

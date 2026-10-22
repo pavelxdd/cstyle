@@ -1104,15 +1104,6 @@ impl FormatEngine<'_> {
         {
             return ContinuationIndent::Spaces(self.current_line_indent_spaces());
         }
-        if self.options.max_code_length.is_some()
-            && self.options.indent_after_parens
-            && self.current_is_conditional_header_continuation()
-        {
-            return ContinuationIndent::Spaces(
-                (self.continuation_base_indent() + self.options.continuation_indent)
-                    * self.options.indent_width,
-            );
-        }
         if self.layout.in_class_base_clause {
             return ContinuationIndent::Spaces(self.class_base_clause_indent_spaces());
         }
