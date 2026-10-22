@@ -21859,3 +21859,14 @@ fn a_lambda_head_its_brace_leaves_stands_with_the_arguments_past_the_maximum_con
     let whitesmith = "void f()\n    {\n    call(first, some_long_function_name_here_xxxxxxxxxxxxxxxxx(argument_one,\n            [=](int kv)\n        {\n        return kv;\n        }));\n    }\n";
     check(input, &["--style=whitesmith"], whitesmith);
 }
+
+#[test]
+fn rows_of_template_arguments_after_a_template_head_stand_at_the_assigned_value() {
+    let input = "class Arg {\n  template <typename T>\n  using CanParse = typename std::enable_if<\n      helper::Parse<T>::value,\n      int>::type;\n};\ntemplate <typename T>\nusing CanParse = typename std::enable_if<\n    helper::Parse<T>::value,\n    int>::type;\n";
+    let expected = "class Arg {\n    template <typename T>\n    using CanParse = typename std::enable_if<\n                     helper::Parse<T>::value,\n                     int>::type;\n};\ntemplate <typename T>\nusing CanParse = typename std::enable_if<\n                 helper::Parse<T>::value,\n                 int>::type;\n";
+    check(input, &["--style=google"], expected);
+    check(expected, &["--style=google"], expected);
+    let input = "template <typename T> using CanParse = typename std::enable_if<\n    helper::value,\n    int>::type;\n";
+    let expected = "template <typename T> using CanParse = typename std::enable_if<\n                                       helper::value,\n                                       int>::type;\n";
+    check(input, &["--style=google"], expected);
+}

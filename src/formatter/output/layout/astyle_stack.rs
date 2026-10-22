@@ -15,6 +15,7 @@ use crate::formatter::engine::{FormatEngine, ForwardFind};
 use crate::formatter::lexer::Token;
 use crate::formatter::structure::TokenSpan;
 use crate::formatter::structure::blocks::{BlockKind, is_code_token, next_code_token};
+use crate::formatter::structure::functions::template_arguments_start;
 use crate::formatter::structure::groups::{Delimiter, GroupId};
 use crate::formatter::syntax::language::is_header;
 use crate::formatter::text::line_scan::preprocessor_directive;
@@ -744,13 +745,17 @@ impl FormatEngine<'_> {
                         *top = 0;
                     }
                 }
+                // A template head's parameters register nothing for the
+                // declaration it introduces.
+                Token::Word(word) if word == "template" && template_keyword(tokens, index) => {
+                    index = template_parameters_end(tokens, index).filter(|&end| end < first)?;
+                }
                 Token::Word(word)
                     if is_header(word)
                         || matches!(
                             word.as_str(),
                             "operator" | "case" | "default" | "else" | "do"
-                        )
-                        || word == "template" && template_keyword(tokens, index) =>
+                        ) =>
                 {
                     return None;
                 }
@@ -1015,6 +1020,22 @@ impl FormatEngine<'_> {
         }
     }
 
+    /// Whether `close` is the `>` of a template head that ends its line.
+    fn ends_template_head_line(&self, close: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        matches!(&tokens[close], Token::Operator(operator) if operator == ">" || operator == ">>")
+            && template_arguments_start(tokens, close)
+                .and_then(|open| self.tree.previous_code_token(open))
+                .is_some_and(
+                    |keyword| matches!(&tokens[keyword], Token::Word(word) if word == "template"),
+                )
+            && self
+                .output
+                .line_with_token(close)
+                .and_then(|line| self.output.line_tokens(line))
+                .is_some_and(|span| span.last == close)
+    }
+
     /// The first token of the statement holding `index`, past parens,
     /// brackets, and initializer braces around it.
     fn stack_statement_start(&self, index: usize) -> Option<usize> {
@@ -1115,6 +1136,9 @@ impl FormatEngine<'_> {
                     && (self.ends_case_label(before)
                         || self.ends_user_label(before)
                         || self.ends_access_label(before))
+                // A template head ending its line leaves the declaration it
+                // introduces to start the statement.
+                || self.ends_template_head_line(before)
             {
                 break None;
             }
@@ -1266,6 +1290,25 @@ fn template_keyword(tokens: &[Token], index: usize) -> bool {
     next_code_token(tokens, index + 1).is_some_and(
         |next| matches!(&tokens[next], Token::Operator(operator) if operator.starts_with('<')),
     )
+}
+
+/// The `>` closing the parameter list of the `template` at `keyword`.
+fn template_parameters_end(tokens: &[Token], keyword: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    let mut index = next_code_token(tokens, keyword + 1)?;
+    loop {
+        match &tokens[index] {
+            Token::Operator(operator) if operator == "<" => depth += 1,
+            Token::Operator(operator) if operator == ">" => depth = depth.checked_sub(1)?,
+            Token::Operator(operator) if operator == ">>" => depth = depth.checked_sub(2)?,
+            Token::Symbol(';' | '{' | '}') => return None,
+            _ => {}
+        }
+        if depth == 0 {
+            return Some(index);
+        }
+        index = next_code_token(tokens, index + 1)?;
+    }
 }
 
 #[cfg(test)]
