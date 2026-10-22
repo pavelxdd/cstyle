@@ -2344,8 +2344,10 @@ impl FormatEngine<'_> {
                     && !trimmed.starts_with_any(b"{}#")
                     && !trimmed.ends_with_any(b";{}")
                     && !trimmed.contains('=')
-                    && !language::is_header(header))
-                .then(|| leading_visual_width(line, self.options.tab_width))
+                    && !language::is_header(header)
+                    // A returned value continues its statement.
+                    && header != "return")
+                    .then(|| leading_visual_width(line, self.options.tab_width))
             })
         })
         .flatten()
@@ -2613,6 +2615,34 @@ impl FormatEngine<'_> {
                                 && self.output.line_with_token(previous) == Some(index)
                         })
             })
+    }
+
+    /// A comment row continuing a returned value stands at the value, as
+    /// the value's code rows do.
+    fn returned_value_comment_indent_spaces(&self) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let comment = self.current.active_comment()?;
+        let previous = self.tree.previous_code_token(comment)?;
+        let group = groups.enclosing(previous);
+        let mut index = previous;
+        let keyword = loop {
+            match &tokens[index] {
+                Token::Word(word) if word == "return" && groups.enclosing(index) == group => {
+                    break index;
+                }
+                Token::Symbol(';' | '{' | '}') if groups.enclosing(index) == group => {
+                    return None;
+                }
+                _ => {}
+            }
+            index = self.tree.previous_code_token(index)?;
+        };
+        let value = next_code_token(tokens, keyword + 1).filter(|&value| value <= previous)?;
+        if self.output.line_with_token(value) != self.output.line_with_token(keyword) {
+            return None;
+        }
+        Some(self.token_column(value)? + self.case_unindent_spaces())
     }
 
     fn standalone_block_comment_indent_spaces(
@@ -2972,6 +3002,7 @@ impl FormatEngine<'_> {
             .or(previous_paren_indent)
             .or(previous_element_row_indent)
             .or(definition_header_comment_indent)
+            .or_else(|| self.returned_value_comment_indent_spaces())
             .or_else(|| self.layout.nesting.current_continuation_indent_spaces())
             // An enumerator no comma ends goes on past the comment.
             .or_else(|| {

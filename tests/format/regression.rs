@@ -7732,6 +7732,22 @@ fn declarators_after_an_initialized_one_on_a_continuation_row_stand_at_the_first
 }
 
 #[test]
+fn a_comment_row_continuing_a_returned_value_stands_at_the_value() {
+    // As a code row continuing the value does, and as a comment row does
+    // after an assignment.
+    let input = "int f(void)\n{\n    if (x) {\n        return ERROR\n        /* note that\n           more */;\n    }\n    if (y) {\n        return ERROR\n        + 1;\n    }\n    value = ERROR\n    /* note */;\n    return 0;\n}\n";
+    let expected = "int f(void)\n{\n    if (x) {\n        return ERROR\n               /* note that\n                  more */;\n    }\n    if (y) {\n        return ERROR\n               + 1;\n    }\n    value = ERROR\n            /* note */;\n    return 0;\n}\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+    // A call in the value makes the line no definition head.
+    let input =
+        "int f(void)\n{\n    return p ? call(p, -1) : 0\n    /* note that\n       more */;\n}\n";
+    let expected = "int f(void)\n{\n    return p ? call(p, -1) : 0\n           /* note that\n              more */;\n}\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+}
+
+#[test]
 fn pointer_declarators_after_a_struct_type_line_continue_it_as_named_ones_do() {
     // A star leading the declarator continues the declaration a `struct`
     // type line starts, as a plain name does.
