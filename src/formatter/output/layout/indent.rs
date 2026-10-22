@@ -1589,16 +1589,6 @@ impl FormatEngine<'_> {
             {
                 return Some(spaces);
             }
-            if current.starts_with("==")
-                && previous_trimmed.contains("ASSERT")
-                && let Some(open) = self.open_paren_column_of(previous.trimmed_end())
-            {
-                return Some(column_after(
-                    previous.trimmed_end(),
-                    open,
-                    self.options.tab_width,
-                ));
-            }
             if (current.starts_with_any(b"?:") || previous_comment_code.ends_with(':'))
                 && let Some(spaces) = self.contextual_ternary_arm_indent_spaces(line, previous)
             {
