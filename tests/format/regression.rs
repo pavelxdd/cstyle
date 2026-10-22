@@ -21579,3 +21579,17 @@ fn a_block_comment_set_against_code_before_more_code_stays_against_it_after_padd
     let expected = "void f() {\n    value = second/*note*/;\n    call(value == second/*note*/, x);\n    value = second; /*note*/\n}\n";
     check(input, &["--pad-oper"], expected);
 }
+
+#[test]
+fn a_paren_closer_row_after_an_operator_led_row_stands_at_its_paren_at_any_scope() {
+    let input = "int v = (\n            a + b\n            + c\n        );\nvoid f() {\n    value = (\n                a + b\n                + c\n            );\n}\n#define SWAP(x) ( \\\n    (x) + (x) \\\n    + (x) \\\n  )\n";
+    check(input, &[], input);
+    check(
+        input,
+        &["--indent-preproc-define"],
+        &input.replace(
+            "#define SWAP(x) ( \\\n    (x) + (x) \\\n    + (x) \\\n  )\n",
+            "#define SWAP(x) ( \\\n                  (x) + (x) \\\n                  + (x) \\\n                )\n",
+        ),
+    );
+}
