@@ -20982,6 +20982,26 @@ fn a_statement_unbraced_from_a_one_line_block_keeps_its_template_arguments() {
 }
 
 #[test]
+fn indented_brace_styles_open_a_block_after_a_closer_row_at_the_statement_on_it() {
+    let input = "void f()\n{\n    TRY {\n        call();\n    } HANDLE(int) {\n        handle();\n    }\n    next();\n}\n";
+    check(
+        input,
+        &["--style=whitesmith"],
+        "void f()\n    {\n    TRY\n        {\n        call();\n        } HANDLE(int)\n        {\n        handle();\n        }\n    next();\n    }\n",
+    );
+    check(
+        input,
+        &["--style=vtk"],
+        "void f()\n{\n    TRY\n        {\n        call();\n        } HANDLE(int)\n        {\n        handle();\n        }\n    next();\n}\n",
+    );
+    check(
+        input,
+        &["--style=ratliff"],
+        "void f() {\n    TRY {\n        call();\n        } HANDLE(int) {\n        handle();\n        }\n    next();\n    }\n",
+    );
+}
+
+#[test]
 fn a_macro_after_a_block_keeps_its_place_by_the_closing_brace() {
     // Brace styles move the keywords that close a block; a macro after one
     // stays where the source set it.

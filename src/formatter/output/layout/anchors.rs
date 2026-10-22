@@ -7847,7 +7847,24 @@ impl FormatEngine<'_> {
                     Some(self.output.lead_width(line, self.options.tab_width) + levels * width)
                 } else {
                     header
-                        .and_then(|header| self.line_led_by(header))
+                        .and_then(|header| {
+                            let header_line = self.line_led_by(header)?;
+                            // A closer leading the header's line stands where
+                            // its style sets closers; the header stands at
+                            // the statement the closer ends.
+                            let line = self
+                                .output
+                                .line_tokens(header_line)
+                                .map(|span| span.first)
+                                .filter(|&first| {
+                                    first != header && matches!(tokens[first], Token::Symbol('}'))
+                                })
+                                .and_then(|closer| self.tree.groups.closed_at(closer))
+                                .and_then(|closed| self.tree.blocks.owner(closed))
+                                .and_then(|owner| self.line_led_by(owner))
+                                .unwrap_or(header_line);
+                            Some(line)
+                        })
                         .map(|header_line| {
                             self.output.lead_width(header_line, self.options.tab_width) + width
                         })

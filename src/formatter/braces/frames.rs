@@ -178,6 +178,17 @@ impl FormatEngine<'_> {
             .current
             .find("*/")
             .is_some_and(|close| self.current[..close].rfind("/*").is_none());
+        let header_candidate = self
+            .current
+            .trimmed_start()
+            .strip_prefix('}')
+            .map_or(self.current.trimmed_start(), after_leading_comments);
+        // A statement on a closer's row stands where its block's statements
+        // do, whatever column a style sets the closer at.
+        let follows_closer = !header_candidate.is_empty()
+            && self.current.trimmed_start().starts_with('}')
+            && brace_type == BraceType::Command
+            && lambda_header_indent.is_none();
         let line_indent = if closes_interrupted_comment {
             brace_header
                 .and_then(|header| {
@@ -202,14 +213,16 @@ impl FormatEngine<'_> {
                 .line_indent(LineKind::Normal, self.options)
                 + self.case_body_indent_extra(LineKind::Normal))
                 * self.options.indent_width
+        } else if follows_closer {
+            (self
+                .layout
+                .indentation
+                .line_indent(LineKind::Normal, self.options)
+                + self.case_body_indent_extra(LineKind::Normal))
+                * self.options.indent_width
         } else {
             current_line_indent
         };
-        let header_candidate = self
-            .current
-            .trimmed_start()
-            .strip_prefix('}')
-            .map_or(self.current.trimmed_start(), after_leading_comments);
         let split_header = !header_candidate.is_empty()
             && brace_header.is_some_and(|header| {
                 leading_identifier(header_candidate) != header
