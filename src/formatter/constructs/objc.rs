@@ -1,5 +1,6 @@
 use crate::config::{BraceStyle, FormatOptions, Mode, ObjCColonPad};
 use crate::formatter::continuation::ContinuationIndent;
+use crate::formatter::continuation::max_length::ObjCMessageRows;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, next_non_whitespace, token_text, tokenize};
 use crate::formatter::state::frame::{BracketFrame, BracketRole};
@@ -40,11 +41,14 @@ fn line_is_label_style_dictionary_key(line: &str) -> bool {
             .all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
 }
 
-fn objc_message_selector_indent_spaces(
+/// The span of the message `frame` opens on `line`: the byte offsets of its
+/// bracket and of the closer the line holds, and the column and offset of
+/// its first selector.
+fn objc_message_rows(
     line: &str,
     frame: &BracketFrame,
     tab_width: usize,
-) -> Option<usize> {
+) -> Option<ObjCMessageRows> {
     let opener_column = frame
         .opener_output_column
         .saturating_sub(frame.line_indent_spaces);
@@ -52,17 +56,30 @@ fn objc_message_selector_indent_spaces(
     // The width of `line[..offset]`, kept as the tokens go by.
     let mut width = 0usize;
     let mut depth = 0usize;
-    let mut in_message = false;
+    let mut rows: Option<ObjCMessageRows> = None;
     for token in tokenize(line) {
         let text = token_text(&token);
-        match token {
-            Token::Symbol('[') if !in_message && width == opener_column => {
-                in_message = true;
+        match (&mut rows, &token) {
+            (None, Token::Symbol('[')) if width == opener_column => {
                 depth = 1;
+                rows = Some(ObjCMessageRows {
+                    open_offset: offset,
+                    close_offset: None,
+                    selector: None,
+                    selector_read: false,
+                    bracket_spaces: frame.opener_output_column + 1,
+                });
             }
-            Token::Symbol('[') if in_message => depth += 1,
-            Token::Symbol(']') if in_message => depth = depth.saturating_sub(1),
-            Token::Symbol(':') if in_message && depth == 1 => {
+            (Some(_), Token::Symbol('[')) => depth += 1,
+            (Some(rows), Token::Symbol(']')) => {
+                depth -= 1;
+                if depth == 0 {
+                    rows.close_offset = Some(offset);
+                    break;
+                }
+            }
+            (Some(rows), Token::Symbol(':')) if depth == 1 && !rows.selector_read => {
+                rows.selector_read = true;
                 let before = line[..offset].trimmed_end();
                 let selector_len = before
                     .chars()
@@ -70,25 +87,25 @@ fn objc_message_selector_indent_spaces(
                     .take_while(|ch| is_identifier_continue(*ch))
                     .map(char::len_utf8)
                     .sum::<usize>();
-                if selector_len == 0 {
-                    return None;
+                if selector_len > 0 {
+                    let selector_start = before.len() - selector_len;
+                    rows.selector = Some((
+                        frame.line_indent_spaces
+                            + visual_width_from(
+                                &line[..selector_start],
+                                frame.line_indent_spaces,
+                                tab_width,
+                            ),
+                        selector_start,
+                    ));
                 }
-                let selector_start = before.len() - selector_len;
-                return Some(
-                    frame.line_indent_spaces
-                        + visual_width_from(
-                            &line[..selector_start],
-                            frame.line_indent_spaces,
-                            tab_width,
-                        ),
-                );
             }
             _ => {}
         }
         width += visual_width_from(&text, width, tab_width);
         offset += text.len();
     }
-    None
+    rows
 }
 
 fn objc_method_colon_position(line: &str) -> Option<usize> {
@@ -333,17 +350,22 @@ impl FormatEngine<'_> {
         line: &LineView<'_>,
         closed_brackets: &[BracketFrame],
     ) {
-        let indent_spaces = closed_brackets
+        // The messages the line closes, and the one it leaves open.
+        let line_index = self.output.len();
+        let open = self
+            .layout
+            .frame_stack
+            .active_bracket()
+            .filter(|frame| frame.opener_output_line == line_index);
+        let messages = closed_brackets
             .iter()
-            .rev()
-            .find(|frame| {
+            .chain(open)
+            .filter(|frame| {
                 frame.role == BracketRole::ObjCMessage && frame.parent_objc_message_align.is_none()
             })
-            .and_then(|frame| {
-                objc_message_selector_indent_spaces(line, frame, self.options.tab_width)
-            });
-        self.max_length_line
-            .set_objc_message_indent_spaces(indent_spaces);
+            .filter_map(|frame| objc_message_rows(line, frame, self.options.tab_width))
+            .collect();
+        self.max_length_line.set_objc_messages(messages);
     }
 
     pub(crate) fn apply_objc_message_alignment(

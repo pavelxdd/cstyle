@@ -34,12 +34,24 @@ use crate::formatter::tokens::operators::{
 use crate::formatter::tokens::pointers::is_pointer_declaration_segment;
 use crate::source::lex::{is_identifier_continue, is_identifier_start, trailing_word};
 
+/// A message on the line being split: the byte offsets of its bracket and of
+/// its closer on the line, its first selector's column and offset, and the
+/// column one past its bracket.
+#[derive(Clone, Copy)]
+pub(crate) struct ObjCMessageRows {
+    pub(crate) open_offset: usize,
+    pub(crate) close_offset: Option<usize>,
+    pub(crate) selector: Option<(usize, usize)>,
+    pub(crate) selector_read: bool,
+    pub(crate) bracket_spaces: usize,
+}
+
 #[derive(Default)]
 pub(crate) struct MaxLengthLineState {
     suffix_width: usize,
     /// The braces and `while` attached after the statement on its line.
     while_suffix: Option<String>,
-    objc_message_indent_spaces: Option<usize>,
+    objc_messages: Vec<ObjCMessageRows>,
     /// The part of a split line being published stands where astyle's
     /// stack or the syntax tree put it.
     anchored_part: bool,
@@ -62,12 +74,30 @@ impl MaxLengthLineState {
         self.while_suffix = suffix;
     }
 
-    fn objc_message_indent_spaces(&self) -> Option<usize> {
-        self.objc_message_indent_spaces
+    /// The column of the rows a split makes in the innermost message it
+    /// splits: its first selector's, or one past its bracket when the split
+    /// comes before that selector; and whether the split moves the first
+    /// selector of a message the line leaves open.
+    fn objc_message_indent_spaces(&self, split_at: usize) -> Option<(usize, bool)> {
+        let rows = self
+            .objc_messages
+            .iter()
+            .filter(|rows| {
+                rows.open_offset < split_at
+                    && rows.close_offset.is_none_or(|close| split_at <= close)
+            })
+            .max_by_key(|rows| rows.open_offset)?;
+        Some(match rows.selector {
+            Some((spaces, offset)) if split_at > offset => (spaces, false),
+            selector => (
+                rows.bracket_spaces,
+                selector.is_some() && rows.close_offset.is_none(),
+            ),
+        })
     }
 
-    pub(crate) fn set_objc_message_indent_spaces(&mut self, spaces: Option<usize>) {
-        self.objc_message_indent_spaces = spaces;
+    pub(crate) fn set_objc_messages(&mut self, messages: Vec<ObjCMessageRows>) {
+        self.objc_messages = messages;
     }
 
     pub(crate) fn take_anchored_part(&mut self) -> bool {
@@ -253,7 +283,18 @@ impl FormatEngine<'_> {
         }
         let conditional_floor =
             self.maximum_length_conditional_continuation_floor(line, base_indent_width);
-        if let Some(spaces) = self.max_length_line.objc_message_indent_spaces() {
+        let objc_message_rows = self
+            .max_length_line
+            .objc_message_indent_spaces(split.split_at)
+            .map(|(spaces, moves_selector)| {
+                // The message's rows after the line align with the selector
+                // the split moved.
+                if moves_selector && self.layout.objc.message_align.is_some() {
+                    self.layout.objc.message_align = Some(spaces);
+                }
+                spaces
+            });
+        if let Some(spaces) = objc_message_rows {
             next_indent = ContinuationIndent::Spaces(spaces);
         }
         if let Some(floor) = conditional_floor
@@ -349,7 +390,7 @@ impl FormatEngine<'_> {
                         .unwrap_or(base_indent_width),
                 );
             }
-            if let Some(spaces) = self.max_length_line.objc_message_indent_spaces() {
+            if let Some(spaces) = objc_message_rows {
                 following_indent = ContinuationIndent::Spaces(spaces);
             }
             if let Some(floor) = conditional_floor

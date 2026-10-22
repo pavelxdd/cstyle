@@ -1640,6 +1640,44 @@ fn max_code_length_constructor_lambda_tail_keeps_call_owner() {
     );
 }
 
+// A selector broken off the receiver of a nested message stands where a
+// selector row of that message stands: one column past its bracket.
+#[test]
+fn max_code_length_sets_selector_rows_split_off_a_receiver_past_its_bracket() {
+    let source = fixture!(
+        "@implementation Item",
+        "- (int)total {",
+        "    return [[self items] count] + [self.other countWith:1",
+        "                                                   and:2];",
+        "}",
+        "@end",
+    );
+    for (style, head, tail) in [
+        ("kr", "- (int)total\n{", "}"),
+        ("java", "- (int)total {", "}"),
+        ("lisp", "- (int)total {", " }"),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(
+            &mut options,
+            &[
+                format!("--style={style}"),
+                "--max-code-length=50".to_owned(),
+            ],
+        )
+        .expect("valid options");
+        let close = if tail == " }" { "and:2]; }" } else { "and:2];" };
+        let mut expected = format!(
+            "@implementation Item\n{head}\n    return [[self items] count] + [self.other\n                                   countWith:1\n                                   {close}\n"
+        );
+        if tail == "}" {
+            expected.push_str("}\n");
+        }
+        expected.push_str("@end\n");
+        assert_stable_max_length_format(source, &options, &expected);
+    }
+}
+
 #[test]
 fn max_code_length_horstmann_objc_message_does_not_split_at_bracket() {
     let mut options = FormatOptions::default();
