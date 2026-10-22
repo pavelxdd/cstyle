@@ -21638,3 +21638,17 @@ fn a_statement_after_a_conditional_whose_first_branch_ended_a_braceless_body_sta
     let output = String::from_utf8(output).expect("utf8");
     assert!(output.contains("\n    item->state = next;\n"), "{output}");
 }
+
+#[test]
+fn a_header_ending_a_later_branch_of_a_conditional_takes_no_body_past_its_endif() {
+    let input = "void f() {\n#ifdef A\n    first();\n#else\n    if (ready)\n#endif\n    second();\n    third();\n}\n";
+    check(input, &[], input);
+}
+
+#[test]
+fn an_else_ending_a_later_branch_of_a_conditional_takes_no_body_past_its_endif() {
+    let input = "void f() {\n#ifdef A\n    if (a) {\n        x();\n    }\n#else\n    if (b) {\n        x();\n    } else\n#endif\n    y();\n    z();\n}\n";
+    check(input, &[], input);
+    let nested = "void f() {\n#ifdef A\n    if (a) {\n        x();\n    }\n#else\n#ifdef B\n    if (b) {\n        x();\n    } else\n#endif\n#endif\n    y();\n    z();\n}\n";
+    check(nested, &[], nested);
+}

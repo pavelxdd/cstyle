@@ -211,6 +211,37 @@ impl SourceTree {
         None
     }
 
+    /// Whether `token` stands in a branch after the first of a conditional
+    /// that closes before `later`: a compiler taking first branches reads
+    /// nothing of it before `later`.
+    pub(crate) fn in_later_branch_closing_before(&self, token: usize, later: usize) -> bool {
+        let start = self
+            .directives
+            .partition_point(|&directive| directive < token);
+        let end = self
+            .directives
+            .partition_point(|&directive| directive < later);
+        let mut depth = 0usize;
+        for &directive in &self.directives[start..end] {
+            let Token::Preprocessor(text) = &self.tokens[directive] else {
+                continue;
+            };
+            match preprocessor_directive(&text.text) {
+                Some("if" | "ifdef" | "ifndef") => depth += 1,
+                Some("endif") if depth > 0 => depth -= 1,
+                Some("endif")
+                    if self
+                        .first_branch_end_of(directive)
+                        .is_some_and(|first_end| first_end < token) =>
+                {
+                    return true;
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
     /// Whether a directive token lies in `range`.
     pub(crate) fn has_directive_in(&self, range: std::ops::Range<usize>) -> bool {
         let at = self

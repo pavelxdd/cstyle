@@ -1520,7 +1520,11 @@ impl FormatEngine<'_> {
                     .pop()
                     .and_then(|branch| branch.first_branch_end)
                 {
+                    // Nor does an `else` a later branch split off its body
+                    // reach past `#endif`.
+                    let split_else = end.preprocessor_split_else;
                     self.restore_branch_snapshot(*end);
+                    self.preprocessor.split_else = split_else;
                 }
                 self.layout.indentation.pop_preprocessor_indent();
                 let suspended = self.preprocessor.suspended_continuations.pop().flatten();

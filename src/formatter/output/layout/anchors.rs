@@ -6457,7 +6457,10 @@ impl FormatEngine<'_> {
     fn braceless_body_indent(&self, first: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
         let header = self.tree.statements.braceless_header(first)?;
-        if self.alternative_branch_body_header(first).is_some() {
+        if self.alternative_branch_body_header(first).is_some()
+            // A header a later branch ends leaves no body past `#endif`.
+            || self.tree.in_later_branch_closing_before(header, first)
+        {
             return None;
         }
         // Added braces make the body a block; an empty statement, a
