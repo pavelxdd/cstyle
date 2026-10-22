@@ -183,8 +183,6 @@ impl FormatEngine<'_> {
             .trimmed_start()
             .strip_prefix('}')
             .map_or(self.current.trimmed_start(), after_leading_comments);
-        // A statement on a closer's row stands where its block's statements
-        // do, whatever column a style sets the closer at.
         let follows_closer = !header_candidate.is_empty()
             && self.current.trimmed_start().starts_with('}')
             && brace_type == BraceType::Command
@@ -204,16 +202,11 @@ impl FormatEngine<'_> {
             self.output_objc_method_header_indent_spaces()
                 .or_else(|| self.split_definition_header_indent_spaces())
                 .unwrap_or(current_line_indent)
-        } else if class_base && !self.current_is_blank() {
+        } else if class_base && !self.current_is_blank() || follows_closer {
             // A class's body opens a level past its head, whatever row of
-            // its bases the brace ends.
-            (self
-                .layout
-                .indentation
-                .line_indent(LineKind::Normal, self.options)
-                + self.case_body_indent_extra(LineKind::Normal))
-                * self.options.indent_width
-        } else if follows_closer {
+            // its bases the brace ends; a statement on a closer's row stands
+            // where its block's statements do, whatever column a style sets
+            // the closer at.
             (self
                 .layout
                 .indentation
