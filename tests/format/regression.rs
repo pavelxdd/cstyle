@@ -21723,3 +21723,13 @@ fn code_after_a_multi_row_define_ending_at_a_comma_starts_afresh() {
     check(input, &[], input);
     check(input, &["--indent-col1-comments"], input);
 }
+
+#[test]
+fn rows_of_a_block_comment_in_a_define_body_keep_their_offset_from_its_opener_past_tabs() {
+    // Each row keeps its distance from the opener as the tabs before both
+    // measure it, at any count of tabs.
+    let input = "#define VALUE(x) do {\\\n\t\t/*\\\n\t\t * note\\\n\t\t */\\\n\t\tcall(x);\\\n} while (0)\n";
+    let expected = "#define VALUE(x) do {\\\n        /*\\\n         * note\\\n         */\\\n        call(x);\\\n    } while (0)\n";
+    check(input, &["--indent-preproc-define", "--convert-tabs"], expected);
+    check(expected, &["--indent-preproc-define", "--convert-tabs"], expected);
+}
