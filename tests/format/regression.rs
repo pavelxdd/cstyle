@@ -5882,6 +5882,20 @@ fn a_statement_after_a_case_block_stands_at_the_indented_case_body() {
 }
 
 #[test]
+fn a_statement_after_a_case_block_keeps_its_column_whatever_comment_trails_it() {
+    // A comment after the statement takes no part in its indent.
+    for comment in ["", " /* note */", " // note"] {
+        let input = format!(
+            "void f()\n{{\n    switch (state) {{\n    case 2:\n    {{\n        push(state);\n    }}\n    break;{comment}\n    }}\n}}\n"
+        );
+        let expected = format!(
+            "void f()\n{{\n    switch (state) {{\n    case 2: {{\n        push(state);\n    }}\n    break;{comment}\n    }}\n}}\n"
+        );
+        check(&input, &["--style=kr"], &expected);
+    }
+}
+
+#[test]
 fn a_case_block_after_an_empty_else_block_keeps_its_indented_body() {
     let input = "void f()\n{\n    switch (w) {\n    case 1: {\n        if (a) {\n        }\n        else {\n        }\n    }\n    case 2: {\n        if (c) {\n            d();\n        }\n    }\n    }\n}\n";
     check(
@@ -16825,6 +16839,64 @@ fn breaking_return_types_breaks_a_declaration_a_comment_leads() {
         "/* note */ int helper(int value);\n",
         &["--style=kr", "--break-return-type-decl"],
         "/* note */ int\nhelper(int value);\n",
+    );
+}
+
+#[test]
+fn lisp_parts_a_closer_from_a_comment_before_it_whatever_attribute_leads_the_block() {
+    for attribute in ["", " [[likely]]"] {
+        let input = format!(
+            "void f()\n{{\n    if (ready){attribute} {{\n        value = 1;\n    /* note */ }}\n    other();\n}}\n"
+        );
+        let expected = format!(
+            "void f() {{\n    if (ready){attribute} {{\n        value = 1;\n        /* note */\n    }}\n    other(); }}\n"
+        );
+        check(&input, &["--style=lisp"], &expected);
+    }
+}
+
+#[test]
+fn indent_preproc_block_indents_a_block_whatever_blank_or_comment_lines_open_it() {
+    // A blank or comment line after the directive leaves the code its
+    // level.
+    for opening in ["", "\n", "// note\n"] {
+        let input = format!("#ifdef FEATURE\n{opening}int value;\n#endif\n");
+        let indented_opening = opening.replace("// note", "    // note");
+        let expected = format!("#ifdef FEATURE\n{indented_opening}    int value;\n#endif\n");
+        check(&input, &["--style=kr", "--indent-preproc-block"], &expected);
+    }
+}
+
+#[test]
+fn run_in_styles_lay_out_a_block_alike_whatever_directive_wraps_the_function_brace() {
+    for (style, block) in [
+        ("--style=pico", "    {   value=0; } }\n"),
+        ("--style=horstmann", "    {   value=0;\n    }\n}\n"),
+    ] {
+        let plain = format!("void f()\n{{\n{block}");
+        check("void f()\n{\n    { value=0; }\n}\n", &[style], &plain);
+        let wrapped = format!("void f()\n#ifdef FEATURE\n{{\n#endif\n{block}");
+        check(
+            "void f()\n#ifdef FEATURE\n{\n#endif\n    { value=0; }\n}\n",
+            &[style],
+            &wrapped,
+        );
+    }
+}
+
+#[test]
+fn pico_keeps_the_brace_of_a_do_body_where_it_stands_when_max_code_length_splits_its_while() {
+    let input =
+        "void f()\n{\n    do {\n        value++;\n    } /* again */ while (value < count);\n}\n";
+    check(
+        input,
+        &["--style=pico"],
+        "void f()\n{   do\n    {   value++; } /* again */ while (value < count); }\n",
+    );
+    check(
+        input,
+        &["--style=pico", "--max-code-length=50"],
+        "void f()\n{   do\n    {   value++; } /* again */ while (value <\n                                      count); }\n",
     );
 }
 
