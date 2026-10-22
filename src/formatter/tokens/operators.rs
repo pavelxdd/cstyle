@@ -398,6 +398,8 @@ impl FormatEngine<'_> {
             token_index,
             ..
         } = context;
+        // An alias's own type keeps its stars as written; those of its
+        // parameters and before a declarator group are declarators.
         if matches!(operator, "*" | "&" | "&&" | "^")
             && self
                 .current
@@ -406,6 +408,8 @@ impl FormatEngine<'_> {
                 .strip_prefix("using ")
                 .is_some_and(|alias| alias.contains('='))
             && self.layout.line_state.template_angle_depth == 0
+            && self.layout.nesting.paren_depth == 0
+            && !self.pointer_run.group_follows_run
         {
             if self.layout.previous == PreviousToken::OpenParen && self.options.pad_parens_inside {
                 self.pad_inside_paren_space();

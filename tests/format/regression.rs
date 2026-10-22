@@ -20659,3 +20659,49 @@ fn a_star_before_an_array_bound_in_template_arguments_declares_a_pointer() {
         check(expected, args, expected);
     }
 }
+
+#[test]
+fn an_alias_aligns_the_stars_of_its_parameters_and_array_bound() {
+    // The alias's own type-id keeps its star as written.
+    let input = "using Handler = void (*)(void *data);\nusing Callback = int(*)(Item* item, int count);\nusing Table = char*[4];\nusing Pointer = Item*;\n";
+    for (align, expected) in [
+        (
+            "--align-pointer=type",
+            "using Handler = void (*)(void* data);\nusing Callback = int(*)(Item* item, int count);\nusing Table = char* [4];\nusing Pointer = Item*;\n",
+        ),
+        (
+            "--align-pointer=middle",
+            "using Handler = void (*)(void * data);\nusing Callback = int(*)(Item * item, int count);\nusing Table = char * [4];\nusing Pointer = Item*;\n",
+        ),
+        (
+            "--align-pointer=name",
+            "using Handler = void (*)(void *data);\nusing Callback = int(*)(Item *item, int count);\nusing Table = char *[4];\nusing Pointer = Item*;\n",
+        ),
+    ] {
+        check(input, &[align], expected);
+        check(expected, &[align], expected);
+    }
+}
+
+#[test]
+fn an_alias_of_a_named_type_treats_its_declarator_star_as_a_keyword_type_does() {
+    let input = "using Maker = Item*(*)(int);\nusing Names = std::string*[4];\n";
+    for (args, expected) in [
+        (&["-p"][..], input),
+        (
+            &["--align-pointer=type"][..],
+            "using Maker = Item* (*)(int);\nusing Names = std::string* [4];\n",
+        ),
+        (
+            &["--align-pointer=middle"][..],
+            "using Maker = Item * (*)(int);\nusing Names = std::string * [4];\n",
+        ),
+        (
+            &["--align-pointer=name"][..],
+            "using Maker = Item *(*)(int);\nusing Names = std::string *[4];\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}

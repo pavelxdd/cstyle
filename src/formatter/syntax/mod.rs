@@ -564,7 +564,7 @@ pub(crate) fn classify_syntax(tokens: &[Token], tree: &SourceTree) -> SyntaxRole
     let mut roles = SyntaxRoles::new(tokens.len());
     classify_paren_ranges(tokens, &mut roles);
     classify_word_roles(tokens, &mut roles);
-    let allocated_type_stars = allocated_type_stars(tokens);
+    let abstract_type_stars = abstract_type_stars(tokens);
     // Every `*` of a run is declared or not as the run is.
     let mut star_run = None;
     for (index, token) in tokens.iter().enumerate() {
@@ -576,7 +576,7 @@ pub(crate) fn classify_syntax(tokens: &[Token], tree: &SourceTree) -> SyntaxRole
                 OperatorRole::PointerDeclarator
             }
             Token::Operator(operator)
-                if operator == "*" && allocated_type_stars.binary_search(&index).is_ok() =>
+                if operator == "*" && abstract_type_stars.binary_search(&index).is_ok() =>
             {
                 OperatorRole::PointerDeclarator
             }
@@ -611,17 +611,23 @@ pub(crate) fn classify_syntax(tokens: &[Token], tree: &SourceTree) -> SyntaxRole
     roles
 }
 
-/// The `*`s declaring pointers in the types `new` allocates, as in
-/// `new Item*[count]`, in order. A name or value after the stars makes them
-/// products instead.
-fn allocated_type_stars(tokens: &[Token]) -> Vec<usize> {
+/// The `*`s declaring pointers in a type named without a name declared: the
+/// type `new` allocates, as in `new Item*[count]`, and an alias's type before
+/// a declarator group, as in `using Row = Item*[4]`. In order. A name or
+/// value after the stars of an allocated type makes them products instead.
+fn abstract_type_stars(tokens: &[Token]) -> Vec<usize> {
     let mut stars = Vec::new();
     let mut closes = None;
     for (index, token) in tokens.iter().enumerate() {
-        if !matches!(token, Token::Word(word) if word == language::NEW) {
+        let Token::Word(word) = token else {
             continue;
-        }
-        let Some(mut cursor) = allocated_type_end(tokens, index, &mut closes) else {
+        };
+        let (start, alias) = match word.as_str() {
+            language::NEW => (allocated_type_start(tokens, index, &mut closes), false),
+            "using" => (alias_type_start(tokens, index), true),
+            _ => continue,
+        };
+        let Some(mut cursor) = start.and_then(|start| type_name_end(tokens, start)) else {
             continue;
         };
         let first = stars.len();
@@ -632,38 +638,61 @@ fn allocated_type_stars(tokens: &[Token]) -> Vec<usize> {
             };
             cursor = next;
         }
-        if matches!(
-            tokens[cursor],
-            Token::Word(_) | Token::Number(_) | Token::CharLiteral(_) | Token::StringLiteral(_)
-        ) {
+        let declares = if alias {
+            matches!(tokens[cursor], Token::Symbol('(' | '['))
+        } else {
+            !matches!(
+                tokens[cursor],
+                Token::Word(_) | Token::Number(_) | Token::CharLiteral(_) | Token::StringLiteral(_)
+            )
+        };
+        if !declares {
             stars.truncate(first);
         }
     }
     stars
 }
 
-/// The first token after the type named by the `new` at `new`, past any
-/// placement arguments, when a type is named.
-fn allocated_type_end(
+/// The first token of the type the `new` at `new` allocates, past any
+/// placement arguments.
+fn allocated_type_start(
     tokens: &[Token],
     new: usize,
     closes: &mut Option<Vec<u32>>,
 ) -> Option<usize> {
-    let mut cursor = next_non_layout_token_index(tokens, new + 1)?;
-    if matches!(tokens[cursor], Token::Symbol('(')) {
-        let close = closes.get_or_insert_with(|| matching_close_parens(tokens))[cursor];
-        if close == u32::MAX {
-            return None;
-        }
-        cursor = next_non_layout_token_index(tokens, close as usize + 1)?;
+    let cursor = next_non_layout_token_index(tokens, new + 1)?;
+    if !matches!(tokens[cursor], Token::Symbol('(')) {
+        return Some(cursor);
     }
+    let close = closes.get_or_insert_with(|| matching_close_parens(tokens))[cursor];
+    if close == u32::MAX {
+        return None;
+    }
+    next_non_layout_token_index(tokens, close as usize + 1)
+}
+
+/// The first token of the type the alias declaration at `using` names.
+fn alias_type_start(tokens: &[Token], using: usize) -> Option<usize> {
+    let name = next_non_layout_token_index(tokens, using + 1)?;
+    let assign = next_non_layout_token_index(tokens, name + 1)?;
+    if !matches!(tokens[name], Token::Word(_))
+        || !matches!(&tokens[assign], Token::Operator(operator) if operator == "=")
+    {
+        return None;
+    }
+    next_non_layout_token_index(tokens, assign + 1)
+}
+
+/// The first token after the type name starting at `start`, when one does.
+fn type_name_end(tokens: &[Token], start: usize) -> Option<usize> {
+    let mut cursor = start;
     let mut type_words = 0;
     loop {
         match &tokens[cursor] {
-            Token::Word(word) if word != language::NEW => type_words += 1,
+            Token::Word(word) if !starts_type_id(word) => type_words += 1,
             Token::Operator(operator) if operator == "::" => {}
             Token::Operator(operator) if operator == "<" && type_words > 0 => {
-                cursor = allocated_template_arguments_close(tokens, cursor)?;
+                cursor = type_template_arguments_close(tokens, cursor)?;
             }
             _ => return (type_words > 0).then_some(cursor),
         }
@@ -671,9 +700,13 @@ fn allocated_type_end(
     }
 }
 
-/// The `>` closing the template arguments opened at `open`; another `new`
+fn starts_type_id(word: &str) -> bool {
+    matches!(word, language::NEW | "using")
+}
+
+/// The `>` closing the template arguments opened at `open`; another type
 /// or the statement's end leaves them unclosed.
-fn allocated_template_arguments_close(tokens: &[Token], open: usize) -> Option<usize> {
+fn type_template_arguments_close(tokens: &[Token], open: usize) -> Option<usize> {
     let mut depth = 0usize;
     for (index, token) in tokens.iter().enumerate().skip(open) {
         match token {
@@ -685,7 +718,7 @@ fn allocated_template_arguments_close(tokens: &[Token], open: usize) -> Option<u
                 }
             }
             Token::Symbol(';' | '{' | '}') => return None,
-            Token::Word(word) if word == language::NEW => return None,
+            Token::Word(word) if starts_type_id(word) => return None,
             _ => {}
         }
     }
