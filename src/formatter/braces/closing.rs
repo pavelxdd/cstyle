@@ -1360,12 +1360,11 @@ impl FormatEngine<'_> {
         // the header its first branch does.
         let tree_header_spaces = tree_group
             .and_then(|group| {
-                let owner = self
-                    .tree
-                    .blocks
-                    .owner(group)
-                    .filter(|&owner| !matches!(self.tree.tokens[owner], Token::Symbol('{')))
-                    .or_else(|| self.tree.blocks.owner(closed_group?))?;
+                let owner = [Some(group), closed_group]
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|group| self.tree.blocks.owner(group))
+                    .find(|&owner| !matches!(self.tree.tokens[owner], Token::Symbol('{')))?;
                 Some((group, owner))
             })
             .map(|(group, owner)| {

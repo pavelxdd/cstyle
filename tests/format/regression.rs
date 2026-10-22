@@ -21684,3 +21684,11 @@ fn a_list_brace_an_assignment_opens_in_a_define_body_aligns_its_rows_past_the_ma
     check(input, &["--indent-preproc-define"], expected);
     check(expected, &["--indent-preproc-define"], expected);
 }
+
+#[test]
+fn ratliff_closes_a_header_block_opened_after_a_conditional_at_its_body() {
+    let input = "void helper(void)\n{\n#ifdef FEATURE\n    if (ready)\n#else\n    check();\n#endif\n    {\n        first();\n        for (;;) {\n            second();\n        }\n        third();\n    }\n}\n";
+    let expected = "void helper(void) {\n#ifdef FEATURE\n    if (ready)\n#else\n    check();\n#endif\n        {\n        first();\n        for (;;) {\n            second();\n            }\n        third();\n        }\n    }\n";
+    check(input, &["--style=ratliff"], expected);
+    check(expected, &["--style=ratliff"], expected);
+}
