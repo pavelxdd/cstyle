@@ -416,8 +416,8 @@ impl FormatEngine<'_> {
                 .current
                 .active_token()
                 .is_some_and(|brace| self.closes_statement_expression(brace));
-        // An initializer row keeps the closer written after its block
-        // comment.
+        // A list's row, an enum's as an initializer's, keeps the closer
+        // written after its block comment.
         let attached_after_comment = matches!(
             self.options.brace_style,
             BraceStyle::Pico | BraceStyle::Lisp
@@ -425,7 +425,7 @@ impl FormatEngine<'_> {
             && self.current.trimmed_end().ends_with("*/")
             && matches!(
                 self.layout.nesting.brace_type_stack.last(),
-                Some(BraceType::Array | BraceType::Initializer)
+                Some(BraceType::Array | BraceType::Initializer | BraceType::Enum)
             );
         if attached_statement_expression {
             self.ensure_space();

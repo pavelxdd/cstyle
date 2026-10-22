@@ -12165,6 +12165,31 @@ fn a_comment_led_statement_after_one_a_comment_closer_leads_stands_with_the_stat
 }
 
 #[test]
+fn an_enum_closer_after_a_comment_leading_its_line_stays_after_it_as_a_list_closer() {
+    let input = "int x;\nenum Kind {\n    First = 1,\n    Third\n    /* note */ };\n%s";
+    for (rest, args, expected) in [
+        (
+            "",
+            &["--style=lisp"][..],
+            "int x;\nenum Kind {\n    First = 1,\n    Third\n    /* note */ };\n",
+        ),
+        (
+            "",
+            &["--style=pico"][..],
+            "int x;\nenum Kind\n{   First = 1,\n    Third\n    /* note */ };\n",
+        ),
+        (
+            "",
+            &["--style=kr"][..],
+            "int x;\nenum Kind {\n    First = 1,\n    Third\n    /* note */\n};\n",
+        ),
+    ] {
+        check(&input.replace("%s", rest), args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
 fn any_unconditional_directive_between_a_case_label_and_a_brace_makes_the_brace_a_plain_block() {
     let input = "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n    {\n        pop(state);\n    }\n    break;\n    case 2:\n#pragma once\n    {\n        push(state);\n    }\n    break;\n    }\n}\n";
     check(
@@ -16796,9 +16821,11 @@ fn a_label_in_a_bare_block_a_comment_leads_leaves_its_statements_at_the_block_bo
 }
 
 #[test]
-fn pico_parts_a_comment_leading_an_enum_closer_as_one_leading_a_block_closer() {
+fn pico_keeps_an_enum_closer_after_a_comment_leading_its_line_as_a_list_closer() {
+    // A block's closer parts from the comment; an enum's stays after it, as
+    // a list's does.
     let input = "void f()\n{\n    enum Kind {\n        First,\n        Third\n    /* note */ };\n    if (ready) {\n        value = 1;\n    /* note */ }\n    value = 1;\n}\n";
-    let expected = "void f()\n{   enum Kind\n    {   First,\n        Third\n        /* note */\n    };\n    if (ready)\n    {   value = 1;\n        /* note */\n    }\n    value = 1; }\n";
+    let expected = "void f()\n{   enum Kind\n    {   First,\n        Third\n        /* note */ };\n    if (ready)\n    {   value = 1;\n        /* note */\n    }\n    value = 1; }\n";
     check(input, &["--style=pico"], expected);
     check(expected, &["--style=pico"], expected);
 }

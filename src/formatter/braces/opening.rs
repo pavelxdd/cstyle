@@ -2674,7 +2674,7 @@ impl FormatEngine<'_> {
                     self.current_is_preindented = true;
                     lead
                 };
-                // The list stands as one attached in any style.
+                // The list's rows stand a level past the brace's line.
                 self.update_current_brace_indent_columns(lead + self.options.indent_width, lead);
             } else if !attached_block_comment_with_line_comment {
                 self.finish_line();
