@@ -522,6 +522,28 @@ fn runs_that_each_line_looked_across_stay_bounded() {
             ),
             capped.clone(),
         ),
+        (
+            "a long argument list a row each",
+            format!(
+                "void f() {{\n    call({});\n}}\n",
+                (0..n)
+                    .map(|i| format!("a{i}"))
+                    .collect::<Vec<_>>()
+                    .join(",\n         ")
+            ),
+            FormatOptions::default(),
+        ),
+        (
+            "a long parameter list a row each",
+            format!(
+                "void f({})\n{{\n}}\n",
+                (0..n)
+                    .map(|i| format!("int a{i}"))
+                    .collect::<Vec<_>>()
+                    .join(",\n       ")
+            ),
+            FormatOptions::default(),
+        ),
     ] {
         let start = Instant::now();
         let output = format_bytes(input.as_bytes(), &options).expect("format bytes");

@@ -282,6 +282,9 @@ pub(crate) struct FormatEngine<'a> {
     case_labels: std::cell::OnceCell<Vec<u32>>,
     /// Indices of the braces opening a lambda's body, in order.
     lambda_body_braces: std::cell::OnceCell<Vec<u32>>,
+    /// Indices of the closers of the groups other than a lambda's body that
+    /// hold a `;` at their own level, in order.
+    statement_group_closes: std::cell::OnceCell<Vec<u32>>,
     /// The source columns of the line being formatted, kept to reuse their
     /// buffers.
     line_columns: LineSourceColumns,
@@ -499,6 +502,7 @@ impl<'a> FormatEngine<'a> {
             designator_chain_cache: std::cell::RefCell::new(None),
             case_labels: std::cell::OnceCell::new(),
             lambda_body_braces: std::cell::OnceCell::new(),
+            statement_group_closes: std::cell::OnceCell::new(),
             constructor_colon_cache: std::cell::Cell::new(None),
             layout: LayoutState {
                 indentation: IndentationState::default(),
@@ -1057,6 +1061,45 @@ impl<'a> FormatEngine<'a> {
         braces[from..to.max(from)]
             .iter()
             .map(|&index| index as usize)
+    }
+
+    /// The closers of the groups holding statements after `start` and
+    /// before `end`, in order.
+    pub(crate) fn statement_group_closes_within(
+        &self,
+        start: usize,
+        end: usize,
+    ) -> impl Iterator<Item = usize> + '_ {
+        let closes = self.statement_group_closes();
+        let from = closes.partition_point(|&index| (index as usize) <= start);
+        let to = closes.partition_point(|&index| (index as usize) < end);
+        closes[from..to.max(from)]
+            .iter()
+            .map(|&index| index as usize)
+    }
+
+    pub(crate) fn statement_group_closes(&self) -> &[u32] {
+        self.statement_group_closes.get_or_init(|| {
+            let groups = &self.tree.groups;
+            let mut holds = vec![false; groups.len()];
+            for (index, token) in self.tree.tokens.iter().enumerate() {
+                if matches!(token, Token::Symbol(';'))
+                    && let Some(group) = groups.enclosing(index)
+                {
+                    holds[group.index()] = true;
+                }
+            }
+            let mut closes: Vec<u32> = groups
+                .ids()
+                .filter(|&group| {
+                    holds[group.index()] && self.tree.blocks.kind(group) != Some(BlockKind::Lambda)
+                })
+                .filter_map(|group| groups.get(group).close)
+                .map(|close| close as u32)
+                .collect();
+            closes.sort_unstable();
+            closes
+        })
     }
 
     /// Whether the `[` at `open` starts an initializer designator. Each `[`

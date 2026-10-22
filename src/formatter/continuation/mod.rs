@@ -17,7 +17,6 @@ use crate::formatter::output::buffer::OutputBuffer;
 use crate::formatter::state::frame::{BraceSemanticKind, ColonRole, LogicalOperator};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
-use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::structure::functions::FunctionHead;
 use crate::formatter::structure::groups::{Delimiter, GroupId};
 use crate::formatter::syntax::language::{is_leading_continuation_operator, is_macro_like_word};
@@ -958,15 +957,11 @@ impl FormatEngine<'_> {
     /// Whether the braces of `block` hold statements, which a `;` at their
     /// own level ends, other than a lambda's body.
     pub(crate) fn brace_holds_statements(&self, block: GroupId) -> bool {
-        let groups = &self.tree.groups;
-        let Some(close) = groups.get(block).close else {
-            return false;
-        };
-        self.tree.blocks.kind(block) != Some(BlockKind::Lambda)
-            && (groups.get(block).open + 1..close).any(|index| {
-                matches!(self.tree.tokens[index], Token::Symbol(';'))
-                    && groups.enclosing(index) == Some(block)
-            })
+        self.tree.groups.get(block).close.is_some_and(|close| {
+            self.statement_group_closes()
+                .binary_search(&(close as u32))
+                .is_ok()
+        })
     }
 
     /// Whether the line ends with a `,` among a call's arguments after a
@@ -1009,14 +1004,14 @@ impl FormatEngine<'_> {
                 .is_some_and(|span| span.first == open),
             None => current.is_some_and(|span| span.first == open),
         };
-        (groups.get(call).open + 1..comma).any(|index| {
-            matches!(tokens[index], Token::Symbol('}'))
-                && groups.closed_at(index).is_some_and(|block| {
-                    let open = groups.get(block).open;
-                    self.brace_holds_statements(block)
-                        && (line_of(open) != line_of(index) || leads_row(open))
-                })
-        })
+        self.statement_group_closes_within(groups.get(call).open, comma)
+            .any(|index| {
+                matches!(tokens[index], Token::Symbol('}'))
+                    && groups.closed_at(index).is_some_and(|block| {
+                        let open = groups.get(block).open;
+                        line_of(open) != line_of(index) || leads_row(open)
+                    })
+            })
     }
 
     pub(crate) fn next_continuation_indent(&self) -> ContinuationIndent {
