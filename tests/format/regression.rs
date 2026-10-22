@@ -21423,3 +21423,10 @@ fn break_blocks_parts_a_bare_block_after_an_added_block_whatever_comment_trails_
         );
     }
 }
+
+#[test]
+fn whitesmith_indents_a_label_in_a_switch_after_one_whose_case_block_closed_as_any() {
+    let input = "void f()\n{\n    switch (state) {\n    case 2:\n    {\n        push(state);\n    }\n    break;\n    }\n    switch (state) {\n    retry:\n    case 1:\n        value = 1;\n        break;\n    }\n}\n";
+    let expected = "void f()\n    {\n    switch (state)\n        {\n        case 2:\n            {\n            push(state);\n            }\n        break;\n        }\n    switch (state)\n        {\n        retry:\n        case 1:\n            value = 1;\n            break;\n        }\n    }\n";
+    check(input, &["--style=whitesmith", "--indent-labels"], expected);
+}

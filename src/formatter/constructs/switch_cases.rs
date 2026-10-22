@@ -2665,6 +2665,13 @@ impl FormatEngine<'_> {
             layout.unindent_brace_depths.pop();
             layout.case_block_closed_depth = Some(depth - 1);
         }
+        // A closed case block's mark ends with its switch.
+        if layout
+            .case_block_closed_depth
+            .is_some_and(|depth| current < depth)
+        {
+            layout.case_block_closed_depth = None;
+        }
 
         // A label kept after the closer of the case block before it opens
         // its own case as one on its own line does.
