@@ -21914,3 +21914,10 @@ fn a_list_running_in_with_a_designator_keeps_its_brace_line_and_levels_the_neste
     let whitesmith = "void f()\n    {\n    y = { .a = {\n            1\n            }\n        };\n    y = (U) { .a = (V){\n            1\n            }\n        };\n    }\nItem c = { .x = { 1, 2 },\n           .y = 3\n         };\n";
     check(input, &["--style=whitesmith"], whitesmith);
 }
+
+#[test]
+fn a_compound_literal_among_the_elements_of_a_split_list_keeps_its_brace_gap() {
+    let input = "void f()\n{\n    y = (U){ .a = (V){ 1, 2 },\n        .b = 3 };\n}\n";
+    let expected = "void f()\n{\n    y = (U) { .a = (V){ 1, 2 },\n        .b = 3\n    };\n}\n";
+    check(input, &["--style=kr"], expected);
+}

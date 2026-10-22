@@ -762,6 +762,16 @@ impl FormatEngine<'_> {
         )
     }
 
+    /// Whether a brace of `brace_type` opens a compound literal among the
+    /// elements of a list.
+    pub(crate) fn opens_compound_literal_in_list(&self, brace_type: BraceType) -> bool {
+        brace_type == BraceType::CompoundLiteral
+            && matches!(
+                self.layout.nesting.brace_type_stack.last(),
+                Some(BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral)
+            )
+    }
+
     pub(crate) fn enclosed_in_compound_literal(&self) -> bool {
         self.layout
             .nesting

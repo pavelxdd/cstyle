@@ -3568,12 +3568,8 @@ impl FormatEngine<'_> {
                 .is_some_and(|ch| is_word_char(ch) || ch == ']');
         // A compound literal nested in an aggregate keeps the gap written
         // before its brace, as any brace there does.
-        let nested_compound_literal = brace_type == BraceType::CompoundLiteral
-            && matches!(
-                self.layout.nesting.brace_type_stack.last(),
-                Some(BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral)
-            );
-        if self.is_nested_designated_init_field() || nested_compound_literal {
+        if self.is_nested_designated_init_field() || self.opens_compound_literal_in_list(brace_type)
+        {
             if self.options.pad_operators && self.current.trimmed_end().ends_with('=') {
                 self.emit_source_space_or_ensure();
             } else {
@@ -4186,13 +4182,7 @@ impl FormatEngine<'_> {
         }
         // A compound literal's brace nested in an aggregate keeps its place
         // before a comment too.
-        if brace_type == BraceType::CompoundLiteral
-            && self.comments.next_comment_ends_line
-            && matches!(
-                self.layout.nesting.brace_type_stack.last(),
-                Some(BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral)
-            )
-        {
+        if self.opens_compound_literal_in_list(brace_type) && self.comments.next_comment_ends_line {
             return true;
         }
         if matches!(
@@ -4216,11 +4206,7 @@ impl FormatEngine<'_> {
                 && !self.is_nested_designated_init_field()
                 // Like any brace nested in an aggregate, a compound literal's
                 // keeps its place.
-                && !(brace_type == BraceType::CompoundLiteral
-                    && matches!(
-                        self.layout.nesting.brace_type_stack.last(),
-                        Some(BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral)
-                    ))
+                && !self.opens_compound_literal_in_list(brace_type)
             {
                 return false;
             }

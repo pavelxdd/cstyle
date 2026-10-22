@@ -704,6 +704,11 @@ impl FormatEngine<'_> {
                 {
                     self.emit_source_space_or_ensure();
                 }
+                // A compound literal among a list's elements keeps the gap
+                // written before its brace, as any brace there does.
+                _ if self.opens_compound_literal_in_list(brace_type) => {
+                    self.emit_source_space();
+                }
                 _ if aggregate_assign || brace_type == BraceType::CompoundLiteral => {
                     self.emit_source_space_or_ensure();
                 }
