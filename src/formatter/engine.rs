@@ -1459,8 +1459,6 @@ impl<'a> FormatEngine<'a> {
             }
         }
         self.layout.line_state.trailing_comment_columns = trailing_comment_columns.into();
-        self.layout.line_state.has_nested_designated_init_brace =
-            has_open_brace && initializers::has_nested_designated_init_brace(tokens);
 
         if has_semicolon {
             let mut statement_count = 0usize;

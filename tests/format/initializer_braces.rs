@@ -4290,7 +4290,7 @@ fn indented_brace_styles_close_nested_compound_literals_at_their_fields() {
                 &options
             ),
             format!(
-                "void f()\n{function_brace}{{\n    y = (U) {{\n        .a = (V){{\n            1\n            }}\n        }};\n{function_brace}}}\n"
+                "void f()\n{function_brace}{{\n    y = (U) {{ .a = (V){{\n            1\n            }}\n        }};\n{function_brace}}}\n"
             ),
             "{style}"
         );

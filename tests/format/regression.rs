@@ -21904,3 +21904,13 @@ fn a_designated_list_holding_a_one_line_list_on_its_row_closes_at_the_row_level(
     check(expected, &[], expected);
     check(input, &["--style=1tbs"], expected);
 }
+
+#[test]
+fn a_list_running_in_with_a_designator_keeps_its_brace_line_and_levels_the_nested_rows() {
+    let input = "void f()\n{\n    y = { .a = {\n        1 } };\n    y = (U){ .a = (V){\n        1 } };\n}\nItem c = { .x = { 1, 2 },\n    .y = 3 };\n";
+    let expected = "void f()\n{\n    y = { .a = {\n            1\n        }\n    };\n    y = (U) { .a = (V){\n            1\n        }\n    };\n}\nItem c = { .x = { 1, 2 },\n           .y = 3\n         };\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+    let whitesmith = "void f()\n    {\n    y = { .a = {\n            1\n            }\n        };\n    y = (U) { .a = (V){\n            1\n            }\n        };\n    }\nItem c = { .x = { 1, 2 },\n           .y = 3\n         };\n";
+    check(input, &["--style=whitesmith"], whitesmith);
+}

@@ -807,7 +807,7 @@ impl FormatEngine<'_> {
                 .get(group)
                 .parent
                 .is_some_and(|parent| self.tree.blocks.kind(parent) == Some(BlockKind::Initializer))
-            && self.opens_initializer_element(comma)
+            && self.opens_initializer_element(comma, !indented_braces)
             && let Some((lead, levels, _)) = self.brace_ending_row_levels(comma)
         {
             let line = self.output.line_with_token(comma)?;
@@ -1426,10 +1426,12 @@ impl FormatEngine<'_> {
             self.tree.blocks.kind(group),
             Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
         ) || literal_in_parens
-            || groups
-                .get(group)
-                .parent
-                .is_some_and(|parent| self.tree.blocks.kind(parent) == Some(BlockKind::Initializer))
+            || groups.get(group).parent.is_some_and(|parent| {
+                matches!(
+                    self.tree.blocks.kind(parent),
+                    Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                )
+            })
             || (self.options.brace_style == BraceStyle::Vtk
                 && (!self.in_code(open)
                     // VTK sets a typed brace initializer's rows as a
@@ -1767,7 +1769,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        if !at_elements && !self.opens_initializer_element(open) {
+        if !at_elements && !self.opens_initializer_element(open, true) {
             return None;
         }
         let (lead, levels, leading_closers) = self.brace_row_levels_through(open)?;
@@ -1803,11 +1805,27 @@ impl FormatEngine<'_> {
     }
 
     /// Whether the `{` at `open` opens an element of the list around it,
-    /// after its `{` or a `,`.
-    fn opens_initializer_element(&self, open: usize) -> bool {
-        self.tree
-            .previous_code_token(open)
-            .is_some_and(|before| matches!(self.tree.tokens[before], Token::Symbol('{' | ',')))
+    /// after its `{`, a `,` or a designator's `=`, a compound literal's
+    /// cast between when `through_cast`.
+    fn opens_initializer_element(&self, open: usize, through_cast: bool) -> bool {
+        let groups = &self.tree.groups;
+        let before = self.tree.previous_code_token(open).map(|before| {
+            groups
+                .closed_at(before)
+                .filter(|&cast| through_cast && groups.get(cast).delimiter == Delimiter::Paren)
+                .and_then(|cast| self.tree.previous_code_token(groups.get(cast).open))
+                .unwrap_or(before)
+        });
+        before.is_some_and(|before| {
+            matches!(self.tree.tokens[before], Token::Symbol('{' | ','))
+                || matches!(&self.tree.tokens[before], Token::Operator(operator) if operator == "=")
+                    && groups.enclosing(before).is_some_and(|group| {
+                        matches!(
+                            self.tree.blocks.kind(group),
+                            Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                        )
+                    })
+        })
     }
 
     /// For a `{` at `open` that ends a row it does not start: the row's

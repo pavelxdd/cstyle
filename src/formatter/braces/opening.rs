@@ -2100,22 +2100,6 @@ impl FormatEngine<'_> {
             );
             return true;
         }
-        if !self.is_objc_method_line()
-            && self.layout.line_state.has_nested_designated_init_brace
-            && matches!(
-                brace_type,
-                BraceType::Initializer | BraceType::Array | BraceType::CompoundLiteral
-            )
-            && matches!(next, Some(Token::Symbol('.')))
-            && self
-                .token_input
-                .next_input_whitespace
-                .as_ref()
-                .is_some_and(|whitespace| !whitespace.is_empty())
-        {
-            self.open_expanded_init_brace(brace.header.take(), brace_type, block_indent_extra);
-            return true;
-        }
         if brace_type == BraceType::Enum
             && self.token_input.token_begins_source_line
             && !self.current_is_blank()

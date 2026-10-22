@@ -423,7 +423,6 @@ pub(crate) struct LineState {
     pub(crate) operator_padding_disabled: bool,
     pub(crate) in_class_initializer: bool,
     pub(crate) trailing_comment_columns: std::collections::VecDeque<usize>,
-    pub(crate) has_nested_designated_init_brace: bool,
     pub(crate) ternary_colon: bool,
     /// Whether the line's last colon gives a bit-field width.
     pub(crate) bit_field_colon: bool,

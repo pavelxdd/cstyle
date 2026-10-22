@@ -46,21 +46,6 @@ fn line_declares_struct(line: &str) -> bool {
         .any(|word| word == "struct")
 }
 
-pub(crate) fn has_nested_designated_init_brace(tokens: &[Token]) -> bool {
-    let mut saw_open = false;
-    let mut saw_designator = false;
-    for token in tokens {
-        match token {
-            Token::Whitespace(_) | Token::Newline => {}
-            Token::Symbol('{') if saw_designator => return true,
-            Token::Symbol('{') => saw_open = true,
-            Token::Symbol('.') if saw_open => saw_designator = true,
-            _ => {}
-        }
-    }
-    false
-}
-
 pub(crate) fn bracket_starts_initializer_designator(
     tokens: &[Token],
     start: usize,
@@ -477,25 +462,6 @@ impl FormatEngine<'_> {
             line_indent_spaces,
             brace_indent_spaces,
         })
-    }
-
-    pub(super) fn open_expanded_init_brace(
-        &mut self,
-        brace_header: Option<String>,
-        brace_type: BraceType,
-        block_indent_extra: usize,
-    ) {
-        self.emit_source_space_or_ensure();
-        self.current.push('{');
-        self.layout.command_state.observe_char('{');
-        self.finish_line();
-        self.layout
-            .nesting
-            .enter_brace(brace_header, brace_type, block_indent_extra);
-        self.layout
-            .indentation
-            .enter_block_with_extra(false, block_indent_extra);
-        self.layout.previous = PreviousToken::Other;
     }
 
     pub(super) fn open_multiline_attached_initializer_brace(
