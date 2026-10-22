@@ -353,6 +353,10 @@ impl FormatEngine<'_> {
                 && !self.layout.line_state.operator_padding_disabled)
                 || (self.options.pad_header
                     && (is_header(self.options, word)
+                        && !matches!(
+                            word,
+                            "try" | "__try" | "__finally" | "do" | "else" | "default"
+                        )
                         || matches!(word, "return" | "new" | "delete")
                         || word == "throw" && !self.throw_is_exception_specification()))
                 || outside_pad;

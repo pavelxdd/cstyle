@@ -114,6 +114,55 @@ fn pad_operators_keeps_multiplication_padded_after_macro_call() {
     assert_eq!(format_exact(source, &kr_c_options()), source);
 }
 
+// A header that takes no condition has no paren to pad: a paren after it
+// belongs to a name or an expression.
+#[test]
+fn pad_header_leaves_parens_after_headers_without_a_condition() {
+    let source = fixture!(
+        "void f()",
+        "{",
+        "    try(x);",
+        "    value = try(x);",
+        "    do(x);",
+        "    else(x);",
+        "    __try(x);",
+        "    __finally(x);",
+        "    default(x);",
+        "    catch(x);",
+        "}",
+    );
+    let expected = fixture!(
+        "void f()",
+        "{",
+        "    try(x);",
+        "    value = try(x);",
+        "    do(x);",
+        "    else(x);",
+        "    __try(x);",
+        "    __finally(x);",
+        "    default(x);",
+        "    catch (x);",
+        "}",
+    );
+    let options = options_from_args(&["--pad-header"]);
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+    // Nor does a paren after `try` hold a body to break off: it calls.
+    let calls = fixture!(
+        "local int try(char *hex, int err)",
+        "{",
+        "    return 0;",
+        "}",
+        "void f()",
+        "{",
+        "    try(\"a\", 1);",
+        "    value = try(\"a\", 1);",
+        "}",
+    );
+    let options = options_from_args(&["--mode=c", "--pad-header", "--break-one-line-headers"]);
+    assert_eq!(format_exact(calls, &options), calls);
+}
+
 // A number ending in a dot owns the dot, so the star after it multiplies;
 // only a dot after an operand forms the member-pointer operator.
 #[test]
