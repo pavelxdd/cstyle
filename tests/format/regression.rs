@@ -21813,3 +21813,9 @@ fn a_define_row_after_a_statement_ending_in_an_open_paren_stands_at_the_paren() 
     check(input, &["--indent-preproc-define"], expected);
     check(expected, &["--indent-preproc-define"], expected);
 }
+
+#[test]
+fn attaching_return_types_leaves_a_type_an_attribute_row_parts_from_its_name() {
+    let input = "static inline Item *\n__attribute((always_inline)) internal_function\nhelper (int value)\n{\n    return 0;\n}\nstatic inline Item *\n__attribute__((always_inline))\nother (int value)\n{\n    return 0;\n}\n";
+    check(input, &["--style=1tbs", "--attach-return-type"], input);
+}
