@@ -21042,3 +21042,15 @@ fn a_lambda_opening_its_body_after_an_assignment_or_a_conditional_stands_at_the_
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn a_lambda_argument_whose_brace_joins_it_stands_at_the_statement() {
+    // Once the brace joins it, the row opens the lambda's body.
+    let input = "void f()\n{\n    run(value,\n        [&]()\n        {\n            return go(value);\n        });\n}\n";
+    let expected =
+        "void f()\n{\n    run(value,\n    [&]() {\n        return go(value);\n    });\n}\n";
+    for style in ["--style=kr", "--style=linux", "--style=1tbs"] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}

@@ -205,6 +205,11 @@ impl FormatEngine<'_> {
             self.preprocessor.group_block_rows.push(self.output.len());
         }
         let emitted_indent_spaces = self.publish_formatted_line_layout(line, &layout);
+        self.last_laid_out_statement_level = self
+            .output
+            .len()
+            .checked_sub(1)
+            .map(|index| (index, layout.normal_indent));
         self.apply_post_emission_state(
             line,
             &layout,

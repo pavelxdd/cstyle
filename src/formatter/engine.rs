@@ -404,6 +404,8 @@ pub(crate) struct FormatEngine<'a> {
     /// Whether the line in layout starts a statement inside a block after
     /// a line of code that ended one with `;`.
     pub(crate) plain_statement_line: bool,
+    /// The output line last laid out and the level of its statement.
+    pub(crate) last_laid_out_statement_level: Option<(usize, usize)>,
     pub(crate) space_after_cast: bool,
     pub(crate) pad_close_paren_pending: bool,
     pub(crate) header_paren: headers::HeaderParenState,
@@ -555,6 +557,7 @@ impl<'a> FormatEngine<'a> {
             may_have_class_base_access: true,
             may_have_noexcept: true,
             plain_statement_line: false,
+            last_laid_out_statement_level: None,
             space_after_cast: false,
             pad_close_paren_pending: false,
             header_paren: headers::HeaderParenState::default(),

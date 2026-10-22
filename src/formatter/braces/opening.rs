@@ -2,8 +2,8 @@ use crate::config::{BraceStyle, LineEnding};
 use crate::formatter::braces::classification::{
     ExternCGuard, block_indent_extra, brace_indent_applies, current_ends_block_literal_header,
     is_lambda_body_header, is_lambda_capture_header, is_namespace_or_module_block_header,
-    line_ends_lambda_parameter_list, line_opens_lambda_or_capture_only_block,
-    line_opens_parameterized_lambda_block,
+    line_ends_lambda_parameter_list, line_opens_lambda_block,
+    line_opens_lambda_or_capture_only_block, line_opens_parameterized_lambda_block,
 };
 use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::braces::initializers::{
@@ -2417,6 +2417,20 @@ impl FormatEngine<'_> {
         // A brace joining the `(` its line ended with leads that paren's
         // arguments.
         let line_index = self.output.len();
+        // A row continuing its statement that the brace makes open a
+        // lambda's body stands at the statement, as one the body opened on
+        // in the source does.
+        let lambda_row_level = self
+            .current
+            .active_token()
+            .and_then(|open| self.tree.groups.opened_at(open))
+            .filter(|&group| self.tree.blocks.kind(group) == Some(BlockKind::Lambda))
+            .and(self.last_laid_out_statement_level)
+            .filter(|&(index, _)| index == line_index)
+            .filter(|_| {
+                tokens.is_some_and(|span| !self.tree.statements.starts_block_statement(span.first))
+            })
+            .map(|(_, level)| level);
         // Parens that indent after them align no argument to the brace.
         let leads_paren_arguments = !self.options.indent_after_parens
             && line[..trailing_comment_split_limit(&line)]
@@ -2523,8 +2537,17 @@ impl FormatEngine<'_> {
             line.push_str(comment.trimmed_end());
             self.comments.skip_next_attached_comment = true;
         }
+        let lambda_row_level = lambda_row_level.filter(|_| line_opens_lambda_block(&line));
+        if let Some(level) = lambda_row_level {
+            let mut row = String::with_capacity(line.len());
+            self.options.push_indent_prefix(&mut row, level);
+            row.push_str(line.trimmed_start());
+            line = row;
+        }
         // The line goes through the case unindent again.
-        let extra = if attached_case_label_output_brace {
+        let extra = if lambda_row_level.is_some() {
+            0
+        } else if attached_case_label_output_brace {
             self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width
         } else {
             self.layout.line_adjuster.last_line_case_unindent()
