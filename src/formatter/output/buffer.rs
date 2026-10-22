@@ -584,6 +584,16 @@ struct OpenBlockLines {
     undo: std::collections::VecDeque<BlockUndo>,
     /// The lines `undo` holds.
     undo_lines: usize,
+    /// The open conditional groups: a later branch starts from the blocks
+    /// open at `#if`, and the lines after `#endif` from those the first
+    /// branch left.
+    conditionals: Vec<ConditionalBlocks>,
+}
+
+#[derive(Clone)]
+struct ConditionalBlocks {
+    at_if: Vec<OpenBlock>,
+    first_branch_end: Option<Vec<OpenBlock>>,
 }
 
 #[derive(Clone, Copy)]
@@ -598,13 +608,14 @@ struct OpenBlock {
     reached: usize,
 }
 
-#[derive(Clone, Copy)]
 enum BlockUndo {
     /// Reading the line began.
     Line(usize),
     Pushed,
     Changed(usize, OpenBlock),
     Removed(usize, OpenBlock),
+    /// The blocks and groups before a conditional directive.
+    Directive(Vec<OpenBlock>, Vec<ConditionalBlocks>),
 }
 
 /// How many of the last lines an [`OpenBlockLines`] can read again.
@@ -637,10 +648,25 @@ impl OpenBlockLines {
         self.undo.push_back(BlockUndo::Line(index));
         self.undo_lines += 1;
         // The body of a block comment holds no braces.
-        if matches!(walk, BlockWalk::ClosingBrace) && output.comment_start_index(index) != index {
+        let comment_body = output.comment_start_index(index) != index;
+        if matches!(walk, BlockWalk::ClosingBrace) && comment_body {
             return;
         }
         let meta = output.brace_meta(index);
+        if meta.code_starts_with_hash && !comment_body {
+            let directive = preprocessor_directive(output.trimmed(index));
+            if let Some(
+                "if" | "ifdef" | "ifndef" | "else" | "elif" | "elifdef" | "elifndef" | "endif",
+            ) = directive
+            {
+                self.undo.push_back(BlockUndo::Directive(
+                    self.blocks.clone(),
+                    self.conditionals.clone(),
+                ));
+                self.read_conditional_directive(directive);
+                return;
+            }
+        }
         let (opens, closes) = (meta.opens(), meta.closes());
         let takes = opens.saturating_sub(closes);
         let open_below = match walk {
@@ -678,6 +704,32 @@ impl OpenBlockLines {
         }
     }
 
+    fn read_conditional_directive(&mut self, directive: Option<&str>) {
+        match directive {
+            Some("if" | "ifdef" | "ifndef") => self.conditionals.push(ConditionalBlocks {
+                at_if: self.blocks.clone(),
+                first_branch_end: None,
+            }),
+            Some("endif") => {
+                if let Some(ConditionalBlocks {
+                    first_branch_end: Some(end),
+                    ..
+                }) = self.conditionals.pop()
+                {
+                    self.blocks = end;
+                }
+            }
+            _ => {
+                if let Some(group) = self.conditionals.last_mut() {
+                    if group.first_branch_end.is_none() {
+                        group.first_branch_end = Some(self.blocks.clone());
+                    }
+                    self.blocks.clone_from(&group.at_if);
+                }
+            }
+        }
+    }
+
     /// Undoes the reads of the lines from `line` on; `false` when they are
     /// no longer kept.
     fn rewind(&mut self, line: usize) -> bool {
@@ -695,6 +747,10 @@ impl OpenBlockLines {
                     }
                     Some(BlockUndo::Changed(at, block)) => self.blocks[at] = block,
                     Some(BlockUndo::Removed(at, block)) => self.blocks.insert(at, block),
+                    Some(BlockUndo::Directive(blocks, conditionals)) => {
+                        self.blocks = blocks;
+                        self.conditionals = conditionals;
+                    }
                 }
             }
         }

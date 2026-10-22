@@ -21946,6 +21946,45 @@ fn closing_braces_after_a_conditional_whose_later_branch_opens_more_blocks_close
 }
 
 #[test]
+fn a_closing_brace_in_a_conditional_after_one_whose_later_branch_opens_a_block_closes_a_first_branch_block()
+ {
+    let input = "void f()\n{\n    if (first) {\n        if (second) {\n#ifdef FEATURE\n            go();\n#else\n            if (third) {\n                go();\n#endif\n                next();\n#ifndef FEATURE\n            }\n#endif\n        }\n    }\n    value = 1;\n}\n";
+    let attached = "void f()\n{\n    if (first) {\n        if (second) {\n#ifdef FEATURE\n            go();\n#else\n            if (third) {\n                go();\n#endif\n            next();\n#ifndef FEATURE\n        }\n#endif\n    }\n}\nvalue = 1;\n}\n";
+    let cases: [(&[&str], &str); 8] = [
+        (&[], attached),
+        (&["--style=kr"], attached),
+        (
+            &["--style=allman"],
+            "void f()\n{\n    if (first)\n    {\n        if (second)\n        {\n#ifdef FEATURE\n            go();\n#else\n            if (third)\n            {\n                go();\n#endif\n            next();\n#ifndef FEATURE\n        }\n#endif\n    }\n}\nvalue = 1;\n}\n",
+        ),
+        (
+            &["--style=whitesmith"],
+            "void f()\n    {\n    if (first)\n        {\n        if (second)\n            {\n#ifdef FEATURE\n            go();\n#else\n            if (third)\n                {\n                go();\n#endif\n            next();\n#ifndef FEATURE\n            }\n#endif\n        }\n    }\nvalue = 1;\n    }\n",
+        ),
+        (
+            &["--style=vtk"],
+            "void f()\n{\n    if (first)\n        {\n        if (second)\n            {\n#ifdef FEATURE\n            go();\n#else\n            if (third)\n                {\n                go();\n#endif\n            next();\n#ifndef FEATURE\n            }\n#endif\n        }\n}\nvalue = 1;\n}\n",
+        ),
+        (
+            &["--style=horstmann"],
+            "void f()\n{   if (first)\n    {   if (second)\n        {\n#ifdef FEATURE\n            go();\n#else\n            if (third)\n            {   go();\n#endif\n            next();\n#ifndef FEATURE\n        }\n#endif\n    }\n}\nvalue = 1;\n}\n",
+        ),
+        (
+            &["--style=gnu"],
+            "void f()\n{\n    if (first)\n        {\n            if (second)\n                {\n#ifdef FEATURE\n                    go();\n#else\n                    if (third)\n                        {\n                            go();\n#endif\n                    next();\n#ifndef FEATURE\n                }\n#endif\n        }\n}\nvalue = 1;\n}\n",
+        ),
+        (
+            &["--style=ratliff"],
+            "void f() {\n    if (first) {\n        if (second) {\n#ifdef FEATURE\n            go();\n#else\n            if (third) {\n                go();\n#endif\n            next();\n#ifndef FEATURE\n            }\n#endif\n        }\n    }\nvalue = 1;\n    }\n",
+        ),
+    ];
+    for (args, expected) in cases {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
 fn a_statement_after_a_conditional_whose_first_branch_ended_a_braceless_body_starts_afresh() {
     // The first branch ended its statement: the code after `#endif` takes
     // no continuation left from it.
