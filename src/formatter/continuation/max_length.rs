@@ -431,12 +431,17 @@ impl FormatEngine<'_> {
             return false;
         };
         let outer = groups.enclosing(tail_first);
+        // Only qualifiers and a trailing return type follow the parameters;
+        // initializers or declarators after them continue the head.
         (span.first..tail_first).rev().any(|index| {
             matches!(tokens[index], Token::Symbol(')'))
                 && groups.closed_at(index).is_some_and(|params| {
                     self.tree.functions.by_params(params).is_some()
                         && groups.enclosing(groups.get(params).open) == outer
                 })
+                && !tokens[index..tail_first]
+                    .iter()
+                    .any(|token| matches!(token, Token::Symbol(':' | ',')))
         }) && outer.is_none_or(|group| groups.get(group).delimiter == Delimiter::Brace)
     }
 

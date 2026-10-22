@@ -3172,3 +3172,20 @@ fn max_code_length_sets_a_row_split_after_a_function_head_at_the_head() {
         assert_eq!(format_exact(&first, &options), first, "{limit}");
     }
 }
+
+#[test]
+fn max_code_length_continues_a_constructor_initializer_split_past_its_parameters() {
+    // The initializers past the parameters continue the head; only a
+    // qualifier or a trailing return type stands at it.
+    let input = "class Options {\n  public:\n    Options() : option_(None), match_limit_(0), stack_limit_(0), report_errors_(true) {}\n};\n";
+    let expected = "class Options {\n  public:\n    Options() : option_(None), match_limit_(0), stack_limit_(0),\n        report_errors_(true) {}\n};\n";
+    let mut options = FormatOptions::default();
+    let args = [
+        "--style=google",
+        "--max-code-length=80",
+        "--break-after-logical",
+    ]
+    .map(str::to_string);
+    apply_command_line_args(&mut options, &args).expect("valid options");
+    assert_eq!(format_exact(input, &options), expected);
+}
