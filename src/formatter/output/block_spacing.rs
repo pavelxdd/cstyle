@@ -53,10 +53,25 @@ impl FormatEngine<'_> {
             && self.layout.nesting.last_closed_brace_header.as_deref() == Some("do")
             && self.layout.command_state.previous_command_char == Some('}')
         {
+            // A `do` the line starts keeps the blank due before it, as an
+            // `if` whose `else` joins its line does.
+            let prepend = self.block_spacing.prepend_blank
+                && leading_identifier(self.current.trimmed_start()) == "do";
             self.clear_block_spacing_blanks();
+            self.block_spacing.prepend_blank = prepend;
             return;
         }
         if is_break_blocks_closing_header(word) {
+            // A block a closing header joins on its opening header's line
+            // ends no chain the next row parts from.
+            if self.layout.command_state.previous_command_char == Some('}')
+                && is_break_blocks_opening_header(
+                    self.options,
+                    leading_identifier(self.current.trimmed_start()),
+                )
+            {
+                self.block_spacing.pending_one_line_block = false;
+            }
             // A body ending in a trailing block comment keeps its closing
             // header.
             if self.current_is_blank()
@@ -576,6 +591,13 @@ impl FormatEngine<'_> {
             };
             header = owner;
         }
+        // A `while` goes on with the `do` whose braceless body ends before
+        // it.
+        if matches!(&tokens[header], Token::Word(word) if word == "while")
+            && let Some(owner) = self.braceless_do_before(header)
+        {
+            header = owner;
+        }
         let Some(before) = self.tree.previous_code_token(header) else {
             return false;
         };
@@ -592,6 +614,33 @@ impl FormatEngine<'_> {
                     .line_with_token(before)
                     .is_some_and(|line| self.output.line_with_token(header) == Some(line))
             }
+    }
+
+    /// The `do` whose braceless body the `while` at `index` follows.
+    fn braceless_do_before(&self, index: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let semicolon = self.tree.previous_code_token(index)?;
+        if !matches!(tokens[semicolon], Token::Symbol(';')) {
+            return None;
+        }
+        let mut cursor = semicolon;
+        while let Some(before) = self.tree.previous_code_token(cursor) {
+            if let Some(closed) = groups.closed_at(before) {
+                cursor = groups.get(closed).open;
+                continue;
+            }
+            match &tokens[before] {
+                Token::Word(word) if word == "do" => {
+                    let body = next_code_token(tokens, before + 1)?;
+                    return (self.tree.statements.braceless_header(body) == Some(before))
+                        .then_some(before);
+                }
+                Token::Symbol(';' | '{' | '}') => return None,
+                _ => cursor = before,
+            }
+        }
+        None
     }
 
     /// Whether the `}` being pushed closes a block the source kept on one

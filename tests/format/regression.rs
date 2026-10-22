@@ -21184,3 +21184,24 @@ fn break_blocks_parts_a_one_line_case_block_from_a_directive_after_it() {
         check(expected, &options, expected);
     }
 }
+
+#[test]
+fn break_blocks_pads_a_braceless_do_on_one_line_and_nothing_inside_a_block_its_else_opens() {
+    // The `while` goes on with its `do`; the empty block before an `else`
+    // on its line ends no block the next row parts from.
+    let input = "void f()\n{\n    value = 0;\n    if (a) {} else { y(); }\n    value = 1;\n    do x(); while (z);\n    value = 2;\n}\n";
+    let expected = "void f()\n{\n    value = 0;\n\n    if (a) {} else {\n        y();\n    }\n\n    value = 1;\n\n    do x(); while (z);\n\n    value = 2;\n}\n";
+    let options = ["--style=kr", "--break-blocks", "-o"];
+    check(input, &options, expected);
+    check(expected, &options, expected);
+}
+
+#[test]
+fn break_blocks_pads_a_do_whose_while_joins_its_line_as_an_if_whose_else_does() {
+    // A header whose blocks stay on its line pads as one on lines of its own.
+    let input = "void f()\n{\n    go();\n    do { go(); } while (x);\n    go();\n}\n";
+    let expected = "void f()\n{\n    go();\n\n    do { go(); } while (x);\n\n    go();\n}\n";
+    let options = ["--style=kr", "--break-blocks", "-O", "-o"];
+    check(input, &options, expected);
+    check(expected, &options, expected);
+}
