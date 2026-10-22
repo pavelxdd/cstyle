@@ -2644,7 +2644,24 @@ impl FormatEngine<'_> {
             {
                 self.push_attached_comment_with_source_gap(comment);
             }
-            if !attached_block_comment_with_line_comment {
+            if self.list_brace_keeps_multi_line_comment(brace_type, next) {
+                // The line publishes after the comment, inside the list, so
+                // it takes its indent here.
+                let lead = if self.current_is_preindented {
+                    leading_visual_width(&self.current, self.options.tab_width)
+                } else {
+                    let lead = self.current_line_indent_spaces();
+                    let prefix = self
+                        .options
+                        .continuation_indent_prefix(lead / self.options.indent_width.max(1), lead);
+                    let line = format!("{prefix}{}", self.current.trimmed_start());
+                    self.current.replace(line);
+                    self.current_is_preindented = true;
+                    lead
+                };
+                // The list stands as one attached in any style.
+                self.update_current_brace_indent_columns(lead + self.options.indent_width, lead);
+            } else if !attached_block_comment_with_line_comment {
                 self.finish_line();
                 self.update_current_brace_indent_from_last_output_line();
             }
@@ -4003,6 +4020,20 @@ impl FormatEngine<'_> {
             .rev()
             .take_while(|&index| !matches!(tokens[index], Token::Symbol(';' | '{' | '}')))
             .any(|index| matches!(&tokens[index], Token::Word(word) if word == "case" || word == "default"))
+    }
+
+    /// Whether a list's brace after code keeps the comment running over
+    /// lines after it on its line, as any code does.
+    fn list_brace_keeps_multi_line_comment(
+        &self,
+        brace_type: BraceType,
+        next: Option<&Token>,
+    ) -> bool {
+        matches!(
+            brace_type,
+            BraceType::Array | BraceType::Initializer | BraceType::Enum
+        ) && !self.token_input.token_begins_source_line
+            && matches!(next, Some(Token::Comment(CommentKind::Block, comment)) if comment.contains('\n'))
     }
 
     pub(crate) fn style_attaches_opening_brace(

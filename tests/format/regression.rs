@@ -12031,6 +12031,55 @@ fn a_row_after_a_nested_list_and_a_comment_stands_with_the_rows() {
 }
 
 #[test]
+fn a_multi_line_comment_after_an_attached_list_brace_stays_on_its_line() {
+    // The comment's rows stay as written, as after any code; an array's
+    // rows stand as after a one-line comment there.
+    let enum_input = "enum Kind { /* first\n             row */\n    ONE, TWO\n};\n";
+    let array_input = "int items[] = { /* first\n                 row */\n    1, 2\n};\n";
+    for style in ["--style=kr", "--style=java", "--style=1tbs", "--mode=c"] {
+        check(enum_input, &[style], enum_input);
+    }
+    for style in ["--style=kr", "--style=java", "--style=mozilla", "--mode=c"] {
+        check(array_input, &[style], array_input);
+    }
+    let input =
+        "void f()\n{\n  enum Kind { /* first\n               row */\n    ONE, TWO\n  };\n}\n";
+    check(
+        input,
+        &["--style=java"],
+        "void f() {\n    enum Kind { /* first\n               row */\n        ONE, TWO\n    };\n}\n",
+    );
+}
+
+#[test]
+fn a_multi_line_comment_after_a_list_brace_the_style_breaks_opens_the_list() {
+    // The comment moves no brace: one the style sets on its own line takes
+    // the comment into the list, as a block's brace does.
+    let input = "enum Kind { /* first\n             row */\n    ONE, TWO\n};\n";
+    for (style, expected) in [
+        (
+            "--style=allman",
+            "enum Kind\n{\n    /* first\n                 row */\n    ONE, TWO\n};\n",
+        ),
+        (
+            "--style=whitesmith",
+            "enum Kind\n    {\n    /* first\n                 row */\n    ONE, TWO\n    };\n",
+        ),
+        (
+            "--style=horstmann",
+            "enum Kind\n{   /* first\n                 row */\n    ONE, TWO\n};\n",
+        ),
+        (
+            "--style=mozilla",
+            "enum Kind\n{\n    /* first\n                 row */\n    ONE, TWO\n};\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
 fn any_unconditional_directive_between_a_case_label_and_a_brace_makes_the_brace_a_plain_block() {
     let input = "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n    {\n        pop(state);\n    }\n    break;\n    case 2:\n#pragma once\n    {\n        push(state);\n    }\n    break;\n    }\n}\n";
     check(
