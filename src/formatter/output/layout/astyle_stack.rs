@@ -1024,7 +1024,7 @@ impl FormatEngine<'_> {
     }
 
     /// Whether the `>` or `>>` at `close` ends template arguments.
-    fn closes_template_arguments(&self, close: usize) -> bool {
+    pub(crate) fn closes_template_arguments(&self, close: usize) -> bool {
         template_arguments_start(&self.tree.tokens, close)
             .is_some_and(|open| self.template_opener_at(open))
     }

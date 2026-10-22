@@ -210,7 +210,7 @@ impl FormatEngine<'_> {
             && !current.starts_with("::")
             && self.layout.nesting.paren_depth == 0
             && previous_code.contains('?')
-            && !previous_code.contains('<')
+            && !self.previous_line_holds_shift()
             && find_assignment_operator(previous_code).is_none()
             && self
                 .assignment_rhs_first_line_indent(previous, true)
@@ -221,6 +221,24 @@ impl FormatEngine<'_> {
             spaces = Some(normal_indent * self.options.indent_width);
         }
         spaces
+    }
+
+    /// Whether the last code line holds a shift outside parentheses, which
+    /// registers a continuation column.
+    fn previous_line_holds_shift(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        self.output
+            .last_line_outside_comment_index()
+            .and_then(|index| self.output.line_tokens(index))
+            .is_some_and(|span| {
+                let level = groups.enclosing(span.first);
+                (span.first..=span.last).any(|index| {
+                    matches!(&tokens[index], Token::Operator(operator) if matches!(operator.as_str(), "<<" | ">>"))
+                        && groups.enclosing(index) == level
+                        && !self.closes_template_arguments(index)
+                })
+            })
     }
 
     pub(crate) fn completed_ternary_call_sibling_indent_spaces(

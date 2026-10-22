@@ -21957,6 +21957,20 @@ fn a_ternary_colon_after_a_brace_in_a_list_or_a_kept_block_keeps_the_statement_w
 }
 
 #[test]
+fn a_ternary_colon_row_after_angles_stands_at_the_statement_as_after_any_condition() {
+    // Template arguments, comparisons and comments among them register no
+    // column; a shift does.
+    let input = "void f()\n{\n    ready() ? f(a)\n    : g(b);\n    is<T>() ? f(a)\n    : g(b);\n    Item<Value<int>>::ready ? f(a)\n    : g(b);\n    a < b ? f(a)\n    : g(b);\n    size < 16 ? alpha<Flag, /*Other=*/true>(a)\n    : alpha<Flag, false>(a);\n    a << b ? f(a)\n      : g(b);\n}\n";
+    check(input, &["--style=allman"], input);
+}
+
+#[test]
+fn a_statement_like_macro_block_continues_an_assigned_call_as_a_control_block_does() {
+    let input = "void f()\n{\n    TRY\n    {\n        auto result = call(\n                          a, b);\n    }\n    if (x)\n    {\n        auto result = call(\n                          a, b);\n    }\n}\n";
+    check(input, &["--style=allman"], input);
+}
+
+#[test]
 fn a_double_angle_closing_template_arguments_stacks_no_shift_before_a_paren_ending_its_row() {
     // `>>` closes two lists as `> >` does: the row after the paren stands a
     // continuation in.

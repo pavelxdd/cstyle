@@ -2108,7 +2108,7 @@ fn stroustrup_ternary_colon_continuations_preserve_source_gap() {
             "       const char* src, size_t size)",
             "{",
             "    size < 16 ? alpha<Flag, /*Other=*/true>(dst, src, size)",
-            "         : alpha<Flag, /*Other=*/false>(dst, src, size);",
+            "    : alpha<Flag, /*Other=*/false>(dst, src, size);",
             "}",
         )
     );
