@@ -2807,8 +2807,8 @@ pub(crate) fn add_marked_cross_line_statement_braces(
         };
     let in_open_parens = words_in_open_parens(tokens);
     let mut covered_until = 0usize;
-    for header_index in 0..tokens.len() {
-        if header_index < covered_until || in_open_parens.contains(&header_index) {
+    for (header_index, &in_parens) in in_open_parens.iter().enumerate() {
+        if header_index < covered_until || in_parens {
             continue;
         }
         let Some((header_end, open_insert, close_insert)) =
@@ -2983,23 +2983,28 @@ pub(crate) fn add_marked_cross_line_statement_braces(
             tokens[*write] = token;
         }
     };
-    if let Some(inserted) = insert_before.remove(&token_count) {
+    // Both walk down with the tokens, the last first.
+    let mut inserts = insert_before.into_iter().collect::<Vec<_>>();
+    let mut gapped = gapped_comments.into_iter().collect::<Vec<_>>();
+    if inserts.last().is_some_and(|(at, _)| *at == token_count)
+        && let Some((_, inserted)) = inserts.pop()
+    {
         place_inserted(&mut tokens, &mut write, inserted, None);
     }
     for index in (0..token_count).rev() {
         write -= 1;
         tokens.swap(index, write);
-        if gapped_comments.contains(&index) {
+        if gapped.last() == Some(&index) {
+            gapped.pop();
             moved_comments.insert(write);
         }
-        if let Some(inserted) = insert_before
-            .last_entry()
-            .filter(|entry| *entry.key() == index)
+        if inserts.last().is_some_and(|(at, _)| *at == index)
+            && let Some((_, inserted)) = inserts.pop()
         {
             place_inserted(
                 &mut tokens,
                 &mut write,
-                inserted.remove(),
+                inserted,
                 opener_overruns.get(&index).copied(),
             );
         }
@@ -3082,10 +3087,10 @@ fn header_condition_open_paren(
 /// opened outside parens: a brace opened inside parens keeps the paren count
 /// of the block around it, so no header within it ends its condition at a
 /// zero count.
-fn words_in_open_parens(tokens: &[Token]) -> IndexSet<usize> {
+fn words_in_open_parens(tokens: &[Token]) -> Vec<bool> {
     let mut counts = vec![0usize];
     let mut pushed = Vec::new();
-    let mut words = IndexSet::default();
+    let mut words = vec![false; tokens.len()];
     for (index, token) in tokens.iter().enumerate() {
         let count = counts.last_mut().expect("base count");
         match token {
@@ -3104,7 +3109,7 @@ fn words_in_open_parens(tokens: &[Token]) -> IndexSet<usize> {
                 }
             }
             Token::Word(_) if *count > 0 => {
-                words.insert(index);
+                words[index] = true;
             }
             _ => {}
         }
