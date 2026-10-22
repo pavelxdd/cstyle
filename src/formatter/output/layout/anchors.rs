@@ -7313,8 +7313,14 @@ impl FormatEngine<'_> {
     /// style's to tell.
     fn sibling_statement_column(&self, first: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
-        let sibling = self.tree.statements.previous_sibling(first)?;
-        let line = self.output.line_with_token(sibling)?;
+        let mut sibling = self.tree.statements.previous_sibling(first)?;
+        let mut line = self.output.line_with_token(sibling)?;
+        // The row a comment's closer leads holds no statement's column; the
+        // statements before stand at it.
+        while self.output.comment_start_index(line) != line {
+            sibling = self.tree.statements.previous_sibling(sibling)?;
+            line = self.output.line_with_token(sibling)?;
+        }
         // Statements kept on one line stand where the first of them does.
         let mut leader = sibling;
         while self.output.line_tokens(line)?.first != leader {

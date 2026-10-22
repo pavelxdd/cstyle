@@ -12148,6 +12148,20 @@ fn a_marker_comment_that_switches_nothing_stands_as_any_comment() {
 }
 
 #[test]
+fn a_comment_led_statement_after_one_a_comment_closer_leads_stands_with_the_statements() {
+    // The row a comment's closer leads holds no statement's column.
+    let input = "void f()\n{\n    x = 0; /* note\n */\tw();\n    /* a */ w();\n    /* more\n     */ w();\n    y = 1;\n}\n";
+    check(input, &["--style=kr"], input);
+    check(
+        &input
+            .replace("    /* a */", "/* a */")
+            .replace("    /* more", "  /* more"),
+        &["--style=kr"],
+        "void f()\n{\n    x = 0; /* note\n */\tw();\n    /* a */ w();\n    /* more\n       */ w();\n    y = 1;\n}\n",
+    );
+}
+
+#[test]
 fn any_unconditional_directive_between_a_case_label_and_a_brace_makes_the_brace_a_plain_block() {
     let input = "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n    {\n        pop(state);\n    }\n    break;\n    case 2:\n#pragma once\n    {\n        push(state);\n    }\n    break;\n    }\n}\n";
     check(
