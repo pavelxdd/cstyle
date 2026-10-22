@@ -1497,6 +1497,10 @@ fn pad_operators_keeps_sizeof_pointer_operand_unary() {
     );
 }
 
+// A star after a parenthesized name may follow a cast and stays as written
+// in a call's arguments; after parentheses holding an expression it
+// multiplies, on the call's row or a row after it, with or without an
+// assignment.
 #[test]
 fn pad_operators_keeps_sizeof_attached_in_standalone_call_argument_continuations() {
     let mut options = FormatOptions::default();
@@ -1507,7 +1511,10 @@ fn pad_operators_keeps_sizeof_attached_in_standalone_call_argument_continuations
         fixture!(
             "void f(){",
             "copy(target,",
+            "     (count)*sizeof(item_t *));",
+            "copy(target,",
             "     (count - before)*sizeof(item_t *));",
+            "copy(target, (count - before)*sizeof(item_t *));",
             "buffer = allocate(pool,",
             "                  (count - before)*sizeof(item_t *));",
             "}",
@@ -1521,7 +1528,10 @@ fn pad_operators_keeps_sizeof_attached_in_standalone_call_argument_continuations
             "void f()",
             "{",
             "    copy(target,",
-            "         (count - before)*sizeof(item_t *));",
+            "         (count)*sizeof(item_t *));",
+            "    copy(target,",
+            "         (count - before) * sizeof(item_t *));",
+            "    copy(target, (count - before) * sizeof(item_t *));",
             "    buffer = allocate(pool,",
             "                      (count - before) * sizeof(item_t *));",
             "}",

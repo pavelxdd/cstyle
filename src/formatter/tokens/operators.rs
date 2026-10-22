@@ -1447,6 +1447,31 @@ impl FormatEngine<'_> {
         {
             return false;
         }
+        // Parentheses holding an expression cast nothing: the star after them
+        // multiplies.
+        let tokens = &self.tree.tokens;
+        let holds_expression = self
+            .current
+            .active_token()
+            .and_then(|star| self.tree.previous_code_token(star))
+            .and_then(|close| self.tree.groups.closed_at(close))
+            .is_some_and(|group| {
+                let group = self.tree.groups.get(group);
+                group.close.is_some_and(|close| {
+                    tokens[group.open + 1..close]
+                        .iter()
+                        .any(|token| match token {
+                            Token::Operator(operator) => {
+                                !matches!(operator.as_str(), "*" | "&" | "::")
+                            }
+                            Token::Number(_) | Token::StringLiteral(_) => true,
+                            _ => false,
+                        })
+                })
+            });
+        if holds_expression {
+            return false;
+        }
         for line in self.output.scoped().iter().rev().take(8) {
             let trimmed = line.trimmed_end();
             if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
