@@ -4568,3 +4568,14 @@ fn indent_preproc_define_sets_a_case_label_in_a_body_inside_a_function_as_at_fil
         .expect("valid options");
     assert_eq!(format_exact(input, &options), input);
 }
+
+#[test]
+fn a_closing_paren_leading_its_row_stands_at_its_opener_in_a_define_and_at_file_scope() {
+    // As in a function, the paren closing a value's rows stands under the
+    // one opening them, not at the rows.
+    let input = "#define SWAP(x) ( \\\n                  ((x)&0xFF) \\\n                  + ((x)&0xFF00) \\\n                )\nint v = (\n            a\n            + b\n        );\nvoid f(void)\n{\n    v = (\n            a\n            + b\n        );\n}\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--indent-preproc-define".to_owned()])
+        .expect("valid options");
+    assert_eq!(format_exact(input, &options), input);
+}
