@@ -7711,6 +7711,14 @@ fn declarators_after_a_struct_type_or_a_ternary_value_stand_at_the_first_declara
 }
 
 #[test]
+fn pointer_declarators_after_a_struct_type_line_continue_it_as_named_ones_do() {
+    // A star leading the declarator continues the declaration a `struct`
+    // type line starts, as a plain name does.
+    let input = "void f(void)\n{\n    const struct entry\n        *e1 = get(a),\n         *e2 = get(b);\n    struct entry\n        first = 1,\n        second = 2;\n}\n";
+    check(input, &[], input);
+}
+
+#[test]
 fn bit_field_declarators_after_a_type_line_stand_at_the_first_declarator() {
     // A bit field leading its line is a declarator, not a label: the
     // declarators after it stand where it does, as after a type on its line.
