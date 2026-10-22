@@ -12197,6 +12197,21 @@ fn a_comment_led_header_continued_by_a_backslash_keeps_its_body_a_level_in() {
 }
 
 #[test]
+fn a_class_brace_after_a_comment_leading_its_line_stands_at_the_class_past_its_bases() {
+    let input = "class Item : public Base\n/* note */ {\n};\n";
+    let expected = "class Item : public Base\n/* note */\n{\n};\n";
+    for style in ["--style=kr", "--style=allman"] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+    check(
+        "class Item\n    : public Base\n/* note */ {\n};\n",
+        &["--style=kr"],
+        "class Item\n    : public Base\n/* note */\n{\n};\n",
+    );
+}
+
+#[test]
 fn any_unconditional_directive_between_a_case_label_and_a_brace_makes_the_brace_a_plain_block() {
     let input = "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n    {\n        pop(state);\n    }\n    break;\n    case 2:\n#pragma once\n    {\n        push(state);\n    }\n    break;\n    }\n}\n";
     check(

@@ -1475,7 +1475,10 @@ impl FormatEngine<'_> {
     }
 
     fn clear_continuation_before_open_brace(&mut self) {
-        if self.layout.in_class_base_clause && self.current_is_blank() {
+        // Comments alone before the brace continue no base list either.
+        if self.layout.in_class_base_clause
+            && line_scan::after_leading_comments(self.current.trimmed()).is_empty()
+        {
             self.layout.continuation_indent.clear_next_line();
             self.layout.nesting.clear_continuation_indents();
         }
