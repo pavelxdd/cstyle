@@ -4135,7 +4135,28 @@ impl FormatEngine<'_> {
         if self.output.line_with_token(assign)? != line {
             return None;
         }
-        Some(self.token_column(value)? + self.case_unindent_spaces())
+        // Past the maximum, measured from the statement's line, the value's
+        // rows stand two levels past the line holding it.
+        let statement = (open + 1..assign)
+            .rev()
+            .find(|&index| {
+                groups.enclosing(index) == Some(group)
+                    && matches!(tokens[index], Token::Symbol(';' | '{' | '}'))
+            })
+            .map_or(open + 1, |end| end + 1);
+        let statement = next_code_token(tokens, statement).filter(|&start| start <= assign)?;
+        let statement_lead = self.output.lead_width(
+            self.output.line_with_token(statement)?,
+            self.options.tab_width,
+        );
+        let column = self.token_column(value)?;
+        let column = if column.saturating_sub(statement_lead) > self.options.max_continuation_indent
+        {
+            self.output.lead_width(line, self.options.tab_width) + 2 * self.options.indent_width
+        } else {
+            column
+        };
+        Some(column + self.case_unindent_spaces())
     }
 
     /// The first token of a returned value whose `&&` or `||` operand at

@@ -7711,6 +7711,16 @@ fn declarators_after_a_struct_type_or_a_ternary_value_stand_at_the_first_declara
 }
 
 #[test]
+fn an_assignment_value_on_a_continuation_row_past_the_maximum_stands_two_levels_past_the_row() {
+    // The maximum holds for an assignment a continuation row starts as for
+    // one a statement starts.
+    let input = "void f(void)\n{\n    short_one = first +\n        second,\n        long_name_xxxxxxxxxxxxxxxxxxxxxxxx = first +\n        second;\n}\n";
+    let expected = "void f(void)\n{\n    short_one = first +\n                second,\n                long_name_xxxxxxxxxxxxxxxxxxxxxxxx = first +\n                        second;\n}\n";
+    check(input, &["--max-continuation-indent=40"], expected);
+    check(expected, &["--max-continuation-indent=40"], expected);
+}
+
+#[test]
 fn pointer_declarators_after_a_struct_type_line_continue_it_as_named_ones_do() {
     // A star leading the declarator continues the declaration a `struct`
     // type line starts, as a plain name does.
