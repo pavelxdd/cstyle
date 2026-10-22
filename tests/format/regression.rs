@@ -12001,6 +12001,36 @@ fn rows_of_a_comment_after_an_element_brace_take_its_body_under_vtk_with_tabs() 
 }
 
 #[test]
+fn a_row_after_a_nested_list_and_a_comment_stands_with_the_rows() {
+    let input = "static const struct Item items[] = {\n  {\"first\",\n   \"one\", 0, 1},\n  {\n    {1, 2}, %s\n    \"third\", 3 },\n};\n";
+    for (rest, args, expected) in [
+        (
+            "/* note */",
+            &["--style=ratliff"][..],
+            "static const struct Item items[] = {\n        {\n        \"first\",\n        \"one\", 0, 1\n        },\n        {\n            {1, 2}, /* note */\n        \"third\", 3\n        },\n    };\n",
+        ),
+        (
+            "/* note */",
+            &["--style=whitesmith"][..],
+            "static const struct Item items[] = {\n        {\n        \"first\",\n        \"one\", 0, 1\n        },\n        {\n            {1, 2}, /* note */\n        \"third\", 3\n        },\n    };\n",
+        ),
+        (
+            "/* note */",
+            &["--style=vtk"][..],
+            "static const struct Item items[] = {\n    {\n        \"first\",\n        \"one\", 0, 1\n    },\n    {\n        {1, 2}, /* note */\n        \"third\", 3\n    },\n};\n",
+        ),
+        (
+            "// note",
+            &["--style=ratliff"][..],
+            "static const struct Item items[] = {\n        {\n        \"first\",\n        \"one\", 0, 1\n        },\n        {\n            {1, 2}, // note\n        \"third\", 3\n        },\n    };\n",
+        ),
+    ] {
+        check(&input.replace("%s", rest), args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
 fn any_unconditional_directive_between_a_case_label_and_a_brace_makes_the_brace_a_plain_block() {
     let input = "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n    {\n        pop(state);\n    }\n    break;\n    case 2:\n#pragma once\n    {\n        push(state);\n    }\n    break;\n    }\n}\n";
     check(

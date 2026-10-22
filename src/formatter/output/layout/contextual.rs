@@ -30,8 +30,8 @@ use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
     code_holds_word, has_unmatched_open_brace, holds_code_after_leading_comments,
-    is_bare_comment_line, is_comment_line, preprocessor_directive, trailing_comment_split_limit,
-    unmatched_open_bracket_column, unmatched_open_paren_columns,
+    is_bare_comment_line, is_comment_line, last_unmatched_open_brace, preprocessor_directive,
+    trailing_comment_split_limit, unmatched_open_bracket_column, unmatched_open_paren_columns,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -3520,7 +3520,7 @@ impl FormatEngine<'_> {
                 && previous_code.ends_with(',')
                 && starts_string_literal_token(line_start)
                 && !line_start.starts_with_any(b"#{}")
-                && let Some(open) = previous_code.rfind('{')
+                && let Some(open) = last_unmatched_open_brace(previous_code)
             {
                 layout.exact_indent_spaces = Some(
                     visual_width_from(

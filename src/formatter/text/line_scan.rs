@@ -638,6 +638,11 @@ pub(crate) fn first_unmatched_open_brace(line: &str) -> Option<usize> {
     unmatched_open_braces(line).first().copied()
 }
 
+/// Byte offset of the last `{` the line leaves open.
+pub(crate) fn last_unmatched_open_brace(line: &str) -> Option<usize> {
+    unmatched_open_braces(line).pop()
+}
+
 fn unmatched_open_braces(line: &str) -> Vec<usize> {
     let mut stack: Vec<usize> = Vec::new();
     let mut chars = line.char_indices().peekable();
