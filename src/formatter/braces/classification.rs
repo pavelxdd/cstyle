@@ -851,8 +851,32 @@ pub(super) fn line_ends_lambda_parameter_list(line: &str) -> bool {
     current[..open_pos].trimmed_end().ends_with(']')
 }
 
+/// The code before the `requires` that starts a clause outside any group
+/// at the end of `code`.
+fn before_trailing_requires_clause(code: &str) -> Option<&str> {
+    let mut end = code.len();
+    while let Some(start) = code[..end].rfind("requires") {
+        let before = &code[..start];
+        let after = &code[start + "requires".len()..];
+        if !before.ends_with(is_word_char)
+            && !after.starts_with(is_word_char)
+            && before.matches('(').count() == before.matches(')').count()
+        {
+            return Some(before);
+        }
+        end = start;
+    }
+    None
+}
+
 pub(crate) fn code_ends_definition_header(source: &str) -> bool {
-    let mut rest = source.trimmed_end();
+    let code = source.trimmed_end();
+    // A trailing requires clause constrains the declarator before it.
+    ends_declarator(code) || before_trailing_requires_clause(code).is_some_and(ends_declarator)
+}
+
+fn ends_declarator(code: &str) -> bool {
+    let mut rest = code.trimmed_end();
     loop {
         if rest.ends_with(')') {
             return true;

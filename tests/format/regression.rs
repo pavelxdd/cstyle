@@ -20742,3 +20742,30 @@ fn attach_return_type_joins_a_return_type_with_template_arguments() {
     check(input, &args, expected);
     check(expected, &args, expected);
 }
+
+#[test]
+fn a_class_template_parameter_names_no_class_for_the_function_body() {
+    let input = "template <class Item>\nvoid List<Item>::find() const {\n  while (true) {\n    next();\n  }\n}\ntemplate <class Item>\nvoid List<Item>::clear() noexcept {\n  while (true) {\n    next();\n  }\n}\n";
+    let expected = "template <class Item>\nvoid List<Item>::find() const\n{\n    while (true) {\n        next();\n    }\n}\ntemplate <class Item>\nvoid List<Item>::clear() noexcept\n{\n    while (true) {\n        next();\n    }\n}\n";
+    for style in [
+        "--style=kr",
+        "--style=1tbs",
+        "--style=linux",
+        "--style=stroustrup",
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn a_trailing_requires_clause_leaves_its_head_a_definition() {
+    // The definition's brace stands as without the clause, whatever names
+    // the template parameter.
+    let input = "template <typename Item>\nint make(Item value) requires Ready<Item> {\n    return value;\n}\ntemplate <class Item>\nint take(Item value) requires Ready<Item> && Small<Item> {\n    return value;\n}\n";
+    let expected = "template <typename Item>\nint make(Item value) requires Ready<Item>\n{\n    return value;\n}\ntemplate <class Item>\nint take(Item value) requires Ready<Item> && Small<Item>\n{\n    return value;\n}\n";
+    for style in ["--style=kr", "--style=1tbs"] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}

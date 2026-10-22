@@ -1478,8 +1478,10 @@ impl FormatEngine<'_> {
         if let Some(header) = header {
             self.observe_block_spacing_header(header);
         }
+        // A `class` among template parameters opens no block.
         if (language::BLOCK_WORDS.contains(&word) || language::PRE_BLOCK_WORDS.contains(&word))
             && self.layout.nesting.paren_depth == 0
+            && self.layout.line_state.template_angle_depth == 0
             && self.block_word_is_recognized(word, next)
             && !(matches!(word, "class" | "struct")
                 && self.layout.command_state.pending_block_word.as_deref() == Some("enum"))
