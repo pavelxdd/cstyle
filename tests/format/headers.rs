@@ -1195,7 +1195,7 @@ fn linux_preserves_source_break_before_control_header_condition_paren() {
 }
 
 #[test]
-fn catch_like_macro_after_block_stays_attached() {
+fn macro_after_closing_brace_stays_on_its_line() {
     let source = fixture!(
         "void f()",
         "{",

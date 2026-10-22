@@ -1766,6 +1766,15 @@ fn lambda_chained_call_after_nested_call_aligns_to_outer_open_paren() {
 }
 
 #[test]
+fn operator_row_in_parens_past_max_continuation_indent_takes_two_levels() {
+    check(
+        "void f()\n{\n    VERIFY(helper.callWithVeryLongName(first, second) == (Option::First\n           | Option::ThirdValue));\n}\n",
+        &[],
+        "void f()\n{\n    VERIFY(helper.callWithVeryLongName(first, second) == (Option::First\n            | Option::ThirdValue));\n}\n",
+    );
+}
+
+#[test]
 fn capture_only_lambda_body_call_ending_its_row_continues_past_assigned_value() {
     check(
         "void f()\n{\n    start().onFailed([state] {\n        const auto error = std::make_exception_ptr(\n                    std::runtime_error(\"Unknown error occurred while processing.\"));\n        state->setError(error);\n    });\n}\n",
@@ -20955,9 +20964,9 @@ fn a_statement_unbraced_from_a_one_line_block_keeps_its_template_arguments() {
 }
 
 #[test]
-fn a_catch_like_macro_keeps_its_place_by_its_closing_brace() {
-    // Brace styles move the keywords that close a block; a macro standing
-    // for one stays where the source set it.
+fn a_macro_after_a_block_keeps_its_place_by_the_closing_brace() {
+    // Brace styles move the keywords that close a block; a macro after one
+    // stays where the source set it.
     let input = "void f()\n{\n    TRY_BLOCK {\n        go();\n    }\n    ON_CATCH(...) {}\n    TRY_BLOCK {\n        go();\n    } ON_CATCH(...) {}\n}\n";
     for style in ["--style=1tbs", "--style=kr", "--style=stroustrup"] {
         check(input, &[style], input);

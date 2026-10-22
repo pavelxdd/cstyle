@@ -4,7 +4,7 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{self, CommentKind, Token};
 use crate::formatter::output::model::{LineLayout, LineReplayLayout};
 use crate::formatter::state::indentation::LineKind;
-use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::trailing_comment_split_limit;
 use crate::formatter::text::line_scan::unmatched_open_brace_content_offset;
 use crate::formatter::text::line_scan::{
@@ -34,18 +34,6 @@ impl FormatEngine<'_> {
                 self.joined_closer_padding_lines.push(self.output.len());
             }
             self.push_empty_line_before_pending();
-        }
-        if line_start.starts_with('|')
-            && !line_start.starts_with("||")
-            && let Some(previous) = self.output.last_line_outside_comment()
-            && previous.contains("CHECK(")
-        {
-            let base = layout.indent * self.options.indent_width;
-            if visual_width_from(previous, 0, self.options.tab_width).saturating_sub(base)
-                > self.options.max_continuation_indent
-            {
-                layout.exact_indent_spaces = Some(base + self.options.indent_width * 2);
-            }
         }
         if line.trimmed() == "("
             && let Some(previous) = self.output.last_line_outside_comment()
