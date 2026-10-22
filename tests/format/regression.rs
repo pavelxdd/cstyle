@@ -20733,3 +20733,12 @@ fn a_parameter_pack_takes_the_declarator_of_its_type() {
         check(&expected, args, &expected);
     }
 }
+
+#[test]
+fn attach_return_type_joins_a_return_type_with_template_arguments() {
+    let input = "Box<Item>\nget(void)\n{\n    return {};\n}\nstatic Box<Item, Other>\nmake(int count);\nBox<Item> *\npointer(void);\nclass Env\n{\n    Box<Item> queue_\n    GUARDED_BY(mutex_);\n};\n";
+    let expected = "Box<Item> get(void)\n{\n    return {};\n}\nstatic Box<Item, Other> make(int count);\nBox<Item> *pointer(void);\nclass Env\n{\n    Box<Item> queue_ GUARDED_BY(mutex_);\n};\n";
+    let args = ["--attach-return-type", "--attach-return-type-decl"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}

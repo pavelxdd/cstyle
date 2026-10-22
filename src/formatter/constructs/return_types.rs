@@ -675,15 +675,37 @@ impl FormatEngine<'_> {
 /// A line astyle attaches a function name to: words and pointer marks
 /// only, any word naming a type.
 fn is_attachable_return_type_line(line: &str) -> bool {
-    is_return_type_line(line)
-        || !line.is_empty()
-            && line.chars().all(|ch| {
-                is_identifier_continue(ch) || ch.is_whitespace() || matches!(ch, '*' | '&' | ':')
-            })
-            && line
-                .split(|ch: char| !is_identifier_continue(ch))
-                .filter(|part| !part.is_empty())
-                .all(|part| !language::is_non_type_keyword(part))
+    if is_return_type_line(line) {
+        return true;
+    }
+    let Some(names) = outside_template_arguments(line) else {
+        return false;
+    };
+    !names.is_empty()
+        && names.chars().all(|ch| {
+            is_identifier_continue(ch) || ch.is_whitespace() || matches!(ch, '*' | '&' | ':')
+        })
+        && names
+            .split(|ch: char| !is_identifier_continue(ch))
+            .filter(|part| !part.is_empty())
+            .all(|part| !language::is_non_type_keyword(part))
+}
+
+/// `line` without its balanced template arguments, as `Box<Item> *` reads
+/// `Box *`; none when its angles do not balance or a statement ends in it.
+fn outside_template_arguments(line: &str) -> Option<String> {
+    let mut depth = 0usize;
+    let mut outside = String::with_capacity(line.len());
+    for ch in line.chars() {
+        match ch {
+            '{' | '}' | ';' => return None,
+            '<' => depth += 1,
+            '>' => depth = depth.checked_sub(1)?,
+            _ if depth == 0 => outside.push(ch),
+            _ => {}
+        }
+    }
+    (depth == 0).then_some(outside)
 }
 
 pub(crate) fn is_return_type_line(line: &str) -> bool {
