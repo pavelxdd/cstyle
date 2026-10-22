@@ -21930,3 +21930,12 @@ fn indented_brace_styles_set_the_brace_rows_of_a_nested_list_a_level_past_its_va
     check(expected, &["--style=whitesmith"], expected);
     check(input, &["--style=ratliff"], expected);
 }
+
+#[test]
+fn an_assignment_operator_body_breaks_its_brace_as_any_function_body() {
+    // The `=` naming the operator assigns nothing: the body and the
+    // blocks in it take the style's braces.
+    let input = "Item& Item::operator=(const Item& other) {\n    if (state_ != other.state_) {\n        go();\n    }\n    return *this;\n}\n";
+    let expected = "Item& Item::operator=(const Item& other)\n{\n    if (state_ != other.state_) {\n        go();\n    }\n    return *this;\n}\n";
+    check(input, &["--style=kr"], expected);
+}
