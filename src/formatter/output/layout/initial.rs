@@ -22,6 +22,8 @@ use crate::formatter::preprocessor::layout::SplitElseLineStart;
 use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::BracketFrame;
 use crate::formatter::state::indentation::LineKind;
+use crate::formatter::structure::TokenSpan;
+use crate::formatter::structure::blocks::is_code_token;
 use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::text::columns::{column_after, leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
@@ -1059,11 +1061,9 @@ impl FormatEngine<'_> {
         }
         if layout.line_kind == LineKind::Normal
             && line.trimmed_start().starts_with(',')
-            && let Some(previous) = self.output.last_line_outside_comment()
-            && matches!(previous.trimmed_start().chars().next(), Some(':' | ','))
+            && let Some(spaces) = self.separator_led_sibling_row_column()
         {
-            layout.exact_indent_spaces =
-                Some(leading_visual_width(previous, self.options.tab_width));
+            layout.exact_indent_spaces = Some(spaces);
         }
         // A case label goes on past comment and directive lines as from its
         // own line.
@@ -1152,6 +1152,53 @@ impl FormatEngine<'_> {
         }
         let row = rows.next()?;
         self.colon_led_run_column(row)
+    }
+
+    /// The column of the row before the current `,`-led one that leads with
+    /// `:` or `,` where the current row's `,` stands. Rows inside parens
+    /// nested there, as a conditional's arms within an initializer's, are
+    /// passed.
+    fn separator_led_sibling_row_column(&self) -> Option<usize> {
+        let leads_separator =
+            |row: &str| matches!(row.trimmed_start().chars().next(), Some(':' | ','));
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let first_code = |span: TokenSpan| {
+            (span.first..=span.last.min(tokens.len().saturating_sub(1)))
+                .find(|&index| is_code_token(&tokens[index]))
+        };
+        let Some(current) = self.output.pending_tokens().and_then(first_code) else {
+            let previous = self.output.last_line_outside_comment()?;
+            return leads_separator(previous)
+                .then(|| leading_visual_width(previous, self.options.tab_width));
+        };
+        let level = groups.enclosing(current);
+        for index in self.output.scoped_range().rev() {
+            if self.output.is_directive_line(index)
+                || self.output.comment_start_index(index) != index
+                || self.output.code_before_comment_trimmed(index).is_empty()
+            {
+                continue;
+            }
+            let row = &self.output[index];
+            let row_level = self
+                .output
+                .line_tokens(index)
+                .and_then(first_code)
+                .map(|first| groups.enclosing(first));
+            if row_level.is_none_or(|row_level| row_level == level) {
+                return leads_separator(row)
+                    .then(|| leading_visual_width(row, self.options.tab_width));
+            }
+            let row_level = row_level.flatten();
+            let nested = row_level.is_some_and(|group| {
+                level.is_none_or(|level| groups.ancestors(group).any(|outer| outer == level))
+            });
+            if !nested {
+                return None;
+            }
+        }
+        None
     }
 
     /// The rows before output line `end` that a run of a class's bases

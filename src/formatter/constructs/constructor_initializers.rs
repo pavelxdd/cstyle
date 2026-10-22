@@ -458,11 +458,15 @@ impl FormatEngine<'_> {
         let code = self.output.code_before_comment(index).trimmed_end();
         let trimmed = self.output.code_body(index);
         let braced_initializer = || self.line_ends_initializer_brace(index);
-        if trimmed.starts_with(':') && !trimmed.starts_with("::") {
+        // A conditional's colon neither starts nor ends the list.
+        if trimmed.starts_with(':')
+            && !trimmed.starts_with("::")
+            && !self.colon_line_is_ternary_arm(index)
+        {
             if (code.ends_with('{') || code.ends_with('}')) && !braced_initializer() {
                 return Some(ConstructorScan::Stop);
             }
-            if self.colon_line_is_ternary_arm(index) || self.colon_line_stands_in_parens(index) {
+            if self.colon_line_stands_in_parens(index) {
                 return Some(ConstructorScan::Stop);
             }
             let after_colon =

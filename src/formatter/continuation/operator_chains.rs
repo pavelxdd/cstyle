@@ -348,10 +348,12 @@ impl FormatEngine<'_> {
         let previous_trimmed = previous_code.trimmed_start();
         let current_starts_operator = current.starts_with_any(b"<>|&+-*/%=!?:,.");
         // The ` */` of a block comment does not start with an operator, nor
-        // does a comment leading the line.
+        // does a comment leading the line. Parens the row before opens or
+        // closes part its expression from the current row's.
         let previous_starts_operator = self.output.comment_start_index(previous_index)
             == previous_index
-            && leads_with_operator(previous_trimmed, b"<>|&+-*/%=!?:,.");
+            && leads_with_operator(previous_trimmed, b"<>|&+-*/%=!?:,.")
+            && matches!(self.output.paren_imbalance(previous_index), (0, []));
         if current_starts_operator && previous_starts_operator {
             if self.preprocessor.split_else.extra_indent
                 && (current.starts_with("&&") || current.starts_with("||"))
@@ -1127,6 +1129,11 @@ impl FormatEngine<'_> {
             let code = self.output.code(index);
             let trimmed_code = self.output.code_trimmed(index);
             if trimmed_code.starts_with(':') && code.ends_with(',') {
+                // An arm that closes the parens around the conditional
+                // leaves the rows after it outside them.
+                if !saw_colon_argument && self.output.paren_imbalance(index).0 > 0 {
+                    break;
+                }
                 saw_colon_argument = true;
             } else if saw_colon_argument && trimmed_code.contains('?') {
                 has_recent_ternary_argument = true;

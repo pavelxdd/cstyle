@@ -20949,3 +20949,33 @@ fn a_braced_initializer_closer_after_its_last_element_stays_there() {
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn an_initializer_after_one_holding_a_split_conditional_stands_with_the_initializers() {
+    // The conditional ends with the parens around it.
+    let input = "class Item {\n public:\n  Item()\n      : first_(size >= 0 ? MakeFirst(size) : nullptr),\n        second_(bits >= 0\n                    ? MakeSecond(bits)\n                    : nullptr),\n        third_(nullptr),\n        count_(count) {\n    run();\n  }\n};\n";
+    let expected = "class Item\n{\npublic:\n    Item()\n        : first_(size >= 0 ? MakeFirst(size) : nullptr),\n          second_(bits >= 0\n                  ? MakeSecond(bits)\n                  : nullptr),\n          third_(nullptr),\n          count_(count)\n    {\n        run();\n    }\n};\n";
+    for style in ["--style=kr", "--style=allman"] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn a_split_conditional_in_the_first_initializer_keeps_its_arms_in_the_parens() {
+    // The initializer list's colon leads no operator chain.
+    let input = "class Item {\n public:\n  Item()\n      : first_(bits >= 0\n                    ? MakeFirst(bits)\n                    : nullptr), second_(nullptr),\n        count_(count) {\n  }\n};\n";
+    let expected = "class Item\n{\npublic:\n    Item()\n        : first_(bits >= 0\n                 ? MakeFirst(bits)\n                 : nullptr), second_(nullptr),\n          count_(count)\n    {\n    }\n};\n";
+    for style in ["--style=kr", "--style=allman"] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn a_comma_led_initializer_after_a_split_conditional_stands_with_the_list() {
+    let input = "Item::Item()\n    : first_(a\n             ? b\n             : c)\n    , second_(d\n              ? e\n              : f)\n    , count_(0)\n{\n}\n";
+    for style in ["--style=kr", "--style=allman", "--style=gnu"] {
+        check(input, &[style], input);
+    }
+}
