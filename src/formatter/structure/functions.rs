@@ -239,6 +239,11 @@ fn function_head(
         Some((outer, _)) => groups.get(outer).parent,
         None => group.parent,
     };
+    if declarator.is_none()
+        && let Some(call) = scope.filter(|&scope| groups.get(scope).delimiter == Delimiter::Paren)
+    {
+        return macro_argument_parameter_list(tokens, groups, blocks, head_ends, call, params);
+    }
     if scope.is_some_and(|scope| groups.get(scope).delimiter != Delimiter::Brace)
         || !BlockKind::is_declaration_scope(scope.and_then(|scope| blocks.kind(scope)))
     {
@@ -338,6 +343,44 @@ fn macro_head_parameter_list(
             Some(HeadMatch::ParameterList)
         }
         HeadEnd::Found(None) => Some(HeadMatch::ParameterList),
+        _ => None,
+    }
+}
+
+/// `MACRO(type, name, (params)) {`: a macro call standing for a function's
+/// head, whose last argument lists the parameters of the body after it.
+fn macro_argument_parameter_list(
+    tokens: &[Token],
+    groups: &Groups,
+    blocks: &Blocks,
+    head_ends: &mut HeadEndWalks,
+    call: GroupId,
+    params: GroupId,
+) -> Option<HeadMatch> {
+    let call_group = groups.get(call);
+    let params_group = groups.get(params);
+    if next_code_token(tokens, params_group.close? + 1)? != call_group.close?
+        || !matches!(
+            tokens[previous_code_token(tokens, params_group.open)?],
+            Token::Symbol(',')
+        )
+    {
+        return None;
+    }
+    let scope = call_group.parent;
+    if scope.is_some_and(|scope| groups.get(scope).delimiter != Delimiter::Brace)
+        || !BlockKind::is_declaration_scope(scope.and_then(|scope| blocks.kind(scope)))
+    {
+        return None;
+    }
+    let macro_name = previous_code_token(tokens, call_group.open)?;
+    if !matches!(&tokens[macro_name], Token::Word(word) if !is_non_type_keyword(word)) {
+        return None;
+    }
+    match head_end(tokens, groups, head_ends, call, call)? {
+        HeadEnd::Found(Some(body)) if blocks.kind(body) == Some(BlockKind::FunctionBody) => {
+            Some(HeadMatch::ParameterList)
+        }
         _ => None,
     }
 }

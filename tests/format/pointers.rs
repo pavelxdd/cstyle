@@ -3697,3 +3697,16 @@ fn align_reference_name_attaches_a_reference_to_a_function_pointer_declarator_gr
     assert_eq!(format_exact(input, &options), expected);
     assert_eq!(format_exact(expected, &options), expected);
 }
+
+#[test]
+fn align_pointer_name_reads_a_macro_head_s_last_argument_list_as_parameters() {
+    // A macro standing for a function's head takes its parameter list as
+    // its last argument; a body follows the call.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--align-pointer=name".to_owned()])
+        .expect("valid options");
+    let input = "EXPORT(void, name, (Item * s)) {\n    go();\n}\nEXPORT(int, other, (Item * s, const char * z)) {\n    go();\n}\nvoid f(void)\n{\n    x = call(a, (b * c));\n}\n";
+    let expected = "EXPORT(void, name, (Item *s)) {\n    go();\n}\nEXPORT(int, other, (Item *s, const char *z)) {\n    go();\n}\nvoid f(void)\n{\n    x = call(a, (b * c));\n}\n";
+    assert_eq!(format_exact(input, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
