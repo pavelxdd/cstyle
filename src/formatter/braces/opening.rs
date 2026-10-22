@@ -395,8 +395,15 @@ impl FormatEngine<'_> {
             .nesting
             .brace_type_stack
             .last()
-            .zip(self.layout.frame_stack.active_brace().and_then(|frame| frame.open_token))
-            .map_or(0, |(&brace_type, open)| self.class_block_indent_extra(brace_type, open));
+            .zip(
+                self.layout
+                    .frame_stack
+                    .active_brace()
+                    .and_then(|frame| frame.open_token),
+            )
+            .map_or(0, |(&brace_type, open)| {
+                self.class_block_indent_extra(brace_type, open)
+            });
         let vtk_indented_brace = self.options.brace_style == BraceStyle::Vtk
             && opening_indent > 0
             && self
