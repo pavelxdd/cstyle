@@ -21659,3 +21659,12 @@ fn a_comment_over_rows_broken_off_a_switch_brace_stands_at_the_labels_as_one_on_
     let expected = "void f() {\n    switch (x) {\n        /* note\n                      ** more */\n        case 1:\n            go();\n    }\n}\n";
     check(input, &["--indent-switches"], expected);
 }
+
+#[test]
+fn a_directive_continuation_row_in_a_case_block_keeps_its_source_column() {
+    let input = "void helper(int choice)\n{\n    switch (choice) {\n    case FIRST: {\n#if defined(ALPHA) && \\\n            defined(BETA)\n#define VALUE(a) \\\n            ((a) + 1)\n        value = 1;\n#endif\n        break;\n    }\n    }\n}\n";
+    check(input, &[], input);
+    let expected = "void helper(int choice)\n{\n    switch (choice) {\n        case FIRST: {\n#if defined(ALPHA) && \\\n            defined(BETA)\n#define VALUE(a) \\\n            ((a) + 1)\n            value = 1;\n#endif\n            break;\n        }\n    }\n}\n";
+    check(input, &["--indent-switches"], expected);
+    check(expected, &["--indent-switches"], expected);
+}
