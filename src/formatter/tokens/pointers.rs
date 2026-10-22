@@ -41,6 +41,9 @@ pub(crate) struct PointerRunState {
     pub(crate) spaces_declarator_group: bool,
     /// A parenthesized declarator or an array bound follows the run.
     pub(crate) group_follows_run: bool,
+    /// A `*` aligned to its name takes the parenthesized declarator or array
+    /// bound right after it as that name, as in `new char *[count]`.
+    pub(crate) attaches_declarator_group: bool,
     /// The last run of one operator read: the tokens' address, the token
     /// read from, and the run's last token.
     pub(crate) run_end: Option<(usize, usize, usize)>,
@@ -1149,6 +1152,7 @@ impl FormatEngine<'_> {
                 ) {
                     return;
                 }
+                self.pointer_run.attaches_declarator_group = self.pointer_run.group_follows_run;
             }
             PointerAlign::None => {
                 self.emit_source_space();

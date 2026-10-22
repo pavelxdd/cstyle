@@ -318,6 +318,8 @@ impl FormatEngine<'_> {
                 self.trim_current_end();
             }
         }
+        let attaches_declarator_group =
+            std::mem::take(&mut self.pointer_run.attaches_declarator_group);
         let next_is_close = matches!(next, Some(Token::Symbol(')')));
         // The method prefix options set the gap before a return type.
         let prefix_sets_gap = handled_objc_return_paren && self.options.unpad_method_prefix;
@@ -373,7 +375,7 @@ impl FormatEngine<'_> {
             && self.options.pointer_align == PointerAlign::Name
             && self.current.trimmed_end().ends_with_any(b"*^")
             && !self.follows_binary_operator()
-            && self.looks_like_pointer_declaration_context()
+            && (attaches_declarator_group || self.looks_like_pointer_declaration_context())
             && !self.active_token_in_brackets()
         {
             if !self.function_pointer_parameter_keeps_space_before_name_group() {
@@ -735,8 +737,10 @@ impl FormatEngine<'_> {
         let opens_attribute = matches!(next, Some(Token::Symbol('[')));
         let opens_structured_binding =
             declarator_operator == Some("&") && trailing_word(declarator_prefix) == "auto";
+        let attaches_declarator_group =
+            std::mem::take(&mut self.pointer_run.attaches_declarator_group);
         let attaches_to_name_side = declarator_alignment == Some(PointerAlign::Name)
-            && (opens_attribute || opens_structured_binding);
+            && (opens_attribute || opens_structured_binding || attaches_declarator_group);
         let spaces_declarator_group = std::mem::take(&mut self.pointer_run.spaces_declarator_group);
         let keeps_aligned_declarator_gap =
             (opens_attribute || opens_structured_binding || spaces_declarator_group)

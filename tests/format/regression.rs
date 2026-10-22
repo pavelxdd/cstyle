@@ -20628,3 +20628,11 @@ fn a_star_run_before_an_array_bound_or_parameters_declares_pointers() {
         check(expected, args, expected);
     }
 }
+
+#[test]
+fn a_name_aligned_star_attaches_to_its_array_bound_or_parameters() {
+    let input = "void f()\n{\n    a = sizeof(char * [4]);\n    b = new char * (nullptr);\n    c = (char * [4])value;\n    d = new Item * [count];\n}\n";
+    let expected = "void f()\n{\n    a = sizeof(char *[4]);\n    b = new char *(nullptr);\n    c = (char *[4])value;\n    d = new Item *[count];\n}\n";
+    check(input, &["--align-pointer=name"], expected);
+    check(expected, &["--align-pointer=name"], expected);
+}
