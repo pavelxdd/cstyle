@@ -21517,3 +21517,10 @@ fn rows_of_a_list_whose_first_element_takes_a_sign_stay_at_the_element_column() 
     let input = "static double values[] = {\n    -1.0,\n    +2.0,\n    4.0,\n};\n";
     check(input, &[], input);
 }
+
+#[test]
+fn pad_oper_pads_a_sign_leading_a_continued_row_before_a_paren() {
+    let input = "void f() {\n    value=first\n          +(Unit)(rem);\n    value=first\n          -(rem);\n    value=first\n          +rem;\n}\n";
+    let expected = "void f() {\n    value = first\n            + (Unit)(rem);\n    value = first\n            - (rem);\n    value = first\n            + rem;\n}\n";
+    check(input, &["--pad-oper"], expected);
+}

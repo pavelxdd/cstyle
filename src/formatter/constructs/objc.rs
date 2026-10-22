@@ -3,6 +3,7 @@ use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, next_non_whitespace, token_text, tokenize};
 use crate::formatter::state::frame::{BracketFrame, BracketRole};
+use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{ContainsAnyByte, after_leading_comments};
@@ -678,6 +679,38 @@ impl FormatEngine<'_> {
     pub(crate) fn is_objc_method_prefix(&self, next: Option<&Token>) -> bool {
         matches!(next, Some(Token::Symbol('(')))
             && after_leading_comments(self.current.trimmed()).is_empty()
+            && self.active_token_starts_declaration()
+    }
+
+    /// Whether the token being pushed starts a declaration, as a method's
+    /// `-` or `+` does: in no group but a declaration scope's braces, and
+    /// after a statement's end or an `@` directive's line, not inside an
+    /// expression the line before continues.
+    fn active_token_starts_declaration(&self) -> bool {
+        let tree = &self.tree;
+        let Some(index) = self
+            .current
+            .active_token()
+            .filter(|&index| index < tree.tokens.len())
+        else {
+            return true;
+        };
+        if let Some(group) = tree.groups.enclosing(index)
+            && (tree.groups.get(group).delimiter != Delimiter::Brace
+                || !BlockKind::is_declaration_scope(tree.blocks.kind(group)))
+        {
+            return false;
+        }
+        match tree
+            .previous_code_token(index)
+            .map(|previous| &tree.tokens[previous])
+        {
+            None | Some(Token::Symbol(';' | '{' | '}')) => true,
+            Some(_) => self
+                .output
+                .last_code_line_past_comments_and_directives()
+                .is_some_and(|line| line.trimmed_start().starts_with('@')),
+        }
     }
 
     pub(crate) fn compute_objc_method_colon_align(
