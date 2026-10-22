@@ -20807,3 +20807,13 @@ fn a_padded_product_of_a_value_keeps_its_operand_apart() {
     check(input, &args, expected);
     check(expected, &args, expected);
 }
+
+#[test]
+fn an_operator_row_after_a_macro_call_spanning_rows_continues_the_statement() {
+    // The operator continues the call's value; the call stands alone as no
+    // statement.
+    let input = "void f() {\n  CHECK_SAME(first,\n             second)\n      << \"note: \" << first;\n  CHECK_SAME(first,\n             second)\n      << \"note: \"\n      << first;\n}\n";
+    let expected = "void f()\n{\n    CHECK_SAME(first,\n               second)\n            << \"note: \" << first;\n    CHECK_SAME(first,\n               second)\n            << \"note: \"\n            << first;\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}

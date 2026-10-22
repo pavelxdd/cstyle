@@ -872,6 +872,35 @@ fn standalone_macro_invocation_word(
             || line_ends_after_token(tokens, close))
 }
 
+/// Whether `token` can only go on with an expression before it.
+pub(crate) fn continues_expression(token: &Token) -> bool {
+    match token {
+        Token::Operator(operator) => {
+            language::is_assignment_operator(operator)
+                || matches!(
+                    operator.as_str(),
+                    "<<" | ">>"
+                        | "=="
+                        | "!="
+                        | "<"
+                        | ">"
+                        | "<="
+                        | ">="
+                        | "&&"
+                        | "||"
+                        | "|"
+                        | "^"
+                        | "/"
+                        | "%"
+                        | "?"
+                        | "->"
+                )
+        }
+        Token::Symbol('.' | '?') => true,
+        _ => false,
+    }
+}
+
 fn line_ends_after_token(tokens: &[Token], index: usize) -> bool {
     let mut cursor = index + 1;
     while matches!(tokens.get(cursor), Some(Token::Whitespace(_))) {

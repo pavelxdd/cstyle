@@ -21,7 +21,8 @@ use crate::formatter::syntax::language::{
     is_unpad_kept_type_word,
 };
 use crate::formatter::syntax::{
-    assignment_declarator_offset, scoped_name_is_constructor, signature_ends_with_parameter_list,
+    assignment_declarator_offset, continues_expression, scoped_name_is_constructor,
+    signature_ends_with_parameter_list,
 };
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
@@ -656,8 +657,15 @@ impl FormatEngine<'_> {
         self.layout.nesting.exit_paren();
         self.layout.frame_stack.pop_delimiter(self.output.len());
         self.layout.indentation.exit_paren();
+        // An operator no statement starts with continues the call's value.
+        let continued = self
+            .current
+            .active_token()
+            .and_then(|close| next_code_token(&self.tree.tokens, close + 1))
+            .is_some_and(|next| continues_expression(&self.tree.tokens[next]));
         if self.layout.nesting.paren_depth == 0
             && !matches!(next, Some(Token::Symbol(';')))
+            && !continued
             && let Some(spaces) = closes_semicolonless_macro_call_indent
         {
             self.layout
