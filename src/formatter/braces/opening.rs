@@ -568,6 +568,7 @@ impl FormatEngine<'_> {
         if line.trimmed() != "{"
             || self.options.brace_style != BraceStyle::Whitesmith
             || self.pending_brace_in_header_parens()
+            || self.pending_brace_opens_argument_list()
             || !self
                 .output
                 .last_line_outside_comment()
@@ -591,6 +592,7 @@ impl FormatEngine<'_> {
         if line.trimmed() != "{"
             || self.options.brace_style != BraceStyle::Whitesmith
             || self.innermost_brace_is_compound_literal()
+            || self.pending_brace_opens_argument_list()
         {
             return None;
         }
@@ -606,6 +608,17 @@ impl FormatEngine<'_> {
         self.output
             .pending_tokens()
             .is_some_and(|span| self.token_in_header_parens(span.first))
+    }
+
+    /// Whether the `{` the pending line holds opens a list among a call's
+    /// arguments: under whitesmith it stands at them.
+    fn pending_brace_opens_argument_list(&self) -> bool {
+        self.pending_brace_opens_value()
+            && self
+                .output
+                .pending_tokens()
+                .and_then(|span| self.tree.groups.enclosing(span.first))
+                .is_some_and(|group| self.tree.groups.get(group).delimiter == Delimiter::Paren)
     }
 
     fn pending_brace_opens_value(&self) -> bool {
@@ -658,9 +671,11 @@ impl FormatEngine<'_> {
     ) -> Option<usize> {
         if line.trimmed() != "{"
             || self.options.brace_style != BraceStyle::Whitesmith
-            // A compound literal's element brace stands at its elements.
+            // A compound literal's element brace stands at its elements, and
+            // a list's brace among arguments at them.
             || self.innermost_brace_is_compound_literal()
             || self.pending_brace_in_header_parens()
+            || self.pending_brace_opens_argument_list()
         {
             return None;
         }

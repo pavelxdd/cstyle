@@ -12106,6 +12106,21 @@ fn rows_of_a_comment_an_attaching_style_breaks_from_an_element_brace_stand_as_af
 }
 
 #[test]
+fn a_list_brace_on_its_own_line_among_arguments_stands_at_them_under_whitesmith() {
+    // Under whitesmith the list's rows stand at its brace; the argument
+    // after the list keeps the arguments' column.
+    let input = "void f() {\n  call(\n      first,\n      {  // note\n        a_++;\n        go();\n      },\n      (b_++, \"test\"));\n}\n";
+    let expected = "void f()\n    {\n    call(\n        first,\n        {\n        // note\n        a_++;\n        go();\n        },\n        (b_++, \"test\"));\n    }\n";
+    check(input, &["--style=whitesmith"], expected);
+    check(expected, &["--style=whitesmith"], expected);
+    check(
+        &input.replace("{  // note", "{"),
+        &["--style=whitesmith"],
+        &expected.replace("        // note\n", ""),
+    );
+}
+
+#[test]
 fn any_unconditional_directive_between_a_case_label_and_a_brace_makes_the_brace_a_plain_block() {
     let input = "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n    {\n        pop(state);\n    }\n    break;\n    case 2:\n#pragma once\n    {\n        push(state);\n    }\n    break;\n    }\n}\n";
     check(
