@@ -32,7 +32,7 @@ use crate::formatter::text::line_scan::{
 };
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{is_identifier_continue, is_word_char, leading_identifier, trailing_word};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 impl FormatEngine<'_> {
     pub(crate) fn try_add_braces_to_statement(
@@ -2694,20 +2694,23 @@ pub(crate) fn add_marked_cross_line_statement_braces(
     let mut replace = BTreeMap::<usize, Token>::new();
     // astyle sets the comment after a braced statement an indent past it,
     // and takes the brace it attaches out of the gap before a comment.
-    let set_statement_comment_gap = |replace: &mut BTreeMap<usize, Token>, close_insert: usize| {
-        let mut index = close_insert;
-        while index > 0 && matches!(tokens[index - 1], Token::Newline | Token::Whitespace(_)) {
-            index -= 1;
-        }
-        if index >= 2
-            && matches!(&tokens[index - 1], Token::Comment(_, text) if !text.contains('\n'))
-            && matches!(tokens[index - 2], Token::Whitespace(_))
-            && index >= 3
-            && matches!(tokens[index - 3], Token::Symbol(';'))
-        {
-            replace.insert(index - 2, Token::Whitespace(" ".repeat(comment_gap).into()));
-        }
-    };
+    let mut gapped_comments = BTreeSet::new();
+    let mut set_statement_comment_gap =
+        |replace: &mut BTreeMap<usize, Token>, close_insert: usize| {
+            let mut index = close_insert;
+            while index > 0 && matches!(tokens[index - 1], Token::Newline | Token::Whitespace(_)) {
+                index -= 1;
+            }
+            if index >= 2
+                && matches!(&tokens[index - 1], Token::Comment(_, text) if !text.contains('\n'))
+                && matches!(tokens[index - 2], Token::Whitespace(_))
+                && index >= 3
+                && matches!(tokens[index - 3], Token::Symbol(';'))
+            {
+                replace.insert(index - 2, Token::Whitespace(" ".repeat(comment_gap).into()));
+                gapped_comments.insert(index - 1);
+            }
+        };
     let in_open_parens = words_in_open_parens(tokens);
     let mut covered_until = 0usize;
     for header_index in 0..tokens.len() {
@@ -2849,6 +2852,7 @@ pub(crate) fn add_marked_cross_line_statement_braces(
             tokens: owned_tokens,
             closers: IndexSet::default(),
             opener_overruns: IndexMap::default(),
+            gapped_comments: IndexSet::default(),
         };
     }
     let token_count = tokens.len();
@@ -2865,6 +2869,7 @@ pub(crate) fn add_marked_cross_line_statement_braces(
     tokens.resize_with(token_count + added, || Token::Newline);
     let mut write = tokens.len();
     let mut closers = Vec::new();
+    let mut moved_comments = IndexSet::default();
     let mut overruns = Vec::new();
     let mut place_inserted = |tokens: &mut Vec<Token>,
                               write: &mut usize,
@@ -2890,6 +2895,9 @@ pub(crate) fn add_marked_cross_line_statement_braces(
     for index in (0..token_count).rev() {
         write -= 1;
         tokens.swap(index, write);
+        if gapped_comments.contains(&index) {
+            moved_comments.insert(write);
+        }
         if let Some(inserted) = insert_before
             .last_entry()
             .filter(|entry| *entry.key() == index)
@@ -2907,16 +2915,18 @@ pub(crate) fn add_marked_cross_line_statement_braces(
         tokens,
         closers: closers.into_iter().rev().collect(),
         opener_overruns: overruns.into_iter().rev().collect(),
+        gapped_comments: moved_comments,
     }
 }
 
 /// Tokens with the braces add-braces put in, the indexes of the added
-/// closers, and the columns each added opener takes past the gap before a
-/// comment after it.
+/// closers, the columns each added opener takes past the gap before a
+/// comment after it, and the comments whose gap it set.
 pub(crate) struct AddedBraces {
     pub(crate) tokens: Vec<Token>,
     pub(crate) closers: IndexSet<usize>,
     pub(crate) opener_overruns: IndexMap<usize, usize>,
+    pub(crate) gapped_comments: IndexSet<usize>,
 }
 
 fn open_brace_attaches_to_header_line(

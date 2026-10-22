@@ -20783,5 +20783,17 @@ fn an_attached_return_type_keeps_its_pointer_on_the_side_it_stands() {
 fn attach_return_type_leaves_a_template_clause_before_a_constructor() {
     // A constructor has no return type for its template clause to stand for.
     let input = "template<typename Value>\nArray<Value>::Array(const Array &src)\n{\n}\ntemplate<typename Value>\nArray<Value>::Array() = default;\n";
-    check(input, &["--attach-return-type", "--attach-return-type-decl"], input);
+    check(
+        input,
+        &["--attach-return-type", "--attach-return-type-decl"],
+        input,
+    );
+}
+
+#[test]
+fn the_comment_gap_add_braces_sets_stands_whatever_padding_adds() {
+    let input = "void f()\n{\n    if (ready)\n        Push(id+1, p);  // try\n    if (ready)\n        Push(id+1+2, p);     // try\n}\n";
+    let expected = "void f()\n{\n    if (ready) {\n        Push(id + 1, p);    // try\n    }\n    if (ready) {\n        Push(id + 1 + 2, p);    // try\n    }\n}\n";
+    check(input, &["--add-braces", "-p"], expected);
+    check(expected, &["--add-braces", "-p"], expected);
 }

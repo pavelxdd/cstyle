@@ -415,6 +415,8 @@ pub(crate) struct FormatEngine<'a> {
     /// Closing braces add-braces put after statements.
     pub(crate) added_closing_braces: IndexSet<usize>,
     pub(crate) added_opener_overruns: IndexMap<usize, usize>,
+    /// Comments whose gap add-braces set after the statement it braced.
+    pub(crate) added_comment_gaps: IndexSet<usize>,
     pub(crate) syntax_roles: SyntaxRoles,
     pub(crate) tree: SourceTree,
     pub(crate) pending_extern: bool,
@@ -562,6 +564,7 @@ impl<'a> FormatEngine<'a> {
             preprocessor: preprocessor::PreprocessorState::default(),
             access_modified_braces: IndexSet::default(),
             added_closing_braces: IndexSet::default(),
+            added_comment_gaps: IndexSet::default(),
             added_opener_overruns: IndexMap::default(),
             syntax_roles: SyntaxRoles::new(0),
             tree: SourceTree::default(),
@@ -685,6 +688,7 @@ impl<'a> FormatEngine<'a> {
             );
             self.added_closing_braces = added.closers;
             self.added_opener_overruns = added.opener_overruns;
+            self.added_comment_gaps = added.gapped_comments;
             added.tokens
         } else {
             tokens

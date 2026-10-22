@@ -4532,6 +4532,15 @@ impl FormatEngine<'_> {
         .then(|| self.layout.line_state.trailing_comment_columns.pop_front())
         .flatten()
         .map(|column| column.saturating_sub(self.broken_off_leading_comments_width()));
+        // The gap add-braces set after the statement it braced stands as set.
+        if self
+            .comments
+            .pushed_comment
+            .is_some_and(|index| self.added_comment_gaps.contains(&index))
+        {
+            self.current.push_str(&gap);
+            return;
+        }
         // A closer after code on its source line runs back into that line,
         // which keeps the gap before its comment.
         if !gap.is_empty() && self.run_in_closer_row() == Some(false) {
