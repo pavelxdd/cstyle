@@ -21572,3 +21572,10 @@ fn padding_a_closer_led_header_line_takes_from_its_comment_gap_as_any_line() {
         &wrap("} else if (b > c) {  /* note */"),
     );
 }
+
+#[test]
+fn a_block_comment_set_against_code_before_more_code_stays_against_it_after_padding() {
+    let input = "void f() {\n  value=second/*note*/;\n  call(value==second/*note*/, x);\n  value=second;/*note*/\n}\n";
+    let expected = "void f() {\n    value = second/*note*/;\n    call(value == second/*note*/, x);\n    value = second; /*note*/\n}\n";
+    check(input, &["--pad-oper"], expected);
+}

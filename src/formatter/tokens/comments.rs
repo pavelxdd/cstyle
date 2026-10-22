@@ -4689,7 +4689,8 @@ impl FormatEngine<'_> {
         let code_len = self.current_char_len() - out_indent;
         let gap_chars = gap.chars().count();
         // A block comment set against the code stays there unless padding
-        // moved the code into its column, when astyle parts them.
+        // moved the code into the column of one ending the line, when
+        // astyle parts them.
         if kind == CommentKind::Block && gap.is_empty() {
             let ends_line = !self.token_input.has_next_meaningful_token
                 || self
@@ -4697,9 +4698,12 @@ impl FormatEngine<'_> {
                     .next_input_whitespace
                     .as_deref()
                     .is_some_and(|whitespace| whitespace.contains('\n'));
+            if !ends_line {
+                return;
+            }
             if code_len > target_column {
                 self.ensure_space();
-            } else if ends_line {
+            } else {
                 // Code unpadding shortened keeps a trailing comment at its
                 // column.
                 self.current.push_str(&" ".repeat(target_column - code_len));
