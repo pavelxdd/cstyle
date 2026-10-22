@@ -21124,3 +21124,29 @@ fn add_braces_braces_a_header_in_a_lambda_body_among_call_arguments() {
     check(input, &["--style=kr", "--add-braces"], expected);
     check(expected, &["--style=kr", "--add-braces"], expected);
 }
+
+#[test]
+fn the_parameter_row_opening_a_lambda_body_stands_at_the_statement() {
+    // As a row the lambda's head opens the body on does; the rows before
+    // it stand past the parameters' paren.
+    let input = "void f() {\n  auto check =\n      [](int a,\n         int b,\n         int c) {\n        go(a);\n      };\n  call(x, [](int a,\n             int b,\n             int c) {\n    return a;\n  });\n  auto other = [](int a,\n                  int b,\n                  int c) -> int {\n    return a;\n  };\n  call(x, [](int a,\n             int b)\n  {\n    return a;\n  });\n}\n";
+    let expected = "void f()\n{\n    auto check =\n        [](int a,\n           int b,\n    int c) {\n        go(a);\n    };\n    call(x, [](int a,\n               int b,\n    int c) {\n        return a;\n    });\n    auto other = [](int a,\n                    int b,\n    int c) -> int {\n        return a;\n    };\n    call(x, [](int a,\n    int b) {\n        return a;\n    });\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn a_split_lambda_head_with_a_trailing_return_type_keeps_its_body_brace() {
+    let input = "void f() {\n  auto other = [](int a,\n                  int b) -> int {\n    return a;\n  };\n}\n";
+    let expected = "void f()\n{\n    auto other = [](int a,\n    int b) -> int {\n        return a;\n    };\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn the_second_parameter_row_of_an_assigned_lambda_opening_its_body_stands_at_the_statement() {
+    let input = "void f() {\n  auto check =\n      [](const char* str,\n         Buffer& buffer) {\n        go(str);\n      };\n}\n";
+    let expected = "void f()\n{\n    auto check =\n        [](const char* str,\n    Buffer& buffer) {\n        go(str);\n    };\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}

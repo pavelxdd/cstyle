@@ -1420,7 +1420,10 @@ impl FormatEngine<'_> {
             || leads_string
             || leads_stream
         {
+            // Only the row opening the lambda's body leaves its parameters'
+            // paren.
             if !current.starts_with_any(b"#(){}")
+                && self.pending_line_opens_lambda_body()
                 && previous_code.ends_with(',')
                 && let Some(capture_end) = previous_code.find_from_first_byte("](")
                 && previous_code[..capture_end].contains('=')

@@ -2,8 +2,8 @@ use crate::config::{BraceStyle, LineEnding};
 use crate::formatter::braces::classification::{
     ExternCGuard, block_indent_extra, brace_indent_applies, current_ends_block_literal_header,
     is_lambda_body_header, is_lambda_capture_header, is_namespace_or_module_block_header,
-    line_ends_lambda_parameter_list, line_opens_lambda_block,
-    line_opens_lambda_or_capture_only_block, line_opens_parameterized_lambda_block,
+    line_ends_lambda_parameter_list, line_opens_lambda_or_capture_only_block,
+    line_opens_parameterized_lambda_block,
 };
 use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::braces::initializers::{
@@ -2537,7 +2537,6 @@ impl FormatEngine<'_> {
             line.push_str(comment.trimmed_end());
             self.comments.skip_next_attached_comment = true;
         }
-        let lambda_row_level = lambda_row_level.filter(|_| line_opens_lambda_block(&line));
         if let Some(level) = lambda_row_level {
             let mut row = String::with_capacity(line.len());
             self.options.push_indent_prefix(&mut row, level);

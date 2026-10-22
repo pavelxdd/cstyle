@@ -299,7 +299,9 @@ impl FormatEngine<'_> {
                 spaces = None;
             }
         }
-        let opens_lambda_block = line_opens_lambda_block(line);
+        // So does a row of its parameters that opens the lambda's body.
+        let opens_lambda_block =
+            line_opens_lambda_block(line) || self.pending_line_opens_lambda_body();
         if spaces.is_some() && opens_lambda_block {
             spaces = None;
         }
@@ -914,6 +916,7 @@ impl FormatEngine<'_> {
                 .chars()
                 .next()
                 .is_some_and(is_identifier_start)
+            && !self.pending_line_opens_lambda_body()
             && let Some(previous) = self.output.last_line_outside_comment()
             && previous.trimmed_start().starts_with("[]")
             && let Some(open) = unmatched_open_paren_column(self.output.code_trimmed_of(previous))
