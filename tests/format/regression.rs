@@ -21439,3 +21439,13 @@ fn keep_one_line_statements_keeps_an_operator_led_statement_on_its_closers_line_
     let lisp = "void f() {\n    while (a) {\n        b(); } -x;\n    if (a) {\n        b(); } *p = 1;\n    if (a) {\n        b(); } ++i;\n    if (a) {\n        b(); } y = 1; }\n";
     check(input, &["--style=lisp"], lisp);
 }
+
+#[test]
+fn break_blocks_parts_a_bare_block_from_a_header_block_a_comment_follows() {
+    // The comment after the header's closer ends what the header carries
+    // on; the bare block after it parts from nothing after it.
+    let input = "void f()\n{\n    if (ready) { value=0; } // done\n    {\n        value = 1;\n    }\n    next();\n}\n";
+    let options = ["--style=kr", "--break-blocks", "--keep-one-line-blocks"];
+    let expected = "void f()\n{\n    if (ready) { value=0; } // done\n\n    {\n        value = 1;\n    }\n    next();\n}\n";
+    check(input, &options, expected);
+}

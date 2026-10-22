@@ -398,11 +398,10 @@ impl FormatEngine<'_> {
     /// or comment between the blocks ends the header.
     fn brace_continues_header_block(&self) -> bool {
         let tokens = &self.tree.tokens;
-        // Comments between them take no part.
         let Some((brace, close)) = self.current.active_token().and_then(|brace| {
             tokens[..brace]
                 .iter()
-                .rposition(is_code_token)
+                .rposition(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
                 .map(|close| (brace, close))
         }) else {
             return false;
@@ -413,12 +412,14 @@ impl FormatEngine<'_> {
                     || is_break_blocks_closing_header(header))
         };
         // Braces added around the statement before the brace close its
-        // header's block there.
-        if self.comments.added_block_semicolon == Some(close) {
+        // header's block there, past the comments trailing the statement.
+        let statement_end = tokens[..brace].iter().rposition(is_code_token);
+        if statement_end.is_some() && self.comments.added_block_semicolon == statement_end {
             return self.tree.statements.previous_sibling(brace).is_some_and(
                 |header| matches!(&tokens[header], Token::Word(word) if pads_header(word)),
             );
         }
+        // A comment after a header's closer ends what the header carries.
         if !matches!(tokens[close], Token::Symbol('}')) {
             return false;
         }
