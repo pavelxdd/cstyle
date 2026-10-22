@@ -21393,3 +21393,13 @@ fn a_declaration_after_an_objective_c_end_starts_anew_under_tabs() {
     let expected = "@interface Item\n@end\n\nstatic const struct Item\n\tfirst =\n{\n\t1, 2\n};\n";
     check(input, &["--indent=tab=4"], expected);
 }
+
+#[test]
+fn pico_aligns_a_joined_closer_rows_paren_by_the_rows_visual_width_under_tabs() {
+    // The tab a run-in brace's fill holds spans to the next tab stop.
+    let input = "void f()\n{\n    do {\n        value++;\n    } while (value < count &&\n             ready);\n}\n";
+    let expected = "void f()\n{\tdo\n\t{\tvalue++; } while (value < count &&\n\t                      ready); }\n";
+    let options = ["--style=pico", "--attach-closing-while", "--indent=tab=4"];
+    check(input, &options, expected);
+    check(expected, &options, expected);
+}

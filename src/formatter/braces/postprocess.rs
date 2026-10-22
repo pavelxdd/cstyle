@@ -460,7 +460,10 @@ fn attach_lisp_closing_braces(output: &str, options: &FormatOptions) -> String {
                         .is_empty()
                 })
             {
-                paren_shift = Some((previous.trimmed_start().len(), opens.len()));
+                let tab_width = options.tab_width.max(1);
+                let shift = visual_width_from(previous, 0, tab_width)
+                    - leading_visual_width(previous, tab_width);
+                paren_shift = Some((shift, opens.len()));
             }
             // The brace moves up a column and its comment follows it.
             let code = trimmed[..trailing_comment_split_limit(trimmed)].trimmed_end();
