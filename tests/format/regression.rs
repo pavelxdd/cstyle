@@ -20855,3 +20855,16 @@ fn a_statement_unbraced_from_a_one_line_block_keeps_its_template_arguments() {
     check(input, &args, expected);
     check(expected, &args, expected);
 }
+
+#[test]
+fn a_catch_like_macro_keeps_its_place_by_its_closing_brace() {
+    // Brace styles move the keywords that close a block; a macro standing
+    // for one stays where the source set it.
+    let input = "void f()\n{\n    TRY_BLOCK {\n        go();\n    }\n    ON_CATCH(...) {}\n    TRY_BLOCK {\n        go();\n    } ON_CATCH(...) {}\n}\n";
+    for style in ["--style=1tbs", "--style=kr", "--style=stroustrup"] {
+        check(input, &[style], input);
+    }
+    let expected = "void f()\n{\n    TRY_BLOCK\n    {\n        go();\n    }\n    ON_CATCH(...) {}\n    TRY_BLOCK\n    {\n        go();\n    } ON_CATCH(...) {}\n}\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+}

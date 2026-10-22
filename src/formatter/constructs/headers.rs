@@ -2406,7 +2406,13 @@ pub(crate) fn is_attachable_closing_header(word: &str) -> bool {
     matches!(
         word,
         "else" | "catch" | "@catch" | "@finally" | "__finally" | "__except"
-    ) || word.ends_with("CATCH")
+    ) || is_catch_like_macro(word)
+}
+
+/// A macro standing for a `catch`, which closes a block where the source
+/// set it and moves with no brace style.
+pub(crate) fn is_catch_like_macro(word: &str) -> bool {
+    word.ends_with("CATCH")
 }
 
 fn header_word_is(line: &str, word: &str) -> bool {

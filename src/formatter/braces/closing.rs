@@ -4,7 +4,8 @@ use crate::formatter::braces::classification::{
 };
 use crate::formatter::braces::rewrite::is_standard_add_braces_header;
 use crate::formatter::constructs::headers::{
-    is_attachable_closing_header, same_line_nested_header_extra, starts_header_word,
+    is_attachable_closing_header, is_catch_like_macro, same_line_nested_header_extra,
+    starts_header_word,
 };
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
@@ -1043,13 +1044,33 @@ impl FormatEngine<'_> {
         }
 
         matches!(next, Some(Token::Word(word))
-            if self.attaches_closing_header(word, self.closing_header_stays_on_brace_line()))
+        if self.attaches_closing_header(
+            word,
+            self.closing_header_stays_on_brace_line()
+                && (!is_catch_like_macro(word) || self.code_follows_brace_on_source_line()),
+        ))
+    }
+
+    /// Whether code follows the `}` being pushed on its source line.
+    fn code_follows_brace_on_source_line(&self) -> bool {
+        self.current.active_token().is_some_and(|brace| {
+            self.tree.tokens[brace + 1..]
+                .iter()
+                .find(|token| !matches!(token, Token::Whitespace(_)))
+                .is_some_and(|token| !matches!(token, Token::Newline))
+        })
     }
 
     /// Whether the closing header `word` joins the `}` before it; without a
     /// brace style only one the source set there stays.
     pub(crate) fn attaches_closing_header(&self, word: &str, source_attached: bool) -> bool {
-        if !is_attachable_closing_header(word) || self.options.break_closing_braces {
+        if !is_attachable_closing_header(word) {
+            return false;
+        }
+        if is_catch_like_macro(word) {
+            return source_attached;
+        }
+        if self.options.break_closing_braces {
             return false;
         }
         if self.options.brace_style == BraceStyle::None {
@@ -1085,6 +1106,7 @@ impl FormatEngine<'_> {
                     && !self.options.indent_blocks)
         } else {
             is_attachable_closing_header(word)
+                && !is_catch_like_macro(word)
                 && is_attached_closing_header_style(self.options)
                 && !self.options.break_closing_braces
                 && !self.options.indent_braces
