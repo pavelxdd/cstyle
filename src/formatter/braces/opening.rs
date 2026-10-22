@@ -1,4 +1,4 @@
-use crate::config::{BraceStyle, LineEnding};
+use crate::config::{BraceStyle, IndentStyle, LineEnding};
 use crate::formatter::braces::classification::{
     ExternCGuard, block_indent_extra, brace_indent_applies, current_ends_block_literal_header,
     is_lambda_body_header, is_lambda_capture_header, is_namespace_or_module_block_header,
@@ -1281,8 +1281,26 @@ impl FormatEngine<'_> {
             self.current.replace(line);
             self.current.restore_tokens(tokens);
         }
-        if !self.current.ends_with_any(b" \t") {
-            self.current.push_str("   ");
+        // A brace the line goes on after stands a level past the brace
+        // before it; the brace ending the line keeps its gap.
+        let tokens = &self.tree.tokens;
+        let ends_line = next_non_whitespace(tokens, token_index + 1, tokens.len())
+            .is_none_or(|next| matches!(tokens[next], Token::Newline));
+        if !ends_line {
+            self.trim_current_end();
+            if self.options.indent_style == IndentStyle::Spaces {
+                let fill = self.options.indent_width.saturating_sub(1).max(1);
+                self.current.push_str(&" ".repeat(fill));
+            } else {
+                self.current.push('\t');
+            }
+        } else if let Some(gap) = self
+            .token_input
+            .previous_input_whitespace
+            .clone()
+            .filter(|_| !self.current.ends_with_any(b" \t"))
+        {
+            self.current.push_str(&gap);
         }
         self.current.push('{');
         self.layout.command_state.observe_char('{');

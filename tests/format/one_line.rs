@@ -1506,13 +1506,22 @@ fn header_one_line_block_inside_bare_block_still_breaks() {
 fn bare_top_level_open_brace_run_keeps_one_line() {
     let options = FormatOptions::default();
 
+    // A brace the line goes on after stands a level past the one before;
+    // the last one, ending the line, keeps its gap.
     for (source, expected) in [
-        ("{{\n", "{   {\n"),
-        ("{{{\n", "{   {   {\n"),
-        ("{{{{\n", "{   {   {   {\n"),
+        ("{{\n", "{{\n"),
+        ("{ {\n", "{ {\n"),
+        ("{{{\n", "{   {{\n"),
+        ("{ {{\n", "{   {{\n"),
+        ("{{ {\n", "{   { {\n"),
+        ("{{{{\n", "{   {   {{\n"),
     ] {
         assert_eq!(format_exact(source, &options), expected);
     }
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--indent=spaces=8".to_owned()])
+        .expect("valid options");
+    assert_eq!(format_exact("{{{{\n", &options), "{       {       {{\n");
 }
 
 #[test]
