@@ -878,23 +878,6 @@ impl FormatEngine<'_> {
                 );
             }
         }
-        if line.trimmed_start().starts_with_any(b"<>|&+-*/%=!?:,.")
-            && let Some(previous) = self.output.last_non_empty_scoped()
-        {
-            let previous_code = self.output.code_trimmed_of(previous);
-            if previous_code.trimmed_start().starts_with('#')
-                && previous_code.contains('(')
-                && !previous_code.contains(')')
-            {
-                layout.exact_indent_spaces = Some(
-                    leading_visual_width(previous, self.options.tab_width)
-                        + self.options.indent_width,
-                );
-            }
-        }
-        if let Some(spaces) = self.pico_leading_operator_after_brace_indent_spaces(line) {
-            layout.exact_indent_spaces = Some(spaces);
-        }
         if line.trimmed_start().starts_with_any(b"<>|&*/%=!?:,.")
             && !line.trimmed_start().starts_with("//")
             && !line.trimmed_start().starts_with("/*")

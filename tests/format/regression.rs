@@ -21292,3 +21292,11 @@ fn an_assignment_row_opening_a_list_on_its_row_continues_the_declaration_first_i
         "void f()\n    {\n    int values[]\n        = {1,\n           2\n          };\n    }\n";
     check(input, &["--style=whitesmith"], whitesmith);
 }
+
+#[test]
+fn pico_continues_an_expression_after_a_list_closed_in_it_at_the_expression() {
+    let input = "void f()\n{\n    value = ready\n            ? Item{1,\n                   2}\n            : other;\n    value = first\n            + Item{1,\n                   2}\n            + other;\n}\n";
+    let expected = "void f()\n{   value = ready\n            ? Item{1,\n                   2 }\n            : other;\n    value = first\n            + Item{1,\n                   2 }\n            + other; }\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+}

@@ -716,21 +716,6 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn pico_leading_operator_after_brace_indent_spaces(
-        &self,
-        line: &LineView<'_>,
-    ) -> Option<usize> {
-        if self.options.brace_style != BraceStyle::Pico
-            || !line.trimmed_start().starts_with_any(b"<>|&+-*/%=!?:,.")
-        {
-            return None;
-        }
-        let (previous, previous_code) = self.output.last_code_outside_comment()?;
-        previous_code
-            .ends_with('}')
-            .then(|| leading_visual_width(previous, self.options.tab_width))
-    }
-
     pub(crate) fn stream_after_string_frame_indent_spaces(&self, line: &str) -> Option<usize> {
         let trimmed = line.trimmed_start();
         if !trimmed.starts_with("<<") && !trimmed.starts_with(">>") {
