@@ -17706,6 +17706,16 @@ fn returned_message_rows_align_at_the_keyword_as_other_message_rows() {
 }
 
 #[test]
+fn rows_of_a_designator_value_list_run_in_after_its_brace_stand_a_level_in() {
+    // Styles running a list's first element in after its brace set the
+    // rows after it a level in, designators or values alike.
+    let input = "struct Config value = {\n    .outer = { 1,\n               2 },\n    .two = { .a = 1,\n             .b = 2 },\n    .three = { .a = { 1 },\n               .b = 2 },\n    .last = 3,\n};\n";
+    let expected = "struct Config value = {\n    .outer = { 1,\n        2\n    },\n    .two = { .a = 1,\n        .b = 2\n    },\n    .three = { .a = { 1 },\n        .b = 2\n    },\n    .last = 3,\n};\n";
+    check(input, &["--style=horstmann"], expected);
+    check(expected, &["--style=horstmann"], expected);
+}
+
+#[test]
 fn a_compound_literal_value_spanning_rows_in_a_designated_list_opens_as_a_list_value() {
     // The element on the literal's brace row moves to a row of its own, as
     // after `= {`, and the rows after it keep the list's columns.

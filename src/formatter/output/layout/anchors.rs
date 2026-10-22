@@ -1708,8 +1708,10 @@ impl FormatEngine<'_> {
         let open = groups.get(group).open;
         self.tree
             .previous_code_token(open)
-            .is_some_and(|before| match tokens[before] {
+            .is_some_and(|before| match &tokens[before] {
                 Token::Symbol('{') => true,
+                // A designator's value list is an element's.
+                Token::Operator(operator) => operator == "=",
                 Token::Symbol(',') => {
                     self.tree
                         .previous_code_token(before)
