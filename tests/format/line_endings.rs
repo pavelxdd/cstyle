@@ -90,6 +90,20 @@ fn form_feed_line_is_preserved_under_options_none() {
 }
 
 #[test]
+fn an_8_bit_source_measures_a_byte_past_ascii_as_its_utf8_width() {
+    // An 8-bit source is read as Latin-1, and columns count the UTF-8
+    // width of the text read: two for each byte past ASCII.
+    let source = b"void f(void)\n{\n    call(first_value, \"\xe9\xe9\xe9\xe9\xe9\xe9\xe9\xe9\xe9\xe9\xe9\xe9\", second_value);\n}\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--max-code-length=50".to_owned()])
+        .expect("valid options");
+    assert_eq!(
+        format_bytes(source, &options).expect("format bytes"),
+        b"void f(void)\n{\n    call(first_value, \"\xe9\xe9\xe9\xe9\xe9\xe9\xe9\xe9\xe9\xe9\xe9\xe9\",\n         second_value);\n}\n",
+    );
+}
+
+#[test]
 fn blanks_outside_ascii_stay_as_text() {
     // Only ASCII blanks part C tokens; any other blank is text the
     // formatter keeps, in UTF-8 and in 8-bit sources alike, and text after
