@@ -2514,6 +2514,16 @@ impl FormatEngine<'_> {
         {
             return false;
         }
+        // A typed element of a list keeps the gap written before its brace,
+        // after template arguments too.
+        if brace_type == BraceType::Initializer
+            && matches!(
+                self.layout.nesting.brace_type_stack.last(),
+                Some(BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral)
+            )
+        {
+            return false;
+        }
         !matches!(brace_type, BraceType::Initializer)
             || self.current.trimmed_end().ends_with('>')
             || !self

@@ -22725,3 +22725,14 @@ fn an_argument_after_a_paren_led_row_past_a_block_argument_stands_at_the_stateme
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
+
+#[test]
+fn an_element_brace_after_template_arguments_keeps_its_gap_in_any_list() {
+    // A list's element keeps the gap written before its brace, after
+    // template arguments too, whichever way the list around it is laid out;
+    // a statement's own list after them takes the space.
+    let input = "void f()\n{\n    Item a[] = {Item<int>{42}, Item<int> {7}};\n    auto b = Outer{Item<int>{42}};\n    auto c = Outer<int>{Item<int>{42}};\n    auto d = Outer<Inner<int>>{Item<int>{42}};\n    auto e = Outer<Inner<int>>{Item{42}, Thing<int>{1}};\n    call(Outer<Inner<int>>{Item<int>{42}});\n    Item g[] = {\n        Item<int>{42},\n        Item<int> {7},\n    };\n}\n";
+    let expected = "void f()\n{\n    Item a[] = {Item<int>{42}, Item<int> {7}};\n    auto b = Outer{Item<int>{42}};\n    auto c = Outer<int> {Item<int>{42}};\n    auto d = Outer<Inner<int>> {Item<int>{42}};\n    auto e = Outer<Inner<int>> {Item{42}, Thing<int>{1}};\n    call(Outer<Inner<int>> {Item<int>{42}});\n    Item g[] = {\n        Item<int>{42},\n        Item<int> {7},\n    };\n}\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+}
