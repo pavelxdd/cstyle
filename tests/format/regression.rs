@@ -21888,3 +21888,10 @@ fn an_access_label_after_a_member_with_a_trailing_comment_keeps_its_indent() {
     let broken = "class Ref\n{\n  private:\n    int value;  // note\n\n  public:\n    int other;\n};\nclass Other\n{\n  private:\n    int value;  /* note */\n  public:\n    int other;\n};\n";
     check(input, &["--style=kr", "--indent-modifiers"], broken);
 }
+
+#[test]
+fn a_double_angle_closing_template_arguments_continues_no_shift_into_the_base_clause() {
+    // The base clause stands a continuation in, as after a single `>`.
+    let input = "template <typename T>\nstruct Item<\n    T, Value<T>>\n    : std::true_type {};\nstruct Item<T, Value<T>>\n    : std::true_type {};\nstruct Item<T, Value>\n    : std::true_type {};\n";
+    check(input, &["--style=google"], input);
+}
