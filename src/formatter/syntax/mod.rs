@@ -564,6 +564,7 @@ pub(crate) fn classify_syntax(tokens: &[Token], tree: &SourceTree) -> SyntaxRole
     let mut roles = SyntaxRoles::new(tokens.len());
     classify_paren_ranges(tokens, &mut roles);
     classify_word_roles(tokens, &mut roles);
+    let allocated_type_stars = allocated_type_stars(tokens);
     // Every `*` of a run is declared or not as the run is.
     let mut star_run = None;
     for (index, token) in tokens.iter().enumerate() {
@@ -571,6 +572,11 @@ pub(crate) fn classify_syntax(tokens: &[Token], tree: &SourceTree) -> SyntaxRole
             Token::Operator(operator)
                 if matches!(operator.as_str(), "*" | "&")
                     && is_tree_declarator_operator(tokens, tree, index) =>
+            {
+                OperatorRole::PointerDeclarator
+            }
+            Token::Operator(operator)
+                if operator == "*" && allocated_type_stars.binary_search(&index).is_ok() =>
             {
                 OperatorRole::PointerDeclarator
             }
@@ -603,6 +609,87 @@ pub(crate) fn classify_syntax(tokens: &[Token], tree: &SourceTree) -> SyntaxRole
         }
     }
     roles
+}
+
+/// The `*`s declaring pointers in the types `new` allocates, as in
+/// `new Item*[count]`, in order. A name or value after the stars makes them
+/// products instead.
+fn allocated_type_stars(tokens: &[Token]) -> Vec<usize> {
+    let mut stars = Vec::new();
+    let mut closes = None;
+    for (index, token) in tokens.iter().enumerate() {
+        if !matches!(token, Token::Word(word) if word == language::NEW) {
+            continue;
+        }
+        let Some(mut cursor) = allocated_type_end(tokens, index, &mut closes) else {
+            continue;
+        };
+        let first = stars.len();
+        while matches!(&tokens[cursor], Token::Operator(operator) if operator == "*") {
+            stars.push(cursor);
+            let Some(next) = next_non_layout_token_index(tokens, cursor + 1) else {
+                break;
+            };
+            cursor = next;
+        }
+        if matches!(
+            tokens[cursor],
+            Token::Word(_) | Token::Number(_) | Token::CharLiteral(_) | Token::StringLiteral(_)
+        ) {
+            stars.truncate(first);
+        }
+    }
+    stars
+}
+
+/// The first token after the type named by the `new` at `new`, past any
+/// placement arguments, when a type is named.
+fn allocated_type_end(
+    tokens: &[Token],
+    new: usize,
+    closes: &mut Option<Vec<u32>>,
+) -> Option<usize> {
+    let mut cursor = next_non_layout_token_index(tokens, new + 1)?;
+    if matches!(tokens[cursor], Token::Symbol('(')) {
+        let close = closes.get_or_insert_with(|| matching_close_parens(tokens))[cursor];
+        if close == u32::MAX {
+            return None;
+        }
+        cursor = next_non_layout_token_index(tokens, close as usize + 1)?;
+    }
+    let mut type_words = 0;
+    loop {
+        match &tokens[cursor] {
+            Token::Word(word) if word != language::NEW => type_words += 1,
+            Token::Operator(operator) if operator == "::" => {}
+            Token::Operator(operator) if operator == "<" && type_words > 0 => {
+                cursor = allocated_template_arguments_close(tokens, cursor)?;
+            }
+            _ => return (type_words > 0).then_some(cursor),
+        }
+        cursor = next_non_layout_token_index(tokens, cursor + 1)?;
+    }
+}
+
+/// The `>` closing the template arguments opened at `open`; another `new`
+/// or the statement's end leaves them unclosed.
+fn allocated_template_arguments_close(tokens: &[Token], open: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    for (index, token) in tokens.iter().enumerate().skip(open) {
+        match token {
+            Token::Operator(operator) if operator == "<" => depth += 1,
+            Token::Operator(operator) if operator == ">" || operator == ">>" => {
+                depth = depth.saturating_sub(operator.len());
+                if depth == 0 {
+                    return Some(index);
+                }
+            }
+            Token::Symbol(';' | '{' | '}') => return None,
+            Token::Word(word) if word == language::NEW => return None,
+            _ => {}
+        }
+    }
+    None
 }
 
 /// Whether the operator at `index` declares a pointer or reference by the

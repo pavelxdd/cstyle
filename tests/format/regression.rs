@@ -20553,3 +20553,55 @@ fn a_logical_and_between_template_arguments_keeps_the_angles_a_template() {
     let input = "using Pick = std::conditional_t<Big && Fast, Item, Other>;\nstatic_assert(Check<A && B>::value);\nauto q = std::forward<T&&>(value);\nvoid g(Box<Item&&, Other&&> pair);\n";
     check(input, &["-p"], input);
 }
+
+#[test]
+fn a_star_in_an_allocated_type_declares_a_pointer() {
+    let input = "void f()\n{\n    items = new Item*[count];\n    more = new Item *[count];\n    names = new char*[size + 1];\n    one = new char*;\n    made = new (buffer) Item*[count];\n    total = new Item[count] * scale;\n}\n";
+    check(input, &["-p"], input);
+}
+
+#[test]
+fn align_pointer_aligns_the_star_of_every_allocated_type() {
+    // An allocated type's star aligns as a cast's does, whether its type is
+    // a keyword or a name.
+    let input = "void f()\n{\n    items = new Item*[count];\n    names = new char*[count];\n    made = new Item*();\n    one = new Item*;\n}\n";
+    for (align, expected) in [
+        (
+            "--align-pointer=type",
+            "void f()\n{\n    items = new Item* [count];\n    names = new char* [count];\n    made = new Item* ();\n    one = new Item*;\n}\n",
+        ),
+        (
+            "--align-pointer=middle",
+            "void f()\n{\n    items = new Item * [count];\n    names = new char * [count];\n    made = new Item * ();\n    one = new Item *;\n}\n",
+        ),
+        (
+            "--align-pointer=name",
+            "void f()\n{\n    items = new Item *[count];\n    names = new char *[count];\n    made = new Item *();\n    one = new Item *;\n}\n",
+        ),
+    ] {
+        check(input, &[align], expected);
+        check(expected, &[align], expected);
+    }
+}
+
+#[test]
+fn an_aligned_star_before_an_array_bound_keeps_its_gap() {
+    let input = "void f(char*[]);\nvoid g()\n{\n    a = sizeof(char*[4]);\n    b = sizeof(char *[4]);\n    c = (char*[4])value;\n}\n";
+    for (align, expected) in [
+        (
+            "--align-pointer=type",
+            "void f(char* []);\nvoid g()\n{\n    a = sizeof(char* [4]);\n    b = sizeof(char* [4]);\n    c = (char* [4])value;\n}\n",
+        ),
+        (
+            "--align-pointer=middle",
+            "void f(char * []);\nvoid g()\n{\n    a = sizeof(char * [4]);\n    b = sizeof(char * [4]);\n    c = (char * [4])value;\n}\n",
+        ),
+        (
+            "--align-pointer=name",
+            "void f(char *[]);\nvoid g()\n{\n    a = sizeof(char *[4]);\n    b = sizeof(char *[4]);\n    c = (char *[4])value;\n}\n",
+        ),
+    ] {
+        check(input, &[align], expected);
+        check(expected, &[align], expected);
+    }
+}

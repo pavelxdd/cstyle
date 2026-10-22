@@ -35,8 +35,9 @@ pub(crate) struct PointerRunState {
     pub(crate) gap_before_column: Option<usize>,
     pub(super) skip_adjacent_pointer_operators: usize,
     pub(crate) template_close_before_current: bool,
-    /// A `*` aligned off its name before a parenthesized declarator, as in
-    /// `char* (*get)(void)`, keeps a space before the paren.
+    /// A `*` aligned off its name before a parenthesized declarator or an
+    /// array bound, as in `char* (*get)(void)` or `new char* [count]`, keeps
+    /// a space before the group.
     pub(crate) spaces_declarator_group: bool,
     /// The last run of one operator read: the tokens' address, the token
     /// read from, and the run's last token.
@@ -1163,8 +1164,8 @@ impl FormatEngine<'_> {
         }
     }
 
-    /// Whether the `*` just pushed starts a parenthesized declarator a space
-    /// parts from it. astyle leaves the star of a `struct` type and of a
+    /// Whether the `*` just pushed starts a parenthesized declarator or an
+    /// array bound a space parts from it. astyle leaves the star of a `struct` type and of a
     /// conversion operator where it was.
     fn pointer_spaces_declarator_group(&self, operator: &str, next: Option<&Token>) -> bool {
         let current = self.current.trimmed_end();
@@ -1175,7 +1176,7 @@ impl FormatEngine<'_> {
             .split(|ch: char| !is_identifier_continue(ch))
             .filter(|word| !word.is_empty())
             .collect::<Vec<_>>();
-        matches!(next, Some(Token::Symbol('(')))
+        matches!(next, Some(Token::Symbol('(' | '[')))
             && !words.iter().rev().take(2).any(|word| {
                 *word == "operator"
                         // In a statement astyle leaves a tagged type's star

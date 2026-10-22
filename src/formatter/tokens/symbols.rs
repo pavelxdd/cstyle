@@ -737,12 +737,14 @@ impl FormatEngine<'_> {
             declarator_operator == Some("&") && trailing_word(declarator_prefix) == "auto";
         let attaches_to_name_side = declarator_alignment == Some(PointerAlign::Name)
             && (opens_attribute || opens_structured_binding);
-        let keeps_aligned_declarator_gap = (opens_attribute || opens_structured_binding)
-            && matches!(
-                declarator_alignment,
-                Some(PointerAlign::Type | PointerAlign::Middle)
-            )
-            && self.current.ends_with_any(b" \t");
+        let spaces_declarator_group = std::mem::take(&mut self.pointer_run.spaces_declarator_group);
+        let keeps_aligned_declarator_gap =
+            (opens_attribute || opens_structured_binding || spaces_declarator_group)
+                && matches!(
+                    declarator_alignment,
+                    Some(PointerAlign::Type | PointerAlign::Middle)
+                )
+                && self.current.ends_with_any(b" \t");
         let keeps_padded_comma_gap = self.layout.previous == PreviousToken::Comma
             && (self.options.pad_commas || self.options.pad_operators)
             && self.token_input.previous_input_whitespace.is_none()
