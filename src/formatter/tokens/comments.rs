@@ -2788,6 +2788,15 @@ impl FormatEngine<'_> {
             }
         }
         let previous_statement_indent = previous_line.and_then(|line| {
+            // A row a comment's closer leads holds no statement's column.
+            let text = line.trimmed_start();
+            if !text.starts_with("/*")
+                && text
+                    .split_once("*/")
+                    .is_some_and(|(before, _)| !before.contains("/*"))
+            {
+                return None;
+            }
             let code = self.output.code_trimmed_of(line);
             let after_braceless_header = self
                 .output

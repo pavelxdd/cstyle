@@ -12159,6 +12159,9 @@ fn a_comment_led_statement_after_one_a_comment_closer_leads_stands_with_the_stat
         &["--style=kr"],
         "void f()\n{\n    x = 0; /* note\n */\tw();\n    /* a */ w();\n    /* more\n       */ w();\n    y = 1;\n}\n",
     );
+    // So for a comment the line's own comment over lines follows.
+    let input = "void f()\n{\n    x = 0; /* note\n */\tw();\n    /* a */ /* more\n    */\tw();\n    y = 1;\n}\n";
+    check(input, &["--style=kr"], input);
 }
 
 #[test]
