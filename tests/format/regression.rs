@@ -21300,3 +21300,14 @@ fn pico_continues_an_expression_after_a_list_closed_in_it_at_the_expression() {
     check(input, &["--style=pico"], expected);
     check(expected, &["--style=pico"], expected);
 }
+
+#[test]
+fn a_list_leading_an_argument_row_with_its_first_element_breaks_its_elements_as_a_list_ending_a_row()
+ {
+    let input = "void f()\n{\n    call(first,\n         {1,\n          2});\n}\n";
+    let expected = "void f()\n{\n    call(first, {\n        1,\n        2\n    });\n}\n";
+    for style in ["--style=kr", "--style=linux"] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}

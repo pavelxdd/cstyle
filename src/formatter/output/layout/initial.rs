@@ -236,13 +236,21 @@ impl FormatEngine<'_> {
             .continuation_indent
             .next_line_indent_spaces
             .take();
+        // A list inside the delimiter holds its own rows.
+        let in_brace_list = self.output.pending_tokens().is_some_and(|span| {
+            self.tree
+                .groups
+                .enclosing(span.first)
+                .is_some_and(|group| self.tree.groups.get(group).delimiter == Delimiter::Brace)
+        });
         let delimiter_owns_snapshot = replay.closed_lambda_parameter_list
             && replay.closed_delimiter_continuation_indent.is_some()
-            || self
-                .layout
-                .frame_stack
-                .active_delimiter()
-                .is_some_and(|frame| frame.opener_output_line < self.output.len());
+            || !in_brace_list
+                && self
+                    .layout
+                    .frame_stack
+                    .active_delimiter()
+                    .is_some_and(|frame| frame.opener_output_line < self.output.len());
         let snapshot_level = match replay.input_continuation_indent {
             Some(ContinuationIndent::Level(level))
                 if delimiter_owns_snapshot && !line_start.starts_with_any(b"{})") =>
