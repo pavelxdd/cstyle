@@ -2918,8 +2918,9 @@ impl FormatEngine<'_> {
                     }
                 })
         };
-        if !(open + 1..=pending.last)
-            .any(|index| matches!(tokens[index], Token::Symbol('{')) && kept_body(index))
+        if !self
+            .lambda_body_braces_within(open, pending.last)
+            .any(kept_body)
         {
             return None;
         }

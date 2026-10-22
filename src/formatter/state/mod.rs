@@ -237,8 +237,15 @@ impl NestingState {
 
     fn push_continuation_column(&mut self, spaces: usize) {
         let index = self.continuation_indent_spaces_stack.len();
-        self.continuation_column_origins
-            .retain(|&(origin, _)| origin < index);
+        // The origins stand in the order of their columns, so those of
+        // columns gone from the stack end the list.
+        while self
+            .continuation_column_origins
+            .last()
+            .is_some_and(|&(origin, _)| origin >= index)
+        {
+            self.continuation_column_origins.pop();
+        }
         self.continuation_indent_spaces_stack.push(spaces);
     }
 

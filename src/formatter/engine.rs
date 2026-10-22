@@ -278,6 +278,8 @@ pub(crate) struct FormatEngine<'a> {
     bracket_closes: std::cell::OnceCell<Vec<(u32, u32)>>,
     /// Indices of the `case` and `default` words, in order.
     case_labels: std::cell::OnceCell<Vec<u32>>,
+    /// Indices of the braces opening a lambda's body, in order.
+    lambda_body_braces: std::cell::OnceCell<Vec<u32>>,
     /// The source columns of the line being formatted, kept to reuse their
     /// buffers.
     line_columns: LineSourceColumns,
@@ -493,6 +495,7 @@ impl<'a> FormatEngine<'a> {
             bracket_closes: std::cell::OnceCell::new(),
             designator_chain_cache: std::cell::RefCell::new(None),
             case_labels: std::cell::OnceCell::new(),
+            lambda_body_braces: std::cell::OnceCell::new(),
             constructor_colon_cache: std::cell::Cell::new(None),
             layout: LayoutState {
                 indentation: IndentationState::default(),
@@ -1026,6 +1029,30 @@ impl<'a> FormatEngine<'a> {
         labels[from..to.max(from)]
             .iter()
             .rev()
+            .map(|&index| index as usize)
+    }
+
+    /// The braces opening a lambda's body after `start` and up to `end`, in
+    /// order.
+    pub(crate) fn lambda_body_braces_within(
+        &self,
+        start: usize,
+        end: usize,
+    ) -> impl Iterator<Item = usize> + '_ {
+        let braces = self.lambda_body_braces.get_or_init(|| {
+            let groups = &self.tree.groups;
+            let mut braces: Vec<u32> = groups
+                .ids()
+                .filter(|&group| self.tree.blocks.kind(group) == Some(BlockKind::Lambda))
+                .map(|group| groups.get(group).open as u32)
+                .collect();
+            braces.sort_unstable();
+            braces
+        });
+        let from = braces.partition_point(|&index| (index as usize) <= start);
+        let to = braces.partition_point(|&index| (index as usize) <= end);
+        braces[from..to.max(from)]
+            .iter()
             .map(|&index| index as usize)
     }
 
