@@ -4591,3 +4591,14 @@ fn indent_preproc_define_sets_rows_after_a_top_level_comma_as_a_function_does() 
         .expect("valid options");
     assert_eq!(format_exact(input, &options), input);
 }
+
+#[test]
+fn indent_preproc_define_keeps_rows_after_a_comment_led_value_at_the_body() {
+    // A value a comment leads declares nothing: the rows after its comma
+    // stand at the body.
+    let input = "#define LIST_INITIALIZER \\\n    /* first */ FIRST_VALUE, \\\n    /* second */ 0, \\\n    /* third */ NULL\n\nint x;\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--indent-preproc-define".to_owned()])
+        .expect("valid options");
+    assert_eq!(format_exact(input, &options), input);
+}

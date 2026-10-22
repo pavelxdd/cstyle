@@ -11,7 +11,6 @@ use crate::formatter::structure::groups::GroupId;
 use crate::formatter::syntax::language::{
     is_macro_like_word, is_non_type_keyword, is_pointer_type_word, is_type_like_pointer_word,
 };
-use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{
     is_identifier_continue, is_identifier_start, is_word_char, trailing_word,
@@ -403,7 +402,11 @@ pub(crate) fn assignment_declarator_offset(line: &str) -> Option<usize> {
 /// The offset of the declarator in `head`, a declaration up to its first
 /// `=` or `,`: past the type and the stars or ampersands before the name.
 pub(crate) fn declaration_head_declarator_offset(head: &str) -> Option<usize> {
-    if head.contains_any_byte(b"(),{}") {
+    // A head holds names and their declarator marks alone: a comment or an
+    // operator makes it no declaration.
+    if !head.chars().all(|ch| {
+        is_word_char(ch) || matches!(ch, ' ' | '\t' | '*' | '&' | ':' | '<' | '>' | '[' | ']')
+    }) {
         return None;
     }
     let head_bytes = head.as_bytes();
