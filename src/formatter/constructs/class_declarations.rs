@@ -21,6 +21,19 @@ pub(crate) fn has_base_access_token(tokens: &[Token]) -> bool {
 }
 
 pub(crate) fn is_split_export_head(line: &str) -> bool {
+    let head = line.trim_start();
+    if !["class", "struct", "union", "interface"]
+        .iter()
+        .any(|kind| {
+            head.strip_prefix(kind).is_some_and(|rest| {
+                rest.chars()
+                    .next()
+                    .is_none_or(|ch| !is_identifier_continue(ch))
+            })
+        })
+    {
+        return false;
+    }
     if line
         .chars()
         .any(|ch| !is_identifier_continue(ch) && !ch.is_whitespace())

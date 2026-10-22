@@ -2220,6 +2220,9 @@ impl FormatEngine<'_> {
     /// call's arguments, which sets the row at the statement as a lambda's
     /// body does.
     fn line_opens_block_argument(&self, line: &str) -> bool {
+        if !line.as_bytes().contains(&b'{') {
+            return false;
+        }
         let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
         let Some(span) = self.output.pending_tokens() else {
@@ -2498,8 +2501,11 @@ impl FormatEngine<'_> {
 }
 
 pub(crate) fn line_opens_attachable_lambda_block(options: &FormatOptions, line: &str) -> bool {
-    // A lambda's head holds its capture list, a block literal's its caret.
-    if !line.contains_any_byte(b"]^") {
+    // A lambda's head holds its capture list, a block literal's its caret,
+    // and the line its body's brace unless the line starts with the list.
+    if !line.contains_any_byte(b"]^")
+        || !line.as_bytes().contains(&b'{') && !line.trimmed_start().starts_with('[')
+    {
         return false;
     }
     // A comment after the code takes no part in the head.

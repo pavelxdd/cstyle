@@ -19,8 +19,9 @@ use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{is_word_char, trailing_word};
 
 pub(crate) fn line_opens_lambda_block(line: &str) -> bool {
-    // A lambda's head holds its capture list, a block literal's its caret.
-    if !line.contains_any_byte(b"]^") {
+    // A lambda's head holds its capture list, a block literal's its caret,
+    // and the line its body's brace.
+    if !line.contains_any_byte(b"]^") || !line.as_bytes().contains(&b'{') {
         return false;
     }
     // A comment after the brace takes no part in the head.
