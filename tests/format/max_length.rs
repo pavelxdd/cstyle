@@ -3227,3 +3227,40 @@ fn max_code_length_continues_a_constructor_initializer_split_past_its_parameters
     apply_command_line_args(&mut options, &args).expect("valid options");
     assert_eq!(format_exact(input, &options), expected);
 }
+
+#[test]
+fn max_code_length_pico_keeps_a_run_in_do_block_row_at_its_column_when_its_closing_line_splits() {
+    // Splitting the row past its `while` moves none of its text: the row
+    // stands where it stands whole, and the condition continues past its
+    // paren.
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Pico;
+    let source = fixture!(
+        "void f()",
+        "{",
+        "    do {",
+        "        value++;",
+        "    } /* again */ while (value < count);",
+        "}",
+    );
+    let whole = format_exact(source, &options);
+    assert_eq!(
+        whole,
+        fixture!(
+            "void f()",
+            "{   do",
+            "    {   value++; } /* again */ while (value < count); }",
+        )
+    );
+    options.max_code_length = Some(50);
+    assert_stable_max_length_format(
+        source,
+        &options,
+        fixture!(
+            "void f()",
+            "{   do",
+            "    {   value++; } /* again */ while (value <",
+            "                                      count); }",
+        ),
+    );
+}
