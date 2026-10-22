@@ -22,6 +22,9 @@ pub(crate) struct BlockSpacingState {
     /// line unpadded.
     header_follows_statement: bool,
     pending_semicolon: bool,
+    /// A blank due before a comment that follows a line still being laid
+    /// out, which takes none itself.
+    prepend_blank_after_pending: bool,
     pending_one_line_block: bool,
     closed_empty_block: bool,
     pending_closed_empty_block: Option<bool>,
@@ -138,7 +141,15 @@ impl FormatEngine<'_> {
         if self.previous_block_spacing_line_is_comment_only() {
             return;
         }
-        let Some(previous) = self.layout.previous_pre_adjust_line.as_deref() else {
+        // The line before the comment may still be laid out, as a
+        // header awaiting its body.
+        let pending = !self.current_is_blank();
+        let previous = if pending {
+            Some(self.current.as_str())
+        } else {
+            self.layout.previous_pre_adjust_line.as_deref()
+        };
+        let Some(previous) = previous else {
             return;
         };
         let previous = previous.trimmed_start();
@@ -155,7 +166,11 @@ impl FormatEngine<'_> {
         if is_break_blocks_opening_header(self.options, &word)
             || (self.options.break_closing_header_blocks && is_break_blocks_closing_header(&word))
         {
-            self.block_spacing.prepend_blank = true;
+            if pending {
+                self.block_spacing.prepend_blank_after_pending = true;
+            } else {
+                self.block_spacing.prepend_blank = true;
+            }
         }
     }
 
@@ -842,6 +857,9 @@ impl FormatEngine<'_> {
         }
         let prepend = std::mem::take(&mut self.block_spacing.prepend_blank);
         let append = std::mem::take(&mut self.block_spacing.append_blank);
+        // The comment after this line takes the blank due before it.
+        self.block_spacing.prepend_blank =
+            std::mem::take(&mut self.block_spacing.prepend_blank_after_pending);
         if !prepend && !append {
             return false;
         }

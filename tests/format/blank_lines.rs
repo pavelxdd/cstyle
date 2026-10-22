@@ -1869,6 +1869,30 @@ fn deleted_empty_line_after_else_leaves_an_else_if() {
 }
 
 #[test]
+fn break_blocks_pads_a_comment_led_header_of_a_braceless_body_after_its_header() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_owned(), "--break-blocks".to_owned()],
+    )
+    .expect("valid options");
+    for (input, expected) in [
+        (
+            "void f()\n{\n    if (ready)\n        // note\n        if (other)\n            value = 0;\n}\n",
+            "void f()\n{\n    if (ready)\n\n        // note\n        if (other)\n            value = 0;\n}\n",
+        ),
+        (
+            "void f()\n{\n    while (ready)\n        /* note */\n        for (;;)\n            value = 0;\n    done();\n}\n",
+            "void f()\n{\n    while (ready)\n\n        /* note */\n        for (;;)\n            value = 0;\n\n    done();\n}\n",
+        ),
+    ] {
+        let first = format_exact(input, &options);
+        assert_eq!(first, expected);
+        assert_eq!(format_exact(&first, &options), first);
+    }
+}
+
+#[test]
 fn deleted_empty_line_after_else_stays_before_a_comment_block_breaks_keep() {
     let mut options = FormatOptions::default();
     apply_command_line_args(
