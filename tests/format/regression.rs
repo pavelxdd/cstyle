@@ -21652,3 +21652,10 @@ fn an_else_ending_a_later_branch_of_a_conditional_takes_no_body_past_its_endif()
     let nested = "void f() {\n#ifdef A\n    if (a) {\n        x();\n    }\n#else\n#ifdef B\n    if (b) {\n        x();\n    } else\n#endif\n#endif\n    y();\n    z();\n}\n";
     check(nested, &[], nested);
 }
+
+#[test]
+fn a_comment_over_rows_broken_off_a_switch_brace_stands_at_the_labels_as_one_on_its_own_row() {
+    let input = "void f() {\n    switch (x) {  /* note\n                  ** more */\n    case 1:\n        go();\n    }\n}\n";
+    let expected = "void f() {\n    switch (x) {\n        /* note\n                      ** more */\n        case 1:\n            go();\n    }\n}\n";
+    check(input, &["--indent-switches"], expected);
+}
