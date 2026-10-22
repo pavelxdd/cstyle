@@ -1167,3 +1167,22 @@ fn a_definition_head_before_a_directive_breaks_its_return_type_whatever_declarat
         assert_eq!(format_exact(input, &options), expected);
     }
 }
+
+#[test]
+fn break_return_type_breaks_a_head_a_comment_leads_after_a_statement() {
+    let input = "int value;\n/* note */ int helper (int value) __attribute__ ((pure));\n/* note */ int helper(int value);\n/* note */ void f()\n{\n    value = 1;\n}\n";
+    let expected = "int value;\n/* note */ int\nhelper (int value) __attribute__ ((pure));\n/* note */ int\nhelper(int value);\n/* note */ void\nf()\n{\n    value = 1;\n}\n";
+    for style in ["--style=linux", "--style=kr"] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(
+            &mut options,
+            &[
+                style.to_owned(),
+                "--break-return-type".to_owned(),
+                "--break-return-type-decl".to_owned(),
+            ],
+        )
+        .expect("valid options");
+        assert_eq!(format_exact(input, &options), expected);
+    }
+}

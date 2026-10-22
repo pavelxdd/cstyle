@@ -1276,7 +1276,6 @@ impl FormatEngine<'_> {
         {
             self.layout.continuation_indent.next_line_indent = None;
             self.layout.continuation_indent.next_line_indent_spaces = None;
-            self.current_is_preindented = true;
             self.layout.nesting.clear_continuation_indents();
         }
         if kind == CommentKind::Block
