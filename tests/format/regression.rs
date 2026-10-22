@@ -19917,7 +19917,7 @@ fn a_template_type_s_list_brace_ending_its_line_takes_a_space_as_on_one_line() {
     // A list's brace after a template's `>` stands apart from it wherever
     // its rows go; after a plain name it keeps the gap the source left.
     let input = "void run() {\n  go(vec<int>{1, 2});\n  go(vec<int>{\n      1});\n  auto w = vec<int>{\n      1};\n  go(Item{\n      1});\n}\n";
-    let expected = "void run() {\n    go(vec<int> {1, 2});\n    go(vec<int> {\n        1\n    });\n    auto w = vec<int> {\n        1\n    };\n    go(Item{\n        1\n    });\n}\n";
+    let expected = "void run() {\n    go(vec<int> {1, 2});\n    go(vec<int> {\n        1\n    });\n    auto w = vec<int> {\n        1\n    };\n    go(Item{\n        1});\n}\n";
     check(input, &[], expected);
     check(expected, &[], expected);
 }
@@ -20922,8 +20922,30 @@ fn a_comparison_among_template_parameters_closes_with_its_clause() {
 #[test]
 fn a_trailing_return_type_aligns_its_pointer_as_any_type_does() {
     // A single star or ampersand aligns as a run of them does.
-    let input = "auto allocate(size_t size) -> void*;\nauto ref() -> Item&;\nauto two() -> Item**;\n";
-    let expected = "auto allocate(size_t size) -> void *;\nauto ref() -> Item &;\nauto two() -> Item **;\n";
+    let input =
+        "auto allocate(size_t size) -> void*;\nauto ref() -> Item&;\nauto two() -> Item**;\n";
+    let expected =
+        "auto allocate(size_t size) -> void *;\nauto ref() -> Item &;\nauto two() -> Item **;\n";
     check(input, &["--align-pointer=name"], expected);
     check(expected, &["--align-pointer=name"], expected);
+}
+
+#[test]
+fn a_braced_initializer_closer_after_its_last_element_stays_there() {
+    // An assigned list's closer leads its row; an initializer's stays where
+    // the source set it.
+    let input = "void f()\n{\n    Item last{\n        first, second};\n    std::vector<int> values{\n        1, 2, 3};\n    call(Item{\n        first, second});\n    Item kept{\n        first, second\n    };\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void f()\n{\n    Item last{\n        first, second};\n    std::vector<int> values{\n        1, 2, 3};\n    call(Item{\n        first, second});\n    Item kept{\n        first, second\n    };\n}\n",
+        ),
+        (
+            "--style=allman",
+            "void f()\n{\n    Item last\n    {\n        first, second};\n    std::vector<int> values\n    {\n        1, 2, 3};\n    call(Item\n    {\n        first, second});\n    Item kept\n    {\n        first, second\n    };\n}\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
 }

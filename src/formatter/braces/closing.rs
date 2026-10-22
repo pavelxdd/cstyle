@@ -428,8 +428,47 @@ impl FormatEngine<'_> {
                 self.layout.nesting.brace_type_stack.last(),
                 Some(BraceType::Array | BraceType::Initializer | BraceType::Enum)
             );
+        // A braced initializer's closer written after its last element
+        // stays there; an assigned list's leads its row.
+        let attached_initializer_closer = !matches!(
+            self.options.brace_style,
+            BraceStyle::Pico | BraceStyle::Lisp
+        ) && !self.token_input.token_begins_source_line
+            && !self.current_is_blank()
+            && !line_ends_with_comment(self.current.trimmed_end())
+            && matches!(
+                self.layout.nesting.brace_type_stack.last(),
+                Some(BraceType::Initializer)
+            )
+            && self
+                .current
+                .active_token()
+                .and_then(|brace| self.tree.groups.closed_at(brace))
+                .is_some_and(|group| {
+                    // The list a name opens, as `Item value{`.
+                    self.tree.blocks.kind(group) == Some(BlockKind::Initializer)
+                        && self
+                            .tree
+                            .previous_code_token(self.tree.groups.get(group).open)
+                            .is_some_and(|before| {
+                                matches!(&self.tree.tokens[before], Token::Word(word) if word != language::RETURN)
+                            })
+                });
         if attached_statement_expression {
             self.ensure_space();
+        } else if attached_initializer_closer {
+            self.emit_source_space();
+            // The row keeps the level it stands at in the list.
+            let level = self
+                .layout
+                .indentation
+                .line_indent(LineKind::Normal, self.options);
+            let continuation = &mut self.layout.continuation_indent;
+            if continuation.next_line_indent.is_none()
+                && continuation.next_line_indent_spaces.is_none()
+            {
+                continuation.next_line_indent = Some(level);
+            }
         } else if attached_after_comment {
             self.trim_current_end_horizontal_space();
             self.ensure_space();
@@ -451,8 +490,15 @@ impl FormatEngine<'_> {
         if self.layout.nesting.last_closed_brace_header.is_some() {
             self.layout.command_state.pre_brace_header_stack.pop();
         }
-        self.layout.continuation_indent.next_line_indent_spaces = None;
-        self.set_indent_after_closing_brace(next, unmatched_closing_brace, closing_frame_indent);
+        // A closer kept on its row sets no indent of a row it would lead.
+        if !attached_initializer_closer {
+            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.set_indent_after_closing_brace(
+                next,
+                unmatched_closing_brace,
+                closing_frame_indent,
+            );
+        }
         self.preprocessor.split_else.closing_brace_has_else =
             matches!(next, Some(Token::Word(word)) if word == "else");
         self.mark_closed_brace_output_position();
