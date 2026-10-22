@@ -21870,3 +21870,12 @@ fn rows_of_template_arguments_after_a_template_head_stand_at_the_assigned_value(
     let expected = "template <typename T> using CanParse = typename std::enable_if<\n                                       helper::value,\n                                       int>::type;\n";
     check(input, &["--style=google"], expected);
 }
+
+#[test]
+fn rows_of_a_class_head_template_argument_list_stand_at_its_name_whatever_they_hold() {
+    // Rows with parens and rows without stand alike, and the closer of the
+    // body stays at the head.
+    let input = "struct Factory< Container,\n    Other,\n    More> {\n};\nstruct Factory< Container,\n    Second(x),\n    Third> {\n};\n";
+    let expected = "struct Factory< Container,\n       Other,\n       More> {\n};\nstruct Factory< Container,\n       Second(x),\n       Third> {\n};\n";
+    check(input, &["--style=google"], expected);
+}
