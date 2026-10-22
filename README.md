@@ -84,8 +84,3 @@ names.
 `cstyle` targets AStyle-compatible option syntax and formatting behavior while
 remaining a standalone Rust implementation. For deterministic comparisons, pass
 `--options=none --project=none` to disable user and project configuration.
-
-Input that is not valid UTF-8 and has no UTF-16 byte order mark is read as
-Latin-1 and written back byte for byte. Columns in such a file, for alignment
-and `--max-code-length`, count the UTF-8 width of the text read: each byte past
-ASCII counts two columns where AStyle counts one.
