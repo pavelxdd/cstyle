@@ -21797,3 +21797,11 @@ fn a_define_whose_parameters_continue_on_the_next_row_starts_its_body_at_the_lef
     check(input, &["--indent-preproc-define"], expected);
     check(expected, &["--indent-preproc-define"], expected);
 }
+
+#[test]
+fn a_case_block_closer_stands_at_its_label_whatever_comment_follows_it() {
+    let input = "void helper(int k)\n{\n    switch (k) {\n    case 1: {\n        first();\n    }  /* fall through */\n    case 2: {\n        second();\n    } // fall through\n    default:\n        break;\n    }\n}\n";
+    check(input, &["--style=1tbs"], input);
+    let expected = "void helper(int k)\n{\n    switch (k) {\n        case 1: {\n            first();\n        }  /* fall through */\n        case 2: {\n            second();\n        } // fall through\n        default:\n            break;\n    }\n}\n";
+    check(input, &["--style=1tbs", "--indent-switches"], expected);
+}
