@@ -21242,3 +21242,33 @@ fn code_before_a_directive_in_a_one_line_block_stays_in_the_block() {
     check(input, &[], expected);
     check(expected, &[], expected);
 }
+
+#[test]
+fn a_braced_member_initializer_split_across_rows_keeps_its_brace_with_the_member() {
+    // Its brace opens a list, not the constructor's body, whatever the
+    // brace style breaks.
+    let input = "Holder::Holder(int value)\n    : first_(value)\n    , items_{1, 2,\n             3}\n{\n}\nHolder::Holder()\n    : items_{1,\n             2}, other_(1)\n{\n}\nHolder::Holder()\n    : other_(1), items_{1,\n                        2}\n{\n}\n";
+    for style in [
+        "--style=allman",
+        "--style=gnu",
+        "--style=horstmann",
+        "--style=kr",
+    ] {
+        check(input, &[style], input);
+    }
+    let whitesmith = input.replace("{\n}\n", "    {\n    }\n");
+    check(input, &["--style=whitesmith"], &whitesmith);
+}
+
+#[test]
+fn a_brace_list_split_across_rows_in_an_operator_led_row_keeps_its_brace_on_the_row() {
+    // The row's operator leads the expression, not the list.
+    let input = "void f()\n{\n    value = first\n            + Item{1,\n                   2};\n    value = first\n            | Flags{1,\n                    2};\n    call(first\n         , .5, Item{1,\n                    2});\n    int values[]\n        = {1,\n           2\n          };\n}\n";
+    for style in ["--style=allman", "--style=gnu", "--style=vtk"] {
+        check(input, &[style], input);
+    }
+    let whitesmith = input
+        .replace("void f()\n{", "void f()\n    {")
+        .replace(";\n}\n", ";\n    }\n");
+    check(input, &["--style=whitesmith"], &whitesmith);
+}

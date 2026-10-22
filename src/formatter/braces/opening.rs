@@ -2126,19 +2126,6 @@ impl FormatEngine<'_> {
                     | BraceStyle::Gnu
                     | BraceStyle::Horstmann
             );
-        // A designator leading a brace list's row leads no operator.
-        let leads_designator =
-            self.innermost_brace_is_brace_list() && self.current.trimmed_start().starts_with('.');
-        let operator_led_broken_brace = matches!(
-            self.options.brace_style,
-            BraceStyle::Allman
-                | BraceStyle::Whitesmith
-                | BraceStyle::Vtk
-                | BraceStyle::Gnu
-                | BraceStyle::Horstmann
-                | BraceStyle::Pico
-        ) && !leads_designator
-            && leads_with_operator(self.current.trimmed_start(), b"<>|&+-*/%=!?:,.");
         // An enum brace that starts its source line stays broken, and so
         // does one a style breaks whose values go on over lines: its values
         // stand below it, as when the source broke it.
@@ -2154,7 +2141,6 @@ impl FormatEngine<'_> {
             && !non_attaching_lambda_body
             // Comments alone before the brace leave it leading its row.
             && !line_scan::after_leading_comments(self.current.trimmed_start()).is_empty()
-            && !operator_led_broken_brace
             && !source_broken_enum
             && !matches!(next, None | Some(Token::Newline))
             && !self.comments.next_comment_ends_line
