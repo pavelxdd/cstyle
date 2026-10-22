@@ -4534,3 +4534,26 @@ fn split_else_chain_ending_in_an_empty_block_leaves_the_next_block_level() {
 
     assert_eq!(format_exact(input, &options), input);
 }
+
+#[test]
+fn a_list_after_one_holding_only_a_directive_closes_at_its_statement() {
+    // The directive leaves the list around it no rows; the list after it
+    // closes where any list of its own closes.
+    let input = "static const struct Item items[] = {\n#include \"items.h\"\n};\n\nstatic const struct Item invalid = {\n    -1, \"invalid\", 0\n};\nint x;\n";
+    for style in ["--style=kr", "--style=java"] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_owned()]).expect("valid options");
+        assert_eq!(format_exact(input, &options), input, "{style}");
+    }
+}
+
+#[test]
+fn indent_preproc_define_keeps_operator_led_body_rows_at_one_column() {
+    // Each row a leading operator continues stands as the one before it;
+    // the last row is no deeper for ending the body.
+    let input = "#define SIZE \\\n    FIRST + 1 \\\n    + SECOND /* note */ \\\n    + THIRD\n\n#define COUNT \\\n    FIRST + 1 \\\n    + SECOND \\\n    + THIRD\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--indent-preproc-define".to_owned()])
+        .expect("valid options");
+    assert_eq!(format_exact(input, &options), input);
+}
