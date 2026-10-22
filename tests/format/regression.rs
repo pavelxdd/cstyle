@@ -21467,3 +21467,10 @@ fn break_blocks_parts_a_header_block_from_what_follows_whatever_braces_its_condi
     check(input, &["--style=kr", "--break-blocks"], expected);
     check(expected, &["--style=kr", "--break-blocks"], expected);
 }
+
+#[test]
+fn break_blocks_leaves_a_bare_block_a_directive_parts_from_a_header_block_unpadded_after() {
+    let input = "void f()\n{\n    if (fd == -1) {\n        go();\n    }\n#ifdef FEATURE\n    {\n        bare();\n    }\n#endif\n    next();\n}\n";
+    let expected = "void f()\n{\n    if (fd == -1) {\n        go();\n    }\n\n#ifdef FEATURE\n    {\n        bare();\n    }\n#endif\n    next();\n}\n";
+    check(input, &["--style=kr", "--break-blocks"], expected);
+}
