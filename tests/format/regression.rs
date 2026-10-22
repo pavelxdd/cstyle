@@ -14934,6 +14934,11 @@ fn a_designator_string_value_continues_under_the_value() {
         &[],
         "void f(void)\n{\n    struct Item item = {\n        .name = \"first \"\n                \"second\",\n        [1] = \"first \"\n              \"second\",\n        \"first \"\n        \"second\",\n    };\n}\n",
     );
+    // A comment row before the value's comma continues the value too.
+    let input = "void f(void)\n{\n    struct Item item = {\n        .name = \"n\"\n        /* note\n        ** more */,\n        .next = 0,\n    };\n}\n";
+    let expected = "void f(void)\n{\n    struct Item item = {\n        .name = \"n\"\n                /* note\n                ** more */,\n        .next = 0,\n    };\n}\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
 }
 
 #[test]
