@@ -1724,7 +1724,7 @@ impl<'a> FormatEngine<'a> {
             let after_run = after_run_index.and_then(|index| tokens.get(index));
             self.pointer_run.next_is_name_like = pointers::pointer_next_is_name_like(after_run);
             self.pointer_run.group_follows_run =
-                matches!(after_run, Some(Token::Symbol('(' | '[')));
+                matches!(after_run, Some(Token::Symbol('(' | '[' | '.')));
             self.pointer_run.followed_by_reference = matches!(
                 after_run,
                 Some(Token::Operator(operator)) if matches!(operator.as_str(), "&" | "&&")

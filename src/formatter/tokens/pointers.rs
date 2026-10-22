@@ -39,10 +39,12 @@ pub(crate) struct PointerRunState {
     /// array bound, as in `char* (*get)(void)` or `new char* [count]`, keeps
     /// a space before the group.
     pub(crate) spaces_declarator_group: bool,
-    /// A parenthesized declarator or an array bound follows the run.
+    /// A parenthesized declarator, an array bound or a pack's `...` follows
+    /// the run.
     pub(crate) group_follows_run: bool,
-    /// A `*` aligned to its name takes the parenthesized declarator or array
-    /// bound right after it as that name, as in `new char *[count]`.
+    /// A `*` aligned to its name takes the parenthesized declarator, array
+    /// bound or pack's `...` right after it as that name, as in
+    /// `new char *[count]`.
     pub(crate) attaches_declarator_group: bool,
     /// The last run of one operator read: the tokens' address, the token
     /// read from, and the run's last token.
@@ -91,6 +93,10 @@ impl FormatEngine<'_> {
     }
 
     pub(super) fn is_rvalue_reference_like(&self, next: Option<&Token>) -> bool {
+        // A `.` after the operator starts a pack's `...`.
+        if matches!(next, Some(Token::Symbol('.'))) {
+            return self.declares_pack();
+        }
         // A parameter list continues no expression of the line before it.
         if self.tree_declaration_context() != Some(true)
             && self.continues_operator_expression()
@@ -540,6 +546,17 @@ impl FormatEngine<'_> {
             })
     }
 
+    /// Whether a `...` after a declarator's operator names a parameter or
+    /// type pack rather than ending a fold expression.
+    fn declares_pack(&self) -> bool {
+        self.tree_declaration_context() == Some(true)
+            || self.layout.line_state.template_angle_depth > 0
+                && self
+                    .current
+                    .rfind('<')
+                    .is_some_and(|open| !self.current[open..].contains('('))
+    }
+
     fn pointer_in_template_type_context(&self, next: Option<&Token>) -> bool {
         if self.layout.line_state.template_angle_depth == 0 {
             return false;
@@ -548,6 +565,7 @@ impl FormatEngine<'_> {
             Some(Token::Operator(operator)) if operator.starts_with('>') => true,
             // An array bound ends the type, as in `Box<char*[4]>`.
             Some(Token::Symbol(',' | '[')) => true,
+            Some(Token::Symbol('.')) => self.declares_pack(),
             Some(Token::Word(word))
                 if matches!(word.as_str(), "const" | "volatile" | "restrict") =>
             {

@@ -20705,3 +20705,31 @@ fn an_alias_of_a_named_type_treats_its_declarator_star_as_a_keyword_type_does() 
         check(expected, args, expected);
     }
 }
+
+#[test]
+fn a_parameter_pack_takes_the_declarator_of_its_type() {
+    let input = "template <typename... Args>\nvoid f(Args&&... args);\ntemplate <typename... Args>\nvoid g(const Args&... args);\ntemplate <typename... Args>\nvoid h(Args && ... args);\ntemplate <typename... Args>\nvoid p(Args*...);\ntemplate <typename... Args>\nbool all(Args... args)\n{\n    return (args && ...);\n}\n";
+    let shaped = |f: &str, g: &str, h: &str, p: &str| {
+        format!(
+            "template <typename... Args>\nvoid f({f} args);\ntemplate <typename... Args>\nvoid g(const {g} args);\ntemplate <typename... Args>\nvoid h({h} args);\ntemplate <typename... Args>\nvoid p({p});\ntemplate <typename... Args>\nbool all(Args... args)\n{{\n    return (args && ...);\n}}\n"
+        )
+    };
+    for (args, expected) in [
+        (&["-p"][..], input.to_string()),
+        (
+            &["--align-pointer=type"][..],
+            shaped("Args&& ...", "Args& ...", "Args&& ...", "Args* ..."),
+        ),
+        (
+            &["--align-pointer=middle"][..],
+            shaped("Args && ...", "Args & ...", "Args && ...", "Args * ..."),
+        ),
+        (
+            &["--align-pointer=name"][..],
+            shaped("Args &&...", "Args &...", "Args &&...", "Args *..."),
+        ),
+    ] {
+        check(input, args, &expected);
+        check(&expected, args, &expected);
+    }
+}

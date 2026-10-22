@@ -211,7 +211,13 @@ impl FormatEngine<'_> {
             || (self.layout.previous == PreviousToken::Operator && self.options.pad_operators))
             && self.token_input.previous_input_whitespace.is_none()
             && self.current.ends_with(' ');
-        if !self.current.ends_with('.')
+        let spaces_declarator_group = std::mem::take(&mut self.pointer_run.spaces_declarator_group);
+        // A pack's `...` stands as the name of an aligned declarator.
+        if std::mem::take(&mut self.pointer_run.attaches_declarator_group) {
+            self.trim_current_end();
+        } else if spaces_declarator_group && self.current.ends_with_any(b" \t") {
+            // The gap moved past a type's star stays before the pack.
+        } else if !self.current.ends_with('.')
             && self.layout.previous == PreviousToken::OpenParen
             && self.options.pad_parens_inside
         {
