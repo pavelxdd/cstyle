@@ -12722,6 +12722,16 @@ fn whitesmith_sets_the_body_brace_of_a_function_returning_a_defined_enum_at_its_
 }
 
 #[test]
+fn designator_rows_of_a_list_after_a_continued_declarator_stand_as_its_other_rows() {
+    // The rows of a declarator's list stand a level past its declaration,
+    // whether they hold designators, values or a nested list.
+    let input = "void f()\n{\n    struct Item\n        first = {\n            1, 2\n        };\n    struct Item\n        first = {\n            .a = 1,\n        };\n    struct Item\n        first = {\n            .a = 1,\n            .u = {\n                .b = 2,\n            }\n        };\n}\n";
+    let expected = "void f()\n{\n    struct Item\n        first = {\n        1, 2\n    };\n    struct Item\n        first = {\n        .a = 1,\n    };\n    struct Item\n        first = {\n        .a = 1,\n        .u = {\n            .b = 2,\n        }\n    };\n}\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+}
+
+#[test]
 fn a_declarator_after_an_initializer_stands_at_its_declaration_in_a_function() {
     let input = "void f()\n{\n    static const struct Item\n        first = {\n            1, 2\n        },\n        __attribute__((unused))\n        second = {\n            3, 4\n        };\n}\n";
     check(

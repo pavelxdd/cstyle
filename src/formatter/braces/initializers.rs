@@ -11,7 +11,7 @@ use crate::formatter::preprocessor::is_conditional_preprocessor;
 use crate::formatter::state::frame::{BraceSemanticKind, ParenRole};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
-use crate::formatter::structure::blocks::{BlockKind, next_code_token};
+use crate::formatter::structure::blocks::{BlockKind, is_code_token, next_code_token};
 use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::BraceListRows;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
@@ -1516,6 +1516,43 @@ impl FormatEngine<'_> {
             .is_some_and(|(open, span)| (span.first..=span.last).contains(&open))
     }
 
+    /// The column of the rows of the aggregate a `struct` declaration
+    /// assigns: a level past the statement, as its other rows stand, though
+    /// its declarator continues the statement on a line of its own.
+    fn struct_declaration_rows_spaces(&self) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let span = self.output.pending_tokens()?;
+        let group = groups.get(groups.enclosing(span.first)?);
+        let brace = group.open;
+        let ends_line = tokens[brace + 1..]
+            .iter()
+            .find(|token| !matches!(token, Token::Whitespace(_) | Token::Comment(..)))
+            .is_none_or(|token| matches!(token, Token::Newline));
+        if group.delimiter != Delimiter::Brace
+            || !ends_line
+            || !brace_follows_assignment(tokens, brace)
+            || !statement_declares_struct(tokens, brace)
+        {
+            return None;
+        }
+        // The statement starts after the one before it and any label.
+        let after = tokens[..brace]
+            .iter()
+            .rposition(|token| matches!(token, Token::Symbol(';' | '{' | '}')))
+            .map_or(0, |index| index + 1);
+        let start = (after..brace)
+            .rev()
+            .find(|&index| self.tree.statements.starts_block_statement(index))
+            .or_else(|| (after..brace).find(|&index| is_code_token(&tokens[index])))?;
+        let line = self.output.line_with_token(start)?;
+        Some(
+            self.output.lead_width(line, self.options.tab_width)
+                + self.options.indent_width
+                + self.case_unindent_spaces(),
+        )
+    }
+
     pub(crate) fn initializer_member_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {
         if !self.in_initializer_brace() {
             return None;
@@ -1602,6 +1639,9 @@ impl FormatEngine<'_> {
                         + self.case_unindent_spaces(),
                 );
             }
+            if let Some(spaces) = self.struct_declaration_rows_spaces() {
+                return Some(spaces);
+            }
             // Ratliff closes the aggregate a declaration defines at its
             // body; the rows stand a level past the declaration.
             let lead = leading_visual_width(previous, self.options.tab_width);
@@ -1648,7 +1688,9 @@ impl FormatEngine<'_> {
                     spaces =
                         spaces.max(self.layout.indentation.indent() * self.options.indent_width);
                 }
-                if let Some(index) = self.row_initializer_opener_line() {
+                if let Some(rows) = self.struct_declaration_rows_spaces() {
+                    spaces = spaces.min(rows);
+                } else if let Some(index) = self.row_initializer_opener_line() {
                     let previous = &self.output[index];
                     let code = self.output.code_before_comment(index).trimmed_end();
                     {
