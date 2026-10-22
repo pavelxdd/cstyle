@@ -3128,3 +3128,25 @@ fn split_call_argument_in_an_extern_c_function_keeps_its_column_on_a_second_run(
 
     assert_eq!(format_exact(&first, &options), first);
 }
+
+#[test]
+fn max_code_length_leaves_a_fitting_line_of_statements_whole() {
+    // astyle parts such a line only when a maximum is set, though it fits.
+    let input = "void f()\n{\n    if (ready) helper(); else run();\ndone: if (ready) {\n        value = 0;\n    }\n}\n";
+    for style in ["--style=kr", "--style=allman"] {
+        let mut options = FormatOptions::default();
+        let args = [
+            style.to_string(),
+            "--keep-one-line-statements".to_string(),
+            "--max-code-length=50".to_string(),
+        ];
+        apply_command_line_args(&mut options, &args).expect("valid options");
+        let mut without = FormatOptions::default();
+        apply_command_line_args(&mut without, &args[..2]).expect("valid options");
+        assert_eq!(
+            format_exact(input, &options),
+            format_exact(input, &without),
+            "{style}"
+        );
+    }
+}
