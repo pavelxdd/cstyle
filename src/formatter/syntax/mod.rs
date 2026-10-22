@@ -260,7 +260,7 @@ pub(crate) fn known_template_angle_role(
 ) -> TemplateAngle {
     match tokens.get(index) {
         Some(Token::Operator(operator)) if operator == "<" => {
-            if template_depth > 0 || opens() {
+            if opens() {
                 TemplateAngle::Open
             } else {
                 TemplateAngle::None

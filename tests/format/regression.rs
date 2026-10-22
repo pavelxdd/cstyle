@@ -20896,3 +20896,12 @@ fn an_equality_test_in_template_arguments_keeps_the_angles_a_template() {
     let input = "using Pick = conditional_t<sizeof(T) == sizeof(double), double, float>;\nusing Flag = bool_constant<limits<T>::digits == 106>;\nusing Other = bool_constant<limits<T>::digits != 106>;\n";
     check(input, &["-p"], input);
 }
+
+#[test]
+fn a_comparison_among_template_parameters_closes_with_its_clause() {
+    // The clause's angles close; the class after it opens its own body.
+    let input = "template <size_t I, typename... T, ENABLE_IF(I < sizeof...(T))>\nvoid make(int a)\n{\n    go();\n}\ntemplate <typename Range, typename... T> class Data\n{\npublic:\n    auto range() const -> Range { return range_; }\n};\n";
+    let expected = "template <size_t I, typename... T, ENABLE_IF(I < sizeof...(T))>\nvoid make(int a)\n{\n    go();\n}\ntemplate <typename Range, typename... T> class Data\n{\npublic:\n    auto range() const -> Range\n    {\n        return range_;\n    }\n};\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+}
