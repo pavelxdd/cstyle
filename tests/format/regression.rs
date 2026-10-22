@@ -20868,3 +20868,25 @@ fn a_catch_like_macro_keeps_its_place_by_its_closing_brace() {
     check(input, &["--style=allman"], expected);
     check(expected, &["--style=allman"], expected);
 }
+
+#[test]
+fn operators_in_a_returned_brace_list_join_operands() {
+    // A returned list holds values, as one assigned does.
+    let input = "Pair f(Pair lhs, Pair rhs)\n{\n    return {lhs.hi & rhs.hi, lhs.lo * rhs.lo};\n}\nPair g(Pair lhs, Pair rhs)\n{\n    return {hi & rhs, lo * mask};\n}\n";
+    for align in [
+        "--align-pointer=name",
+        "--align-pointer=type",
+        "--align-pointer=middle",
+    ] {
+        check(input, &[align], input);
+    }
+}
+
+#[test]
+fn operators_directly_in_a_braced_value_list_join_operands() {
+    // A lambda's parameters in the list still declare.
+    let input = "void f()\n{\n    Item item{a & b};\n    Item other{a.b * c};\n    auto x = Item{a & b};\n    call(Item{a * b});\n    return {a & b};\n    Item last{\n        a & b\n    };\n    Item lambda{[](int *p) {\n            return *p;\n        }};\n}\n";
+    check(input, &["--align-pointer=name"], input);
+    let typed = input.replace("int *p", "int* p");
+    check(input, &["--align-pointer=type"], &typed);
+}

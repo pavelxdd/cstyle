@@ -426,7 +426,7 @@ impl FormatEngine<'_> {
         {
             return true;
         }
-        if self.in_initializer_brace()
+        if (self.in_initializer_brace() || self.directly_in_value_list())
             && matches!(next, Some(Token::Word(_)))
             && trailing_word(&self.current)
                 .chars()
@@ -555,6 +555,22 @@ impl FormatEngine<'_> {
                     .current
                     .rfind('<')
                     .is_some_and(|open| !self.current[open..].contains('('))
+    }
+
+    /// Whether the token stands in a braced list of values, as a braced
+    /// initializer's, outside any parens in it.
+    fn directly_in_value_list(&self) -> bool {
+        matches!(
+            self.layout.nesting.brace_type_stack.last(),
+            Some(BraceType::Initializer)
+        ) && self.layout.nesting.paren_depth
+            == self.layout.nesting.current_brace_paren_depth().unwrap_or(0)
+            && self
+                .current
+                .active_token()
+                .and_then(|index| self.tree.groups.enclosing(index))
+                .and_then(|group| self.tree.blocks.kind(group))
+                .is_none_or(|kind| kind == BlockKind::Initializer)
     }
 
     fn pointer_in_template_type_context(&self, next: Option<&Token>) -> bool {
