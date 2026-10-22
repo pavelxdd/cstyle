@@ -7721,6 +7721,14 @@ fn an_assignment_value_on_a_continuation_row_past_the_maximum_stands_two_levels_
 }
 
 #[test]
+fn declarators_after_an_initialized_one_on_a_continuation_row_stand_at_the_first() {
+    // An initializer on a later row moves no declarator after it off the
+    // column the declaration's first declarator sets.
+    let input = "void f(void)\n{\n    int first, second,\n        third, fourth = -1,\n        fifth = -1,\n        sixth;\n}\n";
+    check(input, &[], input);
+}
+
+#[test]
 fn pointer_declarators_after_a_struct_type_line_continue_it_as_named_ones_do() {
     // A star leading the declarator continues the declaration a `struct`
     // type line starts, as a plain name does.
