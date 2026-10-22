@@ -1713,26 +1713,27 @@ impl FormatEngine<'_> {
                 self.layout.continuation_indent.next_line_indent_spaces = Some(brace_indent);
             }
         }
+        // A list leading its row continues nothing before it; one after code
+        // leaves the expression's continuation to the rows after it.
         if matches!(
             brace_type,
             BraceType::Array
                 | BraceType::CompoundLiteral
                 | BraceType::Initializer
                 | BraceType::DeferArray
-        ) {
+        ) && self.current_is_blank()
+        {
             self.layout.nesting.clear_continuation_indents();
-            if self.current_is_blank() {
-                self.layout.continuation_indent.next_line_indent = None;
-                if self
-                    .layout
-                    .compound_literal
-                    .forced_break_depths
-                    .last()
-                    .is_some_and(|depth| *depth == self.layout.nesting.brace_header_stack.len())
-                {
-                    self.layout.continuation_indent.next_line_indent_spaces =
-                        self.current_inline_array_column();
-                }
+            self.layout.continuation_indent.next_line_indent = None;
+            if self
+                .layout
+                .compound_literal
+                .forced_break_depths
+                .last()
+                .is_some_and(|depth| *depth == self.layout.nesting.brace_header_stack.len())
+            {
+                self.layout.continuation_indent.next_line_indent_spaces =
+                    self.current_inline_array_column();
             }
         }
         if brace_type == BraceType::Command {

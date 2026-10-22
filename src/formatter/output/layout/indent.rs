@@ -1735,7 +1735,7 @@ impl FormatEngine<'_> {
             if previous_trimmed.starts_with(':')
                 && previous_comment_code.ends_with(',')
                 && let Some(spaces) =
-                    self.post_ternary_colon_comma_sibling_indent_spaces(current, previous)
+                    self.post_ternary_colon_comma_sibling_indent_spaces(current, previous_index)
             {
                 return Some(spaces);
             }

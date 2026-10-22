@@ -1085,6 +1085,18 @@ impl FormatEngine<'_> {
             .then_some(leading_visual_width(previous, self.options.tab_width))
     }
 
+    /// Whether the line being laid out stands within a group that opens
+    /// on output line `index`.
+    fn pending_row_in_group_opened_on(&self, index: usize) -> bool {
+        self.output.pending_tokens().is_some_and(|span| {
+            self.tree.groups.enclosing(span.first).is_some_and(|group| {
+                self.output
+                    .line_with_token(self.tree.groups.get(group).open)
+                    == Some(index)
+            })
+        })
+    }
+
     pub(crate) fn recent_ternary_argument_sibling_indent_spaces(
         &self,
         current: &str,
@@ -1099,6 +1111,10 @@ impl FormatEngine<'_> {
                 .rsplit_once('{')
                 .is_some_and(|(prefix, _)| line_ends_compound_literal_cast(prefix.trimmed_end()))
             || self.open_paren_column_of(previous_code).is_some()
+            || self
+                .output
+                .last_non_empty_index()
+                .is_some_and(|index| self.pending_row_in_group_opened_on(index))
         {
             return None;
         }
@@ -2274,16 +2290,21 @@ impl FormatEngine<'_> {
     pub(crate) fn post_ternary_colon_comma_sibling_indent_spaces(
         &self,
         current: &str,
-        previous: &str,
+        previous_index: usize,
     ) -> Option<usize> {
         if current.starts_with_any(b":)}") || !self.output.may_have_question() {
             return None;
         }
+        let previous = &self.output[previous_index];
         let previous_code = self.output.code_trimmed_of(previous);
         if !previous_code.trimmed_start().starts_with(':')
             || !previous_code.ends_with(',')
             || self.open_paren_column_of(previous_code).is_some()
         {
+            return None;
+        }
+        // A row within a list the colon's row opens is the list's.
+        if self.pending_row_in_group_opened_on(previous_index) {
             return None;
         }
         self.output

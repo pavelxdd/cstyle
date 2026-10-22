@@ -21272,3 +21272,11 @@ fn a_brace_list_split_across_rows_in_an_operator_led_row_keeps_its_brace_on_the_
         .replace(";\n}\n", ";\n    }\n");
     check(input, &["--style=whitesmith"], &whitesmith);
 }
+
+#[test]
+fn rows_of_a_list_in_a_continued_expression_stand_in_the_list_and_the_next_row_continues_it() {
+    let input = "void f()\n{\n    value = ready\n            ? Item{1, 2}\n            : Item{3,\n                   4};\n    value = ready\n            ? Item{1,\n                   2}\n            : other;\n    value = first\n            + Item{1,\n                   2}\n            + other;\n}\n";
+    for style in ["--style=kr", "--style=allman"] {
+        check(input, &[style], input);
+    }
+}
