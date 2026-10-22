@@ -251,11 +251,7 @@ fn function_head(
     }
     // `int init\n#endif\n(sqlite3 *db)`: a directive may separate the name
     // from its parameter list.
-    let mut before_params = previous_code_token(tokens, group.open)?;
-    // An escaped newline may part the name from its parameter list.
-    if matches!(tokens[before_params], Token::Symbol('\\')) {
-        before_params = previous_code_token(tokens, before_params)?;
-    }
+    let before_params = previous_code_token(tokens, group.open)?;
     // `int (lua_gettop) (lua_State *L)` keeps the name in parentheses.
     let (name, parenthesized_name) =
         if let Some(operator) = operator_function_name(tokens, groups, before_params) {

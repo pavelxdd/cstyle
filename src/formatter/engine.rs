@@ -1475,7 +1475,7 @@ impl<'a> FormatEngine<'a> {
                         if after_statement
                             && paren_depth <= 0
                             && is_code_token(token)
-                            && !matches!(token, Token::Symbol('}' | ')' | '\\')) =>
+                            && !matches!(token, Token::Symbol('}' | ')')) =>
                     {
                         statement_count += 1;
                     }
