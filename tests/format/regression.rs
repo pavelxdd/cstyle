@@ -17706,6 +17706,14 @@ fn returned_message_rows_align_at_the_keyword_as_other_message_rows() {
 }
 
 #[test]
+fn a_function_body_after_qualifiers_on_their_own_row_breaks_its_brace() {
+    let input = "Node* Item::find()\n    const {\n    go();\n}\nint Item::size()\n    const noexcept {\n    return 1;\n}\n";
+    let expected = "Node* Item::find()\nconst\n{\n    go();\n}\nint Item::size()\nconst noexcept\n{\n    return 1;\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
 fn message_rows_align_at_their_own_keyword_after_an_earlier_message_on_the_line() {
     let input = "@implementation Item\n- (int)total\n{\n    return [[self items] count] + [other countWith:1\n            and:2];\n    x = [a b] + [other countWith:1\n            and:2];\n}\n@end\n";
     let expected = "@implementation Item\n- (int)total\n{\n    return [[self items] count] + [other countWith:1\n                                         and:2];\n    x = [a b] + [other countWith:1\n                       and:2];\n}\n@end\n";

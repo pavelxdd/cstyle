@@ -1578,15 +1578,10 @@ impl FormatEngine<'_> {
         if inferred_definition_brace {
             brace_type = BraceType::Definition;
         }
-        // A constructor's body after a member's braced initializer.
-        if brace_type == BraceType::Command
+        // A function's body, whether its head ends on the brace's line or
+        // its qualifiers or a member's braced initializer stand there.
+        if matches!(brace_type, BraceType::Command | BraceType::Initializer)
             && self.pushed_brace_kind() == Some(BlockKind::FunctionBody)
-            && self
-                .current
-                .active_token()
-                .and_then(|brace| self.tree.previous_code_token(brace))
-                .and_then(|close| self.tree.groups.closed_at(close))
-                .is_some_and(|value| self.tree.blocks.kind(value) == Some(BlockKind::Initializer))
         {
             brace_type = BraceType::Definition;
         }
