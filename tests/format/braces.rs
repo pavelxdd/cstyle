@@ -2021,6 +2021,24 @@ fn back_to_back_blocks_nest_one_level() {
 }
 
 #[test]
+fn back_to_back_blocks_leading_their_line_nest_one_level_in_the_default_style() {
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    {{{{",
+        "        code;",
+        "        more(1);",
+        "    };};};}",
+        "    {{",
+        "        code;",
+        "    }}",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
+}
+
+#[test]
 fn back_to_back_blocks_close_together_past_empty_statements() {
     let source = fixture!(
         "void f(void)",

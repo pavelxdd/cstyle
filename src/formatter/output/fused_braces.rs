@@ -82,7 +82,7 @@ impl FormatEngine<'_> {
     /// The only statement of the block `parent` when it is a plain block
     /// opened right after the parent's `{` on the same line and closed
     /// right before the parent's `}`, with nothing but `;` in between.
-    fn fused_child(&self, parent: GroupId) -> Option<GroupId> {
+    pub(crate) fn fused_child(&self, parent: GroupId) -> Option<GroupId> {
         let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
         let blocks = &self.tree.blocks;

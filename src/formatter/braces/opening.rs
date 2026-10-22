@@ -3326,10 +3326,17 @@ impl FormatEngine<'_> {
         let runs_into_comment_row = matches!(brace_type, BraceType::Array | BraceType::Initializer)
             && matches!(next, Some(Token::Comment(CommentKind::Block, comment)) if !comment.contains('\n'))
             && !runs_list_rows_in(self.options.brace_style);
+        // Blocks opened back to back share their lines as one block.
+        let opens_fused_blocks = self
+            .tree
+            .groups
+            .opened_at(brace.token)
+            .is_some_and(|group| self.fused_child(group).is_some());
         if (self.options.brace_style == BraceStyle::None
             || runs_into_nested_brace
             || runs_into_comment_row)
             && brace_type != BraceType::Namespace
+            && !opens_fused_blocks
             && (self.token_input.token_begins_source_line
                 || runs_into_nested_brace
                 || follows_run_in_brace)
