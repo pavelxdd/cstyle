@@ -229,7 +229,7 @@ pub(crate) fn template_openers(tokens: &[Token]) -> Vec<bool> {
             Token::Operator(operator)
                 if matches!(
                     operator.as_str(),
-                    "::" | "*" | "&" | "&&" | "^" | "=" | "!" | "!="
+                    "::" | "*" | "&" | "&&" | "^" | "=" | "==" | "!" | "!="
                 ) => {}
             Token::Symbol('(') => paren_depth += 1,
             Token::Symbol(')') => {
@@ -324,7 +324,7 @@ fn looks_like_template_opener(tokens: &[Token], index: usize, end: usize) -> boo
             Token::Operator(operator)
                 if matches!(
                     operator.as_str(),
-                    "::" | "*" | "&" | "&&" | "^" | "=" | "!" | "!="
+                    "::" | "*" | "&" | "&&" | "^" | "=" | "==" | "!" | "!="
                 ) => {}
             Token::Symbol('(') => paren_depth += 1,
             Token::Symbol(')') => {

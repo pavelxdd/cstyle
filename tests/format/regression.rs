@@ -20890,3 +20890,9 @@ fn operators_directly_in_a_braced_value_list_join_operands() {
     let typed = input.replace("int *p", "int* p");
     check(input, &["--align-pointer=type"], &typed);
 }
+
+#[test]
+fn an_equality_test_in_template_arguments_keeps_the_angles_a_template() {
+    let input = "using Pick = conditional_t<sizeof(T) == sizeof(double), double, float>;\nusing Flag = bool_constant<limits<T>::digits == 106>;\nusing Other = bool_constant<limits<T>::digits != 106>;\n";
+    check(input, &["-p"], input);
+}
