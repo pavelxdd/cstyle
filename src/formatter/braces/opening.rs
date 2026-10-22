@@ -1080,6 +1080,27 @@ impl FormatEngine<'_> {
         closer_before && !self.current.trimmed_start().starts_with('}')
     }
 
+    /// For a line being built that leads with a `}` the source wrote on the
+    /// line of the header closing it, the spaces formatting added between
+    /// them.
+    fn closer_header_space_added(&self) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let first = self.current.tokens()?.first;
+        if !self.current.trimmed_start().starts_with('}')
+            || !matches!(tokens.get(first), Some(Token::Symbol('}')))
+        {
+            return None;
+        }
+        let is_header = |token: Option<&Token>| matches!(token, Some(Token::Word(word)) if matches!(word.as_str(), "else" | "while" | "catch"));
+        match tokens.get(first + 1)? {
+            token @ Token::Word(_) if is_header(Some(token)) => {
+                Some(usize::from(self.current.trimmed_start().starts_with("} ")))
+            }
+            Token::Whitespace(_) if is_header(tokens.get(first + 2)) => Some(0),
+            _ => None,
+        }
+    }
+
     pub(super) fn push_attached_comment_with_source_gap(&mut self, comment: &str) {
         if comment.trimmed_start().starts_with("//")
             && self.current.trimmed() == "{"
@@ -1132,8 +1153,9 @@ impl FormatEngine<'_> {
                 };
                 // The space joining a closing brace to its header counts as no
                 // padding.
-                if let Some(target) = target
-                    && !self.current.trimmed_start().starts_with('}')
+                let closer_space = self.closer_header_space_added();
+                if let Some(target) = target.map(|target| target + closer_space.unwrap_or(0))
+                    && (closer_space.is_some() || !self.current.trimmed_start().starts_with('}'))
                 {
                     // A line that lost a `}` broken off before it keeps its
                     // comment at the source column.

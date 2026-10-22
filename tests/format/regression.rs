@@ -21549,3 +21549,26 @@ fn a_nested_list_split_over_rows_breaks_after_its_brace_whatever_its_first_eleme
     let expected = "static struct Config c[] = {\n    [1] = {\n        \"a\",\n        \"b\"\n    },\n    [2] = {\n        1,\n        2\n    },\n};\n";
     check(input, &[], expected);
 }
+
+#[test]
+fn padding_a_closer_led_header_line_takes_from_its_comment_gap_as_any_line() {
+    // The space joining the closer to its header counts as no padding.
+    let wrap = |line: &str| {
+        format!("void f() {{\n    if (a) {{\n        x();\n    {line}\n        y();\n    }}\n}}\n")
+    };
+    check(
+        &wrap("}else if (b > c) {    /* note */"),
+        &[],
+        &wrap("} else if (b > c) {    /* note */"),
+    );
+    check(
+        &wrap("} else if( b>c ){    /* note */"),
+        &["--pad-oper"],
+        &wrap("} else if( b > c ) { /* note */"),
+    );
+    check(
+        &wrap("}else if( b>c ){    /* note */"),
+        &["--pad-oper", "--unpad-paren", "--pad-header"],
+        &wrap("} else if (b > c) {  /* note */"),
+    );
+}
