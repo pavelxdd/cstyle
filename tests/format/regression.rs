@@ -21484,3 +21484,14 @@ fn break_blocks_leaves_a_bare_block_a_comment_row_parts_from_a_header_block_unpa
         &input.replace("    }\n    /*", "    }\n\n    /*"),
     );
 }
+
+#[test]
+fn a_conditional_row_in_a_define_body_shifts_with_its_arguments_under_no_conditional_indent() {
+    let input = "#define DECL \\\n  int helper(int min) { \\\n    return reserve(value, min \\\n                   ? min : 8, \\\n                   size); \\\n  }\n";
+    let expected = "#define DECL \\\n    int helper(int min) { \\\n        return reserve(value, min \\\n                       ? min : 8, \\\n                       size); \\\n    }\n";
+    check(
+        input,
+        &["--indent-preproc-define", "--min-conditional-indent=0"],
+        expected,
+    );
+}
