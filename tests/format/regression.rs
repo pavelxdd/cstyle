@@ -21741,3 +21741,11 @@ fn a_case_block_closes_at_its_label_whatever_labels_it_holds() {
     check(input, &["--style=1tbs", "--indent-switches"], expected);
     check(expected, &["--style=1tbs", "--indent-switches"], expected);
 }
+
+#[test]
+fn breaking_one_line_headers_breaks_one_whose_condition_holds_a_paren_in_a_literal() {
+    let input = "void helper(void)\n{\n    if (c == 'a') count++;\n    if (c == '(') count++;\n    if (c == \"(\"[0]) count++;\n}\n";
+    let expected = "void helper(void)\n{\n    if (c == 'a') {\n        count++;\n    }\n    if (c == '(') {\n        count++;\n    }\n    if (c == \"(\"[0]) {\n        count++;\n    }\n}\n";
+    check(input, &["--add-braces", "--break-one-line-headers"], expected);
+    check(expected, &["--add-braces", "--break-one-line-headers"], expected);
+}
