@@ -21509,3 +21509,11 @@ fn designators_after_a_run_in_designator_in_a_define_body_share_its_column() {
     let expected = "#define HOOK(name, text) \\\n    { .name = name, \\\n      .type = COMMAND, \\\n      .pos = { 1, 2 }, \\\n      .scope = SESSION, \\\n      .text = text \\\n    }\n";
     check(input, &["--indent-preproc-define"], expected);
 }
+
+#[test]
+fn rows_of_a_list_whose_first_element_takes_a_sign_stay_at_the_element_column() {
+    // A sign before the first element continues nothing; the rows after it
+    // and the closer stand where they stand in any other list.
+    let input = "static double values[] = {\n    -1.0,\n    +2.0,\n    4.0,\n};\n";
+    check(input, &[], input);
+}
