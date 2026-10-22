@@ -20918,3 +20918,12 @@ fn a_comparison_among_template_parameters_closes_with_its_clause() {
     check(input, &["--style=allman"], expected);
     check(expected, &["--style=allman"], expected);
 }
+
+#[test]
+fn a_trailing_return_type_aligns_its_pointer_as_any_type_does() {
+    // A single star or ampersand aligns as a run of them does.
+    let input = "auto allocate(size_t size) -> void*;\nauto ref() -> Item&;\nauto two() -> Item**;\n";
+    let expected = "auto allocate(size_t size) -> void *;\nauto ref() -> Item &;\nauto two() -> Item **;\n";
+    check(input, &["--align-pointer=name"], expected);
+    check(expected, &["--align-pointer=name"], expected);
+}
