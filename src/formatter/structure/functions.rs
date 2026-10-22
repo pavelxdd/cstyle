@@ -315,8 +315,9 @@ fn is_try_body(tokens: &[Token], groups: &Groups, body: GroupId) -> bool {
         .is_some_and(|word| matches!(&tokens[word], Token::Word(word) if word == "try"))
 }
 
-/// `MACRO(type, name)(params) {`: a macro call standing for a function's
-/// name and return type, whose parameter list opens its body.
+/// `MACRO(type, name)(params) {` or `MACRO(type, name)(params);`: a macro
+/// call standing for a function's name and return type, whose parameter list
+/// opens its body or ends its declaration.
 fn macro_head_parameter_list(
     tokens: &[Token],
     groups: &Groups,
@@ -326,13 +327,17 @@ fn macro_head_parameter_list(
     params: GroupId,
 ) -> Option<HeadMatch> {
     let macro_name = previous_code_token(tokens, groups.get(call).open)?;
-    if !matches!(&tokens[macro_name], Token::Word(word) if !is_non_type_keyword(word)) {
+    // `BOOL (WINAPI *callback)(params);` declares a function pointer.
+    if !matches!(&tokens[macro_name], Token::Word(word) if !is_non_type_keyword(word))
+        || pointer_declarator_before(tokens, groups, params) == Some(call)
+    {
         return None;
     }
     match head_end(tokens, groups, head_ends, params, params)? {
         HeadEnd::Found(Some(body)) if blocks.kind(body) == Some(BlockKind::FunctionBody) => {
             Some(HeadMatch::ParameterList)
         }
+        HeadEnd::Found(None) => Some(HeadMatch::ParameterList),
         _ => None,
     }
 }

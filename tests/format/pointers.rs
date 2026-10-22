@@ -3255,6 +3255,18 @@ fn align_pointer_name_attaches_macro_type_pointer_name() {
 }
 
 #[test]
+fn a_declaration_a_macro_call_names_keeps_its_parameter_pointers() {
+    let source = "EXPORT(int, helper)(Item *first, Item &second);\n";
+    let options = options_from_args(&["--pad-oper"]);
+    assert_eq!(format_exact(source, &options), source);
+    let options = options_from_args(&["--pad-oper", "--align-pointer=type"]);
+    assert_eq!(
+        format_exact(source, &options),
+        "EXPORT(int, helper)(Item* first, Item& second);\n"
+    );
+}
+
+#[test]
 fn macro_type_pointer_parameters_do_not_shift_following_parameter_indent() {
     let options = options_from_args(&[
         "--style=1tbs",
