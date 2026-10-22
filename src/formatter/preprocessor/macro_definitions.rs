@@ -936,6 +936,9 @@ impl FormatEngine<'_> {
         // The column rows continued at before a paren opened, which they
         // resume once it closes.
         let mut column_before_parens = None;
+        // The column of a designator run into its list's brace, with the
+        // depth of that brace's frame: the list's rows stand there.
+        let mut run_in_designators: Vec<(usize, usize)> = Vec::new();
         let mut continuation_column =
             define_expression_continuation_spaces(first_line, self.options.tab_width)
                 // Parens indenting after them indent from the line.
@@ -1209,6 +1212,9 @@ impl FormatEngine<'_> {
                 opens_header_block,
                 starts_with_assignment,
             );
+            // A list a row closes takes its run-in column with it.
+            let open_depth = frames.len() + usize::from(!info.leading_close);
+            run_in_designators.retain(|&(depth, _)| depth < open_depth);
             let parens_before = open_parens;
             open_parens = open_parens_after(open_parens, content);
             if open_parens > 0 {
@@ -1250,8 +1256,15 @@ impl FormatEngine<'_> {
             } else if let Some(column) =
                 define_run_in_designated_initializer_column(&emitted, self.options.tab_width)
             {
+                run_in_designators.push((frames.len(), column));
                 Some(column)
-            } else if is_structural {
+            } else if is_structural
+                // A designator whose value is a list closed on its row ends
+                // its element as any other.
+                && !(info.opens == info.closes
+                    && !info.leading_close
+                    && define_complete_designated_initializer_row(content))
+            {
                 None
             } else if info.ends_semicolon && !line_open_paren {
                 // Inside the parentheses of a `for` header the next row keeps
@@ -1287,7 +1300,10 @@ impl FormatEngine<'_> {
             } else if define_complete_designated_initializer_row(content) {
                 // A designator row ends its element: the next one stands at
                 // the list's rows, as outside a macro.
-                None
+                run_in_designators
+                    .last()
+                    .filter(|&&(depth, _)| depth == frames.len())
+                    .map(|&(_, column)| column)
             } else {
                 // An assignment registers the column after it, a continuing
                 // backslash included.

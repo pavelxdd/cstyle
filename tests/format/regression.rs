@@ -21502,3 +21502,10 @@ fn a_product_in_a_group_leading_a_row_after_a_directive_stays_an_operator() {
     let expected = "void f() {\n    value = (\n#ifdef FEATURE\n                (scale && P * limit) +\n#endif\n                0);\n}\n";
     check(input, &["--pad-oper", "--align-pointer=name"], expected);
 }
+
+#[test]
+fn designators_after_a_run_in_designator_in_a_define_body_share_its_column() {
+    let input = "#define HOOK(name, text) \\\n\t{ .name = name, \\\n\t  .type = COMMAND, \\\n\t  .pos = { 1, 2 }, \\\n\t  .scope = SESSION, \\\n\t  .text = text \\\n\t}\n";
+    let expected = "#define HOOK(name, text) \\\n    { .name = name, \\\n      .type = COMMAND, \\\n      .pos = { 1, 2 }, \\\n      .scope = SESSION, \\\n      .text = text \\\n    }\n";
+    check(input, &["--indent-preproc-define"], expected);
+}
