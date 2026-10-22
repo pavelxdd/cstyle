@@ -1459,24 +1459,6 @@ impl FormatEngine<'_> {
     pub(crate) fn contextual_stream_brace_indent_spaces(&self, current: &str) -> Option<usize> {
         let width = self.options.indent_width;
         if (current.starts_with("<<") || current.starts_with(">>"))
-            && current.contains('{')
-            && !current.contains('}')
-            && self
-                .output
-                .len()
-                .checked_sub(1)
-                .is_some_and(|previous_line| {
-                    self.layout
-                        .frame_stack
-                        .active_stream_on_output_line(previous_line)
-                        .is_some_and(|stream| {
-                            stream.operator_output_column != stream.line_indent_spaces
-                        })
-                })
-        {
-            return Some(self.continuation_base_indent() * width);
-        }
-        if (current.starts_with("<<") || current.starts_with(">>"))
             && current.trimmed_end().ends_with('{')
             && !current.contains('}')
         {

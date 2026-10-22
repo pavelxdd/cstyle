@@ -1766,6 +1766,24 @@ fn lambda_chained_call_after_nested_call_aligns_to_outer_open_paren() {
 }
 
 #[test]
+fn stream_row_holding_a_list_with_elements_after_its_brace_keeps_the_stream_column() {
+    check(
+        "void f()\n{\n    stream << first\n           << ValueVector{A, B,\n                          C, D};\n    stream << first\n           << \"text\" << ValueVector{A, B,\n                                    C, D};\n}\n",
+        &[],
+        "void f()\n{\n    stream << first\n           << ValueVector{A, B,\n                          C, D};\n    stream << first\n           << \"text\" << ValueVector{A, B,\n                                    C, D};\n}\n",
+    );
+}
+
+#[test]
+fn continuation_row_opening_a_lambda_body_stands_at_its_statement() {
+    check(
+        "void f()\n{\n    int total = value +\n                helper([x]() {\n        body();\n    });\n    total = value +\n            helper([x]() {\n        body();\n    }) + other;\n}\n",
+        &[],
+        "void f()\n{\n    int total = value +\n    helper([x]() {\n        body();\n    });\n    total = value +\n    helper([x]() {\n        body();\n    }) + other;\n}\n",
+    );
+}
+
+#[test]
 fn operator_row_in_parens_past_max_continuation_indent_takes_two_levels() {
     check(
         "void f()\n{\n    VERIFY(helper.callWithVeryLongName(first, second) == (Option::First\n           | Option::ThirdValue));\n}\n",

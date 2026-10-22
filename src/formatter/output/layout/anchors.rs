@@ -98,9 +98,13 @@ impl FormatEngine<'_> {
         let in_parens = delimiter == Some(Delimiter::Paren);
         let in_initializer =
             group.is_some_and(|group| self.tree.blocks.kind(group) == Some(BlockKind::Initializer));
-        // astyle's stack holds nothing for a line that starts a statement.
+        // astyle's stack holds nothing for a line that starts a statement,
+        // and drops what it held for one that opens a lambda's body.
         let continues_stack =
             previous_index.is_some_and(|before| !self.ends_stack_statement(before));
+        if continues_stack && self.pending_line_opens_lambda_body() {
+            return None;
+        }
         // Rules for a statement's place in its block read statements only.
         let starts_statement = self.tree.statements.starts_block_statement(first);
         let is_word =
