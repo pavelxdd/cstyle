@@ -487,6 +487,7 @@ pub(crate) struct BraceListRows {
 pub(crate) fn brace_list_rows(tokens: &[Token], tree: &SourceTree, runs_in: bool) -> BraceListRows {
     let mut rows = BraceListRows::default();
     let mut run_in = IndexSet::default();
+    let mut leading = IndexSet::default();
     let mut children = Vec::new();
     let mut rows_of_nested = IndexSet::default();
     let mut stack: Vec<usize> = Vec::new();
@@ -511,7 +512,10 @@ pub(crate) fn brace_list_rows(tokens: &[Token], tree: &SourceTree, runs_in: bool
             Token::Comment(..) => {}
             Token::Symbol('}') => open_on_line = None,
             _ => {
-                if let Some(open) = open_on_line.take() {
+                // A brace leading its line levels the rows after it.
+                if let Some(open) = open_on_line.take()
+                    && !leading.contains(&open)
+                {
                     run_in.insert(open);
                 }
             }
@@ -528,6 +532,9 @@ pub(crate) fn brace_list_rows(tokens: &[Token], tree: &SourceTree, runs_in: bool
                     }
                 }
                 stack.push(index);
+                if begins_line {
+                    leading.insert(index);
+                }
                 if runs_in && begins_line {
                     if let Some((_, around)) = stack.split_last() {
                         rows.nested.extend(around.iter().copied());

@@ -1863,12 +1863,34 @@ impl FormatEngine<'_> {
             self.options.brace_style,
             BraceStyle::Horstmann | BraceStyle::Pico
         );
+        // A list whose brace leads the line, or runs into a nested brace or
+        // ends it, sets each brace the line leaves open a level past the
+        // one before, whatever rows follow.
+        let leveled_line = || {
+            let mut opened = Vec::new();
+            for (index, token) in tokens.iter().enumerate().take(open).skip(span.first) {
+                match token {
+                    Token::Symbol('{') => opened.push(index),
+                    Token::Symbol('}') => {
+                        opened.pop();
+                    }
+                    _ => {}
+                }
+            }
+            opened.first().is_some_and(|&outer| {
+                outer == span.first
+                    || next_code_token(tokens, outer + 1).is_none_or(|next| {
+                        matches!(tokens[next], Token::Symbol('{') | Token::Newline)
+                    })
+            })
+        };
         if span.first == open
             || !tokens[open + 1..=span.last.max(open)]
                 .iter()
                 .filter(|&token| is_code_token(token))
                 .take_while(|token| !run_in_row || matches!(token, Token::Symbol('{')))
                 .all(|token| matches!(token, Token::Symbol('{')))
+                && !leveled_line()
         {
             return None;
         }

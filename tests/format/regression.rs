@@ -17463,6 +17463,55 @@ fn default_style_keeps_the_first_element_of_a_mid_row_list_on_a_line_a_brace_lea
 }
 
 #[test]
+fn a_nested_list_right_after_its_list_brace_closes_a_level_past_it() {
+    let input = "int e[] = {{{1}, 2,\n   3}\n};\n";
+    for (style, expected) in [
+        ("--style=kr", "int e[] = {{{1}, 2,\n        3\n    }\n};\n"),
+        (
+            "--style=allman",
+            "int e[] = {{{1}, 2,\n        3\n    }\n};\n",
+        ),
+        (
+            "--style=whitesmith",
+            "int e[] = {{{1}, 2,\n        3\n        }\n    };\n",
+        ),
+        (
+            "--style=vtk",
+            "int e[] = {{{1}, 2,\n        3\n        }\n};\n",
+        ),
+        ("", "int e[] = {{{1}, 2,\n        3\n    }\n};\n"),
+    ] {
+        let args: Vec<&str> = [style].into_iter().filter(|arg| !arg.is_empty()).collect();
+        check(input, &args, expected);
+        check(expected, &args, expected);
+    }
+}
+
+#[test]
+fn a_list_brace_leading_its_line_levels_the_lists_opened_on_its_rows() {
+    let input = "int a[] =\n{1, {5,\n   3}};\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "int a[] = {\n    1, {\n        5,\n        3\n    }\n};\n",
+        ),
+        (
+            "--style=allman",
+            "int a[] =\n{\n    1, {\n        5,\n        3\n    }\n};\n",
+        ),
+        (
+            "--style=whitesmith",
+            "int a[] =\n    {\n    1, {\n        5,\n        3\n        }\n    };\n",
+        ),
+        ("", "int a[] =\n{   1, {5,\n        3\n    }\n};\n"),
+    ] {
+        let args: Vec<&str> = [style].into_iter().filter(|arg| !arg.is_empty()).collect();
+        check(input, &args, expected);
+        check(expected, &args, expected);
+    }
+}
+
+#[test]
 fn a_one_line_initializer_a_comment_leads_after_its_assignment_stays_on_one_line() {
     let input = "void f()\n{\n    struct Item item =\n        /* note */ { 1, 2 };\n}\n";
     for (style, expected) in [
