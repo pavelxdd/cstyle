@@ -12245,6 +12245,15 @@ fn an_else_chain_after_a_loop_body_given_braces_stands_with_its_if() {
 }
 
 #[test]
+fn a_comment_opening_a_list_among_nested_arguments_stands_with_its_rows() {
+    // The comment opens the list's rows, which continue no argument.
+    let input = "void f()\n{\n    outer(inner(\n              first,\n              {  // note\n                go();\n                more();\n              },\n              last),\n          end);\n}\n";
+    let expected = "void f()\n{\n    outer(inner(\n              first, {\n        // note\n        go();\n        more();\n    },\n              last),\n          end);\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
 fn any_unconditional_directive_between_a_case_label_and_a_brace_makes_the_brace_a_plain_block() {
     let input = "void f()\n{\n    switch (state) {\n    case 1:\n#line 46 \"input.l\"\n    {\n        pop(state);\n    }\n    break;\n    case 2:\n#pragma once\n    {\n        push(state);\n    }\n    break;\n    }\n}\n";
     check(

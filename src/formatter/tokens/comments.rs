@@ -928,11 +928,15 @@ impl FormatEngine<'_> {
             None
         };
         // The comments then lead their row; none trails the brace's code.
+        // The continuation of the brace's input line stays with the brace.
         if std::mem::take(&mut self.comments.comment_opens_brace_body) {
             if !self.current_is_blank() {
                 self.finish_line();
             }
             self.layout.line_state.trailing_comment_columns.clear();
+            self.layout
+                .continuation_indent
+                .input_line_continuation_indent = None;
         }
         let indents = self.comment_indents(kind, comment, index);
         let CommentIndents {
