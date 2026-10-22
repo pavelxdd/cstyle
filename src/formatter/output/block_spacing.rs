@@ -1,4 +1,5 @@
 use crate::config::{BraceStyle, FormatOptions};
+use crate::formatter::braces::rewrite::token_begins_line;
 use crate::formatter::constructs::assembly::is_asm_block_header;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{CommentKind, Token};
@@ -448,13 +449,22 @@ impl FormatEngine<'_> {
                 && (is_standard_break_blocks_opening_header(header)
                     || is_break_blocks_closing_header(header))
         };
-        // A comment kept after the header's closer on its line ends what the
-        // header carries.
-        if self.output.last_non_empty_index().is_some_and(|index| {
-            let line = &self.output[index];
-            let code = self.output.code_trimmed_of(line).trimmed();
-            code.ends_with('}') && code.len() < line.trimmed().len()
-        }) {
+        // A comment on rows of its own between the blocks, or one the output
+        // keeps after the header's closer on its row, ends what the header
+        // carries.
+        let own_row_comment = tokens[..brace]
+            .iter()
+            .rposition(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
+            .is_some_and(|before| {
+                matches!(tokens[before], Token::Comment(..)) && token_begins_line(tokens, before)
+            });
+        if own_row_comment
+            || self.output.last_non_empty_index().is_some_and(|index| {
+                let line = &self.output[index];
+                let code = self.output.code_trimmed_of(line).trimmed();
+                code.ends_with('}') && code.len() < line.trimmed().len()
+            })
+        {
             return false;
         }
         // Braces added around the statement before the brace close its

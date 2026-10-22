@@ -21474,3 +21474,13 @@ fn break_blocks_leaves_a_bare_block_a_directive_parts_from_a_header_block_unpadd
     let expected = "void f()\n{\n    if (fd == -1) {\n        go();\n    }\n\n#ifdef FEATURE\n    {\n        bare();\n    }\n#endif\n    next();\n}\n";
     check(input, &["--style=kr", "--break-blocks"], expected);
 }
+
+#[test]
+fn break_blocks_leaves_a_bare_block_a_comment_row_parts_from_a_header_block_unpadded_after() {
+    let input = "void f()\n{\n    if (ready) {\n        go();\n    }\n    /*\n     * note\n     */\n    {\n        bare();\n    }\n    next();\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-blocks"],
+        &input.replace("    }\n    /*", "    }\n\n    /*"),
+    );
+}
