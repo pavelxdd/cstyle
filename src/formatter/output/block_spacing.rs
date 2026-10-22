@@ -24,6 +24,7 @@ pub(crate) struct BlockSpacingState {
     closed_empty_block: bool,
     pending_closed_empty_block: Option<bool>,
     case_block_before_directive: bool,
+    pending_case_block_before_directive: bool,
     /// Depths of blocks opened right after a header's block closed, which
     /// astyle reads as more of that header.
     header_continued_depths: Vec<usize>,
@@ -313,6 +314,9 @@ impl FormatEngine<'_> {
         if let Some(empty) = self.block_spacing.pending_closed_empty_block.take() {
             self.block_spacing.closed_empty_block = empty;
         }
+        if std::mem::take(&mut self.block_spacing.pending_case_block_before_directive) {
+            self.block_spacing.case_block_before_directive = true;
+        }
     }
 
     pub(crate) fn observe_block_spacing_one_line_block(
@@ -331,6 +335,18 @@ impl FormatEngine<'_> {
         }
         // A block of comments alone is as empty once its line ends.
         self.block_spacing.pending_closed_empty_block = Some(holds_no_code);
+        // A case label's block kept on one line parts from a directive
+        // after it as one spanning rows does.
+        let tokens = &self.tree.tokens;
+        self.block_spacing.pending_case_block_before_directive = self
+            .current
+            .active_token()
+            .filter(|&open| matches!(tokens[open], Token::Symbol('{')))
+            .and_then(|open| self.tree.groups.opened_at(open))
+            .and_then(|group| self.tree.blocks.owner(group))
+            .is_some_and(|owner| {
+                matches!(&tokens[owner], Token::Word(word) if matches!(word.as_str(), "case" | "default"))
+            });
         // Only a header's block is padded.
         let header_block = self
             .block_spacing
@@ -651,7 +667,7 @@ impl FormatEngine<'_> {
                 .layout
                 .previous_pre_adjust_line
                 .as_deref()
-                .is_some_and(|previous| previous.trimmed() == "}")
+                .is_some_and(|previous| previous.trimmed_end().ends_with('}'))
         {
             self.block_spacing.prepend_blank = false;
             self.block_spacing.append_blank = false;

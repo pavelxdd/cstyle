@@ -21172,3 +21172,15 @@ fn a_joined_closer_moves_no_row_of_its_parens_when_parens_indent() {
     check(input, &options, expected);
     check(expected, &options, expected);
 }
+
+#[test]
+fn break_blocks_parts_a_one_line_case_block_from_a_directive_after_it() {
+    // As it parts a case block spanning rows.
+    let input = "void f()\n{\n    switch (state) {\n    case 2:\n#ifdef TRACE\n    { push(state); }\n#endif\n        break;\n    case 3:\n    {\n        push(state);\n    }\n#endif\n        break;\n    }\n}\n";
+    let expected = "void f()\n{   switch (state)\n    {   case 2:\n#ifdef TRACE\n        {   push(state); }\n\n#endif\n        break;\n\n        case 3:\n        {   push(state); }\n\n#endif\n        break; } }\n";
+    for extra in [&[][..], &["--delete-empty-lines"][..]] {
+        let options = [&["--style=pico", "--break-blocks"][..], extra].concat();
+        check(input, &options, expected);
+        check(expected, &options, expected);
+    }
+}
