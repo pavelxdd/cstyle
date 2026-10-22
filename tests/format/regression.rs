@@ -21895,3 +21895,12 @@ fn a_double_angle_closing_template_arguments_continues_no_shift_into_the_base_cl
     let input = "template <typename T>\nstruct Item<\n    T, Value<T>>\n    : std::true_type {};\nstruct Item<T, Value<T>>\n    : std::true_type {};\nstruct Item<T, Value>\n    : std::true_type {};\n";
     check(input, &["--style=google"], input);
 }
+
+#[test]
+fn a_designated_list_holding_a_one_line_list_on_its_row_closes_at_the_row_level() {
+    let input = "struct Config value = {\n    .second = { 1, { 2 },\n        3 },\n    .third = { 1, 2 },\n};\n";
+    let expected = "struct Config value = {\n    .second = {\n        1, { 2 },\n        3\n    },\n    .third = { 1, 2 },\n};\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+    check(input, &["--style=1tbs"], expected);
+}

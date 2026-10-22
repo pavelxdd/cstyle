@@ -7,6 +7,7 @@ use crate::formatter::lexer::{
 };
 use crate::formatter::structure::SourceTree;
 use crate::formatter::structure::blocks::BlockKind;
+use crate::formatter::structure::groups::GroupId;
 use crate::formatter::syntax::language::{
     is_macro_like_word, is_non_type_keyword, is_pointer_type_word, is_type_like_pointer_word,
 };
@@ -539,15 +540,20 @@ pub(crate) fn brace_list_rows(tokens: &[Token], tree: &SourceTree, runs_in: bool
     }
     // An element brace follows a separator or a designator's `=`; one after
     // a capture list or a cast opens a lambda body or a compound literal. A
-    // row of a nested list stands as a block does.
+    // row of a nested list stands as a block does, as does the value of a
+    // designator among a list's elements.
+    let is_list = |group: GroupId| tree.blocks.kind(group) == Some(BlockKind::Initializer);
     for (child, parent) in children {
         if run_in.contains(&parent)
             && !rows.nested.contains(&parent)
             && !rows_of_nested.contains(&parent)
-            && tree
-                .groups
-                .opened_at(parent)
-                .is_some_and(|group| tree.blocks.kind(group) == Some(BlockKind::Initializer))
+            && tree.groups.opened_at(parent).is_some_and(|group| {
+                is_list(group)
+                    && !(tree.groups.get(group).parent.is_some_and(is_list)
+                        && tree.previous_code_token(parent).is_some_and(|before| {
+                            matches!(&tokens[before], Token::Operator(operator) if operator == "=")
+                        }))
+            })
             && tree.previous_code_token(child).is_some_and(|before| {
                 matches!(&tokens[before], Token::Symbol(','))
                     || matches!(&tokens[before], Token::Operator(operator) if operator == "=")
