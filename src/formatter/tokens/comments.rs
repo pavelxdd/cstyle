@@ -1754,12 +1754,20 @@ impl FormatEngine<'_> {
                 })
                 .or_else(|| self.current_inline_array_column())
                 .or(block_comment_continuation_indent)
+                // A directive's rows continue no code.
                 .or_else(|| {
-                    self.output.last_non_empty_scoped().and_then(|line| {
-                        let code = self.output.code_trimmed_of(line);
-                        code.ends_with(',')
-                            .then(|| leading_visual_width(line, self.options.tab_width))
-                    })
+                    self.output
+                        .last_non_empty_scoped()
+                        .filter(|_| {
+                            self.output
+                                .last_non_empty_index()
+                                .is_none_or(|index| !self.output.is_directive_line(index))
+                        })
+                        .and_then(|line| {
+                            let code = self.output.code_trimmed_of(line);
+                            code.ends_with(',')
+                                .then(|| leading_visual_width(line, self.options.tab_width))
+                        })
                 })
                 .or_else(|| {
                     self.output.last_non_empty_scoped().and_then(|line| {

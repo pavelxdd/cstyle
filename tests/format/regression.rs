@@ -21716,3 +21716,10 @@ fn tab_indents_a_later_branch_row_continuing_a_statement_as_a_continuation() {
     check(input, &["--style=linux", "--indent=tab=8"], expected);
     check(expected, &["--style=linux", "--indent=tab=8"], expected);
 }
+
+#[test]
+fn code_after_a_multi_row_define_ending_at_a_comma_starts_afresh() {
+    let input = "#define LIST \\\n    first, \\\n    second,\n\n/* note */\nint value;\n#define PAIR \\\n    first,\n/* note */\n#define OTHER 1\n";
+    check(input, &[], input);
+    check(input, &["--indent-col1-comments"], input);
+}
