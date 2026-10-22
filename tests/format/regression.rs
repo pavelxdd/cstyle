@@ -4251,6 +4251,33 @@ fn vtk_statement_after_nested_added_one_line_block() {
 }
 
 #[test]
+fn break_one_line_headers_breaks_a_block_after_a_closer_ending_a_statement_row() {
+    // The statements before a closer of a block opened on an earlier row
+    // stand on a row of their own, so the header's block shares its row
+    // with none.
+    let input = "void f()\n{\n    if (ready) {\n        value=0; } else { result=0; }\n}\n";
+    let args = [
+        "--keep-one-line-statements",
+        "--break-one-line-headers",
+        "--keep-one-line-blocks",
+    ];
+    for (style, expected) in [
+        (
+            "--style=stroustrup",
+            "void f()\n{\n    if (ready) {\n        value=0;\n    }\n    else {\n        result=0;\n    }\n}\n",
+        ),
+        (
+            "--style=kr",
+            "void f()\n{\n    if (ready) {\n        value=0;\n    } else {\n        result=0;\n    }\n}\n",
+        ),
+    ] {
+        let options = [style, args[0], args[1], args[2]];
+        check(input, &options, expected);
+        check(expected, &options, expected);
+    }
+}
+
+#[test]
 fn break_blocks_all_lays_out_a_one_line_if_else_as_a_multi_line_one() {
     // The `else` the source keeps by the closer stays there, and the
     // condition of a do-while takes no blank line among its rows.
@@ -7759,10 +7786,12 @@ fn breaking_one_line_headers_keeps_blocks_on_lines_holding_other_statements() {
     ] {
         check(kept, &options, kept);
     }
+    // The statement before a closer of a block opened on an earlier line
+    // leaves the header's line with the closer.
     check(
         "void f()\n{\n    if (ready) {\n        value=0; } else { result=0; }\n}\n",
         &options,
-        "void f()\n{\n    if (ready) {\n        value=0;\n    } else { result=0; }\n}\n",
+        "void f()\n{\n    if (ready) {\n        value=0;\n    } else {\n        result=0;\n    }\n}\n",
     );
     check(
         "void f()\n{\n    if (ready) { value=0; }\n}\n",

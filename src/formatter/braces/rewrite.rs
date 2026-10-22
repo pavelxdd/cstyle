@@ -1755,7 +1755,19 @@ impl FormatEngine<'_> {
                 Token::Symbol(')') => parens -= 1,
                 _ if parens > 0 => {}
                 Token::Symbol('{') => braces += 1,
-                Token::Symbol('}') => braces -= 1,
+                Token::Symbol('}') => {
+                    braces -= 1;
+                    // The closer of a block opened on an earlier line leads
+                    // a row of its own, past the statements before it.
+                    if self
+                        .tree
+                        .groups
+                        .closed_at(index)
+                        .is_some_and(|group| self.tree.groups.get(group).open < line_start)
+                    {
+                        statements = 0;
+                    }
+                }
                 Token::Symbol(';') if braces <= 0 => statements += 1,
                 _ => {}
             }
