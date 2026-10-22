@@ -17706,6 +17706,38 @@ fn returned_message_rows_align_at_the_keyword_as_other_message_rows() {
 }
 
 #[test]
+fn indent_after_parens_sets_a_constructor_initializer_s_ternary_rows_a_continuation_in() {
+    let input = "Item::Item(int a)\n    : first(a),\n      second(a == 0\n             ? 1\n             : 2),\n      third(false)\n{\n}\n";
+    let expected = "Item::Item(int a)\n    : first(a),\n      second(a == 0\n          ? 1\n          : 2),\n      third(false)\n{\n}\n";
+    check(
+        input,
+        &["--style=allman", "--indent-after-parens"],
+        expected,
+    );
+    let doubled = expected.replace(
+        "          ? 1\n          : 2",
+        "              ? 1\n              : 2",
+    );
+    check(
+        input,
+        &[
+            "--style=allman",
+            "--indent-after-parens",
+            "--indent-continuation=2",
+        ],
+        &doubled,
+    );
+    // An arm creating a value leaves the next initializer at its column.
+    let input = input.replace(": 2),", ": new Value(a)),");
+    let expected = expected.replace(": 2),", ": new Value(a)),");
+    check(
+        &input,
+        &["--style=allman", "--indent-after-parens"],
+        &expected,
+    );
+}
+
+#[test]
 fn indent_after_parens_continues_a_shift_chain_from_a_row_it_leads() {
     // A shift leading a row with nothing registered stands two levels in;
     // the rows after it continue a level past that row.

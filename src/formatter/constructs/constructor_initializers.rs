@@ -883,7 +883,14 @@ impl FormatEngine<'_> {
         if trimmed.starts_with('?')
             && let Some(open) = self.open_paren_column_of(previous_code)
         {
-            return Some(column_after(previous_code, open, self.options.tab_width));
+            // Indenting after parens sets the arm a continuation past its
+            // paren's line.
+            return Some(if self.options.indent_after_parens {
+                leading_visual_width(previous, self.options.tab_width)
+                    + self.options.continuation_indent * self.options.indent_width
+            } else {
+                column_after(previous_code, open, self.options.tab_width)
+            });
         }
         None
     }

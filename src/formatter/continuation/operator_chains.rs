@@ -2117,11 +2117,18 @@ impl FormatEngine<'_> {
                     );
                 }
             }
+            // Indenting after parens sets the arm a continuation past its
+            // paren's line.
             let spaces = frame
                 .parent_delimiter
                 .and_then(|id| self.layout.frame_stack.delimiter_by_id(id))
                 .map_or(frame.branch_anchor_column?, |delimiter| {
-                    delimiter.opener_output_column + 1
+                    if self.options.indent_after_parens {
+                        delimiter.line_indent_spaces
+                            + self.options.continuation_indent * self.options.indent_width
+                    } else {
+                        delimiter.opener_output_column + 1
+                    }
                 });
             return Some(spaces + case_unindent);
         }
