@@ -21730,8 +21730,16 @@ fn rows_of_a_block_comment_in_a_define_body_keep_their_offset_from_its_opener_pa
     // measure it, at any count of tabs.
     let input = "#define VALUE(x) do {\\\n\t\t/*\\\n\t\t * note\\\n\t\t */\\\n\t\tcall(x);\\\n} while (0)\n";
     let expected = "#define VALUE(x) do {\\\n        /*\\\n         * note\\\n         */\\\n        call(x);\\\n    } while (0)\n";
-    check(input, &["--indent-preproc-define", "--convert-tabs"], expected);
-    check(expected, &["--indent-preproc-define", "--convert-tabs"], expected);
+    check(
+        input,
+        &["--indent-preproc-define", "--convert-tabs"],
+        expected,
+    );
+    check(
+        expected,
+        &["--indent-preproc-define", "--convert-tabs"],
+        expected,
+    );
 }
 
 #[test]
@@ -21746,8 +21754,16 @@ fn a_case_block_closes_at_its_label_whatever_labels_it_holds() {
 fn breaking_one_line_headers_breaks_one_whose_condition_holds_a_paren_in_a_literal() {
     let input = "void helper(void)\n{\n    if (c == 'a') count++;\n    if (c == '(') count++;\n    if (c == \"(\"[0]) count++;\n}\n";
     let expected = "void helper(void)\n{\n    if (c == 'a') {\n        count++;\n    }\n    if (c == '(') {\n        count++;\n    }\n    if (c == \"(\"[0]) {\n        count++;\n    }\n}\n";
-    check(input, &["--add-braces", "--break-one-line-headers"], expected);
-    check(expected, &["--add-braces", "--break-one-line-headers"], expected);
+    check(
+        input,
+        &["--add-braces", "--break-one-line-headers"],
+        expected,
+    );
+    check(
+        expected,
+        &["--add-braces", "--break-one-line-headers"],
+        expected,
+    );
 }
 
 #[test]
@@ -21772,4 +21788,12 @@ fn a_nested_list_after_a_conditional_breaks_its_closer_off_as_its_siblings_do() 
     let expected = "static Item items[] = {\n\n    {\n        first,\n        NULL\n    },\n\n#if (FEATURE)\n\n    {\n        second,\n        NULL\n    },\n\n#endif\n\n    {\n        third,\n        NULL\n    },\n\n    {\n        fourth,\n        NULL\n    },\n\n    null_item\n};\n";
     check(input, &["--style=1tbs"], expected);
     check(expected, &["--style=1tbs"], expected);
+}
+
+#[test]
+fn a_define_whose_parameters_continue_on_the_next_row_starts_its_body_at_the_left() {
+    let input = "#define debug6(level, log,      \\\n               arg1, arg2)     \\\n        helper(level, log,     \\\n               arg1, arg2)\n\nint value;\n";
+    let expected = "#define debug6(level, log,      \\\n               arg1, arg2)     \\\nhelper(level, log,     \\\n       arg1, arg2)\n\nint value;\n";
+    check(input, &["--indent-preproc-define"], expected);
+    check(expected, &["--indent-preproc-define"], expected);
 }

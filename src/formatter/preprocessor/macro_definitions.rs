@@ -269,44 +269,59 @@ fn strip_define_backslash(line: &str) -> (&str, bool) {
 }
 
 fn define_replacement_text(first_line: &str) -> &str {
-    let (body, _) = strip_define_backslash(first_line);
-    let trimmed = body.trimmed_start();
-    let rest = match trimmed.strip_prefix('#') {
-        Some(after_pound) => after_pound.trimmed_start(),
-        None => return "",
+    let Some(after_name) = define_text_after_name(first_line) else {
+        return "";
     };
+    let after_params = if after_name.starts_with('(') {
+        &after_name[define_parameters_end(after_name).unwrap_or(after_name.len())..]
+    } else {
+        after_name
+    };
+    after_params.trimmed_start()
+}
+
+/// The text of the `#define` on `first_line` past its name, up to a
+/// continuing backslash.
+fn define_text_after_name(first_line: &str) -> Option<&str> {
+    let (body, _) = strip_define_backslash(first_line);
+    let rest = body.trimmed_start().strip_prefix('#')?.trimmed_start();
     let directive_end = rest
         .find(|ch: char| !is_identifier_continue(ch))
         .unwrap_or(rest.len());
     if &rest[..directive_end] != "define" {
-        return "";
+        return None;
     }
     let after_directive = rest[directive_end..].trimmed_start();
     let name_end = after_directive
         .find(|ch: char| !is_identifier_continue(ch))
         .unwrap_or(after_directive.len());
-    let after_name = &after_directive[name_end..];
-    let after_params = if after_name.starts_with('(') {
-        let mut depth = 0usize;
-        let mut end = after_name.len();
-        for (index, ch) in after_name.char_indices() {
-            match ch {
-                '(' => depth += 1,
-                ')' => {
-                    depth -= 1;
-                    if depth == 0 {
-                        end = index + 1;
-                        break;
-                    }
+    Some(&after_directive[name_end..])
+}
+
+/// The end of the parameter list `after_name` opens, when it closes there.
+fn define_parameters_end(after_name: &str) -> Option<usize> {
+    let mut depth = 0usize;
+    for (index, ch) in after_name.char_indices() {
+        match ch {
+            '(' => depth += 1,
+            ')' => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return Some(index + 1);
                 }
-                _ => {}
             }
+            _ => {}
         }
-        &after_name[end..]
-    } else {
-        after_name
-    };
-    after_params.trimmed_start()
+    }
+    None
+}
+
+/// Whether the parameter list of the `#define` on `first_line` goes on
+/// past the line.
+fn define_parameters_continue(first_line: &str) -> bool {
+    define_text_after_name(first_line).is_some_and(|after_name| {
+        after_name.starts_with('(') && define_parameters_end(after_name).is_none()
+    })
 }
 
 /// The rows of a define as astyle reads them: a brace that opens no block,
@@ -1053,17 +1068,37 @@ impl FormatEngine<'_> {
         let mut line_spaces = paren_anchors
             .last()
             .map_or(spaces, |&(_, align)| align + extra);
+        // The parameters the `#define` line leaves open, which its rows
+        // continue; the replacement after a row closing them alone starts
+        // at the body's level.
+        let mut open_parameters = define_text_after_name(source_first_line)
+            .filter(|_| define_parameters_continue(source_first_line))
+            .map_or(0, |after_name| open_parens_after(0, after_name));
+        let mut replacement_starts = false;
         let mut previous_line = None;
         for (index, part) in body_parts.iter().enumerate() {
             if index > 0
                 && let Some(previous) = previous_line.as_deref()
             {
                 let current = strip_define_backslash(part).0.trimmed_start();
-                line_spaces = if let Some(anchor) = define_row_anchor(&paren_anchors, current) {
+                line_spaces = if replacement_starts {
+                    body_level * self.options.indent_width
+                } else if let Some(anchor) = define_row_anchor(&paren_anchors, current) {
                     anchor + extra
                 } else {
                     next_define_expression_indent(previous, spaces, self.options)
                 };
+            }
+            replacement_starts = false;
+            if open_parameters > 0 {
+                let content = strip_define_backslash(part).0.trimmed_start();
+                let tail = parameters_tail(open_parameters, content);
+                if tail.len() < content.len() {
+                    open_parameters = 0;
+                    replacement_starts = tail.is_empty();
+                } else {
+                    open_parameters = open_parens_after(open_parameters, content);
+                }
             }
             let prefix = self
                 .options
