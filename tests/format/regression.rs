@@ -17706,6 +17706,13 @@ fn returned_message_rows_align_at_the_keyword_as_other_message_rows() {
 }
 
 #[test]
+fn code_after_comment_rows_keeps_its_block_column_whatever_their_text() {
+    let input = "namespace n {\n// a.\n// Returns false (if error != NULL) on error.\nbool Item::f(int a,\n             int b) {\n  return a;\n}\n// {{{ part\n// more\nint z;\n}\n";
+    let expected = "namespace n\n{\n// a.\n// Returns false (if error != NULL) on error.\n    bool Item::f(int a,\n                 int b)\n    {\n        return a;\n    }\n// {{{ part\n// more\n    int z;\n}\n";
+    check(input, &["--style=kr", "--indent-namespaces"], expected);
+}
+
+#[test]
 fn rows_of_a_designator_value_list_run_in_after_its_brace_stand_a_level_in() {
     // Styles running a list's first element in after its brace set the
     // rows after it a level in, designators or values alike.

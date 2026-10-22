@@ -999,48 +999,6 @@ impl FormatEngine<'_> {
             }
         }
         if layout.line_kind == LineKind::Normal
-            && !line.trimmed_start().starts_with_any(b"/#{}")
-            && let Some(previous) = self.output.last_line_outside_comment()
-            && previous.trimmed_start().starts_with("//")
-        {
-            let comment = previous
-                .trimmed_start()
-                .trim_start_matches("//")
-                .trimmed_start();
-            let previous_indent = leading_visual_width(previous, self.options.tab_width);
-            let before_comment = self
-                .output
-                .scoped()
-                .iter()
-                .rev()
-                .skip_while(|line| line.as_str() != previous.as_str())
-                .skip(1)
-                .filter(|line| !line.trimmed().is_empty());
-            if comment.contains('(')
-                && comment.ends_with('.')
-                && before_comment
-                    .clone()
-                    .next()
-                    .is_some_and(|line| line.trimmed_end().ends_with('.'))
-            {
-                layout.exact_indent_spaces = Some(previous_indent);
-            }
-            for line in before_comment {
-                let trimmed = line.trimmed();
-                if trimmed.is_empty() {
-                    continue;
-                }
-                if trimmed.starts_with("//") {
-                    if trimmed.contains_from_first_byte("{{{") {
-                        layout.exact_indent_spaces = Some(previous_indent);
-                        break;
-                    }
-                    continue;
-                }
-                break;
-            }
-        }
-        if layout.line_kind == LineKind::Normal
             && line.trimmed_start().starts_with('*')
             && let Some(previous) = self.output.last_line_outside_comment()
         {
