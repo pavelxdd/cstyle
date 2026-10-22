@@ -99,12 +99,14 @@ impl FormatEngine<'_> {
         if self.current_opens_class_base_clause() {
             return true;
         }
-        if self.layout.nesting.has_question_in_current_brace()
-            || !self.current[..self.current_trailing_comment_split_limit()]
-                .trimmed()
-                .is_empty()
-        {
+        if self.layout.nesting.has_question_in_current_brace() {
             return false;
+        }
+        if !self.current[..self.current_trailing_comment_split_limit()]
+            .trimmed()
+            .is_empty()
+        {
+            return self.current_ends_split_class_head();
         }
         // Comment lines and directives before the colon leave the head.
         let Some(line) = self.output.scoped().iter().rev().find(|line| {
@@ -117,6 +119,32 @@ impl FormatEngine<'_> {
         };
         let code = &self.output.code_of(line);
         code_opens_class_base_clause(code.trimmed_end())
+    }
+
+    /// Whether the current line ends a class head that the rows before it
+    /// open, as template arguments split across rows leave one.
+    pub(crate) fn current_ends_split_class_head(&self) -> bool {
+        let mut head = vec![self.current_code_before_trailing_comment().trimmed()];
+        let range = self.output.scoped_range();
+        for index in range.clone().rev().take(16) {
+            let trimmed = self.output.trimmed(index);
+            if trimmed.is_empty()
+                || is_bare_comment_line(trimmed)
+                || self.output.comment_start_index(index) != index
+                || self.output.is_directive_line(index)
+            {
+                continue;
+            }
+            let code = self.output.code_before_comment_trimmed(index).trimmed();
+            if code.ends_with_any(b";{}:") {
+                break;
+            }
+            head.push(code);
+        }
+        head.len() > 1 && {
+            head.reverse();
+            code_opens_class_base_clause(&head.join(" "))
+        }
     }
 
     pub(crate) fn try_join_class_base_line(&mut self, line: &LineView<'_>) -> bool {

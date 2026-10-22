@@ -2090,11 +2090,20 @@ impl<'a> FormatEngine<'a> {
             self.previous_was_newline = true;
         } else if self.next_line.leads_with_class_base {
             let header_indent = self.layout.indentation.indent();
+            let split_head = !self.current_opens_class_base_clause();
             self.finish_line();
             self.layout.nesting.clear_continuation_indents();
-            self.layout
-                .continuation_indent
-                .set_next_line_level(header_indent + 1);
+            // The clause after a head split across rows stands with them.
+            match self.output.last().filter(|_| split_head) {
+                Some(row) => {
+                    let spaces = columns::leading_visual_width(row, self.options.tab_width);
+                    self.layout.continuation_indent.set_next_line_spaces(spaces);
+                }
+                None => self
+                    .layout
+                    .continuation_indent
+                    .set_next_line_level(header_indent + 1),
+            }
             self.layout.in_class_base_clause = true;
             self.previous_was_newline = true;
         } else if self.current.trimmed_end().ends_with(',') && self.is_top_level_table_macro_row() {

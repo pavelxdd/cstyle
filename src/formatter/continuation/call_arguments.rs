@@ -2176,8 +2176,36 @@ impl FormatEngine<'_> {
             return Some(spaces);
         }
         (has_member_after_paren(previous_code)
-            && self.open_paren_column_of(previous_code).is_none())
+            && self.open_paren_column_of(previous_code).is_none()
+            && !self
+                .output
+                .last_line_outside_comment_index()
+                .is_some_and(|index| self.row_leaves_template_angles_open(index)))
         .then(|| leading_visual_width(previous, self.options.tab_width))
+    }
+
+    /// Whether output line `index` leaves template angles open, as a row of
+    /// template arguments split across rows does.
+    fn row_leaves_template_angles_open(&self, index: usize) -> bool {
+        let Some(span) = self.output.line_tokens(index) else {
+            return false;
+        };
+        let tokens = &self.tree.tokens;
+        let mut depth = 0usize;
+        for at in span.first..=span.last.min(tokens.len().saturating_sub(1)) {
+            match &tokens[at] {
+                Token::Operator(operator) if operator == "<" && self.template_opener_at(at) => {
+                    depth += 1;
+                }
+                Token::Operator(operator)
+                    if depth > 0 && matches!(operator.as_str(), ">" | ">>") =>
+                {
+                    depth = depth.saturating_sub(operator.len());
+                }
+                _ => {}
+            }
+        }
+        depth > 0
     }
 
     pub(crate) fn nested_call_argument_over_max_output_indent_spaces(

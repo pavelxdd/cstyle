@@ -20989,3 +20989,46 @@ fn a_lambda_argument_after_a_string_argument_stands_at_the_statement() {
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn a_base_clause_after_a_split_class_head_stands_with_the_head_rows() {
+    let input = "template <typename T>\nstruct Holder<T, Pair<decltype(first<T>()),\n                      decltype(second<T>())>>\n    : std::true_type {};\ntemplate <typename T>\nstruct Holder<T, decltype(first<T>()),\n              decltype(second<T>())>\n    : std::true_type {};\ntemplate <typename T>\nstruct Holder<T, decltype(first<T>()),\n              decltype(second<T>())> >\n    : std::true_type {};\n";
+    let expected = "template <typename T>\nstruct Holder<T, Pair<decltype(first<T>()),\n       decltype(second<T>())>>\n       : std::true_type {};\ntemplate <typename T>\nstruct Holder<T, decltype(first<T>()),\n       decltype(second<T>())>\n       : std::true_type {};\ntemplate <typename T>\nstruct Holder<T, decltype(first<T>()),\n       decltype(second<T>())> >\n       : std::true_type {};\n";
+    for style in [
+        "--style=kr",
+        "--style=allman",
+        "--style=whitesmith",
+        "--style=gnu",
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn every_split_class_head_continues_at_its_name() {
+    // Whatever the class key and whether the head holds parens, as a
+    // struct head holding parens does.
+    let input = "struct Holder<T,\n              int>\n    : Base {};\nclass Holder<T, decltype(first<T>()),\n             int>\n    : public Base {};\nunion Holder<T,\n             int> {};\n";
+    let expected = "struct Holder<T,\n       int>\n       : Base {};\nclass Holder<T, decltype(first<T>()),\n      int>\n      : public Base {};\nunion Holder<T,\n      int> {};\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn a_base_clause_ended_with_its_statement_leads_no_initializer_list_after_it() {
+    let input = "struct Item\n    : Base {};\nstruct Holder<T, decltype(first<T>()),\n              int> {};\n";
+    let expected =
+        "struct Item\n    : Base {};\nstruct Holder<T, decltype(first<T>()),\n       int> {};\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn a_member_call_in_a_split_template_argument_row_leaves_the_next_row_continued() {
+    // The row's comma stands within the template angles it leaves open.
+    let input = "template <typename T>\nstruct Holder<T, Pair<decltype(*first<T>().begin()),\n                      decltype(second<T>().end())>>\n    : std::true_type {};\n";
+    let expected = "template <typename T>\nstruct Holder<T, Pair<decltype(*first<T>().begin()),\n       decltype(second<T>().end())>>\n       : std::true_type {};\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}

@@ -463,7 +463,9 @@ impl FormatEngine<'_> {
             && !trimmed.starts_with("::")
             && !self.colon_line_is_ternary_arm(index)
         {
-            if (code.ends_with('{') || code.ends_with('}')) && !braced_initializer() {
+            if code.ends_with(';')
+                || (code.ends_with('{') || code.ends_with('}')) && !braced_initializer()
+            {
                 return Some(ConstructorScan::Stop);
             }
             if self.colon_line_stands_in_parens(index) {
