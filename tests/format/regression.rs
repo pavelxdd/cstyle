@@ -21692,3 +21692,11 @@ fn ratliff_closes_a_header_block_opened_after_a_conditional_at_its_body() {
     check(input, &["--style=ratliff"], expected);
     check(expected, &["--style=ratliff"], expected);
 }
+
+#[test]
+fn break_blocks_reads_a_block_a_later_branch_leaves_after_a_statement_as_a_bare_block() {
+    let input = "void helper(void)\n{\n#ifdef FEATURE\n    if (ready)\n#else\n    check();\n#endif\n    {\n        first();\n    }\n#ifdef FEATURE\n    else if (other)\n    {\n        second();\n    }\n#endif\n}\n";
+    let expected = "void helper(void)\n{\n#ifdef FEATURE\n\n    if (ready)\n#else\n    check();\n\n#endif\n    {\n        first();\n    }\n#ifdef FEATURE\n    else if (other)\n    {\n        second();\n    }\n\n#endif\n}\n";
+    check(input, &["--style=allman", "--break-blocks"], expected);
+    check(expected, &["--style=allman", "--break-blocks"], expected);
+}

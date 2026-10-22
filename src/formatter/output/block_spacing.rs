@@ -417,6 +417,24 @@ impl FormatEngine<'_> {
         }
     }
 
+    /// Whether the block being closed follows a statement in token order,
+    /// across a directive: astyle's formatter reads the tokens in order, so
+    /// no header a conditional's first branch leaves heads it there.
+    fn closes_block_after_statement_across_directive(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        self.current
+            .active_token()
+            .and_then(|close| groups.closed_at(close))
+            .is_some_and(|block| {
+                let open = groups.get(block).open;
+                self.tree.previous_code_token(open).is_some_and(|previous| {
+                    matches!(tokens[previous], Token::Symbol(';' | '}'))
+                        && self.tree.has_directive_in(previous..open)
+                })
+            })
+    }
+
     /// Whether the token being pushed stands in a header's parens, where it
     /// takes no part in the header's padding.
     fn brace_in_header_parens(&self) -> bool {
@@ -583,7 +601,8 @@ impl FormatEngine<'_> {
             .nesting
             .last_closed_brace_header
             .as_deref()
-            .or(tree_header.as_deref());
+            .or(tree_header.as_deref())
+            .filter(|_| !self.closes_block_after_statement_across_directive());
         // astyle reads an assembly block as no command block.
         let closed_command_header = self.layout.nesting.last_closed_brace_type
             == Some(BraceType::Command)
