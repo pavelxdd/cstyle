@@ -2103,3 +2103,15 @@ fn remove_braces_removes_them_past_a_comment_between_header_and_brace() {
         "void f()\n{\n    if (ready) // why\n        value=0;\n    if (ready) /* why */\n        value=0;\n    if (ready)\n        /* own */\n        value=0;\n}\n",
     );
 }
+
+#[test]
+fn remove_braces_leaves_no_empty_line_for_a_closer_sharing_its_line() {
+    // Removing a closer that shares its line with another drops the closer
+    // only; the line the other closer stands on stays the only one left.
+    let mut options = FormatOptions::default();
+    options.remove_braces = true;
+    let input = "void f(void)\n{\n    if (a) {\n        if (b) {\n            go();\n    }   }\n\n    done();\n}\nvoid g(void)\n{\n    if (a) {\n        if (b) {\n            go();\n        } }\n    done();\n}\n";
+    let expected = "void f(void)\n{\n    if (a) {\n        if (b)\n            go();\n    }\n\n    done();\n}\nvoid g(void)\n{\n    if (a) {\n        if (b)\n            go();\n    }\n    done();\n}\n";
+    assert_eq!(format_exact(input, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
