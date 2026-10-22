@@ -21903,6 +21903,49 @@ fn statements_after_a_conditional_whose_later_branch_opens_a_block_stand_in_the_
 }
 
 #[test]
+fn closing_braces_after_a_conditional_whose_later_branch_opens_more_blocks_close_the_first_branch_blocks()
+ {
+    // A brace a later branch leaves open closes nothing past `#endif`.
+    let input = "void f()\n{\n#ifdef FEATURE\n    if (first) {\n#else\n    if (second) {\n        if (third) {\n#endif\n            go();\n        }\n    }\n}\nint value;\n";
+    let cases: [(&str, &str); 7] = [
+        (
+            "allman",
+            "void f()\n{\n#ifdef FEATURE\n    if (first)\n    {\n#else\n    if (second)\n    {\n        if (third)\n        {\n#endif\n        go();\n    }\n}\n}\nint value;\n",
+        ),
+        (
+            "gnu",
+            "void f()\n{\n#ifdef FEATURE\n    if (first)\n        {\n#else\n    if (second)\n        {\n            if (third)\n                {\n#endif\n            go();\n        }\n}\n}\nint value;\n",
+        ),
+        (
+            "whitesmith",
+            "void f()\n    {\n#ifdef FEATURE\n    if (first)\n        {\n#else\n    if (second)\n        {\n        if (third)\n            {\n#endif\n        go();\n        }\n    }\n    }\nint value;\n",
+        ),
+        (
+            "vtk",
+            "void f()\n{\n#ifdef FEATURE\n    if (first)\n        {\n#else\n    if (second)\n        {\n        if (third)\n            {\n#endif\n        go();\n        }\n}\n}\nint value;\n",
+        ),
+        (
+            "kr",
+            "void f()\n{\n#ifdef FEATURE\n    if (first) {\n#else\n    if (second) {\n        if (third) {\n#endif\n        go();\n    }\n}\n}\nint value;\n",
+        ),
+        (
+            "horstmann",
+            "void f()\n{\n#ifdef FEATURE\n    if (first)\n    {\n#else\n    if (second)\n    {   if (third)\n        {\n#endif\n        go();\n    }\n}\n}\nint value;\n",
+        ),
+        (
+            "ratliff",
+            "void f() {\n#ifdef FEATURE\n    if (first) {\n#else\n    if (second) {\n        if (third) {\n#endif\n        go();\n        }\n    }\n    }\nint value;\n",
+        ),
+    ];
+    for (style, expected) in cases {
+        let args = [format!("--style={style}")];
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        check(input, &args, expected);
+        check(expected, &args, expected);
+    }
+}
+
+#[test]
 fn a_statement_after_a_conditional_whose_first_branch_ended_a_braceless_body_starts_afresh() {
     // The first branch ended its statement: the code after `#endif` takes
     // no continuation left from it.

@@ -131,10 +131,9 @@ impl FormatEngine<'_> {
             };
         }
         let mut depth = 0usize;
-        // Depths at each enclosing `#endif`: a later branch of a group
-        // repeats the braces of the first one.
-        let mut group_depths = Vec::new();
-        for index in (0..self.output.len()).rev() {
+        let mut index = self.output.len();
+        while index > 0 {
+            index -= 1;
             // The body of a block comment holds no braces.
             if self.output.comment_start_index(index) != index {
                 continue;
@@ -143,16 +142,21 @@ impl FormatEngine<'_> {
             if depth == 0 && meta.code_starts_with_hash {
                 return None;
             }
+            // The code after `#endif` goes on from the first branch of its
+            // group, and a later branch from the code before its `#if`.
             if meta.code_starts_with_hash {
                 match preprocessor_directive(self.output.trimmed(index)) {
-                    Some("endif") => group_depths.push(depth),
-                    Some("else" | "elif" | "elifdef" | "elifndef") => {
-                        if let Some(&group_depth) = group_depths.last() {
-                            depth = group_depth;
+                    Some("endif") => {
+                        if let (_, Some(alternative)) = self.conditional_group_start(index) {
+                            index = alternative;
                         }
+                        continue;
                     }
-                    Some("if" | "ifdef" | "ifndef") => {
-                        group_depths.pop();
+                    Some("else" | "elif" | "elifdef" | "elifndef") => {
+                        if let (Some(opening), _) = self.conditional_group_start(index) {
+                            index = opening;
+                        }
+                        continue;
                     }
                     _ => {}
                 }
@@ -168,6 +172,31 @@ impl FormatEngine<'_> {
             depth -= meta.opens();
         }
         None
+    }
+
+    /// The output line of the `#if` opening the conditional group that the
+    /// directive line at `index` goes on with, and the group's first
+    /// `#else` or `#elif` before `index`.
+    fn conditional_group_start(&self, index: usize) -> (Option<usize>, Option<usize>) {
+        let mut nested = 0usize;
+        let mut alternative = None;
+        for line in (0..index).rev() {
+            if self.output.comment_start_index(line) != line
+                || !self.output.brace_meta(line).code_starts_with_hash
+            {
+                continue;
+            }
+            match preprocessor_directive(self.output.trimmed(line)) {
+                Some("endif") => nested += 1,
+                Some("if" | "ifdef" | "ifndef") if nested > 0 => nested -= 1,
+                Some("if" | "ifdef" | "ifndef") => return (Some(line), alternative),
+                Some("else" | "elif" | "elifdef" | "elifndef") if nested == 0 => {
+                    alternative = Some(line);
+                }
+                _ => {}
+            }
+        }
+        (None, alternative)
     }
 
     pub(crate) fn isolated_closing_brace_indent_spaces(
