@@ -21628,3 +21628,13 @@ fn code_after_a_conditional_whose_branches_end_differently_goes_on_from_the_firs
     let continued_first = "void f() {\n#ifdef A\n    value = 1 +\n#else\n    value = 2;\n#endif\n            3;\n    next();\n}\n";
     check(continued_first, &[], continued_first);
 }
+
+#[test]
+fn a_statement_after_a_conditional_whose_first_branch_ended_a_braceless_body_starts_afresh() {
+    // The first branch ended its statement: the code after `#endif` takes
+    // no continuation left from it.
+    let input = "typedef enum {\n  while(pos < limit) {\n  }\n}\n{\n  if(size >= 2 && !compare(\"* \", pos, 2)) {\n  }\n  /* first note\n   second note */\n  else\n\n  return 0;\n}\n{\n#if defined(A)\n  static const char * const labels[] = {\n  };\n  if(item->state != next)\n    report(data, \"state %p from %s to %s\",\n          (void *)item, labels[item->state], labels[next]);\n#else\n#endif\n  item->state = next;\n}\n{\n  if(!ready(link)) {\n  }\n}\n";
+    let output = format_bytes(input.as_bytes(), &FormatOptions::default()).expect("format bytes");
+    let output = String::from_utf8(output).expect("utf8");
+    assert!(output.contains("\n    item->state = next;\n"), "{output}");
+}

@@ -1486,7 +1486,19 @@ impl FormatEngine<'_> {
                     .last()
                     .is_some_and(|branch| branch.first_branch_end.is_none())
                 {
-                    let end = Box::new(self.branch_snapshot());
+                    let mut end = Box::new(self.branch_snapshot());
+                    // A statement the first branch ended leaves no
+                    // continuation to the code after `#endif`.
+                    if self
+                        .preprocessor
+                        .active_directive
+                        .and_then(|directive| self.tree.previous_code_token(directive))
+                        .is_some_and(|last| {
+                            matches!(self.tree.tokens[last], Token::Symbol(';' | '}'))
+                        })
+                    {
+                        end.layout.continuation_indent.clear_next_line();
+                    }
                     if let Some(branch) = self.preprocessor.branch_stack.last_mut() {
                         branch.first_branch_end = Some(end);
                     }
