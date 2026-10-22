@@ -3730,7 +3730,7 @@ fn table_macro_rows_do_not_stair_step_after_comma() {
             "\nTABLE_START(SIMULATION, \"item\")\n\t.compat\t= item_compat,\n\t.init     = item_init,\nTABLE_END\n",
             &FormatOptions::default(),
         ),
-        "\nTABLE_START(SIMULATION, \"item\")\n.compat\t= item_compat,\n .init     = item_init,\n TABLE_END\n",
+        "\nTABLE_START(SIMULATION, \"item\")\n.compat\t= item_compat,\n.init     = item_init,\nTABLE_END\n",
     );
 }
 

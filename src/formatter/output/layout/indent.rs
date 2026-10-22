@@ -1610,25 +1610,6 @@ impl FormatEngine<'_> {
                 return Some(spaces);
             }
             if previous_code.ends_with(',')
-                && current.starts_with("m_")
-                && previous_code.contains('=')
-                && current.contains('=')
-                && !previous_code.trimmed_start().starts_with('.')
-                && !current.starts_with_any(b".[*&")
-                && !current.contains(')')
-                && let Some(eq) = previous_code.find('=')
-            {
-                let before_value = previous_code[..eq].trimmed_end();
-                let name_start = before_value
-                    .rfind(|ch: char| !(ch == '_' || ch.is_ascii_alphanumeric()))
-                    .map_or(0, |index| index + 1);
-                return Some(visual_width_from(
-                    &previous_code[..name_start],
-                    0,
-                    tab_width,
-                ));
-            }
-            if previous_code.ends_with(',')
                 && !current.starts_with_any(b".[*&")
                 && let Some(previous_eq) = previous_code.find('=')
                 && let Some(current_eq) = current.find('=')

@@ -9,6 +9,7 @@
 //! continuation, and a paren at a line end registers one continuation
 //! level past the indent before.
 
+use super::anchors::dotted_name_start;
 use crate::config::BraceStyle;
 use crate::formatter::continuation::min_conditional_indent_spaces;
 use crate::formatter::engine::{FormatEngine, ForwardFind};
@@ -732,7 +733,9 @@ impl FormatEngine<'_> {
                         {
                             replay.assigned_this_line = true;
                             let indent = match tokens[previous] {
-                                Token::Word(_) | Token::Number(_) => relative(previous)?,
+                                Token::Word(_) | Token::Number(_) => {
+                                    relative(dotted_name_start(tokens, previous))?
+                                }
                                 _ => replay.line_space,
                             };
                             replay.stack.push(indent);

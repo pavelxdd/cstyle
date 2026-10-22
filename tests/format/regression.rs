@@ -22744,3 +22744,14 @@ fn an_element_brace_after_template_arguments_keeps_its_gap_in_any_list() {
     check(input, &[], expected);
     check(expected, &[], expected);
 }
+
+#[test]
+fn a_member_name_a_comma_continued_assignment_sets_starts_at_its_dotted_run() {
+    // The rows after a comma-continued assignment stand at the name it
+    // assigns, and a dotted name runs back through its dots: `.` joins a
+    // name where `->` and a closer part it.
+    let input = "void f(void)\n{\n    object.first = 1,\n    second = 2;\n    (*p).first = 1,\n    second = 2;\n    obj->first = 1,\n    second = 2;\n    obj.m_first = 1,\n    m_second = 2;\n    obj->m_first = 1,\n    m_second = 2;\n    list[0].first = 1,\n    second = 2;\n}\n";
+    let expected = "void f(void)\n{\n    object.first = 1,\n    second = 2;\n    (*p).first = 1,\n        second = 2;\n    obj->first = 1,\n         second = 2;\n    obj.m_first = 1,\n    m_second = 2;\n    obj->m_first = 1,\n         m_second = 2;\n    list[0].first = 1,\n           second = 2;\n}\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+}

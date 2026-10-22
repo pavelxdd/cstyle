@@ -3416,7 +3416,10 @@ impl FormatEngine<'_> {
         let before = self.tree.previous_code_token(assign)?;
         let (target, run_in_extra) = match &tokens[before] {
             Token::Symbol(']') => (next_code_token(tokens, assign + 1)?, 0),
-            Token::Word(_) => (before, usize::from(run_in) * self.options.indent_width),
+            Token::Word(_) => (
+                dotted_name_start(tokens, before),
+                usize::from(run_in) * self.options.indent_width,
+            ),
             _ => return None,
         };
         Some(self.token_column(target)? + run_in_extra)
@@ -7945,6 +7948,21 @@ impl FormatEngine<'_> {
         };
         (self.tree.blocks.kind(group).is_some()).then_some(group)
     }
+}
+
+/// The first token of the name ending at the word `last`: a `.` right
+/// before a name joins it, with the word right before that `.`.
+pub(super) fn dotted_name_start(tokens: &[Token], last: usize) -> usize {
+    let mut start = last;
+    while start > 0 && matches!(tokens[start - 1], Token::Symbol('.')) {
+        start -= 1;
+        if start > 0 && matches!(tokens[start - 1], Token::Word(_) | Token::Number(_)) {
+            start -= 1;
+        } else {
+            break;
+        }
+    }
+    start
 }
 
 /// Moves the last of `entries` to the front, keeping the order of the
