@@ -7739,6 +7739,20 @@ fn a_comment_row_continuing_a_returned_value_stands_at_the_value() {
     let expected = "int f(void)\n{\n    if (x) {\n        return ERROR\n               /* note that\n                  more */;\n    }\n    if (y) {\n        return ERROR\n               + 1;\n    }\n    value = ERROR\n            /* note */;\n    return 0;\n}\n";
     check(input, &[], expected);
     check(expected, &[], expected);
+    // Indenting after parens continues both at the continuation indent.
+    for (args, expected) in [
+        (
+            &["--indent-after-parens"][..],
+            "int f(void)\n{\n    if (x) {\n        return ERROR\n            /* note that\n               more */;\n    }\n    if (y) {\n        return ERROR\n            + 1;\n    }\n    value = ERROR\n        /* note */;\n    return 0;\n}\n",
+        ),
+        (
+            &["--indent-after-parens", "--indent-continuation=2"][..],
+            "int f(void)\n{\n    if (x) {\n        return ERROR\n                /* note that\n                   more */;\n    }\n    if (y) {\n        return ERROR\n                + 1;\n    }\n    value = ERROR\n            /* note */;\n    return 0;\n}\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
     // A call in the value makes the line no definition head.
     let input =
         "int f(void)\n{\n    return p ? call(p, -1) : 0\n    /* note that\n       more */;\n}\n";

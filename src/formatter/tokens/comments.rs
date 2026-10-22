@@ -2639,10 +2639,18 @@ impl FormatEngine<'_> {
             index = self.tree.previous_code_token(index)?;
         };
         let value = next_code_token(tokens, keyword + 1).filter(|&value| value <= previous)?;
-        if self.output.line_with_token(value) != self.output.line_with_token(keyword) {
+        let line = self.output.line_with_token(keyword)?;
+        if self.output.line_with_token(value) != Some(line) {
             return None;
         }
-        Some(self.token_column(value)? + self.case_unindent_spaces())
+        // Indenting after parens continues the statement past its line.
+        let column = if self.options.indent_after_parens {
+            self.output.lead_width(line, self.options.tab_width)
+                + self.options.continuation_indent * self.options.indent_width
+        } else {
+            self.token_column(value)?
+        };
+        Some(column + self.case_unindent_spaces())
     }
 
     fn standalone_block_comment_indent_spaces(
