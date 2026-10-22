@@ -3150,3 +3150,25 @@ fn max_code_length_leaves_a_fitting_line_of_statements_whole() {
         );
     }
 }
+
+#[test]
+fn max_code_length_sets_a_row_split_after_a_function_head_at_the_head() {
+    // As a row the source broke there stands, so the split is stable.
+    let input = "template <typename T>\n[[nodiscard]] constexpr auto sum(std::span<const T> values) noexcept -> T\n{\n    return 0;\n}\nclass Item\n{\n    [[nodiscard]] constexpr auto sum(std::span<const int> values) noexcept -> int;\n};\n";
+    for (limit, expected) in [
+        (
+            "--max-code-length=60",
+            "template <typename T>\n[[nodiscard]] constexpr auto sum(std::span<const T> values)\nnoexcept -> T\n{\n    return 0;\n}\nclass Item\n{\n    [[nodiscard]] constexpr auto sum(std::span<const int>\n                                     values) noexcept -> int;\n};\n",
+        ),
+        (
+            "--max-code-length=70",
+            "template <typename T>\n[[nodiscard]] constexpr auto sum(std::span<const T> values) noexcept\n-> T\n{\n    return 0;\n}\nclass Item\n{\n    [[nodiscard]] constexpr auto sum(std::span<const int> values) noexcept\n    -> int;\n};\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[limit.to_string()]).expect("valid options");
+        let first = format_exact(input, &options);
+        assert_eq!(first, expected, "{limit}");
+        assert_eq!(format_exact(&first, &options), first, "{limit}");
+    }
+}

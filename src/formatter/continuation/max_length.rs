@@ -246,6 +246,11 @@ impl FormatEngine<'_> {
         if brace_row_layout.attaches_lisp_closer && !split.head.trimmed_end().ends_with('{') {
             next_indent = ContinuationIndent::Level(self.layout.indentation.indent());
         }
+        // A row split past a function's parameters stands at the head, as
+        // one the source broke there does.
+        if self.split_follows_function_parameters(line, split.tail) {
+            next_indent = ContinuationIndent::Spaces(base_indent_width);
+        }
         let conditional_floor =
             self.maximum_length_conditional_continuation_floor(line, base_indent_width);
         if let Some(spaces) = self.max_length_line.objc_message_indent_spaces() {
@@ -395,6 +400,44 @@ impl FormatEngine<'_> {
         }
         self.split_part_stack_indent(first)
             .or_else(|| self.tree_anchor_indent(first, part))
+    }
+
+    /// Whether `tail`, the end of `line`, starts past the parameters of a
+    /// function head the line holds, outside any group.
+    fn split_follows_function_parameters(&self, line: &str, tail: &str) -> bool {
+        let Some(span) = self.output.pending_tokens() else {
+            return false;
+        };
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let tail_start = line.len() - tail.len();
+        let mut cursor = 0;
+        let mut tail_first = None;
+        for index in span.first..=span.last {
+            if !is_code_token(&tokens[index]) {
+                continue;
+            }
+            let text = token_text(&tokens[index]);
+            let Some(offset) = line[cursor..].find(&*text) else {
+                return false;
+            };
+            if cursor + offset >= tail_start {
+                tail_first = Some(index);
+                break;
+            }
+            cursor += offset + text.len();
+        }
+        let Some(tail_first) = tail_first else {
+            return false;
+        };
+        let outer = groups.enclosing(tail_first);
+        (span.first..tail_first).rev().any(|index| {
+            matches!(tokens[index], Token::Symbol(')'))
+                && groups.closed_at(index).is_some_and(|params| {
+                    self.tree.functions.by_params(params).is_some()
+                        && groups.enclosing(groups.get(params).open) == outer
+                })
+        }) && outer.is_none_or(|group| groups.get(group).delimiter == Delimiter::Brace)
     }
 
     /// Gives the part of the split `line` that starts with `part` the source
