@@ -2662,7 +2662,8 @@ impl FormatEngine<'_> {
         let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
         let body = groups.enclosing(first)?;
-        let semicolon = self.tree.previous_code_token(first)?;
+        // The member the first branch of a conditional ends goes on after it.
+        let semicolon = self.tree.previous_code_token_in_first_branches(first)?;
         if self.tree.blocks.kind(body) != Some(BlockKind::Aggregate)
             || !matches!(tokens[semicolon], Token::Symbol(';'))
             || groups.enclosing(semicolon) != Some(body)
@@ -2695,7 +2696,7 @@ impl FormatEngine<'_> {
         }
         let open = groups.get(body).open;
         let mut member = semicolon;
-        while let Some(before) = self.tree.previous_code_token(member) {
+        while let Some(before) = self.tree.previous_code_token_in_first_branches(member) {
             // An access label before the member ends it as a `;` does.
             let access_label_colon = matches!(tokens[before], Token::Symbol(':'))
                 && self.tree.previous_code_token(before).is_some_and(|word| {

@@ -21700,3 +21700,11 @@ fn break_blocks_reads_a_block_a_later_branch_leaves_after_a_statement_as_a_bare_
     check(input, &["--style=allman", "--break-blocks"], expected);
     check(expected, &["--style=allman", "--break-blocks"], expected);
 }
+
+#[test]
+fn a_member_after_a_conditional_splitting_a_member_stands_at_the_member_the_first_branch_ends() {
+    let input = "struct Item {\nprivate:\n  using value_type =\n#ifdef FEATURE\n      first_type;\n#else\n      second_type;\n#endif\n  int value;\n};\n";
+    let expected = "struct Item {\nprivate:\n    using value_type =\n#ifdef FEATURE\n        first_type;\n#else\n        second_type;\n#endif\n    int value;\n};\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
