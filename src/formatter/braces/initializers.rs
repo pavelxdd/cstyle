@@ -678,10 +678,21 @@ impl FormatEngine<'_> {
             self.options.brace_style,
             BraceStyle::Horstmann | BraceStyle::Pico
         );
+        // The default style runs a source line a brace opens in after that
+        // brace, which keeps a list opened mid-row there whole.
+        let row_runs_in = self.options.brace_style == BraceStyle::None
+            && self.tree.tokens[..token_index]
+                .iter()
+                .rev()
+                .take_while(|token| !matches!(token, Token::Newline))
+                .filter(|token| !matches!(token, Token::Whitespace(_)))
+                .last()
+                .is_some_and(|token| matches!(token, Token::Symbol('{')));
         // A list opened after a comma among the rows of a list that sets
         // them a level in breaks after its brace when it spans rows, as a
         // row's block does.
         let spanning_mid_row_list = run_in_after_comma
+            && !row_runs_in
             && self.enclosing_list_rows_leveled(token_index)
             && self
                 .tree

@@ -17440,6 +17440,29 @@ fn a_list_opened_mid_row_of_a_broken_list_breaks_after_its_brace_when_it_spans_r
 }
 
 #[test]
+fn default_style_keeps_the_first_element_of_a_mid_row_list_on_a_line_a_brace_leads() {
+    let cases = [
+        (
+            "int a[] =\n{{\"a\", {1,\n 2},\n   3}};\n",
+            "int a[] =\n{   {   \"a\", {1,\n            2\n        },\n        3\n    }\n};\n",
+        ),
+        (
+            "int a[] =\n{\n{1, 2}, {3,\n 4}};\n",
+            "int a[] =\n{\n    {1, 2}, {3,\n        4\n    }\n};\n",
+        ),
+        // A row led by anything else breaks after the brace.
+        (
+            "int t[] =\n{\n    10, { 11,\n          12 },\n    13,\n};\n",
+            "int t[] =\n{\n    10, {\n        11,\n        12\n    },\n    13,\n};\n",
+        ),
+    ];
+    for (input, expected) in cases {
+        check(input, &[], expected);
+        check(expected, &[], expected);
+    }
+}
+
+#[test]
 fn a_one_line_initializer_a_comment_leads_after_its_assignment_stays_on_one_line() {
     let input = "void f()\n{\n    struct Item item =\n        /* note */ { 1, 2 };\n}\n";
     for (style, expected) in [

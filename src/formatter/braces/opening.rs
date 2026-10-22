@@ -16,7 +16,7 @@ use crate::formatter::constructs::labels;
 use crate::formatter::constructs::return_types::is_parameter_return_type_prefix;
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::lexer::{CommentKind, Token, token_char_len};
+use crate::formatter::lexer::{CommentKind, Token, next_non_whitespace, token_char_len};
 use crate::formatter::output::block_spacing::is_break_blocks_closing_header;
 use crate::formatter::state::frame::{BraceSemanticKind, ConstructorInitializerLayout};
 use crate::formatter::state::indentation::LineKind;
@@ -174,6 +174,7 @@ fn attach_brace_to_code_and_comment(code: &str, comment: &str) -> String {
 
 /// The brace being opened, as the placement steps of `push_open_brace` see it.
 struct OpenBrace {
+    token: usize,
     header: Option<String>,
     brace_type: BraceType,
     block_indent_extra: usize,
@@ -1241,7 +1242,7 @@ impl FormatEngine<'_> {
         attach_brace_before_trailing_comment(&self.current)
     }
 
-    fn try_push_bare_open_brace_run(&mut self) -> bool {
+    fn try_push_bare_open_brace_run(&mut self, token_index: usize) -> bool {
         if self.options.brace_style != BraceStyle::None
             || self.token_input.token_begins_source_line
             || self.layout.command_state.previous_command_char != Some('{')
@@ -1250,6 +1251,12 @@ impl FormatEngine<'_> {
                 self.layout.nesting.brace_type_stack.last(),
                 Some(BraceType::NonStatement | BraceType::Array)
             )
+            // A brace in a list opens a list of its own.
+            || self
+                .tree
+                .groups
+                .opened_at(token_index)
+                .is_some_and(|group| self.tree.blocks.kind(group) == Some(BlockKind::Initializer))
         {
             return false;
         }
@@ -1369,6 +1376,7 @@ impl FormatEngine<'_> {
         self.realign_compound_literal_cast_brace(brace_type);
         let element_row_levels = self.element_row_levels(brace_type, next);
         let mut brace = OpenBrace {
+            token: token_index,
             header: brace_header,
             brace_type,
             block_indent_extra,
@@ -1551,7 +1559,7 @@ impl FormatEngine<'_> {
             self.push_inline_open_brace(token_index);
             return true;
         }
-        if self.try_push_bare_open_brace_run() {
+        if self.try_push_bare_open_brace_run(token_index) {
             return true;
         }
         false
@@ -2226,6 +2234,38 @@ impl FormatEngine<'_> {
         false
     }
 
+    /// Whether the `{` at `brace` follows on its source line a `{` the
+    /// default style runs into the row after it.
+    fn follows_run_in_brace(&self, brace: usize) -> bool {
+        self.options.brace_style == BraceStyle::None
+            && self.current_is_blank()
+            && self
+                .tree
+                .previous_code_token(brace)
+                .is_some_and(|previous| {
+                    matches!(self.tree.tokens[previous], Token::Symbol('{'))
+                        && !self.tree.tokens[previous..brace]
+                            .iter()
+                            .any(|token| matches!(token, Token::Newline))
+                })
+            && self
+                .output
+                .len()
+                .checked_sub(1)
+                .is_some_and(|line| self.source_run_in_brace_lines.last() == Some(&line))
+    }
+
+    /// Whether the `{` right after the one at `brace` ends its source line.
+    fn nested_brace_ends_line(&self, brace: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        next_non_whitespace(tokens, brace + 1, tokens.len())
+            .filter(|&nested| matches!(tokens[nested], Token::Symbol('{')))
+            .is_some_and(|nested| {
+                next_non_whitespace(tokens, nested + 1, tokens.len())
+                    .is_none_or(|after| matches!(tokens[after], Token::Newline))
+            })
+    }
+
     /// Whether the group the `{` at `token_index` opens closes on a later
     /// source line.
     fn brace_list_spans_lines(&self, token_index: usize) -> bool {
@@ -2259,17 +2299,19 @@ impl FormatEngine<'_> {
         } = *placement;
         let mut attached_case_label_output_brace = false;
         let brace_type = brace.brace_type;
+        // A list's brace keeps a nested brace that ends the line beside it
+        // as written; one the line goes on after runs into its own row.
         if self.current_is_blank()
-            && self.token_input.token_begins_source_line
+            && (self.token_input.token_begins_source_line || self.follows_run_in_brace(brace.token))
             && matches!(brace_type, BraceType::Array | BraceType::Initializer)
             && matches!(next, Some(Token::Symbol('{')))
             && self.options.brace_style == BraceStyle::None
+            && self.nested_brace_ends_line(brace.token)
         {
             self.current.push('{');
             self.layout.command_state.observe_char('{');
-            match self.token_input.next_input_whitespace.as_deref() {
-                Some(whitespace) if !whitespace.is_empty() => self.current.push_str(whitespace),
-                _ => self.current.push_str("   "),
+            if let Some(whitespace) = self.token_input.next_input_whitespace.as_deref() {
+                self.current.push_str(whitespace);
             }
             self.layout.continuation_indent.next_line_indent = None;
             self.layout.continuation_indent.next_line_indent_spaces = Some(
@@ -2924,6 +2966,7 @@ impl FormatEngine<'_> {
         } = *placement;
         let previous_line_opens_lambda_body = lambda.previous_line_opens_body;
         let brace_type = brace.brace_type;
+        let follows_run_in_brace = self.follows_run_in_brace(brace.token);
         // A comment after the brace of a case label split off before it
         // stays on the label's line.
         if self.current_is_blank()
@@ -3287,7 +3330,9 @@ impl FormatEngine<'_> {
             || runs_into_nested_brace
             || runs_into_comment_row)
             && brace_type != BraceType::Namespace
-            && (self.token_input.token_begins_source_line || runs_into_nested_brace)
+            && (self.token_input.token_begins_source_line
+                || runs_into_nested_brace
+                || follows_run_in_brace)
             && !previous_line_opens_lambda_body
             && !matches!(next, None | Some(Token::Newline))
             && (!(self.options.break_one_line_blocks && one_line_block)

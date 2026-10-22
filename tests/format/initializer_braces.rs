@@ -3074,6 +3074,49 @@ fn default_array_initializer_expands_adjacent_run_in_first_element_brace_gap() {
 }
 
 #[test]
+fn default_array_initializer_runs_an_open_nested_element_brace_into_its_row() {
+    for source in [
+        "int a[] =\n{{{1}, 2,\n   3}\n};\n",
+        "int a[] =\n{   {{1}, 2,\n        3}\n};\n",
+    ] {
+        assert_eq!(
+            format_exact(source, &FormatOptions::default()),
+            "int a[] =\n{   {   {1}, 2,\n        3\n    }\n};\n",
+        );
+    }
+    assert_eq!(
+        format_exact(
+            "int a[] =\n{{\"a\",\n   3}\n};\n",
+            &FormatOptions::default(),
+        ),
+        "int a[] =\n{   {   \"a\",\n        3\n    }\n};\n",
+    );
+    let cases = [
+        (
+            "void f()\n{\n    int a[] =\n    {{1,\n       3}};\n}\n",
+            "void f()\n{\n    int a[] =\n    {   {   1,\n            3\n        }\n    };\n}\n",
+        ),
+        // A nested brace that ends the line stays beside the brace.
+        (
+            "int a[] =\n{{\n1, 2}};\n",
+            "int a[] =\n{{\n        1, 2\n    }\n};\n",
+        ),
+        (
+            "int a[] =\n{{{\n1, 2}}};\n",
+            "int a[] =\n{   {{\n            1, 2\n        }\n    }\n};\n",
+        ),
+        (
+            "int a[] =\n{     {1, 2},\n {3}};\n",
+            "int a[] =\n{   {1, 2},\n    {3}\n};\n",
+        ),
+    ];
+    for (source, expected) in cases {
+        assert_eq!(format_exact(source, &FormatOptions::default()), expected);
+        assert_eq!(format_exact(expected, &FormatOptions::default()), expected);
+    }
+}
+
+#[test]
 fn multiline_array_first_element_brace_preserves_absent_source_space() {
     let source = fixture!("int x[] = {{ 1, 2 },", "    { 3, 4 }", "};",);
 
