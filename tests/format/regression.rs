@@ -21205,3 +21205,11 @@ fn break_blocks_pads_a_do_whose_while_joins_its_line_as_an_if_whose_else_does() 
     check(input, &options, expected);
     check(expected, &options, expected);
 }
+
+#[test]
+fn add_braces_braces_a_header_in_a_lambda_argument_whatever_its_parameters() {
+    // As in an assigned lambda's body, with parameters or none.
+    let input = "void f() {\n  call(a, [=](int it) {\n    if (x) go();\n  });\n  call([&] {\n    if (x) go();\n  });\n}\n";
+    let expected = "void f()\n{\n    call(a, [=](int it) {\n        if (x) {\n            go();\n        }\n    });\n    call([&] {\n        if (x) {\n            go();\n        }\n    });\n}\n";
+    check(input, &["--style=kr", "--add-braces"], expected);
+}
