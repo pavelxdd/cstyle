@@ -1253,9 +1253,12 @@ impl FormatEngine<'_> {
                 emitted.find('{').map(|column| {
                     visual_width_from(&emitted[..column + 1], 0, self.options.tab_width) + 1
                 })
-            } else if let Some(column) =
-                define_run_in_designated_initializer_column(&emitted, self.options.tab_width)
+            } else if info.opens > info.closes
+                && let Some(column) =
+                    define_run_in_designated_initializer_column(&emitted, self.options.tab_width)
             {
+                // A list run in past its brace and left open lays its rows
+                // at its first designator.
                 run_in_designators.push((frames.len(), column));
                 Some(column)
             } else if is_structural

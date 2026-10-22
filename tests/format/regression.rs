@@ -21593,3 +21593,10 @@ fn a_paren_closer_row_after_an_operator_led_row_stands_at_its_paren_at_any_scope
         ),
     );
 }
+
+#[test]
+fn a_designator_row_holding_a_whole_run_in_list_leaves_the_rows_after_it_in_place() {
+    let input = "#define INIT { \\\n\t.queue = { .compare = compare_items }, \\\n\t.abbrev = DEFAULT, \\\n\t.dense = 1, \\\n}\n";
+    let expected = "#define INIT { \\\n        .queue = { .compare = compare_items }, \\\n        .abbrev = DEFAULT, \\\n        .dense = 1, \\\n    }\n";
+    check(input, &["--indent-preproc-define"], expected);
+}
