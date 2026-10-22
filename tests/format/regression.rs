@@ -21957,6 +21957,13 @@ fn a_ternary_colon_after_a_brace_in_a_list_or_a_kept_block_keeps_the_statement_w
 }
 
 #[test]
+fn a_member_after_a_column_zero_comment_and_a_directive_keeps_the_class_indent() {
+    let input = "struct Item\n{\n// note\n#if X\n    int value;\n    Item(int v) : value(v) {}\n#endif\n};\n";
+    check(input, &[], input);
+    check(input, &["--style=allman"], input);
+}
+
+#[test]
 fn a_brace_initializer_in_a_kept_one_line_block_keeps_its_spacing() {
     let input = "void f()\n{\n    if (c) { x = Item{1}; }\n    if (c) { Item value{1}; }\n    if (c) { x = Item{}; }\n    { x = c ? Item{1} : g; }\n}\n";
     check(input, &["--keep-one-line-blocks"], input);
