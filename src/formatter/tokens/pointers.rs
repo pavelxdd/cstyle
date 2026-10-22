@@ -1466,14 +1466,13 @@ impl FormatEngine<'_> {
         if matches!(next, Some(Token::Operator(next_operator)) if next_operator == operator) {
             self.trim_current_end();
         }
+        // The star takes a parameter's declarator group as its name unless
+        // padding sets it apart.
         if matches!(next, Some(Token::Symbol('(')))
             && self.function_pointer_parameter_keeps_space_before_name_group()
+            && self.function_pointer_parameter_name_group_uses_space()
         {
-            if self.function_pointer_parameter_name_group_uses_space() {
-                self.ensure_space();
-            } else {
-                self.emit_trailing_source_space();
-            }
+            self.ensure_space();
         }
         false
     }

@@ -20817,3 +20817,16 @@ fn an_operator_row_after_a_macro_call_spanning_rows_continues_the_statement() {
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
+
+#[test]
+fn a_name_aligned_star_attaches_to_a_function_pointer_parameter_group() {
+    // A named type's star aligns as a basic type's does; padding operators
+    // still sets a named type's star apart.
+    let input = "int a(char* (*f)(int), int x);\nint b(const char * (*f)(int), int x);\nint c(size_t* (*f)(int), int x);\nint d(Item* (*f)(int), int x);\n";
+    let expected = "int a(char *(*f)(int), int x);\nint b(const char *(*f)(int), int x);\nint c(size_t *(*f)(int), int x);\nint d(Item *(*f)(int), int x);\n";
+    check(input, &["--align-pointer=name"], expected);
+    check(expected, &["--align-pointer=name"], expected);
+    let padded = expected.replace("Item *(*f)", "Item * (*f)");
+    check(input, &["--align-pointer=name", "-p"], &padded);
+    check(&padded, &["--align-pointer=name", "-p"], &padded);
+}
