@@ -819,6 +819,10 @@ impl FormatEngine<'_> {
             } else {
                 lead
             };
+            // Those styles set a row the brace of an element leads a level
+            // past the values, as a brace line apart.
+            let levels = levels
+                + usize::from(indented_braces && matches!(tokens[first], Token::Symbol('{')));
             return Some(lead + levels * self.options.indent_width + self.case_unindent_spaces());
         }
         // A row after the first one a nested list runs into its brace

@@ -1405,6 +1405,35 @@ impl FormatEngine<'_> {
         })
     }
 
+    /// The lead of the row starting the element whose list a `},` closes
+    /// right before the pending line.
+    fn pending_closed_element_row_lead(&self) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let first = self.output.pending_tokens()?.first;
+        let comma = self.tree.previous_code_token(first)?;
+        let close = self.tree.previous_code_token(comma)?;
+        if !matches!(tokens[comma], Token::Symbol(',')) {
+            return None;
+        }
+        let group = groups.closed_at(close)?;
+        let parent = groups.get(group).parent?;
+        let mut start = groups.get(group).open;
+        while let Some(before) = self.tree.previous_code_token(start) {
+            if groups.opened_at(before) == Some(parent)
+                || matches!(tokens[before], Token::Symbol(','))
+                    && groups.enclosing(before) == Some(parent)
+            {
+                break;
+            }
+            start = groups
+                .closed_at(before)
+                .map_or(before, |closed| groups.get(closed).open);
+        }
+        let line = self.output.line_with_token(start)?;
+        Some(self.output.lead_width(line, self.options.tab_width))
+    }
+
     pub(crate) fn initializer_member_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {
         if !self.in_initializer_brace() {
             return None;
@@ -1446,8 +1475,11 @@ impl FormatEngine<'_> {
             && let Some(previous) = self.output.last_code_line_in_scope()
             && previous.trimmed_start().starts_with("},")
         {
+            // The row of the element the closer ends sets the column; a
+            // style indenting braces sets the closer apart from it.
             return Some(
-                leading_visual_width(previous, self.options.tab_width)
+                self.pending_closed_element_row_lead()
+                    .unwrap_or_else(|| leading_visual_width(previous, self.options.tab_width))
                     + self.case_unindent_spaces(),
             );
         }

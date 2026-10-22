@@ -21921,3 +21921,12 @@ fn a_compound_literal_among_the_elements_of_a_split_list_keeps_its_brace_gap() {
     let expected = "void f()\n{\n    y = (U) { .a = (V){ 1, 2 },\n        .b = 3\n    };\n}\n";
     check(input, &["--style=kr"], expected);
 }
+
+#[test]
+fn indented_brace_styles_set_the_brace_rows_of_a_nested_list_a_level_past_its_values() {
+    let input = "static S s = {\n    3, {\n        {4},\n        {5}\n    },\n    .k = {\n        {4},\n        {5}\n    },\n    .m = {\n        4,\n        5\n    },\n};\n";
+    let expected = "static S s = {\n    3, {\n            {4},\n            {5}\n        },\n    .k = {\n            {4},\n            {5}\n        },\n    .m = {\n        4,\n        5\n        },\n    };\n";
+    check(input, &["--style=whitesmith"], expected);
+    check(expected, &["--style=whitesmith"], expected);
+    check(input, &["--style=ratliff"], expected);
+}
