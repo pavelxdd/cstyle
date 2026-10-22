@@ -2595,6 +2595,10 @@ fn pad_oper_keeps_multiply_after_sizeof_pointer_padded() {
         "\nvoid f(char **argv, int count)\n{\n    copy(argv, sizeof(char *) * count);\n}\n";
 
     assert_eq!(format_exact(source, &options), source);
+    // The size of a pointer type multiplies as the size of any type does.
+    let unpadded = "\nvoid f(char **argv, int count)\n{\n    copy(argv, sizeof(char *)*count, sizeof(char)*count);\n}\n";
+    let padded = "\nvoid f(char **argv, int count)\n{\n    copy(argv, sizeof(char *) * count, sizeof(char) * count);\n}\n";
+    assert_eq!(format_exact(unpadded, &options), padded);
 }
 
 #[test]
