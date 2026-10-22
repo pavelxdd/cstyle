@@ -37,6 +37,25 @@ fn line_opens_typed_initializer(line: &str) -> bool {
     before.contains('<') && before.ends_with('>')
 }
 
+/// Whether the last mark before `brace` that is no part of a name, a
+/// separator or a comment is an operator ending in `=`.
+fn brace_follows_assignment(tokens: &[Token], brace: usize) -> bool {
+    tokens[..brace]
+        .iter()
+        .rev()
+        .find(|token| match token {
+            Token::Word(_)
+            | Token::Number(_)
+            | Token::Whitespace(_)
+            | Token::Newline
+            | Token::Comment(..) => false,
+            Token::Symbol(ch) => !matches!(ch, '.' | ',' | ';'),
+            Token::Operator(operator) => operator != ".",
+            _ => true,
+        })
+        .is_some_and(|token| matches!(token, Token::Operator(operator) if operator.ends_with('=')))
+}
+
 /// Whether `line`, a declaration up to its `=`, declares a `struct`, whose
 /// aggregate astyle closes at the statement rather than under its brace.
 fn line_declares_struct(line: &str) -> bool {
@@ -792,11 +811,33 @@ impl FormatEngine<'_> {
                 + self.case_body_indent_extra(LineKind::Normal),
         )
         .columns(self.options.indent_width);
-        if brace_type == BraceType::Initializer
-            && line_opens_typed_initializer(&self.current)
+        // Elements after a brace past the maximum continuation indent stand
+        // two levels past their line, or at the parens or list around them;
+        // an assigned value's list keeps them at its brace.
+        if !nested
+            && !leveled_literal
             && column.saturating_sub(statement_base) > self.options.max_continuation_indent
+            && next_non_whitespace(&self.tree.tokens, token_index + 1, self.tree.tokens.len())
+                .is_some_and(|next| !matches!(self.tree.tokens[next], Token::Newline))
+            && !brace_follows_assignment(&self.tree.tokens, token_index)
         {
-            column = base_indent + self.options.indent_width * 2;
+            // A stream the statement opens with stands as its parens do.
+            let enclosing = if self.layout.nesting.paren_depth > 0 {
+                self.layout.nesting.current_continuation_indent_spaces()
+            } else {
+                self.layout
+                    .frame_stack
+                    .active_stream()
+                    .filter(|stream| stream.assignment_value_start_column.is_none())
+                    .map(|stream| stream.chain_anchor_column)
+            };
+            column = (base_indent + self.options.indent_width * 2).max(
+                enclosing
+                    .into_iter()
+                    .chain(self.current_inline_array_column())
+                    .max()
+                    .unwrap_or(0),
+            );
         }
         let current_trimmed = self.current.trimmed_start();
         let run_in_nested_brace =

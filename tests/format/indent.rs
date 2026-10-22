@@ -2352,14 +2352,14 @@ fn closed_member_call_argument_keeps_previous_line_indent() {
 }
 
 #[test]
-fn qprintable_argument_aligns_to_nested_callee_name() {
+fn argument_after_nested_call_ending_its_row_continues_past_outer_argument() {
     assert_eq!(
         format_exact(
             fixture!(
                 "void f()",
                 "{",
-                "    CHECK_OK(ok, qPrintable(",
-                "        QString(\"message\")",
+                "    CHECK_OK(ok, textOf(",
+                "        Text(\"message\")",
                 "        .arg(value)));",
                 "}",
             ),
@@ -2368,8 +2368,8 @@ fn qprintable_argument_aligns_to_nested_callee_name() {
         fixture!(
             "void f()",
             "{",
-            "    CHECK_OK(ok, qPrintable(",
-            "                 QString(\"message\")",
+            "    CHECK_OK(ok, textOf(",
+            "                 Text(\"message\")",
             "                 .arg(value)));",
             "}",
         )
@@ -2377,14 +2377,14 @@ fn qprintable_argument_aligns_to_nested_callee_name() {
 }
 
 #[test]
-fn qprintable_long_qualified_argument_aligns_to_nested_callee_name() {
+fn qualified_argument_after_nested_call_ending_its_row_continues_past_outer_argument() {
     assert_eq!(
         format_exact(
             fixture!(
                 "void f()",
                 "{",
-                "    CHECK_OK(context.operationReady(), qPrintable(",
-                "        QString::fromSource(\"Could not apply %1: %2\").arg(source, context.errorDetail())));",
+                "    CHECK_OK(context.operationReady(), textOf(",
+                "        Text::fromSource(\"Could not apply %1: %2\").arg(source, context.errorDetail())));",
                 "}",
             ),
             &FormatOptions::default(),
@@ -2392,8 +2392,8 @@ fn qprintable_long_qualified_argument_aligns_to_nested_callee_name() {
         fixture!(
             "void f()",
             "{",
-            "    CHECK_OK(context.operationReady(), qPrintable(",
-            "                 QString::fromSource(\"Could not apply %1: %2\").arg(source, context.errorDetail())));",
+            "    CHECK_OK(context.operationReady(), textOf(",
+            "                 Text::fromSource(\"Could not apply %1: %2\").arg(source, context.errorDetail())));",
             "}",
         )
     );
@@ -5097,10 +5097,10 @@ fn call_argument_sibling_after_closed_call_keeps_previous_argument_indent() {
         "            return (type == 0 ? \"std\"",
         "                    : type == 1 ? \"gen\" : \"dst\");",
         "        };",
-        "        qDebug(\"Long name round-tripped %s (%s) to %s (%s) via %s\",",
-        "               zoneName.valueData(), typeName(timeType),",
-        "               match.ianaId.valueData(), typeName(match.timeType),",
-        "               localeName.encode().valueData());",
+        "        notify(\"Value converted %s (%s) to %s (%s) via %s\",",
+        "               itemName.valueData(), typeName(itemType),",
+        "               match.itemId.valueData(), typeName(match.itemType),",
+        "               labelName.encode().valueData());",
         "    });",
         "}",
     );
@@ -6451,10 +6451,10 @@ fn assignment_stream_chain_continuation_aligns_to_value_start() {
 fn stream_chain_after_inline_multiline_braced_argument_returns_to_stream_column() {
     assert_eq!(
         format_exact(
-            "void f()\n{\n    Suite::addRow(\"Spaces\") << QStringList{ \"   Documents (*.doc)\", \"Everything (*.*)\",\n                                            \"   Stuff (  *.stf   *.tng)\", \"    *.exe\" }\n                                            << \".doc,.stf,.tng,.exe\";\n}\n",
+            "void f()\n{\n    Suite::addRow(\"Spaces\") << StringItems{ \"   Documents (*.doc)\", \"Everything (*.*)\",\n                                            \"   Stuff (  *.stf   *.tng)\", \"    *.exe\" }\n                                            << \".doc,.stf,.tng,.exe\";\n}\n",
             &FormatOptions::default(),
         ),
-        "void f()\n{\n    Suite::addRow(\"Spaces\") << QStringList{ \"   Documents (*.doc)\", \"Everything (*.*)\",\n                                            \"   Stuff (  *.stf   *.tng)\", \"    *.exe\" }\n                            << \".doc,.stf,.tng,.exe\";\n}\n",
+        "void f()\n{\n    Suite::addRow(\"Spaces\") << StringItems{ \"   Documents (*.doc)\", \"Everything (*.*)\",\n                                            \"   Stuff (  *.stf   *.tng)\", \"    *.exe\" }\n                            << \".doc,.stf,.tng,.exe\";\n}\n",
     );
 }
 

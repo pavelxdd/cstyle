@@ -287,8 +287,6 @@ pub(crate) struct FormatEngine<'a> {
             Option<crate::formatter::constructs::switch_cases::ActiveCaseLayout>,
         >,
     >,
-    /// The look backs for an open lambda body read so far.
-    pub(crate) open_lambda_cache: std::cell::RefCell<buffer::LookBackAnswers<Option<usize>>>,
     /// The look backs for the begin of the macro block a line lies in read
     /// so far.
     pub(crate) macro_block_cache: std::cell::RefCell<buffer::LookBackAnswers<Option<usize>>>,
@@ -470,7 +468,6 @@ impl<'a> FormatEngine<'a> {
             line_columns: LineSourceColumns::default(),
             finished_line_buffer: String::new(),
             active_case_cache: std::cell::RefCell::default(),
-            open_lambda_cache: std::cell::RefCell::default(),
             macro_block_cache: std::cell::RefCell::default(),
             stack_start_cache: std::cell::RefCell::default(),
             brace_or_newline_cache: std::cell::Cell::new(None),

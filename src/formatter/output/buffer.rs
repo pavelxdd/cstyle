@@ -548,14 +548,13 @@ enum OpenBraceEntry {
 /// lines changed since they last asked.
 #[derive(Clone, Copy)]
 pub(crate) enum LookBack {
-    OpenLambda,
     ActiveCase,
     MacroBlock,
     OpenSwitch,
     ClosingBrace,
 }
 
-const LOOK_BACKS: usize = 5;
+const LOOK_BACKS: usize = 4;
 
 /// How a walk back from the last line for an open block counts a line's
 /// braces. Either walk closes the line's `{`s by its own `}`s before

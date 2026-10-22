@@ -272,7 +272,7 @@ fn lambda_call_argument_after_split_arg_uses_call_line_indent() {
 }
 
 #[test]
-fn get_if_argument_aligns_to_value_expression_in_lambda_body() {
+fn template_call_argument_in_lambda_body_aligns_past_value_expression() {
     assert_eq!(
         format_exact(
             fixture!(
@@ -280,7 +280,7 @@ fn get_if_argument_aligns_to_value_expression_in_lambda_body() {
                 "{",
                 "    callback( //",
                 "            [&value](const Request &request) {",
-                "                const auto *result = std::get_if<Result>(",
+                "                const auto *result = store::lookup<Result>(",
                 "                        &request.result);",
                 "            });",
                 "}",
@@ -292,7 +292,7 @@ fn get_if_argument_aligns_to_value_expression_in_lambda_body() {
             "{",
             "    callback( //",
             "    [&value](const Request &request) {",
-            "        const auto *result = std::get_if<Result>(",
+            "        const auto *result = store::lookup<Result>(",
             "                                 &request.result);",
             "    });",
             "}",
@@ -951,7 +951,7 @@ fn lambda_call_argument_after_comma_uses_inner_call_indent() {
         "void f()",
         "{",
         "    auto report = onScopeExit([inputScale, progressValue, elapsedTime]() {",
-        "        qDebug(\"format\",",
+        "        notify(\"format\",",
         "               inputScale, progressValue, elapsedTime);",
         "    });",
         "}",
@@ -1064,7 +1064,7 @@ fn stream_chain_after_split_lambda_header_uses_two_indent_levels() {
         "    auto row = [](const String &format, Value val, const String &expected,",
         "                  const Locale &loc = Locale::classic())",
         "    {",
-        "        Check::append(\"%s:%s\", loc.name().c_str(), qPrintable(format))",
+        "        Check::append(\"%s:%s\", loc.name().c_str(), textOf(format))",
         "                << format << val << loc << expected;",
         "    };",
         "}",
@@ -1350,4 +1350,99 @@ fn one_line_lambda_body_after_its_parameters_breaks_whatever_their_count() {
             "{parameters}"
         );
     }
+}
+
+#[test]
+fn call_arguments_in_lambda_body_of_assigned_call_continue_from_their_call() {
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f()",
+                "{",
+                "    auto result = run([value]() {",
+                "        log(\"format\",",
+                "            value, other);",
+                "    });",
+                "}",
+            ),
+            &FormatOptions::default(),
+        ),
+        fixture!(
+            "void f()",
+            "{",
+            "    auto result = run([value]() {",
+            "        log(\"format\",",
+            "            value, other);",
+            "    });",
+            "}",
+        )
+    );
+}
+
+#[test]
+fn template_call_ending_its_row_in_lambda_body_continues_past_assigned_value() {
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f()",
+                "{",
+                "    run([value]() {",
+                "        auto *item = helper<Item>(",
+                "            value);",
+                "    });",
+                "}",
+            ),
+            &FormatOptions::default(),
+        ),
+        fixture!(
+            "void f()",
+            "{",
+            "    run([value]() {",
+            "        auto *item = helper<Item>(",
+            "                         value);",
+            "    });",
+            "}",
+        )
+    );
+}
+
+#[test]
+fn capture_only_lambda_body_continues_statements_as_one_with_parameters() {
+    let source = fixture!(
+        "void f()",
+        "{",
+        "    run([value] {",
+        "        int total = first +",
+        "        second;",
+        "        auto item = helper(",
+        "            value);",
+        "    });",
+        "    run([value]() {",
+        "        int total = first +",
+        "        second;",
+        "        auto item = helper(",
+        "            value);",
+        "    });",
+        "}",
+    );
+    assert_eq!(
+        format_exact(source, &FormatOptions::default()),
+        fixture!(
+            "void f()",
+            "{",
+            "    run([value] {",
+            "        int total = first +",
+            "                    second;",
+            "        auto item = helper(",
+            "                        value);",
+            "    });",
+            "    run([value]() {",
+            "        int total = first +",
+            "                    second;",
+            "        auto item = helper(",
+            "                        value);",
+            "    });",
+            "}",
+        )
+    );
 }

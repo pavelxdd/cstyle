@@ -3534,10 +3534,45 @@ fn nested_compound_literal_single_element_close_brace_aligns_with_statement() {
 fn braced_string_list_second_element_in_call_aligns_to_call_argument_column() {
     assert_eq!(
         format_exact(
-            "void f()\n{\n    CONFIRM(sample_runner.runCommand(\"cmd\", QStringList{\"/c\",\n                                                        \"echo.>>\" + Path::toNativeSeparators(baseDir + \"/version.inc\")}));\n}\n",
+            "void f()\n{\n    REQUIRE(active_runner.runCommand(\"cmd\", StringItems{\"/c\",\n                                                        \"echo.>>\" + Path::native(baseDir + \"/version.inc\")}));\n}\n",
             &FormatOptions::default(),
         ),
-        "void f()\n{\n    CONFIRM(sample_runner.runCommand(\"cmd\", QStringList{\"/c\",\n                                     \"echo.>>\" + Path::toNativeSeparators(baseDir + \"/version.inc\")}));\n}\n",
+        "void f()\n{\n    REQUIRE(active_runner.runCommand(\"cmd\", StringItems{\"/c\",\n                                     \"echo.>>\" + Path::native(baseDir + \"/version.inc\")}));\n}\n",
+    );
+}
+
+#[test]
+fn list_elements_past_max_continuation_indent_take_the_enclosing_continuation() {
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f()",
+                "{",
+                "    runner.runWithLongName(\"command\", \"name\", Items{first,",
+                "                                                    value});",
+                "    runner.runWithLongName(\"command\", \"name\", ns::Items{first,",
+                "                                                        value});",
+                "    CHECK(runner.run(\"cmd\", Items{\"/c\", \"a\", \"bbbbbbbbbbbbbbbbbb\", Inner{\"/c\",",
+                "                                                                         value}}));",
+                "    auto resultingCollection = ItemsCollection{\"first\",",
+                "                                               value};",
+                "}",
+            ),
+            &FormatOptions::default(),
+        ),
+        fixture!(
+            "void f()",
+            "{",
+            "    runner.runWithLongName(\"command\", \"name\", Items{first,",
+            "                           value});",
+            "    runner.runWithLongName(\"command\", \"name\", ns::Items{first,",
+            "                           value});",
+            "    CHECK(runner.run(\"cmd\", Items{\"/c\", \"a\", \"bbbbbbbbbbbbbbbbbb\", Inner{\"/c\",",
+            "                                  value}}));",
+            "    auto resultingCollection = ItemsCollection{\"first\",",
+            "                                               value};",
+            "}",
+        )
     );
 }
 

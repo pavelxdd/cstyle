@@ -1,7 +1,5 @@
 use crate::config::BraceStyle;
-use crate::formatter::braces::classification::{
-    is_lambda_body_header, line_opens_lambda_block, line_opens_lambda_or_capture_only_block,
-};
+use crate::formatter::braces::classification::{is_lambda_body_header, line_opens_lambda_block};
 use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::constructs::class_declarations::template_base_colon_indent_spaces;
 use crate::formatter::constructs::constructor_initializers::has_inline_constructor_initializer_colon;
@@ -458,54 +456,6 @@ impl FormatEngine<'_> {
             );
         }
         None
-    }
-
-    pub(crate) fn open_lambda_body_indent_spaces(&self) -> Option<usize> {
-        let index = self.open_lambda_body_line()?;
-        Some(
-            leading_visual_width(&self.output[index], self.options.tab_width)
-                + self.options.indent_width,
-        )
-    }
-
-    /// The nearest line in scope that opens a lambda or capture-only block
-    /// no `}` after it closes.
-    fn open_lambda_body_line(&self) -> Option<usize> {
-        let range = self.output.scoped_range();
-        let mut cache = self.open_lambda_cache.borrow_mut();
-        let answers = self
-            .output
-            .look_back_answers(LookBack::OpenLambda, range.start, &mut cache);
-        // A look back from a line where no `}` is pending reads only the
-        // lines up to it, so its answer holds for every later look back
-        // that gets there.
-        let mut reached = Vec::new();
-        let mut closed_blocks = 0usize;
-        let mut found = None;
-        for index in range.clone().rev() {
-            if closed_blocks == 0 {
-                if let Some(answer) = answers[index - range.start] {
-                    found = answer;
-                    break;
-                }
-                reached.push(index);
-            }
-            let code = self.output.code_before_comment_trimmed(index);
-            if code.trimmed().is_empty() {
-                continue;
-            }
-            if closed_blocks == 0 && line_opens_lambda_or_capture_only_block(code.trimmed_start()) {
-                found = Some(index);
-                break;
-            }
-            closed_blocks += code.bytes().filter(|&byte| byte == b'}').count();
-            closed_blocks =
-                closed_blocks.saturating_sub(code.bytes().filter(|&byte| byte == b'{').count());
-        }
-        for index in reached {
-            answers[index - range.start] = Some(found);
-        }
-        found
     }
 }
 
@@ -1211,14 +1161,6 @@ impl FormatEngine<'_> {
             {
                 return Some(leading_visual_width(previous, tab_width));
             }
-            if (current.starts_with("Q_FALLTHROUGH") || current.starts_with("[[fallthrough]]"))
-                && previous_code.trimmed() == "}"
-            {
-                return Some(
-                    leading_visual_width(previous, tab_width)
-                        + self.layout.line_adjuster.total_case_unindent_depth() * width,
-                );
-            }
         }
         if previous_comment_code.ends_with(',')
             || previous_ends_comma
@@ -1295,30 +1237,6 @@ impl FormatEngine<'_> {
                         + self.layout.line_adjuster.total_case_unindent_depth() * width,
                 );
             }
-            if previous_code.ends_with("qPrintable(")
-                && current.starts_with("QString")
-                && let Some(callee) = previous_code.find("qPrintable")
-            {
-                let callee_column = visual_width_from(&previous_code[..callee], 0, tab_width);
-                let outer_column = unmatched_open_paren_columns(previous_code)
-                    .first()
-                    .map_or(callee_column, |open| open + 1 + width);
-                return Some(callee_column.min(outer_column));
-            }
-            if current.starts_with('&')
-                && previous_code.ends_with('(')
-                && previous_code.contains("= std::get_if<")
-                && let Some((eq, op)) = find_assignment_operator(previous_code)
-            {
-                let after_operator = eq + op.len();
-                let value_start = previous_code[after_operator..]
-                    .char_indices()
-                    .find(|(_, ch)| !ch.is_whitespace())
-                    .map_or(previous_code.len(), |(offset, _)| after_operator + offset);
-                return Some(
-                    visual_width_from(&previous_code[..value_start], 0, tab_width) + width,
-                );
-            }
         }
         if previous_opens_paren
             || previous_ends_comma
@@ -1330,16 +1248,6 @@ impl FormatEngine<'_> {
                     self.nested_brace_after_stream_opener_indent_spaces(current, previous_code)
             {
                 return Some(spaces);
-            }
-            if !current.starts_with_any(b"#(){}")
-                && previous_opens_paren
-                && self.open_lambda_body_indent_spaces().is_some()
-            {
-                return Some(
-                    leading_visual_width(previous, tab_width)
-                        + width
-                        + self.layout.line_adjuster.total_case_unindent_depth() * width,
-                );
             }
             if previous_trimmed.starts_with("return")
                 && let Some(spaces) = self.return_chain_indent_spaces(current, previous, natural)
@@ -1356,16 +1264,6 @@ impl FormatEngine<'_> {
                     inline_stream_opener_argument_indent_spaces(current, previous_code)
             {
                 return Some(spaces);
-            }
-            if !current.starts_with_any(b"#(){}.?:")
-                && previous_trimmed.starts_with("qDebug(")
-                && previous_code.ends_with(',')
-                && let Some(open) = previous_open_paren()
-            {
-                return Some(
-                    column_after(previous_code, open, tab_width)
-                        + self.layout.line_adjuster.total_case_unindent_depth() * width,
-                );
             }
             if current.starts_with(',') && previous_trimmed.starts_with('#') {
                 for line in self.output.scoped().iter().rev().skip(1) {
@@ -1457,13 +1355,6 @@ impl FormatEngine<'_> {
                     self.contextual_ternary_colon_sibling_indent_spaces(current, previous)
             {
                 return Some(spaces);
-            }
-            if leads_string
-                && previous_code.contains("QStringList{")
-                && has_unmatched_open_brace(previous_code)
-                && let Some(open) = self.paren_imbalance_of(previous_code).1.last()
-            {
-                return Some(column_after(previous_code, *open, self.options.tab_width));
             }
             if leads_string
                 && (previous_code.ends_with('+')

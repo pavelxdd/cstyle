@@ -1766,11 +1766,11 @@ fn lambda_chained_call_after_nested_call_aligns_to_outer_open_paren() {
 }
 
 #[test]
-fn lambda_call_argument_after_open_paren_uses_body_continuation_indent() {
+fn capture_only_lambda_body_call_ending_its_row_continues_past_assigned_value() {
     check(
-        "void f()\n{\n    start().onFailed([promise] {\n        const auto ex = std::make_exception_ptr(\n                    std::runtime_error(\"Unknown error occurred while processing.\"));\n        promise->setException(ex);\n    });\n}\n",
+        "void f()\n{\n    start().onFailed([state] {\n        const auto error = std::make_exception_ptr(\n                    std::runtime_error(\"Unknown error occurred while processing.\"));\n        state->setError(error);\n    });\n}\n",
         &[],
-        "void f()\n{\n    start().onFailed([promise] {\n        const auto ex = std::make_exception_ptr(\n            std::runtime_error(\"Unknown error occurred while processing.\"));\n        promise->setException(ex);\n    });\n}\n",
+        "void f()\n{\n    start().onFailed([state] {\n        const auto error = std::make_exception_ptr(\n                               std::runtime_error(\"Unknown error occurred while processing.\"));\n        state->setError(error);\n    });\n}\n",
     );
 }
 

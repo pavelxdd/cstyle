@@ -1320,7 +1320,7 @@ fn pointer_align_name_treats_constructor_parameters_as_reference_declarators() {
     let actual = format_with(
         fixture!(
             "class A {",
-            "A(Config &config, QString text);",
+            "A(Config &config, String text);",
             "void set(Config &config, const Item &r);",
             "A() { call(e & f); }",
             "};"
@@ -1332,7 +1332,7 @@ fn pointer_align_name_treats_constructor_parameters_as_reference_declarators() {
         actual,
         fixture!(
             "class A {",
-            "    A(Config &config, QString text);",
+            "    A(Config &config, String text);",
             "    void set(Config &config, const Item &r);",
             "    A() {",
             "        call(e & f);",

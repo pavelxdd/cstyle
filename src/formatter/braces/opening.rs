@@ -2197,6 +2197,9 @@ impl FormatEngine<'_> {
                         .is_some_and(|line| is_break_blocks_closing_header(line.trimmed()))))
             && matches!(next, None | Some(Token::Newline))
             && self.current_inline_array_column().is_some()
+            // Parens opened among the list's elements hold the brace.
+            && self.layout.nesting.paren_depth
+                <= self.layout.nesting.current_brace_paren_depth().unwrap_or(0)
             && !self.current_open_brace_is_lambda_body()
         {
             self.open_multiline_attached_initializer_brace(

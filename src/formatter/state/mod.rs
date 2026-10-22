@@ -308,15 +308,15 @@ impl NestingState {
     }
 
     pub(crate) fn current_continuation_indent_spaces(&self) -> Option<usize> {
-        // A brace list's elements continue nothing of the expression
-        // around it.
-        if matches!(
-            self.brace_type_stack.last(),
-            Some(BraceType::Array | BraceType::CompoundLiteral)
-        ) && self
-            .brace_scope_depth_stack
+        // A brace list's elements, and a block's statements, continue
+        // nothing of the expression around it.
+        if self
+            .brace_type_stack
             .last()
-            .is_some_and(|depth| self.continuation_indent_spaces_stack.len() <= depth.continuations)
+            .is_some_and(|brace| !matches!(brace, BraceType::Initializer | BraceType::DeferArray))
+            && self.brace_scope_depth_stack.last().is_some_and(|depth| {
+                self.continuation_indent_spaces_stack.len() <= depth.continuations
+            })
         {
             return None;
         }
