@@ -677,9 +677,12 @@ impl FormatEngine<'_> {
                     replay.header_paren = next_code_token(tokens, index + 1);
                 }
                 // The first shift outside parens registers its column, or,
-                // when indenting after parens, a continuation level.
+                // when indenting after parens, a continuation level; a `>>`
+                // closing template arguments is no shift.
                 Token::Operator(operator)
-                    if matches!(operator.as_str(), "<<" | ">>") && replay.depth == 0 =>
+                    if matches!(operator.as_str(), "<<" | ">>")
+                        && replay.depth == 0
+                        && !self.closes_template_arguments(index) =>
                 {
                     if !self.options.indent_after_parens {
                         // A line leading with a shift continues the chain its
@@ -1018,6 +1021,12 @@ impl FormatEngine<'_> {
             Token::Word(word) => word == "else" || word == "do",
             _ => false,
         }
+    }
+
+    /// Whether the `>` or `>>` at `close` ends template arguments.
+    fn closes_template_arguments(&self, close: usize) -> bool {
+        template_arguments_start(&self.tree.tokens, close)
+            .is_some_and(|open| self.template_opener_at(open))
     }
 
     /// Whether `close` is the `>` of a template head that ends its line.

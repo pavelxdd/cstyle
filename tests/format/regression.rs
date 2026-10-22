@@ -21957,6 +21957,15 @@ fn a_ternary_colon_after_a_brace_in_a_list_or_a_kept_block_keeps_the_statement_w
 }
 
 #[test]
+fn a_double_angle_closing_template_arguments_stacks_no_shift_before_a_paren_ending_its_row() {
+    // `>>` closes two lists as `> >` does: the row after the paren stands a
+    // continuation in.
+    let input = "void f()\n{\n    Item<Value<int>> values(\n        10000);\n    Item<Value<int> > others(\n        10000);\n    Item<List<Value<int>>> lists(\n        10000);\n}\n";
+    check(input, &[], input);
+    check(input, &["--style=allman"], input);
+}
+
+#[test]
 fn a_member_after_a_column_zero_comment_and_a_directive_keeps_the_class_indent() {
     let input = "struct Item\n{\n// note\n#if X\n    int value;\n    Item(int v) : value(v) {}\n#endif\n};\n";
     check(input, &[], input);

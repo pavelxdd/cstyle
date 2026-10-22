@@ -1901,14 +1901,11 @@ fn enum_value_assignment_inside_preprocessor_branch_indents_one_level() {
 }
 
 #[test]
-fn nested_template_declaration_assignment_aligns_value_to_declarator() {
-    assert_eq!(
-        format_exact(
-            "void f()\n{\n    std::optional<Items<ValueT>> sampleValuesList =\n        db.readValue(Header::PayloadLength);\n}\n",
-            &FormatOptions::default(),
-        ),
-        "void f()\n{\n    std::optional<Items<ValueT>> sampleValuesList =\n                                  db.readValue(Header::PayloadLength);\n}\n",
-    );
+fn nested_template_declaration_assignment_continues_as_after_spaced_closers() {
+    // `>>` closes two lists as `> >` does, registering no shift column.
+    let source = "void f()\n{\n    std::optional<Items<ValueT>> sampleValuesList =\n        db.readValue(Header::PayloadLength);\n    std::optional<Items<ValueT> > otherValuesList =\n        db.readValue(Header::PayloadLength);\n}\n";
+
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
 
 #[test]
