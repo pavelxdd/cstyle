@@ -21749,3 +21749,13 @@ fn breaking_one_line_headers_breaks_one_whose_condition_holds_a_paren_in_a_liter
     check(input, &["--add-braces", "--break-one-line-headers"], expected);
     check(expected, &["--add-braces", "--break-one-line-headers"], expected);
 }
+
+#[test]
+fn a_struct_typed_declaration_continues_its_value_a_level_in_whatever_the_value_holds() {
+    // A `struct` keyword in a declaration heads no class: its value row
+    // stands where any declaration's does, with or without a paren in it.
+    let input = "struct Item *first =\n  value;\nstruct Item *second =\n  &value;\nstruct Item *third =\n  call(value);\nvoid helper(void)\n{\n    const struct Item *fourth =\n      value;\n}\n";
+    let expected = "struct Item *first =\n    value;\nstruct Item *second =\n    &value;\nstruct Item *third =\n    call(value);\nvoid helper(void)\n{\n    const struct Item *fourth =\n        value;\n}\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+}
