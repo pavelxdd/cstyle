@@ -7653,6 +7653,16 @@ fn designator_rows_of_a_run_in_list_stand_at_its_elements_whatever_rows_their_va
 }
 
 #[test]
+fn a_struct_declaration_split_before_its_declarator_closes_its_run_in_list_at_the_statement() {
+    // The declaration names `struct` on a line before the declarator: its
+    // aggregate still closes at the statement.
+    let input = "void f(void)\n{\n    struct s\n        w = { .a = 1,\n              .b = 2\n    };\n    struct s v = { .a = 1,\n                   .b = 2\n    };\n}\n";
+    for style in ["--style=kr", "--style=1tbs"] {
+        check(input, &[style], input);
+    }
+}
+
+#[test]
 fn aggregate_with_run_in_first_fields_closes_at_its_statement() {
     let input = "void f(void)\n{\n    struct s sa = { .a = 1, .b = 2,\n        .c = 3\n    };\n    *p = (struct s) { .a = 1,\n        .c = 3\n    };\n    T y = (T) { .a = 1,\n        .b = 2 };\n}\n";
     // Fields after those run in stand at the first, as in any list.
