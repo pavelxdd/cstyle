@@ -1683,14 +1683,17 @@ impl FormatEngine<'_> {
                         .contains(char::is_whitespace)
                 })
             {
+                // A row the row before continues at its column, or one
+                // standing with it, holds the column for the next.
                 let previous_prefix = leading_visual_width(previous, self.options.tab_width);
-                if previous_prefix
-                    + declaration_comma_continuation_width(
-                        previous_code.trimmed_start(),
-                        previous_prefix,
-                        self.options.tab_width,
-                    )
-                    == prefix_len
+                if previous_prefix == prefix_len
+                    || previous_prefix
+                        + declaration_comma_continuation_width(
+                            previous_code.trimmed_start(),
+                            previous_prefix,
+                            self.options.tab_width,
+                        )
+                        == prefix_len
                 {
                     return Some(prefix_len);
                 }

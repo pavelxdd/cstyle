@@ -21150,3 +21150,10 @@ fn the_second_parameter_row_of_an_assigned_lambda_opening_its_body_stands_at_the
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
+
+#[test]
+fn a_template_argument_row_leading_with_a_type_word_continues_the_arguments() {
+    // A comma within template angles ends no declarator.
+    let input = "void f()\n{\n    check<char, bool, signed char,\n          unsigned short, int,\n          long long, unsigned long long,\n          long double, void *>();\n}\n";
+    check(input, &["--style=kr"], input);
+}
