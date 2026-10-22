@@ -21541,3 +21541,11 @@ fn reference_alignment_spaces_an_address_after_a_pointer_cast_in_a_list_as_after
     let expected = "struct Config s = {\n    .a=(uintptr_t) &flag,\n    .b=(char *) &flag,\n};\nstruct Config t[] = {\n    {OPT, (char*) &flag},\n};\nvoid f() {\n    value = (char *)&flag;\n}\n";
     check(input, &["--align-reference=name"], expected);
 }
+
+#[test]
+fn a_nested_list_split_over_rows_breaks_after_its_brace_whatever_its_first_element() {
+    // A string first in the list breaks off the brace as a number does.
+    let input = "static struct Config c[] = {\n    [1] = { \"a\",\n        \"b\" },\n    [2] = { 1,\n        2 },\n};\n";
+    let expected = "static struct Config c[] = {\n    [1] = {\n        \"a\",\n        \"b\"\n    },\n    [2] = {\n        1,\n        2\n    },\n};\n";
+    check(input, &[], expected);
+}
