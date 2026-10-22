@@ -21879,3 +21879,12 @@ fn rows_of_a_class_head_template_argument_list_stand_at_its_name_whatever_they_h
     let expected = "struct Factory< Container,\n       Other,\n       More> {\n};\nstruct Factory< Container,\n       Second(x),\n       Third> {\n};\n";
     check(input, &["--style=google"], expected);
 }
+
+#[test]
+fn an_access_label_after_a_member_with_a_trailing_comment_keeps_its_indent() {
+    let input = "class Ref {\n private:\n  int value;  // note\n\n public:\n  int other;\n};\nclass Other {\n private:\n  int value;  /* note */\n public:\n  int other;\n};\n";
+    let expected = "class Ref {\n  private:\n    int value;  // note\n\n  public:\n    int other;\n};\nclass Other {\n  private:\n    int value;  /* note */\n  public:\n    int other;\n};\n";
+    check(input, &["--style=google"], expected);
+    let broken = "class Ref\n{\n  private:\n    int value;  // note\n\n  public:\n    int other;\n};\nclass Other\n{\n  private:\n    int value;  /* note */\n  public:\n    int other;\n};\n";
+    check(input, &["--style=kr", "--indent-modifiers"], broken);
+}

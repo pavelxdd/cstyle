@@ -82,8 +82,10 @@ impl FormatEngine<'_> {
         if let Some(spaces) = self.split_else_comment_row_indent_spaces(line) {
             layout.exact_indent_spaces = Some(spaces);
         }
-        // A closer stands at its brace whatever ended the statement before.
+        // A closer stands at its brace whatever ended the statement before,
+        // as a label stands at its own column.
         if layout.exact_indent_spaces.is_some()
+            && layout.line_kind == LineKind::Normal
             && !self.in_aggregate_declaration_brace()
             && !line.trimmed_start().starts_with('}')
             && let Some(previous) = self.output.last_line_outside_comment()
