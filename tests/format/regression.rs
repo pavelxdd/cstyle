@@ -21458,3 +21458,12 @@ fn break_blocks_parts_a_bare_block_from_a_header_block_a_comment_follows() {
     ];
     check(added, &options, expected);
 }
+
+#[test]
+fn break_blocks_parts_a_header_block_from_what_follows_whatever_braces_its_condition_holds() {
+    // astyle loses the header to braces in its condition.
+    let input = "void f()\n{\n    if (check(first, Item{1,\n                          2})) {\n        go();\n    }\n    next();\n    while (check(first, [](int x) {\n        return x;\n    })) {\n        go();\n    }\n    next();\n}\n";
+    let expected = "void f()\n{\n    if (check(first, Item{1,\n                          2})) {\n        go();\n    }\n\n    next();\n\n    while (check(first, [](int x) {\n        return x;\n    })) {\n        go();\n    }\n\n    next();\n}\n";
+    check(input, &["--style=kr", "--break-blocks"], expected);
+    check(expected, &["--style=kr", "--break-blocks"], expected);
+}

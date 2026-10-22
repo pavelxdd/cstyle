@@ -4,6 +4,7 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{CommentKind, Token};
 use crate::formatter::state::BraceType;
 use crate::formatter::structure::blocks::{is_code_token, next_code_token};
+use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::text::line_scan::{
     after_leading_comments, holds_code_after_leading_comments, is_bare_comment_line,
 };
@@ -287,6 +288,7 @@ impl FormatEngine<'_> {
         if !self.options.break_blocks
             || !self.block_spacing.header_expects_body
             || self.layout.nesting.paren_depth > 0
+            || self.brace_in_header_parens()
         {
             return;
         }
@@ -384,13 +386,42 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn observe_block_spacing_open_brace(&mut self) {
-        if self.options.break_blocks {
+        if self.options.break_blocks && !self.brace_in_header_parens() {
             if self.brace_continues_header_block() {
                 let depth = self.layout.nesting.brace_header_stack.len();
                 self.block_spacing.header_continued_depths.push(depth);
             }
             self.clear_block_spacing_header();
         }
+    }
+
+    /// The control keyword whose condition the block the `}` being pushed
+    /// closes follows.
+    fn closed_control_block_header(&self) -> Option<String> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let close = self.current.active_token()?;
+        let block = groups.closed_at(close)?;
+        let condition_close = self.tree.previous_code_token(groups.get(block).open)?;
+        let condition = groups.closed_at(condition_close)?;
+        if groups.get(condition).delimiter != Delimiter::Paren {
+            return None;
+        }
+        let keyword = self.tree.previous_code_token(groups.get(condition).open)?;
+        match &tokens[keyword] {
+            Token::Word(word) if matches!(word.as_str(), "if" | "while" | "for" | "switch") => {
+                Some(word.to_string())
+            }
+            _ => None,
+        }
+    }
+
+    /// Whether the token being pushed stands in a header's parens, where it
+    /// takes no part in the header's padding.
+    fn brace_in_header_parens(&self) -> bool {
+        self.current
+            .active_token()
+            .is_some_and(|brace| self.token_in_header_parens(brace))
     }
 
     /// Whether the brace being pushed opens a block right after a header's
@@ -482,7 +513,7 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn observe_block_spacing_close_brace(&mut self, next: Option<&Token>) {
-        if !self.options.break_blocks {
+        if !self.options.break_blocks || self.brace_in_header_parens() {
             return;
         }
         // A comment or a statement kept after the brace ends its line first;
@@ -528,7 +559,15 @@ impl FormatEngine<'_> {
             Some(Token::Symbol(';' | ',' | ')' | '}') | Token::Newline) | None => false,
             Some(_) => true,
         };
-        let closed_header = self.layout.nesting.last_closed_brace_header.as_deref();
+        // A lambda in the header's condition takes the header from its
+        // block; the tree names it all the same.
+        let tree_header = self.closed_control_block_header();
+        let closed_header = self
+            .layout
+            .nesting
+            .last_closed_brace_header
+            .as_deref()
+            .or(tree_header.as_deref());
         // astyle reads an assembly block as no command block.
         let closed_command_header = self.layout.nesting.last_closed_brace_type
             == Some(BraceType::Command)
