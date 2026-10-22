@@ -3644,3 +3644,31 @@ fn xor_after_a_call_in_a_one_line_block_stays_binary() {
 
     assert_eq!(format_exact(input, &options), input);
 }
+
+#[test]
+fn align_pointer_name_keeps_the_gap_before_a_function_pointer_declarator() {
+    // The star moves to the declarator; the gap written after it stays
+    // before it, as before any name.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--align-pointer=name".to_owned()])
+        .expect("valid options");
+    let input = "static char *        (*fgets_hook)(char *, int);\nchar *   name;\n";
+    let expected = "static char         *(*fgets_hook)(char *, int);\nchar    *name;\n";
+    assert_eq!(format_exact(input, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn padding_the_first_paren_outside_keeps_the_gaps_around_a_function_pointer_star() {
+    // As padding every paren outside does, the gaps on both sides of the
+    // star stay as written; only the paren gains its space.
+    let input = "char *  (*first)(void);\nchar*  (*second)(void);\n";
+    let expected = "char *  (*first) (void);\nchar *  (*second) (void);\n";
+    for option in ["--pad-paren-out", "--pad-first-paren-out"] {
+        let mut options = FormatOptions::default();
+        let args = ["--align-pointer=name", option].map(str::to_owned);
+        apply_command_line_args(&mut options, &args).expect("valid options");
+        assert_eq!(format_exact(input, &options), expected, "{option}");
+        assert_eq!(format_exact(expected, &options), expected, "{option}");
+    }
+}

@@ -1487,7 +1487,11 @@ impl FormatEngine<'_> {
                 self.trim_current_end_horizontal_space();
             } else if self.pointer_run.next_is_name_like {
                 self.trim_current_end();
-                let gap = if matches!(next, Some(Token::Symbol('('))) {
+                // Padding parens outside keeps the gap after the star before
+                // a declarator group.
+                let gap = if matches!(next, Some(Token::Symbol('(')))
+                    && (self.options.pad_parens_outside || self.options.pad_first_paren_outside)
+                {
                     match self.token_input.previous_input_whitespace.as_deref() {
                         Some(gap) if !gap.is_empty() => gap.to_string(),
                         _ => " ".to_string(),
