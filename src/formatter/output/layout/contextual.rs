@@ -563,35 +563,10 @@ impl FormatEngine<'_> {
                 })
             })
             && let Some(previous) = self.output.last_line_outside_comment()
+            && let Some(target) = self.header_block_first_row_spaces(previous)
+            && layout.exact_indent_spaces.unwrap_or(0) < target
         {
-            let code = self.output.code_trimmed_of(previous);
-            let trimmed = code.trimmed_start();
-            if code.ends_with('{')
-                && (starts_header_word(trimmed, "if")
-                    || starts_header_word(trimmed, "while")
-                    || starts_header_word(trimmed, "for")
-                    || starts_header_word(trimmed, "do")
-                    || trimmed.starts_with("else")
-                    || trimmed.starts_with("case ")
-                    || trimmed.starts_with("default:"))
-            {
-                let nested_header_extra = same_line_nested_header_extra(trimmed);
-                let case_label = trimmed.starts_with("case ") || trimmed.starts_with("default:");
-                // Indented cases indent a case block once more, and GNU sets a
-                // header's body past the brace it would indent.
-                let case_block_extra = usize::from(case_label && self.options.indent_cases);
-                let gnu_brace_extra =
-                    usize::from(!case_label && self.options.brace_style == BraceStyle::Gnu);
-                let target = leading_visual_width(previous, self.options.tab_width)
-                    + self.options.indent_width
-                        * (1 + nested_header_extra + case_block_extra + gnu_brace_extra)
-                    + usize::from(!case_label)
-                        * self.layout.line_adjuster.next_line_case_unindent_depth()
-                        * self.options.indent_width;
-                if layout.exact_indent_spaces.unwrap_or(0) < target {
-                    layout.exact_indent_spaces = Some(target);
-                }
-            }
+            layout.exact_indent_spaces = Some(target);
         }
         if !plain {
             if let Some(base) = self.initializer_brace_continuation_anchor(line) {
@@ -660,6 +635,39 @@ impl FormatEngine<'_> {
 }
 
 impl FormatEngine<'_> {
+    /// The column of the first row in the block a control header or case
+    /// label opens with a `{` ending the output line `previous`.
+    pub(crate) fn header_block_first_row_spaces(&self, previous: &str) -> Option<usize> {
+        let code = self.output.code_trimmed_of(previous);
+        let trimmed = code.trimmed_start();
+        if !code.ends_with('{')
+            || !(starts_header_word(trimmed, "if")
+                || starts_header_word(trimmed, "while")
+                || starts_header_word(trimmed, "for")
+                || starts_header_word(trimmed, "do")
+                || trimmed.starts_with("else")
+                || trimmed.starts_with("case ")
+                || trimmed.starts_with("default:"))
+        {
+            return None;
+        }
+        let nested_header_extra = same_line_nested_header_extra(trimmed);
+        let case_label = trimmed.starts_with("case ") || trimmed.starts_with("default:");
+        // Indented cases indent a case block once more, and GNU sets a
+        // header's body past the brace it would indent.
+        let case_block_extra = usize::from(case_label && self.options.indent_cases);
+        let gnu_brace_extra =
+            usize::from(!case_label && self.options.brace_style == BraceStyle::Gnu);
+        Some(
+            leading_visual_width(previous, self.options.tab_width)
+                + self.options.indent_width
+                    * (1 + nested_header_extra + case_block_extra + gnu_brace_extra)
+                + usize::from(!case_label)
+                    * self.layout.line_adjuster.next_line_case_unindent_depth()
+                    * self.options.indent_width,
+        )
+    }
+
     /// Whether the last code line holds the header word whose parens its
     /// last `)` closes.
     fn previous_line_holds_closed_header_word(&self) -> bool {

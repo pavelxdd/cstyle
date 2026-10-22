@@ -2879,9 +2879,14 @@ impl FormatEngine<'_> {
                     + self.else_if_break_extra())
                     * self.options.indent_width;
                 let trimmed = code.trimmed_start();
-                if comment_starts_header_word(trimmed, "if")
+                let header_line = comment_starts_header_word(trimmed, "if")
                     || comment_starts_header_word(trimmed, "for")
-                    || comment_starts_header_word(trimmed, "while")
+                    || comment_starts_header_word(trimmed, "while");
+                if header_line && let Some(spaces) = self.header_block_first_row_spaces(line) {
+                    // The comment stands where the block's first statement
+                    // does.
+                    spaces
+                } else if header_line
                     || trimmed.starts_with("else if")
                     || trimmed.starts_with("} else")
                     || trimmed.starts_with("case ")

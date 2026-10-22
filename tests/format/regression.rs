@@ -21524,3 +21524,13 @@ fn pad_oper_pads_a_sign_leading_a_continued_row_before_a_paren() {
     let expected = "void f() {\n    value = first\n            + (Unit)(rem);\n    value = first\n            - (rem);\n    value = first\n            + rem;\n}\n";
     check(input, &["--pad-oper"], expected);
 }
+
+#[test]
+fn a_comment_opening_a_block_under_a_case_label_inside_a_case_block_stands_at_the_body() {
+    // The block a case label's brace opens closes where that label stands,
+    // whatever labels it holds.
+    let input = "void f() {\n    switch (kind) {\n        case 1: {\n            go();\n            case 3:\n                if (first) {\n                    /* note */\n                    second();\n                }\n                third();\n        }\n    }\n}\n";
+    check(input, &["--indent-switches"], input);
+    let input = "void f() {\n    switch (kind) {\n    case 1: {\n        go();\n        case 3:\n            if (first) {\n                /* note */\n                second();\n            }\n            third();\n    }\n    }\n}\n";
+    check(input, &[], input);
+}
