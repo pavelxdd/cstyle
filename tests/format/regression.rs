@@ -21495,3 +21495,10 @@ fn a_conditional_row_in_a_define_body_shifts_with_its_arguments_under_no_conditi
         expected,
     );
 }
+
+#[test]
+fn a_product_in_a_group_leading_a_row_after_a_directive_stays_an_operator() {
+    let input = "void f() {\n    value = (\n#ifdef FEATURE\n        (scale && P*limit) +\n#endif\n        0);\n}\n";
+    let expected = "void f() {\n    value = (\n#ifdef FEATURE\n                (scale && P * limit) +\n#endif\n                0);\n}\n";
+    check(input, &["--pad-oper", "--align-pointer=name"], expected);
+}

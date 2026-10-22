@@ -813,10 +813,13 @@ impl FormatEngine<'_> {
                     return self.paren_head_is_declaration(before);
                 }
                 // The enclosing open paren starts this line; its head is the
-                // preceding output line.
+                // preceding code line, past comments and directives.
                 self.output
-                    .last_non_empty_scoped()
-                    .is_some_and(|line| self.paren_head_is_declaration(line.trimmed_end()))
+                    .last_code_line_index_past_comments_and_directives()
+                    .filter(|index| self.output.scoped_range().contains(index))
+                    .is_some_and(|index| {
+                        self.paren_head_is_declaration(self.output[index].trimmed_end())
+                    })
             }
             Some(_) => false,
             None => {
