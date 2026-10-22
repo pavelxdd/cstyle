@@ -1788,6 +1788,20 @@ fn indent_preproc_define_block_comment_keeps_structural_tabs() {
     );
 }
 
+// Rows of a block comment in a define body move with their opener at every
+// depth, and the tabs before a row's backslash keep it where it stood from
+// the row's text.
+#[test]
+fn indent_preproc_define_moves_block_comment_rows_with_their_opener_at_any_depth() {
+    let input = "#define BODY(x) {\t\\\n\t/*\t\t\\\n\t * first note\t\\\n\t * more\t\t\\\n\t */\t\t\\\n\tgo(x);\t\t\\\n\tif (x) {\t\\\n\t\t/*\t\\\n\t\t * inner\t\\\n\t\t */\t\\\n\t\tgo(x);\t\\\n\t}\t\t\\\n}\n";
+    let expected = "#define BODY(x) {   \\\n        /*      \\\n         * first note   \\\n         * more     \\\n         */     \\\n        go(x);      \\\n        if (x) {    \\\n            /*  \\\n             * inner    \\\n             */ \\\n            go(x);  \\\n        }       \\\n    }\n";
+    let mut options = FormatOptions::default();
+    options.indent_preproc_define = true;
+    options.convert_tabs = true;
+    assert_eq!(format_exact(input, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
 #[test]
 fn indent_preproc_define_indents_open_block_comment_and_following_brace() {
     let mut options = FormatOptions::default();
