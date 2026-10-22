@@ -348,6 +348,7 @@ fn has_lambda_capture(tokens: &[Token], groups: &Groups, head: &[usize]) -> bool
     let specifier = |index: usize| is_lambda_specifier(&tokens[index]);
     head.iter().enumerate().any(|(position, &index)| {
         matches!(tokens[index], Token::Symbol('['))
+            && !names_operator(tokens, index)
             && groups
                 .opened_at(index)
                 .and_then(|id| groups.get(id).close)
@@ -359,6 +360,23 @@ fn has_lambda_capture(tokens: &[Token], groups: &Groups, head: &[usize]) -> bool
         .iter()
         .rposition(|&index| matches!(tokens[index], Token::Symbol('[')))
         .is_some_and(|capture| head[capture + 1..].iter().all(|&index| specifier(index)))
+}
+
+/// Whether the bracket at `open` names an operator, as `operator[]` or
+/// `operator new[]` do.
+fn names_operator(tokens: &[Token], open: usize) -> bool {
+    let word = |index: Option<usize>, words: &[&str]| {
+        index.is_some_and(
+            |index| matches!(&tokens[index], Token::Word(word) if words.contains(&word.as_str())),
+        )
+    };
+    let before = previous_code_token(tokens, open);
+    word(before, &["operator"])
+        || word(before, &["new", "delete"])
+            && word(
+                before.and_then(|before| previous_code_token(tokens, before)),
+                &["operator"],
+            )
 }
 
 /// The code token before the template parameter list that the `>` at
@@ -485,6 +503,14 @@ fn classify_after_paren(
                     || previous_code_token(tokens, before).is_some_and(
                         |name| matches!(&tokens[name], Token::Word(word) if word == "operator"),
                     )) =>
+        {
+            BlockKind::FunctionBody
+        }
+        Token::Symbol(']')
+            if BlockKind::is_declaration_scope(parent_block)
+                && groups
+                    .closed_at(before)
+                    .is_some_and(|brackets| names_operator(tokens, groups.get(brackets).open)) =>
         {
             BlockKind::FunctionBody
         }
@@ -801,6 +827,16 @@ mod tests {
                 "void f() {\n    auto add = []<typename T>(T a, T b) {\n    };\n    call([]<class T>(T a) {\n    });\n}\n"
             ),
             [FunctionBody, Lambda, Lambda]
+        );
+    }
+
+    #[test]
+    fn classifies_a_subscript_operator_body_as_a_function_body() {
+        assert_eq!(
+            kinds(
+                "class C {\n    int& operator[](int pos) const {\n    }\n    void* operator new[](size_t size) {\n    }\n};\n"
+            ),
+            [Aggregate, FunctionBody, FunctionBody]
         );
     }
 }

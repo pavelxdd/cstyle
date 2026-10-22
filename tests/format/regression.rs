@@ -21825,3 +21825,11 @@ fn rows_of_a_block_comment_keep_their_columns_whatever_word_leads_them() {
     let input = "/*\n     header information passed to the routines.  See the notes\n  for more details on the meanings of these fields.\n*/\ntypedef int value_t;\nint other;\n/*\n     first row\n  while waiting\n  for the rest\n*/\n";
     check(input, &[], input);
 }
+
+#[test]
+fn an_attached_subscript_operator_body_leaves_the_class_layout_after_it() {
+    let input = "class Array {\n public:\n  int& operator[](int pos) const {\n    return ptr_[pos];\n  }\n\n private:\n  int value;\n};\n";
+    let expected = "class Array {\n  public:\n    int& operator[](int pos) const {\n        return ptr_[pos];\n    }\n\n  private:\n    int value;\n};\n";
+    check(input, &["--style=google", "--indent=spaces=4"], expected);
+    check(expected, &["--style=google", "--indent=spaces=4"], expected);
+}

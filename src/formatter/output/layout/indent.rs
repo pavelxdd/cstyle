@@ -1036,17 +1036,6 @@ impl FormatEngine<'_> {
                 return Some(spaces);
             }
         }
-        if !current.starts_with_any(b"#{})") {
-            let previous_indent = leading_visual_width(previous, tab_width);
-            if previous_indent > natural
-                && (0..self.output.len()).rev().take(16).any(|index| {
-                    let code = self.output.code(index);
-                    code.ends_with('{') && code.contains("operator[]")
-                })
-            {
-                return Some(previous_indent);
-            }
-        }
         if current.starts_with_any(b":|=ie")
             || previous_comment_code.ends_with(':')
             || leads_string && previous_is_preprocessor
