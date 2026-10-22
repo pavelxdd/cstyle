@@ -17706,6 +17706,16 @@ fn returned_message_rows_align_at_the_keyword_as_other_message_rows() {
 }
 
 #[test]
+fn a_compound_literal_value_spanning_rows_in_a_designated_list_opens_as_a_list_value() {
+    // The element on the literal's brace row moves to a row of its own, as
+    // after `= {`, and the rows after it keep the list's columns.
+    let input = "struct Config value = {\n    .first = (Vec){ 1,\n        2 },\n    .second = 3,\n};\nvoid f(void)\n{\n    x = (struct Config) {\n        .first = (Vec){ 1,\n            2 },\n        .second = 3,\n    };\n}\n";
+    let expected = "struct Config value = {\n    .first = (Vec){\n        1,\n        2\n    },\n    .second = 3,\n};\nvoid f(void)\n{\n    x = (struct Config) {\n        .first = (Vec){\n            1,\n            2\n        },\n        .second = 3,\n    };\n}\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+}
+
+#[test]
 fn a_nested_class_with_a_base_clause_indents_its_brace_as_any_nested_class_in_whitesmith() {
     let input = "class Outer {\n  class Inner : public Base {\n    int x;\n  };\n  class Plain {\n    int x;\n  };\n};\n";
     let expected = "class Outer\n    {\n        class Inner : public Base\n            {\n                int x;\n            };\n        class Plain\n            {\n                int x;\n            };\n    };\n";

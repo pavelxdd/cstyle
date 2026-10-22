@@ -605,7 +605,7 @@ impl FormatEngine<'_> {
             .opened_at(token_index)
             .and_then(|group| self.tree.groups.get(group).parent)
             .is_some_and(|parent| self.tree.groups.get(parent).delimiter != Delimiter::Brace);
-        let enclosed = brace_type == BraceType::Array
+        let enclosed = matches!(brace_type, BraceType::Array | BraceType::CompoundLiteral)
             && !in_parens
             && !self
                 .inline_array
@@ -1434,6 +1434,16 @@ impl FormatEngine<'_> {
         Some(self.output.lead_width(line, self.options.tab_width))
     }
 
+    /// Whether the innermost open brace opens on the pending row.
+    fn pending_row_opens_innermost_brace(&self) -> bool {
+        self.layout
+            .frame_stack
+            .active_brace()
+            .and_then(|frame| frame.open_token)
+            .zip(self.output.pending_tokens())
+            .is_some_and(|(open, span)| (span.first..=span.last).contains(&open))
+    }
+
     pub(crate) fn initializer_member_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {
         if !self.in_initializer_brace() {
             return None;
@@ -1455,9 +1465,11 @@ impl FormatEngine<'_> {
         if closing && let Some(spaces) = self.layout.continuation_indent.next_line_indent_spaces {
             return Some(spaces);
         }
-        // A compound literal's fields stand at its elements.
+        // A compound literal's fields stand at its elements; a row opening
+        // one as a value stands in the list around it.
         if designator
             && self.innermost_brace_is_compound_literal()
+            && !self.pending_row_opens_innermost_brace()
             && let Some(column) = self.current_inline_array_column()
         {
             return Some(column);
