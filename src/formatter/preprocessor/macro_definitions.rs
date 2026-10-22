@@ -1,6 +1,7 @@
 use crate::config::{BraceStyle, FormatOptions, MinConditionalIndent};
 use crate::formatter::continuation::{min_conditional_indent_spaces, operator_chains};
 use crate::formatter::engine::FormatEngine;
+use crate::formatter::syntax::{assignment_declarator_offset, declaration_head_declarator_offset};
 use crate::formatter::text::columns::{leading_visual_width, visual_column_at, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
@@ -30,6 +31,7 @@ struct DefineBodyLineInfo {
     leading_close: bool,
     is_case_label: bool,
     ends_semicolon: bool,
+    ends_comma: bool,
     /// The closing `;` ends the statement rather than a clause of a
     /// `for` header whose parens stay open.
     semicolon_ends_statement: bool,
@@ -208,6 +210,7 @@ fn scan_define_body_line(content: &str) -> DefineBodyLineInfo {
         leading_close: content.trimmed_start().starts_with('}'),
         is_case_label: is_define_case_label(content),
         ends_semicolon,
+        ends_comma: last_code == Some(','),
         semicolon_ends_statement,
         paren_balance,
         is_header,
@@ -1566,6 +1569,30 @@ impl FormatEngine<'_> {
                 column_before_parens.take()
             } else if let Some(&(_, align)) = paren_anchors.last() {
                 Some(align)
+            } else if info.ends_comma
+                && open_parens <= 0
+                && frames.last().copied() != Some(DefineFrame::Brace)
+            {
+                // A comma at the statement's level parts operands, whose
+                // rows stand at the statement, or declarators, whose rows
+                // stand at the first, as in a function.
+                continuation_column.or_else(|| {
+                    let text = content.trimmed_start();
+                    assignment_declarator_offset(text)
+                        .or_else(|| {
+                            text.split_once(',')
+                                .filter(|(head, _)| !head.contains('='))
+                                .and_then(|(head, _)| {
+                                    declaration_head_declarator_offset(head.trimmed_end())
+                                })
+                        })
+                        .map(|offset| {
+                            leading_visual_width(
+                                &format!("{prefix}{display}"),
+                                self.options.tab_width,
+                            ) + offset
+                        })
+                })
             } else if continuation_column.is_some()
                 && !(define_complete_designated_initializer_row(content)
                     && frames.last().copied() == Some(DefineFrame::Brace))

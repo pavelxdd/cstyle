@@ -4579,3 +4579,15 @@ fn a_closing_paren_leading_its_row_stands_at_its_opener_in_a_define_and_at_file_
         .expect("valid options");
     assert_eq!(format_exact(input, &options), input);
 }
+
+#[test]
+fn indent_preproc_define_sets_rows_after_a_top_level_comma_as_a_function_does() {
+    // Assignments a comma joins declare nothing: the row after the comma
+    // stands at the statement. A declaration's declarators stand at its
+    // first, as in a function.
+    let input = "#define SET(seq) \\\n    (seq)->first = 1; (seq)->second = 2; \\\n    (seq)->third = 3, (seq)->fourth = 4, \\\n    (seq)->fifth = 5;\n#define DECLARE \\\n    int first = 1, \\\n        second = 2, \\\n        third; \\\n    int one, two, \\\n        three; \\\n    go(first)\nvoid f(void)\n{\n    first = 1, second = 2,\n    third = 3;\n    int one = 1,\n        two = 2,\n        three;\n}\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--indent-preproc-define".to_owned()])
+        .expect("valid options");
+    assert_eq!(format_exact(input, &options), input);
+}

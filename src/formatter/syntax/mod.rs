@@ -397,7 +397,12 @@ pub(crate) fn assignment_declarator_offset(line: &str) -> Option<usize> {
         i += 1;
     }
     let eq = eq?;
-    let head = line[..eq].trimmed_end();
+    declaration_head_declarator_offset(line[..eq].trimmed_end())
+}
+
+/// The offset of the declarator in `head`, a declaration up to its first
+/// `=` or `,`: past the type and the stars or ampersands before the name.
+pub(crate) fn declaration_head_declarator_offset(head: &str) -> Option<usize> {
     if head.contains_any_byte(b"(),{}") {
         return None;
     }
