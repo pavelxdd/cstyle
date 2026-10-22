@@ -2807,6 +2807,61 @@ fn ternary_arms_in_a_block_after_a_directive_follow_their_parens() {
 }
 
 #[test]
+fn rows_in_a_block_after_a_directive_register_no_assignment_until_a_list_closes_in_it() {
+    // A bare block after a directive is read as a list: rows in its
+    // parentheses register no assignment, until a list closed in the block
+    // ends that reading. A row after an operator continues its statement
+    // either way.
+    let body = |first: &str| {
+        format!(
+            "void f(void)\n{{\n#ifdef FEATURE\n    {{\n        {first}\n        value = ((a) ? c\n            : d);\n        other = (b\n            + e);\n        third = first(a,\n            b);\n        x = a +\n            b;\n    }}\n#endif\n}}\n"
+        )
+    };
+    let cases = [
+        (
+            "int list;",
+            &[][..],
+            "void f(void)\n{\n#ifdef FEATURE\n    {\n        int list;\n        value = ((a) ? c\n                 : d);\n        other = (b\n                 + e);\n        third = first(a,\n                      b);\n        x = a +\n            b;\n    }\n#endif\n}\n",
+        ),
+        (
+            "int list[2] = {1, 2};",
+            &[][..],
+            "void f(void)\n{\n#ifdef FEATURE\n    {\n        int list[2] = {1, 2};\n        value = ((a) ? c\n                 : d);\n        other = (b\n                 + e);\n        third = first(a,\n                      b);\n        x = a +\n            b;\n    }\n#endif\n}\n",
+        ),
+        (
+            "int list;",
+            &["-xU"][..],
+            "void f(void)\n{\n#ifdef FEATURE\n    {\n        int list;\n        value = ((a) ? c\n            : d);\n        other = (b\n            + e);\n        third = first(a,\n            b);\n        x = a +\n            b;\n    }\n#endif\n}\n",
+        ),
+        (
+            "int list[2] = {1, 2};",
+            &["-xU"][..],
+            "void f(void)\n{\n#ifdef FEATURE\n    {\n        int list[2] = {1, 2};\n        value = ((a) ? c\n                : d);\n        other = (b\n                + e);\n        third = first(a,\n                b);\n        x = a +\n            b;\n    }\n#endif\n}\n",
+        ),
+    ];
+    for (first, args, expected) in cases {
+        check(&body(first), args, expected);
+        check(expected, args, expected);
+    }
+    // Only a block whose directive directly follows a brace ending its line
+    // reads as a list; a statement or a comment before the directive leaves
+    // a block.
+    let wrap = |before: &str, column: &str| {
+        format!(
+            "void f(void)\n{{\n{before}    {{\n        value = ((a) ? c\n{column}: d);\n    }}\n#endif\n}}\n"
+        )
+    };
+    for (before, column) in [
+        ("    go();\n#ifdef FEATURE\n", "                "),
+        ("    /* note */\n#ifdef FEATURE\n", "                "),
+        ("#ifdef FEATURE\n    /* note */\n", "            "),
+    ] {
+        let input = wrap(before, "            ");
+        check(&input, &["-xU"], &wrap(before, column));
+    }
+}
+
+#[test]
 fn bracket_operand_after_a_typedef_struct_keeps_its_bracket_column() {
     let input = "typedef struct {\n    int x;\n} a_t;\ntypedef struct {\n    u_char key[LEN\n               - sizeof(k)];\n} b_t;\n";
     check(input, &["--style=kr"], input);

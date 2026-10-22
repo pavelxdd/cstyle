@@ -229,6 +229,25 @@ impl FormatEngine<'_> {
             })
     }
 
+    /// Whether `block` is a bare block after a directive that directly
+    /// follows a brace ending its line, which astyle reads as a list.
+    pub(crate) fn is_directive_list_block(&self, block: GroupId) -> bool {
+        let tokens = &self.tree.tokens;
+        let open = self.tree.groups.get(block).open;
+        self.is_directive_block(block)
+            && self
+                .tree
+                .previous_code_token(open)
+                .filter(|&before| matches!(tokens[before], Token::Symbol('{')))
+                .and_then(|brace| {
+                    tokens[brace + 1..open]
+                        .iter()
+                        .position(|token| matches!(token, Token::Preprocessor(_)))
+                        .map(|offset| &tokens[brace + 1..brace + 1 + offset])
+                })
+                .is_some_and(|gap| !gap.iter().any(|token| matches!(token, Token::Comment(..))))
+    }
+
     /// A line inside a subscript whose `[` ends its line, or any when parens
     /// indent, stands at the top of astyle's continuation stack: a
     /// continuation level past the indent before.
@@ -452,18 +471,16 @@ impl FormatEngine<'_> {
             return None;
         }
         // astyle takes a bare block brace after a directive for an array
-        // brace and registers no assignment in it.
-        let directive_block = self
-            .tree
-            .groups
-            .enclosing(start)
-            .is_some_and(|block| self.is_directive_block(block));
-        // Only ternary arms are known to follow its parentheses there.
-        let ternary_arm = matches!(tokens[first], Token::Symbol('?' | ':'))
-            || matches!(&tokens[first], Token::Operator(operator) if matches!(operator.as_str(), "?" | ":"));
-        if directive_block && !ternary_arm {
-            return None;
-        }
+        // brace and registers no assignment in it, until a list that closes
+        // in the block ends that reading.
+        let directive_block = self.tree.groups.enclosing(start).is_some_and(|block| {
+            self.is_directive_list_block(block)
+                && !(self.tree.groups.get(block).open + 1..start).any(|index| {
+                    self.tree.groups.closed_at(index).is_some_and(|list| {
+                        self.tree.blocks.kind(list) == Some(BlockKind::Initializer)
+                    })
+                })
+        });
         let block_lead = self.output.lead_width(start_line, self.options.tab_width);
         // Indenting after parens, astyle measures a line run in after a
         // block brace from the brace.

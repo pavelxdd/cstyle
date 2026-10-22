@@ -575,13 +575,7 @@ impl FormatEngine<'_> {
                     self.tree.blocks.kind(group),
                     Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
                 ) || self.is_enum_body(group)
-                    || self.is_directive_block(group)
-                        && self
-                            .tree
-                            .previous_code_token(self.tree.groups.get(group).open)
-                            .is_some_and(|before| {
-                                matches!(self.tree.tokens[before], Token::Symbol('{'))
-                            })
+                    || self.is_directive_list_block(group)
             })
     }
 
