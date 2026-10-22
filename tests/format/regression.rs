@@ -17706,6 +17706,13 @@ fn returned_message_rows_align_at_the_keyword_as_other_message_rows() {
 }
 
 #[test]
+fn a_nested_class_with_a_base_clause_indents_its_brace_as_any_nested_class_in_whitesmith() {
+    let input = "class Outer {\n  class Inner : public Base {\n    int x;\n  };\n  class Plain {\n    int x;\n  };\n};\n";
+    let expected = "class Outer\n    {\n        class Inner : public Base\n            {\n                int x;\n            };\n        class Plain\n            {\n                int x;\n            };\n    };\n";
+    check(input, &["--style=whitesmith"], expected);
+}
+
+#[test]
 fn every_member_of_an_access_modified_struct_takes_the_class_indent_under_broken_braces() {
     let input = "struct Item {\n  int key;\n  int more;\n private:\n  int next_;\n};\n";
     let allman = "struct Item\n{\n        int key;\n        int more;\n    private:\n        int next_;\n};\n";
