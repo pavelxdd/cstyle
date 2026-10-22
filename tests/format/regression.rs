@@ -21708,3 +21708,11 @@ fn a_member_after_a_conditional_splitting_a_member_stands_at_the_member_the_firs
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
+
+#[test]
+fn tab_indents_a_later_branch_row_continuing_a_statement_as_a_continuation() {
+    let input = "struct Item {\nprivate:\n  using value_type =\n#ifdef FEATURE\n      first_type;\n#else\n      second_type;\n#endif\n  int value;\n};\nvoid helper()\n{\n  int value =\n#ifdef FEATURE\n      first;\n#else\n      second;\n#endif\n  call();\n}\n";
+    let expected = "struct Item {\nprivate:\n\tusing value_type =\n#ifdef FEATURE\n\t        first_type;\n#else\n\t        second_type;\n#endif\n\tint value;\n};\nvoid helper()\n{\n\tint value =\n#ifdef FEATURE\n\t        first;\n#else\n\t        second;\n#endif\n\tcall();\n}\n";
+    check(input, &["--style=linux", "--indent=tab=8"], expected);
+    check(expected, &["--style=linux", "--indent=tab=8"], expected);
+}

@@ -766,13 +766,18 @@ impl FormatEngine<'_> {
                     .is_some_and(|previous| matches!(tokens[previous], Token::Symbol(')')))
         };
         loop {
-            if statements.starts_block_statement(start)
+            // A later branch of a conditional continues the code before its
+            // `#if`, and the code after `#endif` its first branch, whatever
+            // statement the tokens in order start there.
+            let previous = self.tree.previous_code_token_in_first_branches(start);
+            let in_order = previous == self.tree.previous_code_token(start);
+            if in_order && statements.starts_block_statement(start)
                 || statements.braceless_header(start).is_some()
                 || initializer_colon(start)
             {
                 return start;
             }
-            let Some(previous) = self.tree.previous_code_token(start) else {
+            let Some(previous) = previous else {
                 return start;
             };
             let closes_expression_brace = groups.closed_at(previous).is_some_and(|group| {
