@@ -20778,3 +20778,10 @@ fn an_attached_return_type_keeps_its_pointer_on_the_side_it_stands() {
     check(input, &["--attach-return-type-decl"], expected);
     check(expected, &["--attach-return-type-decl"], expected);
 }
+
+#[test]
+fn attach_return_type_leaves_a_template_clause_before_a_constructor() {
+    // A constructor has no return type for its template clause to stand for.
+    let input = "template<typename Value>\nArray<Value>::Array(const Array &src)\n{\n}\ntemplate<typename Value>\nArray<Value>::Array() = default;\n";
+    check(input, &["--attach-return-type", "--attach-return-type-decl"], input);
+}
