@@ -21759,3 +21759,9 @@ fn a_struct_typed_declaration_continues_its_value_a_level_in_whatever_the_value_
     check(input, &[], expected);
     check(expected, &[], expected);
 }
+
+#[test]
+fn pad_oper_leaves_an_address_of_leading_a_branch_unpadded_in_every_branch() {
+    let input = "int *current =\n#ifdef FIRST\n    &first;\n#elif defined(SECOND)\n    &second;\n#else\n    &third;\n#endif\n";
+    check(input, &["--pad-oper"], input);
+}
