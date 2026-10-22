@@ -21116,3 +21116,11 @@ fn a_union_member_function_breaks_its_brace_as_a_struct_member_function_does() {
     check(input, &["--style=1tbs"], expected);
     check(expected, &["--style=1tbs"], expected);
 }
+
+#[test]
+fn add_braces_braces_a_header_in_a_lambda_body_among_call_arguments() {
+    let input = "void f()\n{\n    auto t = start([&]() {\n        go();\n        for (int i = 0; i < 10; ++i) value += 10;\n    });\n}\n";
+    let expected = "void f()\n{\n    auto t = start([&]() {\n        go();\n        for (int i = 0; i < 10; ++i) {\n            value += 10;\n        }\n    });\n}\n";
+    check(input, &["--style=kr", "--add-braces"], expected);
+    check(expected, &["--style=kr", "--add-braces"], expected);
+}

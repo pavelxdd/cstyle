@@ -107,9 +107,16 @@ impl FormatEngine<'_> {
         let header_is_else = header == "else";
         let header_is_if = header == "if";
         let header_is_do = header == "do";
+        // Parens opened outside the block the header stands in, as a
+        // call's around a lambda's body, leave its condition closed.
+        let open_parens_are_outside_current_block = self
+            .layout
+            .nesting
+            .current_brace_paren_depth()
+            .is_some_and(|depth| depth == self.layout.nesting.paren_depth);
         if matches!(header, "if" | "for" | "while")
             && (self.layout.command_state.previous_command_char != Some(')')
-                || self.layout.nesting.paren_depth > 0)
+                || self.layout.nesting.paren_depth > 0 && !open_parens_are_outside_current_block)
         {
             return None;
         }

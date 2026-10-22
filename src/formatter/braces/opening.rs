@@ -3636,7 +3636,10 @@ impl FormatEngine<'_> {
     }
 
     pub(super) fn control_paren_init_brace_indent_spaces(&self) -> Option<usize> {
-        if self.layout.nesting.paren_depth == 0
+        // Parens a block's enclosing call opened hold no list of its own.
+        let opened_in_block = self.layout.nesting.paren_depth
+            > self.layout.nesting.current_brace_paren_depth().unwrap_or(0);
+        if !opened_in_block
             || !matches!(
                 self.options.brace_style,
                 BraceStyle::OneTrueBrace
