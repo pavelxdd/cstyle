@@ -21099,3 +21099,12 @@ fn an_angle_ending_a_template_head_row_steps_an_indent_past_the_angle_around_it(
         "template <typename T, typename I = Type<\n            Other<T>::value>>\nauto call(T value);\n",
     );
 }
+
+#[test]
+fn a_statement_continued_after_an_assignment_in_a_lambda_body_keeps_its_continuation() {
+    // As in a function's body; the lambda's braces change nothing.
+    let input = "void f()\n{\n    call(once, [](const Item *item) {\n        item->value =\n            item->compute(item->size() / 3);\n    }, this);\n}\n";
+    for style in ["--style=kr", "--style=1tbs"] {
+        check(input, &[style], input);
+    }
+}
