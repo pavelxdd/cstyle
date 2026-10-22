@@ -3869,7 +3869,12 @@ impl FormatEngine<'_> {
             return false;
         }
         // A list among the arguments of a call in a block, its brace a
-        // statement's after the open paren.
+        // statement's after the open paren. One among the arguments of a
+        // call in a list keeps its row, as the list's own elements do.
+        let in_outer_list = matches!(
+            self.layout.nesting.brace_type_stack.last(),
+            Some(BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral)
+        );
         let list_brace = matches!(brace_type, BraceType::Array | BraceType::Initializer)
             || brace_type == BraceType::Command
                 && last.ends_with('(')
@@ -3884,7 +3889,9 @@ impl FormatEngine<'_> {
                     .active_token()
                     .is_some_and(|brace| self.opens_declarator_list(brace))
                 || trailing_word(last) == language::RETURN
-                || last.ends_with_any(b",(") && self.layout.nesting.paren_depth > 0)
+                || last.ends_with_any(b",(")
+                    && self.layout.nesting.paren_depth > 0
+                    && !in_outer_list)
             && matches!(
                 self.options.brace_style,
                 BraceStyle::OneTrueBrace

@@ -1943,12 +1943,15 @@ impl FormatEngine<'_> {
         let line = self.output.line_with_token(open)?;
         // A brace attached to the line before after layout closes its way;
         // one a comment leads closes at the line all the same. Ratliff sets
-        // the closer of a statement's list a level in.
+        // the closer of a statement's list a level in, not that of a list
+        // among the parens of another list.
         let outermost = self.tree.groups.get(group).parent.is_none_or(|parent| {
-            !matches!(
-                self.tree.blocks.kind(parent),
-                Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
-            )
+            !self.tree.groups.ancestors(parent).any(|ancestor| {
+                matches!(
+                    self.tree.blocks.kind(ancestor),
+                    Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                )
+            })
         });
         let closer_indent =
             usize::from(self.options.brace_style == BraceStyle::Ratliff && outermost)

@@ -20982,6 +20982,20 @@ fn a_statement_unbraced_from_a_one_line_block_keeps_its_template_arguments() {
 }
 
 #[test]
+fn attaching_styles_keep_a_list_brace_among_call_arguments_of_an_outer_list_on_its_row() {
+    let input = "Items list = {\n    call(a, b,\n    {\n        b, c\n    }),\n    call(\n    {\n        b, c\n    }),\n};\nvoid f()\n{\n    call(a,\n    {\n        b, c\n    });\n}\n";
+    let expected = "Items list = {\n    call(a, b,\n    {\n        b, c\n    }),\n    call(\n    {\n        b, c\n    }),\n};\nvoid f()\n{\n    call(a, {\n        b, c\n    });\n}\n";
+    for style in ["--style=kr", "--style=1tbs", "--style=stroustrup"] {
+        check(input, &[style], expected);
+    }
+    check(
+        input,
+        &["--style=ratliff"],
+        "Items list = {\n    call(a, b,\n        {\n        b, c\n        }),\n    call(\n        {\n        b, c\n        }),\n    };\nvoid f() {\n    call(a, {\n        b, c\n        });\n    }\n",
+    );
+}
+
+#[test]
 fn indented_brace_styles_open_a_block_after_a_closer_row_at_the_statement_on_it() {
     let input = "void f()\n{\n    TRY {\n        call();\n    } HANDLE(int) {\n        handle();\n    }\n    next();\n}\n";
     check(
