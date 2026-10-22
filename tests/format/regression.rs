@@ -22676,6 +22676,14 @@ fn a_double_angle_closing_template_arguments_stacks_no_shift_before_a_paren_endi
 }
 
 #[test]
+fn a_double_angle_closing_template_arguments_continues_a_declarator_as_a_spaced_pair_does() {
+    // The declarator after a type line `>>` ends stands where it does after
+    // `> >`.
+    let input = "void f()\n{\n    Holder<List<Item<int>>, Deleter>\n    guard{&data, pop};\n    Holder<List<Item<int> >, Deleter>\n    guard{&data, pop};\n}\n";
+    check(input, &["--style=allman"], input);
+}
+
+#[test]
 fn a_member_after_a_column_zero_comment_and_a_directive_keeps_the_class_indent() {
     let input = "struct Item\n{\n// note\n#if X\n    int value;\n    Item(int v) : value(v) {}\n#endif\n};\n";
     check(input, &[], input);
