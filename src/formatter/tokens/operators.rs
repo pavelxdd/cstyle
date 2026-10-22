@@ -1266,6 +1266,16 @@ impl FormatEngine<'_> {
                 self.current.push_str(operator);
                 self.ensure_space();
             }
+            "&" if (self.current_ends_cast() || self.current_ends_pointer_cast())
+                && !matches!(next, Some(Token::Symbol('(')))
+                && self.layout.nesting.paren_depth == 0
+                && matches!(
+                    self.layout.nesting.brace_type_stack.last(),
+                    Some(BraceType::Array | BraceType::Initializer | BraceType::DeferArray)
+                ) =>
+            {
+                self.push_pointer_or_reference(operator, next, next_is_adjacent);
+            }
             "&" | "*" if self.current_ends_pointer_cast() => self.push_unary_prefix(operator),
             "&" if self.current_ends_cast()
                 && !matches!(next, Some(Token::Symbol('(')))

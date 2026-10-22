@@ -3844,8 +3844,17 @@ fn format_one_line_block_tokens(
     let mut formatter = FormatEngine::new(options);
     formatter.one_line_block_mode = true;
     formatter.one_line_block_after_directive = after_directive;
-    // The roles of the block's own tokens tell operators apart.
-    formatter.tree = SourceTree::build(tokens);
+    // The roles of the block's own tokens tell operators apart; a list's
+    // braces stay a list's.
+    let root = brace_type
+        .filter(|brace_type| {
+            matches!(
+                brace_type,
+                BraceType::Array | BraceType::Initializer | BraceType::DeferArray
+            )
+        })
+        .map(|_| BlockKind::Initializer);
+    formatter.tree = SourceTree::build_block(tokens, root);
     formatter.syntax_roles = classify_syntax(tokens, &formatter.tree);
     if let Some(brace_type) = brace_type {
         formatter.layout.nesting.brace_type_stack.push(brace_type);

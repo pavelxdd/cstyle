@@ -53,6 +53,17 @@ pub(crate) struct Blocks {
 
 impl Blocks {
     pub(crate) fn build(tokens: &[Token], groups: &Groups) -> Self {
+        Self::build_within(tokens, groups, None)
+    }
+
+    /// Classifies the brace groups of `tokens`, a brace group known to be of
+    /// `root` kind standing first among them when `root` is given, as when
+    /// the tokens are a block taken out of its context.
+    pub(crate) fn build_within(
+        tokens: &[Token],
+        groups: &Groups,
+        mut root: Option<BlockKind>,
+    ) -> Self {
         let mut blocks = Self {
             kinds: vec![None; groups.len()],
             owners: vec![None; groups.len()],
@@ -62,7 +73,10 @@ impl Blocks {
         for id in groups.ids() {
             let group = groups.get(id);
             if group.delimiter == Delimiter::Brace {
-                let kind = classify(tokens, groups, &blocks, id);
+                let kind = match root.take_if(|_| group.parent.is_none()) {
+                    Some(kind) => kind,
+                    None => classify(tokens, groups, &blocks, id),
+                };
                 blocks.kinds[id.index()] = Some(kind);
                 let head = statement_head(tokens, groups, group.open);
                 // The statement after a label owns its block; a block right

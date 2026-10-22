@@ -17,7 +17,7 @@ pub(crate) mod statements;
 use crate::formatter::lexer::{Token, token_text, tokenize};
 use crate::formatter::text::line_scan::preprocessor_directive;
 use crate::formatter::text::line_view::LineView;
-use blocks::{Blocks, is_code_token, next_code_token};
+use blocks::{BlockKind, Blocks, is_code_token, next_code_token};
 use functions::Functions;
 use groups::Groups;
 use statements::Statements;
@@ -69,9 +69,19 @@ impl SourceTree {
     }
 
     pub(crate) fn build_shared(shared: Rc<Vec<Token>>) -> Self {
+        Self::build_within(shared, None)
+    }
+
+    /// The tree of a block taken out of its context, whose first brace
+    /// group is of `root` kind when given.
+    pub(crate) fn build_block(tokens: &[Token], root: Option<BlockKind>) -> Self {
+        Self::build_within(Rc::new(tokens.to_vec()), root)
+    }
+
+    fn build_within(shared: Rc<Vec<Token>>, root: Option<BlockKind>) -> Self {
         let tokens = shared.as_slice();
         let groups = Groups::build(tokens);
-        let mut blocks = Blocks::build(tokens, &groups);
+        let mut blocks = Blocks::build_within(tokens, &groups, root);
         let functions = Functions::build(tokens, &groups, &blocks);
         blocks.mark_function_bodies(functions.heads().iter().filter_map(|head| head.body));
         let statements = Statements::build(tokens, &groups, &blocks);

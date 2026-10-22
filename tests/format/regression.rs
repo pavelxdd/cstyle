@@ -21534,3 +21534,10 @@ fn a_comment_opening_a_block_under_a_case_label_inside_a_case_block_stands_at_th
     let input = "void f() {\n    switch (kind) {\n    case 1: {\n        go();\n        case 3:\n            if (first) {\n                /* note */\n                second();\n            }\n            third();\n    }\n    }\n}\n";
     check(input, &[], input);
 }
+
+#[test]
+fn reference_alignment_spaces_an_address_after_a_pointer_cast_in_a_list_as_after_any_cast() {
+    let input = "struct Config s = {\n    .a=(uintptr_t)&flag,\n    .b=(char *)&flag,\n};\nstruct Config t[] = {\n    {OPT, (char*)&flag},\n};\nvoid f() {\n    value = (char *)&flag;\n}\n";
+    let expected = "struct Config s = {\n    .a=(uintptr_t) &flag,\n    .b=(char *) &flag,\n};\nstruct Config t[] = {\n    {OPT, (char*) &flag},\n};\nvoid f() {\n    value = (char *)&flag;\n}\n";
+    check(input, &["--align-reference=name"], expected);
+}
