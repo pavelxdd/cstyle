@@ -11871,6 +11871,21 @@ fn breaking_one_line_headers_leaves_a_comment_led_body_line_of_a_header_directiv
     check(input, &["--style=kr", "--break-one-line-headers"], input);
 }
 
+// A header whose branches each open its parens closes them once: the
+// statements after it get their braces and breaks as any others.
+#[test]
+fn statements_after_a_header_split_between_conditional_branches_take_added_braces() {
+    let input = "void f()\n{\n#ifdef FEATURE\n    if (first ||\n#else\n    if (\n#endif\n        second) {\n        go();\n    }\n    if (ready)\n        go();\n    if (done) return;\n    value = (int)(other & 0xff);\n}\n";
+    let expected = "void f()\n{\n#ifdef FEATURE\n    if (first ||\n#else\n    if (\n#endif\n            second) {\n        go();\n    }\n    if (ready) {\n        go();\n    }\n    if (done) {\n        return;\n    }\n    value = (int)(other & 0xff);\n}\n";
+    let args = [
+        "--add-braces",
+        "--break-one-line-headers",
+        "--max-code-length=109",
+    ];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
+
 #[test]
 fn adding_braces_leaves_no_body_indent_after_a_comment_led_body_of_a_header_directives_split() {
     let input = "void f()\n{\n#ifdef D\n#ifdef A\n    if (q > 9)\n#else\n    if (q > 15)\n#endif\n        /*d*/ Bug(\"x\");\n#endif\n    if (q) {\n        value = 1;\n    }\n}\n";
