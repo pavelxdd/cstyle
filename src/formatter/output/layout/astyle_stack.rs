@@ -985,7 +985,7 @@ impl FormatEngine<'_> {
         // once.
         if self
             .tree
-            .previous_code_token(index)
+            .previous_code_token_in_first_branches(index)
             .is_none_or(|before| self.ends_stack_statement(before))
         {
             return None;
@@ -1013,7 +1013,7 @@ impl FormatEngine<'_> {
                 break Some(at);
             }
             passed.push(start as u32);
-            let Some(before) = self.tree.previous_code_token(start) else {
+            let Some(before) = self.tree.previous_code_token_in_first_branches(start) else {
                 break None;
             };
             // A directive outside parentheses ends what astyle stacks when

@@ -17,7 +17,7 @@ pub(crate) mod statements;
 use crate::formatter::lexer::{Token, token_text, tokenize};
 use crate::formatter::text::line_scan::preprocessor_directive;
 use crate::formatter::text::line_view::LineView;
-use blocks::{BlockKind, Blocks, is_code_token, next_code_token};
+use blocks::{BlockKind, Blocks, is_code_token, next_code_token, previous_code_token};
 use functions::Functions;
 use groups::Groups;
 use statements::Statements;
@@ -125,6 +125,88 @@ impl SourceTree {
                 source = source_index + 1;
             }
             offset += text.len();
+        }
+        None
+    }
+
+    /// The code token before `index` as a compiler taking the first branch
+    /// of each conditional reads the tokens: a later branch follows the code
+    /// before its `#if`, and the code after `#endif` follows the end of the
+    /// first branch.
+    pub(crate) fn previous_code_token_in_first_branches(&self, index: usize) -> Option<usize> {
+        let mut before = index.min(self.tokens.len());
+        loop {
+            let previous = previous_code_token(&self.tokens, before)?;
+            let start = self
+                .directives
+                .partition_point(|&directive| directive <= previous);
+            let end = self
+                .directives
+                .partition_point(|&directive| directive < before);
+            // The last conditional directive between them decides.
+            let jump = self.directives[start..end]
+                .iter()
+                .rev()
+                .find_map(|&directive| {
+                    let Token::Preprocessor(text) = &self.tokens[directive] else {
+                        return None;
+                    };
+                    match preprocessor_directive(&text.text) {
+                        Some("endif") => Some(self.first_branch_end_of(directive)),
+                        Some("else" | "elif" | "elifdef" | "elifndef") => {
+                            Some(self.conditional_start_of(directive))
+                        }
+                        _ => None,
+                    }
+                });
+            match jump {
+                Some(Some(target)) if target < before => before = target,
+                _ => return Some(previous),
+            }
+        }
+    }
+
+    /// The directive ending the first branch of the conditional `endif`
+    /// closes, when it has more than one branch.
+    fn first_branch_end_of(&self, endif: usize) -> Option<usize> {
+        let at = self
+            .directives
+            .partition_point(|&directive| directive < endif);
+        let mut depth = 0usize;
+        let mut first_branch_end = None;
+        for &directive in self.directives[..at].iter().rev() {
+            let Token::Preprocessor(text) = &self.tokens[directive] else {
+                continue;
+            };
+            match preprocessor_directive(&text.text) {
+                Some("endif") => depth += 1,
+                Some("if" | "ifdef" | "ifndef") if depth == 0 => return first_branch_end,
+                Some("if" | "ifdef" | "ifndef") => depth -= 1,
+                Some("else" | "elif" | "elifdef" | "elifndef") if depth == 0 => {
+                    first_branch_end = Some(directive);
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+
+    /// The `#if` of the conditional a branch directive `branch` continues.
+    fn conditional_start_of(&self, branch: usize) -> Option<usize> {
+        let at = self
+            .directives
+            .partition_point(|&directive| directive < branch);
+        let mut depth = 0usize;
+        for &directive in self.directives[..at].iter().rev() {
+            let Token::Preprocessor(text) = &self.tokens[directive] else {
+                continue;
+            };
+            match preprocessor_directive(&text.text) {
+                Some("endif") => depth += 1,
+                Some("if" | "ifdef" | "ifndef") if depth == 0 => return Some(directive),
+                Some("if" | "ifdef" | "ifndef") => depth -= 1,
+                _ => {}
+            }
         }
         None
     }

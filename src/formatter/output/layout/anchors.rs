@@ -90,7 +90,7 @@ impl FormatEngine<'_> {
         // before it; each runs only where that token is.
         let tokens = &self.tree.tokens;
         let token = &tokens[first];
-        let previous_index = self.tree.previous_code_token(first);
+        let previous_index = self.tree.previous_code_token_in_first_branches(first);
         let previous = previous_index.map(|index| &tokens[index]);
         // Others read the group around the line's start.
         let group = self.tree.groups.enclosing(first);

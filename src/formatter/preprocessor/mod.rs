@@ -1507,8 +1507,6 @@ impl FormatEngine<'_> {
                     .branch_stack
                     .pop()
                     .and_then(|branch| branch.first_branch_end)
-                    && end.layout.nesting.brace_type_stack.len()
-                        != self.layout.nesting.brace_type_stack.len()
                 {
                     self.restore_branch_snapshot(*end);
                 }

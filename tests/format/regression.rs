@@ -21618,3 +21618,13 @@ fn arguments_after_a_call_head_split_by_a_conditional_continue_from_its_first_br
     let input = "void f() {\n#if A\n    first(L,\n#else\n    second(L,\n#endif\n          value |\n          other);\n    next();\n}\n";
     check(input, &[], input);
 }
+
+#[test]
+fn code_after_a_conditional_whose_branches_end_differently_goes_on_from_the_first_branch() {
+    // A later branch starts from the code before `#if`; the code after
+    // `#endif` follows the first branch's end.
+    let ended_first = "void f() {\n#ifdef A\n    value = 1;\n#else\n    value = 2 +\n#endif\n    3;\n    next();\n}\n";
+    check(ended_first, &[], ended_first);
+    let continued_first = "void f() {\n#ifdef A\n    value = 1 +\n#else\n    value = 2;\n#endif\n            3;\n    next();\n}\n";
+    check(continued_first, &[], continued_first);
+}

@@ -1064,12 +1064,21 @@ fn preprocessor_branch_restores_objective_c_message_state() {
     let args = ["--style=allman", "--pad-oper"].map(str::to_owned);
     apply_command_line_args(&mut options, &args).expect("valid options");
 
+    // After `#endif` the first branch's message goes on, as without the
+    // other branch.
+    let closer = format_exact("void f(){\n[receiver method\n];\n}\n", &options)
+        .lines()
+        .nth(3)
+        .unwrap_or_default()
+        .to_owned();
     assert_eq!(
         format_exact(
             "void f(){\n#if A\n[receiver method\n#else\narray[index\n#endif\n];\n}\n",
             &options,
         ),
-        "void f()\n{\n#if A\n    [receiver method\n#else\n    array[index\n#endif\n         ];\n}\n",
+        format!(
+            "void f()\n{{\n#if A\n    [receiver method\n#else\n    array[index\n#endif\n{closer}\n}}\n"
+        ),
     );
 }
 
