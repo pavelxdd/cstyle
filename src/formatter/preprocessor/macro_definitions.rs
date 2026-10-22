@@ -1160,7 +1160,8 @@ impl FormatEngine<'_> {
             let keep_source_indent = self.options.min_conditional_indent
                 == MinConditionalIndent::Zero
                 && source_indent > 0
-                && open_parens <= 0
+                // Only a row no continuation anchors keeps its column.
+                && continuation_column.is_none()
                 && (content.starts_with('?')
                     || (content.starts_with(':') && !content.starts_with("::")));
             // A row led by `)` stands where its paren saved.

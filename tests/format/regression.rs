@@ -21600,3 +21600,15 @@ fn a_designator_row_holding_a_whole_run_in_list_leaves_the_rows_after_it_in_plac
     let expected = "#define INIT { \\\n        .queue = { .compare = compare_items }, \\\n        .abbrev = DEFAULT, \\\n        .dense = 1, \\\n    }\n";
     check(input, &["--indent-preproc-define"], expected);
 }
+
+#[test]
+fn a_conditional_row_continuing_a_return_in_a_define_body_takes_the_value_column_under_no_conditional_indent()
+ {
+    let input = "#define WRAP(x) \\\n  int helper(int value){ \\\n    return (int)(value ? first : second) \\\n      ? one : two; \\\n  }\n";
+    let expected = "#define WRAP(x) \\\n    int helper(int value){ \\\n        return (int)(value ? first : second) \\\n               ? one : two; \\\n    }\n";
+    check(
+        input,
+        &["--indent-preproc-define", "--min-conditional-indent=0"],
+        expected,
+    );
+}
