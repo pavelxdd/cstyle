@@ -7697,6 +7697,9 @@ fn a_value_row_after_a_struct_type_takes_the_continuation_as_after_any_type() {
         &["--indent-after-parens", "--indent-continuation=2"],
         expected,
     );
+    // So does a row the `=` leads.
+    let input = "void f(void)\n{\n    struct Options options\n        = OPTIONS_INIT;\n    Options other\n        = OPTIONS_INIT;\n}\n";
+    check(input, &[], input);
 }
 
 #[test]
