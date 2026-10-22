@@ -1537,10 +1537,13 @@ impl FormatEngine<'_> {
             {
                 None
             } else if info.ends_semicolon && !line_open_paren {
-                // Inside the parentheses of a `for` header the next row keeps
-                // their column.
+                // Inside parens, as of a `for` header, the next row stands at
+                // the innermost one left open.
                 if continuation_column.is_some() && open_parens > 0 {
-                    continuation_column
+                    paren_anchors
+                        .last()
+                        .map(|&(_, align)| align)
+                        .or(continuation_column)
                 } else {
                     None
                 }

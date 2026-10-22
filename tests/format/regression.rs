@@ -21805,3 +21805,11 @@ fn a_case_block_closer_stands_at_its_label_whatever_comment_follows_it() {
     let expected = "void helper(int k)\n{\n    switch (k) {\n        case 1: {\n            first();\n        }  /* fall through */\n        case 2: {\n            second();\n        } // fall through\n        default:\n            break;\n    }\n}\n";
     check(input, &["--style=1tbs", "--indent-switches"], expected);
 }
+
+#[test]
+fn a_define_row_after_a_statement_ending_in_an_open_paren_stands_at_the_paren() {
+    let input = "#define GEN(a_prefix) \\\nouter_##a_prefix( \\\na_attr bool \\\na_prefix##empty(a_type *tree, \\\n    void *ctx); \\\na_attr int \\\na_prefix##first(a_type *tree, \\\n    void *ctx);\n#define LOOP(n) \\\nfor (i = 0; \\\n     i < n; \\\n     i++) \\\n    call(i)\n";
+    let expected = "#define GEN(a_prefix) \\\n    outer_##a_prefix( \\\n                      a_attr bool \\\n                      a_prefix##empty(a_type *tree, \\\n                                      void *ctx); \\\n                      a_attr int \\\n                      a_prefix##first(a_type *tree, \\\n                                      void *ctx);\n#define LOOP(n) \\\n    for (i = 0; \\\n            i < n; \\\n            i++) \\\n        call(i)\n";
+    check(input, &["--indent-preproc-define"], expected);
+    check(expected, &["--indent-preproc-define"], expected);
+}
