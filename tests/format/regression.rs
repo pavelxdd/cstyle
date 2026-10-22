@@ -21985,6 +21985,46 @@ fn a_closing_brace_in_a_conditional_after_one_whose_later_branch_opens_a_block_c
 }
 
 #[test]
+fn a_later_branch_after_a_first_branch_closing_a_block_starts_in_that_block() {
+    // A later branch starts from the nesting at `#if`: its first row stands
+    // in the block the first branch closes, and its header brace takes the
+    // shape of a brace in that block.
+    let input = "void f()\n{\n    go();\n#ifdef FEATURE\n}\n#else\n    if (ready) {\n#endif\n    next();\n}\n";
+    let cases: [(&[&str], &str); 3] = [
+        (
+            &[],
+            "void f()\n{\n    go();\n#ifdef FEATURE\n}\n#else\n    if (ready) {\n#endif\nnext();\n}\n",
+        ),
+        (
+            &["--style=kr"],
+            "void f()\n{\n    go();\n#ifdef FEATURE\n}\n#else\n    if (ready) {\n#endif\nnext();\n}\n",
+        ),
+        (
+            &["--style=allman"],
+            "void f()\n{\n    go();\n#ifdef FEATURE\n}\n#else\n    if (ready)\n    {\n#endif\nnext();\n}\n",
+        ),
+    ];
+    for (args, expected) in cases {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
+fn braces_around_a_conditional_whose_branches_close_differently_take_the_shape_of_their_indentation()
+ {
+    // The nesting that indents a row also shapes its brace: a later branch
+    // stands in the block open at `#if`, the code after `#endif` where the
+    // first branch leaves it.
+    let after_endif = "void f()\n{\n    go();\n#ifdef FEATURE\n}\n#else\n    if (ready) {\n#endif\nif (other) {\n    go();\n}\n}\n";
+    let expected = "void f()\n{\n    go();\n#ifdef FEATURE\n}\n#else\n    if (ready) {\n#endif\nif (other)\n{\n    go();\n}\n}\n";
+    check(after_endif, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+    let else_branch = "void f()\n{\n    if (first) {\n        go();\n#ifdef FEATURE\n    }\n#else\n    } else {\n        other();\n#endif\n}\n}\n";
+    check(else_branch, &["--style=kr"], else_branch);
+}
+
+#[test]
 fn a_statement_after_a_conditional_whose_first_branch_ended_a_braceless_body_starts_afresh() {
     // The first branch ended its statement: the code after `#endif` takes
     // no continuation left from it.

@@ -385,6 +385,18 @@ impl FormatEngine<'_> {
                     || matches!(preprocessor_directive(trimmed), Some("else" | "elif")))
                 && self.output.directive_of_continuation(index).is_none()
         })?;
+        // Past `#endif` a brace a later branch opened holds nothing.
+        if self
+            .output
+            .line_tokens(opening_brace)
+            .zip(self.output.pending_tokens())
+            .is_some_and(|(brace, row)| {
+                self.tree
+                    .in_later_branch_closing_before(brace.first, row.first)
+            })
+        {
+            return None;
+        }
         let opening_brace = &self.output[opening_brace];
         if self.output.code_of(opening_brace).trimmed() != "{" {
             return None;

@@ -97,7 +97,10 @@ impl PreprocessorSplitElseState {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct PreprocessorBranchState {
     pub(crate) layout: LayoutState,
+    /// The column of the body the first branch's first row stands in,
+    /// unknown when that row closes a block.
     pub(crate) first_body_indent_spaces: Option<usize>,
+    pub(crate) first_body_row_read: bool,
     pub(crate) restore_body_indent: bool,
     preprocessor_split_else: PreprocessorSplitElseState,
     pub(crate) header_paren: HeaderParenState,
@@ -1580,6 +1583,7 @@ impl FormatEngine<'_> {
         PreprocessorBranchState {
             layout: self.layout.clone(),
             first_body_indent_spaces: None,
+            first_body_row_read: false,
             restore_body_indent: false,
             preprocessor_split_else: self.preprocessor.split_else,
             header_paren: self.header_paren.clone(),
@@ -1596,6 +1600,7 @@ impl FormatEngine<'_> {
         let PreprocessorBranchState {
             layout,
             first_body_indent_spaces: _,
+            first_body_row_read: _,
             restore_body_indent: _,
             preprocessor_split_else,
             header_paren,
