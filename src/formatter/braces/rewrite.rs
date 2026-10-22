@@ -235,14 +235,29 @@ impl FormatEngine<'_> {
                         .set_next_line_level(block_indent);
                 }
                 // An `else` stands where its `if` put it; the brace joins it.
+                // One kept after a closer leaves the brace at its `if`.
                 if header_is_else
                     && !follows_comment_line
                     && !self.split_else_line_layout_active()
-                    && let Some(else_line) = self.output.last()
-                    && else_line.trimmed() == "else"
+                    && let Some(anchor) = self.output.last().and_then(|else_line| {
+                        if else_line.trimmed() == "else" {
+                            return Some(else_line);
+                        }
+                        let if_token = self
+                            .tree
+                            .statements
+                            .braceless_header(statement_start)
+                            .and_then(|else_token| self.tree.statements.if_of_else(else_token))?;
+                        let if_line = self.output.line_with_token(if_token).filter(|&line| {
+                            self.output
+                                .line_tokens(line)
+                                .is_some_and(|span| span.first == if_token)
+                        })?;
+                        Some(&self.output[if_line])
+                    })
                 {
-                    let spaces = leading_visual_width(else_line, self.options.tab_width)
-                        + self.adjusted_line_indent_delta(else_line)
+                    let spaces = leading_visual_width(anchor, self.options.tab_width)
+                        + self.adjusted_line_indent_delta(anchor)
                         + usize::from(
                             brace_indent_extra > 0
                                 || self.options.brace_style == BraceStyle::Whitesmith,

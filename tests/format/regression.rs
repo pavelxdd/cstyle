@@ -21318,3 +21318,12 @@ fn a_member_braced_initializer_split_across_rows_continues_past_its_brace_as_a_l
     let input = "struct Config {\n    std::vector<int> items{1, 2,\n                           3};\n    Item item{1,\n              2};\n};\nvoid f()\n{\n    std::vector<int> items{1, 2,\n                           3};\n    Item item{1,\n              2};\n}\n";
     check(input, &[], input);
 }
+
+#[test]
+fn add_one_line_braces_sets_an_else_block_joined_to_a_closer_at_its_if() {
+    // As below an `else` on its own line, the block stands at the `if`.
+    let input = "void f()\n{\n    if (a)\n        while (b) {\n            go();\n        }\n    else\n        j++;\n    for (;;)\n        if (a)\n            switch (b) {\n            case 1:\n                break;\n            }\n        else\n            j++;\n}\n";
+    let expected = "void f()\n{\n    if (a)\n        while (b) {\n            go();\n        } else\n    { j++; }\n    for (;;)\n        if (a)\n            switch (b) {\n            case 1:\n                break;\n            } else\n        { j++; }\n}\n";
+    check(input, &["--style=kr", "-J"], expected);
+    check(expected, &["--style=kr", "-J"], expected);
+}
