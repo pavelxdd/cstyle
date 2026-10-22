@@ -3672,3 +3672,14 @@ fn padding_the_first_paren_outside_keeps_the_gaps_around_a_function_pointer_star
         assert_eq!(format_exact(expected, &options), expected, "{option}");
     }
 }
+
+#[test]
+fn align_pointer_name_sets_every_later_pointer_declarator_row_at_one_column() {
+    // Each row of star-led declarators stands where the one before it
+    // does; a row is no deeper for coming later.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--align-pointer=name".to_owned()])
+        .expect("valid options");
+    let input = "void f(void)\n{\n    char *a = NULL, *b = NULL,\n          *c = NULL, *d = NULL,\n          *e = NULL;\n}\n";
+    assert_eq!(format_exact(input, &options), input);
+}
