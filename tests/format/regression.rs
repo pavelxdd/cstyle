@@ -17011,6 +17011,18 @@ fn a_definition_among_conditionals_leaves_an_operator_continuation_going_on() {
 }
 
 #[test]
+fn a_block_after_a_macro_statement_in_a_function_keeps_statement_braces_attached() {
+    // A block in a function body holds statements: the braces of its
+    // headers take the statement shape wherever the block follows a macro.
+    let input = "static int f(void)\n{\n  BEGIN_TEST\n\n  /* note */\n  {\n    int i;\n    for (i = 0; i < 2; i++) {\n      go();\n    }\n  }\n  END_TEST\n}\n";
+    let expected = "static int f(void)\n{\n    BEGIN_TEST\n\n    /* note */\n    {\n        int i;\n        for (i = 0; i < 2; i++) {\n            go();\n        }\n    }\n    END_TEST\n}\n";
+    for style in ["--style=kr", "--style=1tbs"] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
 fn pad_oper_keeps_a_dereference_of_a_parenthesized_operand_attached_inside_parentheses() {
     // A star after an operator dereferences: it stays on its operand in
     // parentheses as outside them.
@@ -17021,9 +17033,9 @@ fn pad_oper_keeps_a_dereference_of_a_parenthesized_operand_attached_inside_paren
 #[test]
 fn pad_oper_pads_a_binary_xor_after_a_closing_paren_as_after_a_name() {
     check(
-        "void f()\n{\n    x = a^b;\n    x = (a | b)^c;\n    x = f(a)^b;\n}\n",
+        "void f()\n{\n    x = a^b;\n    x = (a | b)^c;\n    x = f(a)^b;\n    x = (w[1]^w[2]) & 1;\n}\n",
         &["-p"],
-        "void f()\n{\n    x = a ^ b;\n    x = (a | b) ^ c;\n    x = f(a) ^ b;\n}\n",
+        "void f()\n{\n    x = a ^ b;\n    x = (a | b) ^ c;\n    x = f(a) ^ b;\n    x = (w[1] ^ w[2]) & 1;\n}\n",
     );
 }
 
