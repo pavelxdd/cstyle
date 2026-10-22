@@ -33,7 +33,7 @@ use crate::formatter::text::line_scan::{
     unmatched_open_paren_column,
 };
 use crate::formatter::text::trim::Trimmed;
-use crate::source::lex::{is_identifier_continue, is_word_char, leading_identifier, trailing_word};
+use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
 use std::collections::{BTreeMap, BTreeSet};
 
 impl FormatEngine<'_> {
@@ -2511,9 +2511,9 @@ impl FormatEngine<'_> {
                 .is_some_and(is_identifier_continue)
     }
 
-    pub(super) fn push_inline_open_brace(&mut self) {
+    pub(super) fn push_inline_open_brace(&mut self, token_index: usize) {
         let inside_aggregate = self.inline_array.aggregate_braces.last() == Some(&true);
-        let is_aggregate = self.inline_open_brace_is_aggregate();
+        let is_aggregate = self.inline_open_brace_is_aggregate(token_index);
         self.inline_array.aggregate_braces.push(is_aggregate);
         let braced_init = is_aggregate
             && (inside_aggregate
@@ -2561,7 +2561,7 @@ impl FormatEngine<'_> {
         self.previous_was_newline = false;
     }
 
-    fn inline_open_brace_is_aggregate(&self) -> bool {
+    fn inline_open_brace_is_aggregate(&self, token_index: usize) -> bool {
         if self.current.trimmed_end().ends_with('@') {
             return true;
         }
@@ -2571,14 +2571,19 @@ impl FormatEngine<'_> {
             Some(false) => match self.layout.command_state.previous_command_char {
                 Some('=') => true,
                 Some(')') => self.current_ends_compound_literal_type(),
-                // A type's braces among arguments or in a returned value, as
-                // `Type{value}`, open no block.
+                // A type's braces, as `Type{value}`, open no block.
                 Some(ch) => {
                     is_word_char(ch)
-                        && (self.layout.nesting.paren_depth > 0
-                            || leading_identifier(
-                                self.current[self.current.statement_start()..].trimmed_start(),
-                            ) == "return")
+                        && self
+                            .tree
+                            .groups
+                            .opened_at(token_index)
+                            .is_some_and(|group| {
+                                matches!(
+                                    self.tree.blocks.kind(group),
+                                    Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                                )
+                            })
                 }
                 None => false,
             },

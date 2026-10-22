@@ -3,7 +3,7 @@
 
 use crate::formatter::lexer::Token;
 use crate::formatter::structure::groups::{Delimiter, GroupId, Groups};
-use crate::formatter::syntax::language::is_non_type_keyword;
+use crate::formatter::syntax::language::{is_assignment_operator, is_non_type_keyword};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum BlockKind {
@@ -263,6 +263,10 @@ fn classify(tokens: &[Token], groups: &Groups, blocks: &Blocks, id: GroupId) -> 
         Token::Operator(operator)
             if operator == ">" && closing_is_followed_by_terminator(tokens, group.close) =>
         {
+            BlockKind::Initializer
+        }
+        // A type's braces within an expression hold its value.
+        Token::Word(_) if braces_value_in_expression(tokens, &head, group.close) => {
             BlockKind::Initializer
         }
         // A statement-like macro such as `SEH_TRY {`.
@@ -692,6 +696,25 @@ fn braces_member_initializer(tokens: &[Token], groups: &Groups, open: usize) -> 
     false
 }
 
+/// Whether a brace after a word holds a value within an expression: its
+/// statement returns or throws one, or assigns or chooses it, or the value
+/// is used past its closing brace.
+fn braces_value_in_expression(tokens: &[Token], head: &[usize], close: Option<usize>) -> bool {
+    head.first()
+        .and_then(|&first| word_at(tokens, first))
+        .is_some_and(|word| matches!(word, "return" | "throw" | "co_return" | "co_yield"))
+        || head.iter().any(|&index| match &tokens[index] {
+            Token::Operator(operator) => is_assignment_operator(operator),
+            token => matches!(token, Token::Symbol('?')),
+        })
+        || close
+            .and_then(|close| next_code_token(tokens, close + 1))
+            .is_some_and(|next| match &tokens[next] {
+                Token::Operator(operator) => matches!(operator.as_str(), "." | "->" | "?"),
+                token => matches!(token, Token::Symbol('.' | '?')),
+            })
+}
+
 fn head_has_code(head: &[usize]) -> bool {
     !head.is_empty()
 }
@@ -779,6 +802,16 @@ mod tests {
         assert_eq!(
             kinds("static int foreach (lua_State *L)\n{\n    foreach (x) {\n    }\n}\n"),
             [FunctionBody, Control]
+        );
+    }
+
+    #[test]
+    fn classifies_a_type_s_braces_within_an_expression_as_its_value() {
+        assert_eq!(
+            kinds(
+                "void f() {\n    x = c ? Item{1} : g;\n    x = Item{1} + 1;\n    return Item{1}.value;\n    SEH_TRY {\n    }\n}\n"
+            ),
+            [FunctionBody, Initializer, Initializer, Initializer, Control]
         );
     }
 

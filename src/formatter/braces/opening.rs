@@ -1297,7 +1297,7 @@ impl FormatEngine<'_> {
         self.unmatched_closing_brace_recovery = false;
         let class_base = self.layout.in_class_base_clause;
         self.clear_continuation_before_open_brace();
-        if self.try_push_open_brace_without_block() {
+        if self.try_push_open_brace_without_block(token_index) {
             return;
         }
         self.break_source_line_before_open_brace();
@@ -1512,7 +1512,7 @@ impl FormatEngine<'_> {
 
     /// Pushes a brace that opens no block: inside `#define`, after a backslash
     /// continuation, in one-line block mode, or in a bare brace run.
-    fn try_push_open_brace_without_block(&mut self) -> bool {
+    fn try_push_open_brace_without_block(&mut self, token_index: usize) -> bool {
         if self.current.trimmed_start().starts_with("#define") {
             self.emit_source_space_or_ensure();
             self.current.push('{');
@@ -1532,7 +1532,7 @@ impl FormatEngine<'_> {
             return true;
         }
         if self.one_line_block_mode {
-            self.push_inline_open_brace();
+            self.push_inline_open_brace(token_index);
             return true;
         }
         if self.try_push_bare_open_brace_run() {

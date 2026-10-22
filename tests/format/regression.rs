@@ -21957,6 +21957,12 @@ fn a_ternary_colon_after_a_brace_in_a_list_or_a_kept_block_keeps_the_statement_w
 }
 
 #[test]
+fn a_brace_initializer_in_a_kept_one_line_block_keeps_its_spacing() {
+    let input = "void f()\n{\n    if (c) { x = Item{1}; }\n    if (c) { Item value{1}; }\n    if (c) { x = Item{}; }\n    { x = c ? Item{1} : g; }\n}\n";
+    check(input, &["--keep-one-line-blocks"], input);
+}
+
+#[test]
 fn a_ternary_colon_keeps_its_line_whatever_braces_its_arm_holds() {
     // Breaking one-line statements splits labels, never a `?:`: a brace
     // closed in the arm, held in parentheses, or written in a literal
