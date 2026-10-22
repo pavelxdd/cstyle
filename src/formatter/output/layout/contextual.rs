@@ -376,10 +376,17 @@ impl FormatEngine<'_> {
             {
                 layout.exact_indent_spaces = Some(spaces);
             }
+            // The arguments after a lambda's body or a block stand at the
+            // statement wherever the source put them.
             if self.token_input.token_source_line_indent
                 > layout
                     .exact_indent_spaces
                     .unwrap_or(layout.indent * self.options.indent_width)
+                && !self
+                    .output
+                    .pending_tokens()
+                    .and_then(|span| self.tree.previous_code_token(span.first))
+                    .is_some_and(|comma| self.block_argument_before(comma))
                 && previous_trimmed.starts_with('(')
                 && self.output.code_trimmed_of(previous).ends_with(',')
                 && self.open_paren_column_of(previous_code).is_none()

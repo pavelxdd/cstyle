@@ -973,16 +973,21 @@ impl FormatEngine<'_> {
     /// block that spans lines closed somewhere in the call: the rest of the
     /// statement stands at it, as after a lambda's body.
     pub(crate) fn continues_arguments_after_block_argument(&self) -> bool {
-        let tokens = &self.tree.tokens;
-        let groups = &self.tree.groups;
-        let Some(comma) = self
-            .current
+        self.current
             .tokens()
             .and_then(|span| self.tree.previous_code_token(span.last + 1))
-            .filter(|&comma| matches!(tokens[comma], Token::Symbol(',')))
-        else {
+            .is_some_and(|comma| self.block_argument_before(comma))
+    }
+
+    /// Whether `comma` separates a call's arguments after a block among
+    /// them that spans rows or leads one; a block run in mid-row leaves the
+    /// arguments their column.
+    pub(crate) fn block_argument_before(&self, comma: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        if !matches!(tokens[comma], Token::Symbol(',')) {
             return false;
-        };
+        }
         let Some(call) = groups
             .enclosing(comma)
             .filter(|&group| groups.get(group).delimiter == Delimiter::Paren)
@@ -1004,8 +1009,6 @@ impl FormatEngine<'_> {
                 .is_some_and(|span| span.first == open),
             None => current.is_some_and(|span| span.first == open),
         };
-        // A block that spans rows or leads one; one run in mid-row leaves
-        // the arguments their column.
         (groups.get(call).open + 1..comma).any(|index| {
             matches!(tokens[index], Token::Symbol('}'))
                 && groups.closed_at(index).is_some_and(|block| {

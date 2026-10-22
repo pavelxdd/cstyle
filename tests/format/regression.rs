@@ -21958,3 +21958,11 @@ fn a_comment_after_a_statement_expression_brace_stays_after_it_in_breaking_style
         check(input, &[style], input);
     }
 }
+
+#[test]
+fn an_argument_after_a_paren_led_row_past_a_block_argument_stands_at_the_statement() {
+    let input = "void f()\n{\n    OUTER(INNER(\n              first,\n              {\n                go();\n              },\n              (b, \"other\")),\n          \"text\");\n}\n";
+    let expected = "void f()\n{\n    OUTER(INNER(\n    first, {\n        go();\n    },\n    (b, \"other\")),\n    \"text\");\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
