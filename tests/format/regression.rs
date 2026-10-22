@@ -22903,3 +22903,23 @@ fn a_value_below_a_line_splice_after_its_operator_continues_as_below_a_line_brea
     check(spliced, &[], spliced);
     check(broken, &[], broken);
 }
+
+#[test]
+fn a_list_brace_leading_its_line_in_a_breaking_style_leaves_its_first_row_below() {
+    // An element's brace runs into the brace nested in it; the brace that
+    // opens the list does not.
+    let input = "int a[][2] =\n{{1, 2},\n {3, 4}\n};\nint b[][2] =\n  { {1, 2}, {3, 4},\n    {5, 6} };\nstatic const Node e =\n{{{NULL}, VEMPTY,\n   DEADKEY, 0, {NULL}}\n};\n";
+    for (style, expected) in [
+        (
+            "--style=allman",
+            "int a[][2] =\n{\n    {1, 2},\n    {3, 4}\n};\nint b[][2] =\n{\n    {1, 2}, {3, 4},\n    {5, 6}\n};\nstatic const Node e =\n{\n    {   {NULL}, VEMPTY,\n        DEADKEY, 0, {NULL}\n    }\n};\n",
+        ),
+        (
+            "--style=whitesmith",
+            "int a[][2] =\n    {\n        {1, 2},\n        {3, 4}\n    };\nint b[][2] =\n    {\n        {1, 2}, {3, 4},\n        {5, 6}\n    };\nstatic const Node e =\n    {\n        {   {NULL}, VEMPTY,\n        DEADKEY, 0, {NULL}\n        }\n    };\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}

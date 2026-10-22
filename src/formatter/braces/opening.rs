@@ -3240,14 +3240,26 @@ impl FormatEngine<'_> {
                 .continuation_indent
                 .set_next_line_spaces(spaces + self.options.indent_width);
         }
-        // Every style runs a brace into a nested brace that follows it;
-        // run-in styles do that for all braces later.
+        // Every style runs an element's brace into a nested brace that
+        // follows it; run-in styles do that for all braces later. A style
+        // that breaks braces leaves the list's own brace on its line.
         let runs_into_nested_brace = matches!(next, Some(Token::Symbol('{')))
             && matches!(brace_type, BraceType::Array | BraceType::Initializer)
             && !matches!(
                 self.options.brace_style,
                 BraceStyle::Horstmann | BraceStyle::Pico
-            );
+            )
+            && (self.options.brace_style == BraceStyle::None
+                || self
+                    .current
+                    .active_token()
+                    .and_then(|brace| self.tree.groups.enclosing(brace))
+                    .is_some_and(|list| {
+                        matches!(
+                            self.tree.blocks.kind(list),
+                            Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                        )
+                    }));
         // The brace's own block decides, not another block on its line.
         let one_line_block = self
             .current
@@ -3275,7 +3287,7 @@ impl FormatEngine<'_> {
             || runs_into_nested_brace
             || runs_into_comment_row)
             && brace_type != BraceType::Namespace
-            && self.token_input.token_begins_source_line
+            && (self.token_input.token_begins_source_line || runs_into_nested_brace)
             && !previous_line_opens_lambda_body
             && !matches!(next, None | Some(Token::Newline))
             && (!(self.options.break_one_line_blocks && one_line_block)
