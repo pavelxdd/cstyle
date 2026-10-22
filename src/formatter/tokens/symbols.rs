@@ -383,8 +383,16 @@ impl FormatEngine<'_> {
             }
         } else if !outside_pad
             && self.layout.previous == PreviousToken::Operator
-            && self.options.pointer_align == PointerAlign::Name
-            && self.current.trimmed_end().ends_with_any(b"*^")
+            && self
+                .current
+                .trimmed_end()
+                .chars()
+                .next_back()
+                .is_some_and(|last| {
+                    matches!(last, '*' | '^' | '&')
+                        && resolved_pointer_align(self.options, last.encode_utf8(&mut [0; 4]))
+                            == PointerAlign::Name
+                })
             && !self.follows_binary_operator()
             && (attaches_declarator_group || self.looks_like_pointer_declaration_context())
             && !self.active_token_in_brackets()

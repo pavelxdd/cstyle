@@ -3683,3 +3683,17 @@ fn align_pointer_name_sets_every_later_pointer_declarator_row_at_one_column() {
     let input = "void f(void)\n{\n    char *a = NULL, *b = NULL,\n          *c = NULL, *d = NULL,\n          *e = NULL;\n}\n";
     assert_eq!(format_exact(input, &options), input);
 }
+
+#[test]
+fn align_reference_name_attaches_a_reference_to_a_function_pointer_declarator_group_at_file_scope()
+{
+    // The reference goes to the declarator group as a star does, adding no
+    // space after it.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--align-reference=name".to_owned()])
+        .expect("valid options");
+    let input = "Item& (*first)(int);\nItem & (*second)(int);\nint value = mask & (bits);\n";
+    let expected = "Item &(*first)(int);\nItem &(*second)(int);\nint value = mask & (bits);\n";
+    assert_eq!(format_exact(input, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
