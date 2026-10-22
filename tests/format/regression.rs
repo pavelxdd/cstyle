@@ -21054,3 +21054,11 @@ fn a_lambda_argument_whose_brace_joins_it_stands_at_the_statement() {
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn an_initializer_after_one_holding_a_conditional_on_a_scoped_name_stands_with_the_list() {
+    let input = "Options::Options(int value)\n    : first_(kDefault),\n      second_(value == Mode::Wide ? kWide : kNarrow),\n      third_(value == kOther),\n      count_(value)\n{\n}\n";
+    for style in ["--style=kr", "--style=allman"] {
+        check(input, &[style], input);
+    }
+}

@@ -301,26 +301,6 @@ impl FormatEngine<'_> {
             .then(|| leading_visual_width(previous, self.options.tab_width))
     }
 
-    pub(crate) fn scoped_ternary_continuation_indent_spaces(
-        &self,
-        line: &LineView<'_>,
-    ) -> Option<usize> {
-        if line.trimmed_start().starts_with_any(b"}#")
-            || !line
-                .trimmed_start()
-                .chars()
-                .next()
-                .is_some_and(is_identifier_start)
-        {
-            return None;
-        }
-        let (_, previous_code) = self.output.last_code_outside_comment()?;
-        (previous_code.contains('?')
-            && previous_code.contains("::")
-            && self.open_paren_column_of(previous_code).is_none())
-        .then(|| self.layout.indentation.indent() * self.options.indent_width)
-    }
-
     pub(crate) fn allman_operator_or_preprocessor_indent_spaces(
         &self,
         line: &LineView<'_>,

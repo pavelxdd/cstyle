@@ -770,9 +770,6 @@ impl FormatEngine<'_> {
                 layout.exact_indent_spaces =
                     Some(self.layout.indentation.indent() * self.options.indent_width);
             }
-            if let Some(spaces) = self.scoped_ternary_continuation_indent_spaces(line) {
-                layout.exact_indent_spaces = Some(spaces);
-            }
             if previous_operator_led
                 && line
                     .trimmed_start()
