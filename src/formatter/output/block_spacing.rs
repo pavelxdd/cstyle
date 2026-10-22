@@ -636,14 +636,19 @@ impl FormatEngine<'_> {
             return self.layout.nesting.last_closed_brace_header.as_deref() == Some("do")
                 && self.layout.command_state.previous_command_char == Some('}');
         };
-        self.tree
-            .previous_code_token(header)
-            .and_then(|close| self.tree.groups.closed_at(close))
-            .and_then(|body| {
-                self.tree
-                    .previous_code_token(self.tree.groups.get(body).open)
-            })
-            .is_some_and(|before| matches!(&tokens[before], Token::Word(word) if word == "do"))
+        // Braces add-braces gave the body close it as the source's would.
+        let added_braces = self.braceless_do_before(header).is_some()
+            && self.layout.command_state.previous_command_char == Some('}');
+        added_braces
+            || self
+                .tree
+                .previous_code_token(header)
+                .and_then(|close| self.tree.groups.closed_at(close))
+                .and_then(|body| {
+                    self.tree
+                        .previous_code_token(self.tree.groups.get(body).open)
+                })
+                .is_some_and(|before| matches!(&tokens[before], Token::Word(word) if word == "do"))
     }
 
     /// The `do` whose braceless body the `while` at `index` follows.

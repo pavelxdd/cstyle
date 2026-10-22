@@ -21377,3 +21377,12 @@ fn run_in_styles_set_a_file_scope_designator_row_at_the_list_rows_as_other_eleme
     check(input, &["--style=horstmann"], expected);
     check(expected, &["--style=horstmann"], expected);
 }
+
+#[test]
+fn break_blocks_parts_nothing_inside_a_block_add_braces_gives_a_do() {
+    let input = "void f()\n{\n    do\n        value=0;\n    while (ready);\n}\n";
+    let expected = "void f()\n{\n    do {\n        value=0;\n    } while (ready);\n}\n";
+    for blocks in ["--break-blocks", "--break-blocks=all"] {
+        check(input, &["--style=kr", "--add-braces", blocks], expected);
+    }
+}
