@@ -4446,3 +4446,36 @@ fn an_initializer_a_directive_splits_from_its_assignment_stays_on_one_line() {
         assert_eq!(format_exact(input, &options), input, "{style}");
     }
 }
+
+#[test]
+fn a_comment_after_a_list_brace_leading_its_line_opens_the_list_rows() {
+    // A line comment after a brace leading its line, the list open past
+    // it, goes to the list's first row in every style but the run-in ones;
+    // a block comment does where braces attach.
+    let input = "int items[][2] = {\n    { /* c */\n        1, 2 },\n    { // d\n        3, 4 },\n    { /* e\n         f */\n        5, 6 },\n};\nint more[] =\n{ // g\n    7\n};\n";
+    for (style, expected) in [
+        (
+            "--style=java",
+            "int items[][2] = {\n    {\n        /* c */\n        1, 2\n    },\n    {\n        // d\n        3, 4\n    },\n    {\n        /* e\n           f */\n        5, 6\n    },\n};\nint more[] = {\n    // g\n    7\n};\n",
+        ),
+        (
+            "--style=ratliff",
+            "int items[][2] = {\n        {\n        /* c */\n        1, 2\n        },\n        {\n        // d\n        3, 4\n        },\n        {\n        /* e\n           f */\n        5, 6\n        },\n    };\nint more[] = {\n    // g\n    7\n    };\n",
+        ),
+        (
+            "--style=horstmann",
+            "int items[][2] = {\n    {   /* c */\n        1, 2\n    },\n    {   // d\n        3, 4\n    },\n    {   /* e\n           f */\n        5, 6\n    },\n};\nint more[] =\n{   // g\n    7\n};\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_owned()]).expect("valid options");
+        assert_eq!(format_exact(input, &options), expected, "{style}");
+        assert_eq!(format_exact(expected, &options), expected, "{style}");
+    }
+    let input = "int items[][2] = {\n    { /* c */\n        1, 2 },\n    { // d\n        3, 4 },\n};\nint more[] =\n{ // g\n    7\n};\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=kr".to_owned()]).expect("valid options");
+    let expected = "int items[][2] = {\n    { /* c */\n        1, 2\n    },\n    {\n        // d\n        3, 4\n    },\n};\nint more[] = {\n    // g\n    7\n};\n";
+    assert_eq!(format_exact(input, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}

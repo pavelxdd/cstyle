@@ -7,7 +7,7 @@ use crate::formatter::braces::classification::{
 };
 use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::braces::initializers::{
-    InlineArrayFrame, initializer_brace_line_comment_gap,
+    InlineArrayFrame, initializer_brace_comment_gap, runs_list_rows_in,
 };
 use crate::formatter::constructs::headers::{
     is_header, line_is_control_body_header, starts_header_word,
@@ -215,6 +215,36 @@ fn brace_comment_leads_line(tokens: &[Token], brace: usize) -> bool {
         && rest.next().is_some_and(|token| {
             !matches!(token, Token::Newline | Token::Comment(CommentKind::Line, _))
         })
+}
+
+impl FormatEngine<'_> {
+    /// Whether the comment after a list brace leading its source line moves
+    /// to the list's first row. A line comment does unless the style runs
+    /// the brace into that row; a block comment does where braces attach.
+    fn comment_opens_list_rows(&self, brace: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        let leads_line = tokens[..brace]
+            .iter()
+            .rev()
+            .take_while(|token| !matches!(token, Token::Newline))
+            .all(|token| matches!(token, Token::Whitespace(_)));
+        if !leads_line {
+            return false;
+        }
+        match tokens[brace + 1..]
+            .iter()
+            .find(|token| !matches!(token, Token::Whitespace(_)))
+        {
+            Some(Token::Comment(CommentKind::Line, _)) => {
+                !runs_list_rows_in(self.options.brace_style)
+            }
+            Some(Token::Comment(CommentKind::Block, _)) => matches!(
+                self.options.brace_style,
+                BraceStyle::Attach | BraceStyle::Ratliff | BraceStyle::Lisp
+            ),
+            _ => false,
+        }
+    }
 }
 
 impl<'t> OpenBraceComments<'t> {
@@ -1041,7 +1071,7 @@ impl FormatEngine<'_> {
             && (self.in_initializer_brace() || self.current_inline_array_column().is_some())
         {
             self.trim_current_end();
-            let gap = initializer_brace_line_comment_gap(self.options, &self.current);
+            let gap = initializer_brace_comment_gap(&self.output_options(), &self.current);
             self.current.push_str(&gap);
             self.current.push_str(comment.trimmed_end());
             self.comments.skip_next_attached_comment = true;
@@ -1307,15 +1337,20 @@ impl FormatEngine<'_> {
             return;
         }
         // A comment leading the rest of the brace's line opens the body.
-        let comment_leads_body = !matches!(
-            brace_type,
-            BraceType::Array
-                | BraceType::Initializer
-                | BraceType::CompoundLiteral
-                | BraceType::Enum
-                | BraceType::DeferArray
-        ) && brace_comment_leads_line(&self.tree.tokens, token_index);
+        let comment_leads_body = if matches!(brace_type, BraceType::Array | BraceType::Initializer)
+        {
+            self.comment_opens_list_rows(token_index)
+        } else {
+            !matches!(
+                brace_type,
+                BraceType::CompoundLiteral | BraceType::Enum | BraceType::DeferArray
+            ) && brace_comment_leads_line(&self.tree.tokens, token_index)
+        };
         self.comments.comment_opens_brace_body = comment_leads_body;
+        // The brace then ends its line.
+        let next = next.filter(|_| {
+            !(comment_leads_body && matches!(brace_type, BraceType::Array | BraceType::Initializer))
+        });
         let comments = if comment_leads_body {
             OpenBraceComments::from_next(None, self.current_is_blank())
         } else {
@@ -2416,7 +2451,10 @@ impl FormatEngine<'_> {
             if line.trimmed() == "{"
                 && (self.in_initializer_brace() || self.current_inline_array_column().is_some())
             {
-                line.push_str(&initializer_brace_line_comment_gap(self.options, &line));
+                line.push_str(&initializer_brace_comment_gap(
+                    &self.output_options(),
+                    &line,
+                ));
             } else if attached_case_label_output_brace
                 && !self.token_input.token_begins_source_line
                 && let Some(gap) = self
@@ -3075,19 +3113,15 @@ impl FormatEngine<'_> {
             None
         };
         if let Some(comment) = runin_comment {
-            if comment.trimmed_start().starts_with("//")
+            if (comment.trimmed_start().starts_with("//")
+                || runs_list_rows_in(self.options.brace_style))
                 && self.current.trimmed() == "{"
                 && (self.in_initializer_brace() || self.current_inline_array_column().is_some())
             {
-                let gap = initializer_brace_line_comment_gap(self.options, &self.current);
+                let gap = initializer_brace_comment_gap(&self.output_options(), &self.current);
                 self.current.push_str(&gap);
-            } else {
-                match self.token_input.next_input_whitespace.as_deref() {
-                    Some(ws) if !ws.is_empty() => self.current.push_str(ws),
-                    // A bare block keeps a comment written against its brace.
-                    _ if brace_type == BraceType::Command => {}
-                    _ => self.current.push(' '),
-                }
+            } else if let Some(ws) = self.token_input.next_input_whitespace.as_deref() {
+                self.current.push_str(ws);
             }
             self.current.push_str(comment.trimmed_end());
             self.comments.skip_next_attached_comment = true;
@@ -3163,7 +3197,14 @@ impl FormatEngine<'_> {
                 )
             })
             .unwrap_or(self.layout.line_state.is_one_line_block);
-        if (self.options.brace_style == BraceStyle::None || runs_into_nested_brace)
+        // A style that breaks braces keeps a list's first row after a block
+        // comment on its brace's line.
+        let runs_into_comment_row = matches!(brace_type, BraceType::Array | BraceType::Initializer)
+            && matches!(next, Some(Token::Comment(CommentKind::Block, comment)) if !comment.contains('\n'))
+            && !runs_list_rows_in(self.options.brace_style);
+        if (self.options.brace_style == BraceStyle::None
+            || runs_into_nested_brace
+            || runs_into_comment_row)
             && brace_type != BraceType::Namespace
             && self.token_input.token_begins_source_line
             && !previous_line_opens_lambda_body

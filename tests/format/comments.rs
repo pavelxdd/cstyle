@@ -4709,7 +4709,7 @@ fn stripped_comment_row_keeps_its_own_tab_under_tab_indent() {
 #[test]
 fn rows_of_a_comment_after_a_run_in_element_brace_follow_the_comment() {
     let input = "int a[] = {\n  { /* q\n       N */\n    1 },\n};\n";
-    let expected = "int a[] = {\n    { /* q\n         N */\n        1\n    },\n};\n";
+    let expected = "int a[] = {\n    {   /* q\n           N */\n        1\n    },\n};\n";
     let options = FormatOptions::default();
     let first = format_exact(input, &options);
 

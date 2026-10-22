@@ -1,6 +1,7 @@
 use crate::config::{BraceStyle, FormatOptions, IndentStyle, PointerAlign, ReferenceAlign};
 use crate::formatter::braces::classification::ExternCGuard;
-use crate::formatter::braces::initializers::initializer_brace_line_comment_gap;
+use crate::formatter::braces::initializers::initializer_brace_comment_gap;
+use crate::formatter::braces::initializers::runs_list_rows_in;
 use crate::formatter::braces::postprocess::horstmann_run_in_fill;
 use crate::formatter::braces::rewrite::is_standard_add_braces_header;
 use crate::formatter::constructs::headers::is_header;
@@ -3374,7 +3375,11 @@ impl FormatEngine<'_> {
             && self.layout.command_state.current_header.is_none()
             && match self.layout.nesting.brace_type_stack.last() {
                 Some(BraceType::Command) => self.options.brace_style == BraceStyle::OneTrueBrace,
-                Some(BraceType::Array | BraceType::Initializer) => true,
+                // Where braces attach, the comment opens the list's rows.
+                Some(BraceType::Array | BraceType::Initializer) => !matches!(
+                    self.options.brace_style,
+                    BraceStyle::Attach | BraceStyle::Ratliff | BraceStyle::Lisp
+                ),
                 _ => false,
             }
             && self.output.last().is_some_and(|line| line.trimmed() == "{");
@@ -3608,13 +3613,6 @@ impl FormatEngine<'_> {
                 });
             }
             if index == 0 && run_in_opener {
-                // The comment keeps the gap it had after the brace.
-                let gap = self
-                    .token_input
-                    .previous_input_whitespace
-                    .clone()
-                    .filter(|ws| !ws.contains('\n'))
-                    .unwrap_or_default();
                 // astyle pads an element brace's comment to the body column,
                 // where it lays the rows; keeping the gap moves them along.
                 let element_brace = matches!(
@@ -3624,6 +3622,23 @@ impl FormatEngine<'_> {
                     self.options.brace_style,
                     BraceStyle::Pico | BraceStyle::Horstmann
                 );
+                // The comment keeps the gap it had after the brace but where
+                // the style runs the list's rows in after it.
+                let gap = if element_brace && runs_list_rows_in(self.options.brace_style) {
+                    let brace_line = self
+                        .output
+                        .last()
+                        .map(|line| line.as_str())
+                        .unwrap_or_default();
+                    initializer_brace_comment_gap(&self.output_options(), brace_line)
+                } else {
+                    self.token_input
+                        .previous_input_whitespace
+                        .clone()
+                        .filter(|ws| !ws.contains('\n'))
+                        .unwrap_or_default()
+                        .into_owned()
+                };
                 if let Some(brace_line) = self.output.last_mut() {
                     if self.options.convert_tabs {
                         let column = visual_width_from(brace_line, 0, tab_width);
@@ -4541,7 +4556,7 @@ impl FormatEngine<'_> {
             && trimmed_code == "{"
             && (self.in_initializer_brace() || self.current_inline_array_column().is_some())
         {
-            let gap = initializer_brace_line_comment_gap(self.options, &self.current);
+            let gap = initializer_brace_comment_gap(&self.output_options(), &self.current);
             self.current.push_str(&gap);
             return;
         }

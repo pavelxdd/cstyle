@@ -3,6 +3,7 @@ use crate::formatter::braces::classification::{
     is_lambda_body_header, is_namespace_or_module_block_header,
 };
 use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
+use crate::formatter::braces::initializers::runs_list_rows_in;
 use crate::formatter::constructs::{labels, switch_cases};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{self, Token};
@@ -115,13 +116,23 @@ impl FormatEngine<'_> {
             // written as the finished output indents, in spaces when tabs
             // are converted.
             let next_text = next_line.trimmed_start();
-            let fill = if (next_text.starts_with("//") || next_text.starts_with("/*"))
-                && !self.options.convert_tabs
-            {
-                horstmann_run_in_fill(&self.output[index], &next_line, &self.output_options())
-            } else {
-                horstmann_run_in_fill(&self.output[index], &next_line, self.options)
-            };
+            let fill =
+                if next_text.starts_with("/*") && !runs_list_rows_in(self.options.brace_style) {
+                    // A style that breaks braces keeps the gap the source left.
+                    self.output
+                        .line_tokens(index)
+                        .and_then(|span| self.tree.tokens.get(span.first + 1))
+                        .map_or_else(String::new, |token| match token {
+                            Token::Whitespace(gap) => gap.to_string(),
+                            _ => String::new(),
+                        })
+                } else if (next_text.starts_with("//") || next_text.starts_with("/*"))
+                    && !self.options.convert_tabs
+                {
+                    horstmann_run_in_fill(&self.output[index], &next_line, &self.output_options())
+                } else {
+                    horstmann_run_in_fill(&self.output[index], &next_line, self.options)
+                };
             let merged = format!(
                 "{}{}{}",
                 self.output[index],

@@ -11838,16 +11838,121 @@ fn a_case_block_holding_case_labels_closes_under_its_brace_and_keeps_its_comment
 }
 
 #[test]
-fn a_comment_after_an_element_brace_stays_on_the_brace_line_in_every_style() {
+fn a_comment_after_an_element_brace_runs_in_breaks_or_stays_by_brace_style() {
     let input = "static const struct Item items[] = {\n  {\"first\",\n   \"one\", 0, 1},\n  { /* second item */\n    \"second\",\n    \"two\", 0, 2 },\n};\n";
+    let run_in = "static const struct Item items[] = {\n    {   \"first\",\n        \"one\", 0, 1\n    },\n    {   /* second item */\n        \"second\",\n        \"two\", 0, 2\n    },\n};\n";
+    check(input, &["--mode=c"], run_in);
+    for gap in [
+        "{/* second item */",
+        "{  /* second item */",
+        "{\t/* second item */",
+    ] {
+        check(
+            &input.replace("{ /* second item */", gap),
+            &["--mode=c"],
+            run_in,
+        );
+    }
     check(
         input,
-        &["--mode=c"],
-        "static const struct Item items[] = {\n    {   \"first\",\n        \"one\", 0, 1\n    },\n    { /* second item */\n        \"second\",\n        \"two\", 0, 2\n    },\n};\n",
+        &["--style=java"],
+        "static const struct Item items[] = {\n    {\n        \"first\",\n        \"one\", 0, 1\n    },\n    {\n        /* second item */\n        \"second\",\n        \"two\", 0, 2\n    },\n};\n",
     );
-    let broken = "static const struct Item items[] = {\n    {\n        \"first\",\n        \"one\", 0, 1\n    },\n    { /* second item */\n        \"second\",\n        \"two\", 0, 2\n    },\n};\n";
-    check(input, &["--style=java"], broken);
-    check(input, &["--style=kr"], broken);
+    check(
+        input,
+        &["--style=kr"],
+        "static const struct Item items[] = {\n    {\n        \"first\",\n        \"one\", 0, 1\n    },\n    { /* second item */\n        \"second\",\n        \"two\", 0, 2\n    },\n};\n",
+    );
+}
+
+#[test]
+fn a_comment_after_a_list_brace_leading_its_line_takes_the_run_in_fill() {
+    let input = "static const struct Item items[] = {\n  {\"first\",\n   \"one\", 0, 1},\n  %s\n    \"second\",\n    \"two\", 0, 2 },\n};\n";
+    for (rest, args, expected) in [
+        (
+            "{ // note",
+            &["--mode=c", "--indent=spaces=2"][..],
+            "static const struct Item items[] = {\n  { \"first\",\n    \"one\", 0, 1\n  },\n  { // note\n    \"second\",\n    \"two\", 0, 2\n  },\n};\n",
+        ),
+        (
+            "{ /* note */",
+            &["--mode=c", "--indent=tab"][..],
+            "static const struct Item items[] = {\n\t{\t\"first\",\n\t\t\"one\", 0, 1\n\t},\n\t{\t/* note */\n\t\t\"second\",\n\t\t\"two\", 0, 2\n\t},\n};\n",
+        ),
+        (
+            "{ /* note */ /* more */",
+            &["--mode=c", "--indent=spaces=8"][..],
+            "static const struct Item items[] = {\n        {       \"first\",\n                \"one\", 0, 1\n        },\n        {       /* note */ /* more */\n                \"second\",\n                \"two\", 0, 2\n        },\n};\n",
+        ),
+        (
+            "{ /* note */ // more",
+            &["--style=horstmann", "--indent=tab"][..],
+            "static const struct Item items[] = {\n\t{\t\"first\",\n\t\t\"one\", 0, 1\n\t},\n\t{\t/* note */ // more\n\t\t\"second\",\n\t\t\"two\", 0, 2\n\t},\n};\n",
+        ),
+        (
+            "{ /* note */ /* more */",
+            &["--style=pico"][..],
+            "static const struct Item items[] = {\n    {   \"first\",\n        \"one\", 0, 1 },\n    {   /* note */ /* more */\n        \"second\",\n        \"two\", 0, 2 }, };\n",
+        ),
+    ] {
+        check(&input.replace("%s", rest), args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
+fn a_block_comment_after_a_list_brace_leading_its_line_opens_the_rows_where_braces_attach() {
+    let input = "static const struct Item items[] = {\n  {\"first\",\n   \"one\", 0, 1},\n  %s\n    \"second\",\n    \"two\", 0, 2 },\n};\n";
+    for (rest, args, expected) in [
+        (
+            "{ /* note */ /* more */",
+            &["--style=java"][..],
+            "static const struct Item items[] = {\n    {\n        \"first\",\n        \"one\", 0, 1\n    },\n    {\n        /* note */ /* more */\n        \"second\",\n        \"two\", 0, 2\n    },\n};\n",
+        ),
+        (
+            "{ /* note */ // more",
+            &["--style=lisp"][..],
+            "static const struct Item items[] = {\n    {\n        \"first\",\n        \"one\", 0, 1 },\n    {\n        /* note */ // more\n        \"second\",\n        \"two\", 0, 2 }, };\n",
+        ),
+        (
+            "{ /* note */ \"zero\",",
+            &["--style=google"][..],
+            "static const struct Item items[] = {\n    {\n        \"first\",\n        \"one\", 0, 1\n    },\n    {\n        /* note */ \"zero\",\n        \"second\",\n        \"two\", 0, 2\n    },\n};\n",
+        ),
+    ] {
+        check(&input.replace("%s", rest), args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
+fn a_block_comment_after_a_list_brace_leading_its_line_keeps_the_row_where_braces_break() {
+    let input = "static const struct Item items[] = {\n  {\"first\",\n   \"one\", 0, 1},\n  %s\n    \"second\",\n    \"two\", 0, 2 },\n};\n";
+    for (rest, args, expected) in [
+        (
+            "{/* note */ \"zero\",",
+            &["--style=kr"][..],
+            "static const struct Item items[] = {\n    {\n        \"first\",\n        \"one\", 0, 1\n    },\n    {/* note */ \"zero\",\n        \"second\",\n        \"two\", 0, 2\n    },\n};\n",
+        ),
+        (
+            "{  /* note */ {1, 2},",
+            &["--style=allman"][..],
+            "static const struct Item items[] = {\n    {\n        \"first\",\n        \"one\", 0, 1\n    },\n    {  /* note */ {1, 2},\n        \"second\",\n        \"two\", 0, 2\n    },\n};\n",
+        ),
+        (
+            "{\t/* note */ \"zero\", /* more */",
+            &["--style=gnu", "--indent=tab"][..],
+            "static const struct Item items[] = {\n\t{\n\t\t\"first\",\n\t\t\"one\", 0, 1\n\t},\n\t{\t/* note */ \"zero\", /* more */\n\t\t\"second\",\n\t\t\"two\", 0, 2\n\t},\n};\n",
+        ),
+        (
+            "{ /* note */ \"zero\",",
+            &["--style=whitesmith", "--indent=spaces=2"][..],
+            "static const struct Item items[] = {\n    {\n    \"first\",\n    \"one\", 0, 1\n    },\n    { /* note */ \"zero\",\n    \"second\",\n    \"two\", 0, 2\n    },\n  };\n",
+        ),
+    ] {
+        check(&input.replace("%s", rest), args, expected);
+        check(expected, args, expected);
+    }
 }
 
 #[test]

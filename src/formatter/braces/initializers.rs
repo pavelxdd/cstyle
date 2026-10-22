@@ -1989,13 +1989,17 @@ pub(crate) struct InlineArrayState {
     pub(crate) line_start: (usize, usize, Option<usize>),
 }
 
-pub(crate) fn initializer_brace_line_comment_gap(
-    options: &FormatOptions,
-    brace_line: &str,
-) -> String {
-    if options.brace_style != BraceStyle::Horstmann {
-        return "   ".to_string();
-    }
+/// Whether the style runs a list's first row in after a brace leading it.
+pub(crate) fn runs_list_rows_in(style: BraceStyle) -> bool {
+    matches!(
+        style,
+        BraceStyle::None | BraceStyle::Horstmann | BraceStyle::Pico
+    )
+}
+
+/// The fill between a list brace leading its row and a comment run in after
+/// it, which stands where the list's rows do.
+pub(crate) fn initializer_brace_comment_gap(options: &FormatOptions, brace_line: &str) -> String {
     let brace_column = leading_visual_width(brace_line, options.tab_width);
     let target = brace_column + options.indent_width;
     horstmann_run_in_fill(brace_line, &" ".repeat(target), options)
