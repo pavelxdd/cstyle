@@ -7686,6 +7686,17 @@ fn designator_rows_of_a_run_in_list_stand_at_its_elements_whatever_rows_their_va
 }
 
 #[test]
+fn declarators_after_a_struct_type_or_a_ternary_value_stand_at_the_first_declarator() {
+    // The type a declaration names and the values its declarators hold
+    // leave the rows after them at the first declarator.
+    let input = "void f(void)\n{\n\tstruct item first = INIT, second = INIT,\n\t\tthird = INIT;\n\tstruct item first = INIT,\n\t\tthird = INIT;\n\tItem first = INIT, second = INIT,\n\t\tthird = INIT;\n\tint *a = b ? c : d,\n\t\t*e = f;\n\tint *a = b ? c : d,\n\t\t*e = f ? g : h,\n\t\t*i = j;\n}\nstruct item first = INIT, second = INIT,\n\tthird = INIT;\n";
+    let expected = "void f(void)\n{\n    struct item first = INIT, second = INIT,\n                third = INIT;\n    struct item first = INIT,\n                third = INIT;\n    Item first = INIT, second = INIT,\n         third = INIT;\n    int *a = b ? c : d,\n         *e = f;\n    int *a = b ? c : d,\n         *e = f ? g : h,\n         *i = j;\n}\nstruct item first = INIT, second = INIT,\n            third = INIT;\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+    check(input, &["--indent-after-parens"], expected);
+}
+
+#[test]
 fn bit_field_declarators_after_a_type_line_stand_at_the_first_declarator() {
     // A bit field leading its line is a declarator, not a label: the
     // declarators after it stand where it does, as after a type on its line.
