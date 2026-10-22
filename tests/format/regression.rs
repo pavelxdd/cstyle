@@ -21368,3 +21368,12 @@ fn lisp_keeps_a_closing_while_row_that_fits_with_its_closers() {
     let input = "void f() {\n    do {\n        value = 0; } /* again */ while (ready); }\n";
     check(input, &["--style=lisp", "--max-code-length=50"], input);
 }
+
+#[test]
+fn run_in_styles_set_a_file_scope_designator_row_at_the_list_rows_as_other_elements() {
+    // astyle sets such rows a level past the first only at file scope.
+    let input = "auto config = Config{\n    .name = \"item\",\n    .size = 1,\n};\nauto other = Config{\n    first,\n    second,\n};\n";
+    let expected = "auto config = Config\n{   .name = \"item\",\n    .size = 1,\n};\nauto other = Config\n{   first,\n    second,\n};\n";
+    check(input, &["--style=horstmann"], expected);
+    check(expected, &["--style=horstmann"], expected);
+}
