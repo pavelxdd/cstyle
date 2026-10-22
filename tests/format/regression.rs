@@ -20636,3 +20636,26 @@ fn a_name_aligned_star_attaches_to_its_array_bound_or_parameters() {
     check(input, &["--align-pointer=name"], expected);
     check(expected, &["--align-pointer=name"], expected);
 }
+
+#[test]
+fn a_star_before_an_array_bound_in_template_arguments_declares_a_pointer() {
+    let input = "using Row = Box<char*[4]>;\nBox<char**[4]> rows;\n";
+    for (args, expected) in [
+        (&["-p"][..], input),
+        (
+            &["--align-pointer=type"][..],
+            "using Row = Box<char* [4]>;\nBox<char** [4]> rows;\n",
+        ),
+        (
+            &["--align-pointer=middle"][..],
+            "using Row = Box<char * [4]>;\nBox<char ** [4]> rows;\n",
+        ),
+        (
+            &["--align-pointer=name"][..],
+            "using Row = Box<char *[4]>;\nBox<char **[4]> rows;\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}

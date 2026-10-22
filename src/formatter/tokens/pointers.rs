@@ -546,7 +546,8 @@ impl FormatEngine<'_> {
         }
         match next {
             Some(Token::Operator(operator)) if operator.starts_with('>') => true,
-            Some(Token::Symbol(',')) => true,
+            // An array bound ends the type, as in `Box<char*[4]>`.
+            Some(Token::Symbol(',' | '[')) => true,
             Some(Token::Word(word))
                 if matches!(word.as_str(), "const" | "volatile" | "restrict") =>
             {
