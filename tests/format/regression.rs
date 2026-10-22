@@ -21733,3 +21733,11 @@ fn rows_of_a_block_comment_in_a_define_body_keep_their_offset_from_its_opener_pa
     check(input, &["--indent-preproc-define", "--convert-tabs"], expected);
     check(expected, &["--indent-preproc-define", "--convert-tabs"], expected);
 }
+
+#[test]
+fn a_case_block_closes_at_its_label_whatever_labels_it_holds() {
+    let input = "int helper(int c)\n{\n    switch (c) {\n    case 1: {\n        int value;\n        value = 1;\n        goto shared;\n    case 2:\n        value = 2;\nshared:\n        value++;\n        return value;\n    }\n    case 3: {\n        return 3;\n    }\n    }\n    return 0;\n}\n";
+    let expected = "int helper(int c)\n{\n    switch (c) {\n        case 1: {\n            int value;\n            value = 1;\n            goto shared;\n            case 2:\n                value = 2;\nshared:\n                value++;\n                return value;\n        }\n        case 3: {\n            return 3;\n        }\n    }\n    return 0;\n}\n";
+    check(input, &["--style=1tbs", "--indent-switches"], expected);
+    check(expected, &["--style=1tbs", "--indent-switches"], expected);
+}
