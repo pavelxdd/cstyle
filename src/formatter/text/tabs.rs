@@ -28,7 +28,13 @@ impl Converter {
         tab_width: usize,
         keep_indent_tabs: bool,
     ) -> String {
-        if !self.enabled {
+        // A line with no tab and nothing that opens or closes a literal or a
+        // comment comes out as it is and leaves the state as it was.
+        if !self.enabled
+            || !line
+                .bytes()
+                .any(|byte| matches!(byte, b'\t' | b'"' | b'\'' | b'/' | b'*' | b'\\'))
+        {
             return line;
         }
         let kept = if keep_indent_tabs {
@@ -120,11 +126,19 @@ fn blanks_reach_block_comment(bytes: &[u8], at: usize) -> bool {
 /// Whether `byte` is an ASCII character one column wide that opens or
 /// closes no literal, comment, or raw string.
 fn is_plain_byte(byte: u8) -> bool {
-    matches!(byte, b' '..=b'~')
-        && !matches!(
-            byte,
-            b'"' | b'\'' | b'/' | b'*' | b'\\' | b'u' | b'L' | b'U' | b'R'
-        )
+    const PLAIN: [bool; 256] = {
+        let mut plain = [false; 256];
+        let mut byte = b' ';
+        while byte <= b'~' {
+            plain[byte as usize] = !matches!(
+                byte,
+                b'"' | b'\'' | b'/' | b'*' | b'\\' | b'u' | b'L' | b'U' | b'R'
+            );
+            byte += 1;
+        }
+        plain
+    };
+    PLAIN[byte as usize]
 }
 
 fn to_spaces_stateful(
