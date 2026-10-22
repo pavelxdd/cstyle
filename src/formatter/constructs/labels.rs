@@ -34,9 +34,9 @@ pub(crate) fn line_kind(line: &str, access_labels: &[String]) -> LineKind {
     }
 }
 
+/// What decides whether a line read as a label is one, needed only then.
 #[derive(Clone, Copy)]
-pub(crate) struct ClassificationContext<'a> {
-    pub(crate) enclosing_brace: Option<BraceType>,
+pub(crate) struct LabelContext<'a> {
     pub(crate) in_initializer: bool,
     pub(crate) in_ternary: bool,
     pub(crate) previous_line: Option<&'a str>,
@@ -46,24 +46,27 @@ pub(crate) struct LineLayout {
     pub(crate) indent_spaces: usize,
 }
 
-pub(crate) fn reconcile_line_kind(
+pub(crate) fn reconcile_line_kind<'a>(
     mut kind: LineKind,
     line: &str,
     access_labels: &[String],
-    context: ClassificationContext<'_>,
+    enclosing_brace: Option<BraceType>,
+    label_context: impl FnOnce() -> LabelContext<'a>,
 ) -> LineKind {
     if kind == LineKind::Normal
         && line.contains(':')
         && (is_attached_user_label(line)
             || is_user_label_candidate(line, access_labels)
             || (starts_access_label(line, access_labels)
-                && context
-                    .enclosing_brace
-                    .is_some_and(is_class_like_brace_type)))
+                && enclosing_brace.is_some_and(is_class_like_brace_type)))
     {
         kind = LineKind::Label;
     }
-    if kind == LineKind::Label && (context.in_initializer || context.in_ternary) {
+    if kind != LineKind::Label {
+        return kind;
+    }
+    let context = label_context();
+    if context.in_initializer || context.in_ternary {
         kind = LineKind::Normal;
     }
     // The last line of an expression continued over lines, as a case label

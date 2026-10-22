@@ -64,8 +64,8 @@ impl FormatEngine<'_> {
             observed_line_kind,
             line,
             &self.options.access_labels,
-            labels::ClassificationContext {
-                enclosing_brace: self.layout.nesting.brace_type_stack.last().copied(),
+            self.layout.nesting.brace_type_stack.last().copied(),
+            || labels::LabelContext {
                 in_initializer: self.in_initializer_brace()
                     || self.current_inline_array_column().is_some(),
                 in_ternary: self.layout.line_state.ternary_colon
@@ -714,6 +714,24 @@ impl FormatEngine<'_> {
             let previous_indent = leading_visual_width(previous, self.options.tab_width);
             let mut seen_header = false;
             let mut seen_comment = false;
+            let is_else_code = |index: usize| {
+                let code = self.output.code_body(index);
+                code == "else" || code.ends_with("} else")
+            };
+            // The look reaches a dozen lines back for an `else`.
+            let else_in_reach = || {
+                let range = self.output.scoped_range();
+                self.output
+                    .last_line_looked(&self.else_code_look, range.start, range.end, is_else_code)
+                    .is_some_and(|last_else| {
+                        range
+                            .rev()
+                            .take_while(|&index| index > last_else)
+                            .filter(|&index| !self.output.trimmed(index).is_empty())
+                            .nth(13)
+                            .is_none()
+                    })
+            };
             let mut after_braceless_else_comment = || {
                 self.output
                     .scoped_range()
@@ -743,6 +761,7 @@ impl FormatEngine<'_> {
             if previous_code.ends_with(';')
                 && !is_comment_line(previous.trimmed_start())
                 && layout.exact_indent_spaces.unwrap_or(0) < previous_indent
+                && else_in_reach()
                 && after_braceless_else_comment()
             {
                 layout.exact_indent_spaces = Some(previous_indent);

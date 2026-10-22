@@ -253,6 +253,8 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) constructor_context_look: crate::formatter::output::buffer::LineLook,
     /// The look back for a line that is `(` alone.
     pub(crate) paren_alone_look: crate::formatter::output::buffer::LineLook,
+    /// The look back for a line whose code is `else` or ends with `} else`.
+    pub(crate) else_code_look: crate::formatter::output::buffer::LineLook,
     /// The look back for a line ending the lines of a `new` call.
     pub(crate) new_call_lines_end_look: crate::formatter::output::buffer::LineLook,
     /// The look back for a line ending with `,` in an over-long `new` call.
@@ -451,6 +453,7 @@ impl<'a> FormatEngine<'a> {
             open_paren_walk: Default::default(),
             empty_new_call_look: Default::default(),
             paren_alone_look: Default::default(),
+            else_code_look: Default::default(),
             constructor_context_look: Default::default(),
             brace_code_look: Default::default(),
             argument_end_look: Default::default(),

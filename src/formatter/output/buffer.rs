@@ -356,13 +356,13 @@ fn output_line_hints(
         .fold(0, |found, &byte| found | CLASSES[usize::from(byte)]);
     OutputLineHints {
         has_colon: found & COLON != 0,
-        has_else: find_else && found & E != 0 && line.contains("else"),
+        has_else: find_else && found & E != 0 && line.contains_from_first_byte("else"),
         has_hash: found & HASH != 0,
         has_slash: found & SLASH != 0,
         has_question: found & QUESTION != 0,
         has_at: found & AT != 0,
-        has_new: find_new && found & N != 0 && line.contains("new "),
-        has_asm: find_asm && found & A != 0 && line.contains("asm"),
+        has_new: find_new && found & N != 0 && line.contains_from_first_byte("new "),
+        has_asm: find_asm && found & A != 0 && line.contains_from_first_byte("asm"),
         starts_star: bytes.iter().find(|&&byte| byte != b' ' && byte != b'\t') == Some(&b'*'),
     }
 }
@@ -1578,7 +1578,7 @@ impl OutputBuffer {
         let range = self.scoped_range();
         let start = range.start.max(range.end.saturating_sub(count));
         self.has_line_from(&self.mentions_new_cache, start, |index| {
-            self.lines[index].contains("new ")
+            self.lines[index].contains_from_first_byte("new ")
         })
     }
 

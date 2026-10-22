@@ -1,4 +1,5 @@
 use crate::formatter::lexer::raw_strings;
+use crate::formatter::text::line_scan::ContainsAnyByte;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct Converter {
@@ -29,12 +30,17 @@ impl Converter {
         keep_indent_tabs: bool,
     ) -> String {
         // A line with no tab and nothing that opens or closes a literal or a
-        // comment comes out as it is and leaves the state as it was.
-        if !self.enabled
-            || !line
-                .bytes()
-                .any(|byte| matches!(byte, b'\t' | b'"' | b'\'' | b'/' | b'*' | b'\\'))
-        {
+        // comment comes out as it is and leaves the state as it was: outside
+        // literals only a quote or a `/` opens one, and only a `*` ends a
+        // comment.
+        let changing: &[u8] = if self.quote.is_some() || self.raw_delimiter.is_some() {
+            b"\t\"'/*\\"
+        } else if self.in_block_comment {
+            b"\t*"
+        } else {
+            b"\t\"'/"
+        };
+        if !self.enabled || !line.contains_any_byte(changing) {
             return line;
         }
         let kept = if keep_indent_tabs {
@@ -187,18 +193,23 @@ fn to_spaces_stateful(
                 .iter()
                 .take_while(|&&byte| is_plain_byte(byte))
                 .count();
-            let holds_text = bytes[index..index + run].iter().any(|&byte| byte != b' ');
-            if holds_text {
-                at_indent = false;
-            }
-            if bytes[index..index + run]
-                .iter()
-                .any(|&byte| !matches!(byte, b' ' | b'{' | b'}'))
-            {
-                braces_lead = false;
-            }
-            if holds_text && !in_block_comment && !in_line_comment {
-                code_on_line = true;
+            let segment = &bytes[index..index + run];
+            // Past a line's start the flags it reads have settled.
+            if at_indent || braces_lead || !code_on_line {
+                let holds_text = segment.iter().any(|&byte| byte != b' ');
+                if holds_text {
+                    at_indent = false;
+                }
+                if braces_lead
+                    && segment
+                        .iter()
+                        .any(|&byte| !matches!(byte, b' ' | b'{' | b'}'))
+                {
+                    braces_lead = false;
+                }
+                if holds_text && !in_block_comment && !in_line_comment {
+                    code_on_line = true;
+                }
             }
             index += run;
             column += run;

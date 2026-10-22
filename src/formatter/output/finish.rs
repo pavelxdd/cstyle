@@ -306,6 +306,7 @@ impl FormatEngine<'_> {
                 .frame_stack
                 .mark_delimiter_line_output_indent(output_line_index, output_indent);
             let output_code = self.output.code_trimmed_of(output_line);
+            let output_start = output_code.trimmed_start();
             let line_comment_limit = line_comment_split_limit(line);
             let code_before_line_comment = line[..line_comment_limit].trimmed_end();
             // A `#` in a literal is no directive.
@@ -318,12 +319,11 @@ impl FormatEngine<'_> {
                         .any(|token| matches!(token, Token::Preprocessor(_)))
                 });
             let embedded_preprocessor = holds_directive
-                && (has_hash_outside_literals(output_code)
-                    && !output_code.trimmed_start().starts_with('#')
+                && (has_hash_outside_literals(output_code) && !output_start.starts_with('#')
                     || (line_comment_limit < line.len() || line.trimmed_end().ends_with(':'))
                         && has_hash_outside_literals(code_before_line_comment)
                         && !code_before_line_comment.trimmed_start().starts_with('#'));
-            if output_code.trimmed_start().starts_with("return ")
+            if output_start.starts_with("return ")
                 && holds_directive
                 && has_hash_outside_literals(output_code)
                 && !output_code.ends_with(';')
@@ -353,7 +353,7 @@ impl FormatEngine<'_> {
                     &mut self.layout.continuation_indent.logical_chain_indent_spaces,
                 );
             }
-            if output_code.trimmed_start().starts_with("else,") {
+            if output_start.starts_with("else,") {
                 self.layout.continuation_indent.next_line_indent = None;
                 self.layout.continuation_indent.next_line_indent_spaces = Some(0);
                 self.layout.nesting.clear_continuation_indents();
@@ -362,7 +362,7 @@ impl FormatEngine<'_> {
                     &mut self.layout.continuation_indent.logical_chain_indent_spaces,
                 );
             }
-            if output_code.trimmed_start().starts_with("#define") && !output_code.ends_with('\\') {
+            if output_start.starts_with("#define") && !output_code.ends_with('\\') {
                 self.layout.continuation_indent.next_line_indent = None;
                 self.layout.continuation_indent.next_line_indent_spaces = None;
                 self.layout.nesting.clear_continuation_indents();
@@ -371,7 +371,7 @@ impl FormatEngine<'_> {
                     &mut self.layout.continuation_indent.logical_chain_indent_spaces,
                 );
             }
-            if preprocessor_directive(output_code.trimmed_start()) == Some("endif")
+            if preprocessor_directive(output_start) == Some("endif")
                 && let Some(previous) = self.output[..output_line_index]
                     .iter()
                     .rev()
@@ -383,12 +383,12 @@ impl FormatEngine<'_> {
                 self.layout.continuation_indent.next_line_indent_spaces =
                     Some(leading_visual_width(previous, self.options.tab_width));
             }
-            if output_code.trimmed() == "?" {
+            if output_start == "?" {
                 self.layout.continuation_indent.next_line_indent = None;
                 self.layout.continuation_indent.next_line_indent_spaces = Some(output_indent);
                 self.layout.nesting.clear_continuation_indents();
             }
-            if output_code.trimmed() == "catch"
+            if output_start == "catch"
                 && self.output[..output_line_index]
                     .iter()
                     .rev()

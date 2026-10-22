@@ -2261,9 +2261,6 @@ impl FormatEngine<'_> {
         if trimmed.is_empty() || trimmed.starts_with_any(b"#(){}") {
             return None;
         }
-        if self.line_opens_statement_level_lambda(line) {
-            return None;
-        }
         // Most lines follow none that leaves a paren open before a `,`;
         // several layouts ask of the same output.
         let key = (
@@ -2282,7 +2279,7 @@ impl FormatEngine<'_> {
                 open
             }
         };
-        if !open_before_comma {
+        if !open_before_comma || self.line_opens_statement_level_lambda(line) {
             return None;
         }
         let previous = self.output.last_non_empty_scoped()?;

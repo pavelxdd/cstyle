@@ -2456,12 +2456,13 @@ pub(crate) fn min_conditional_indent_spaces(options: &FormatOptions) -> usize {
 pub(crate) fn splits_aggregate_declaration_name(line: &str) -> bool {
     // A comment leading the type leaves the declaration it leads.
     let line = after_leading_comments(line);
-    if line.trimmed_start().starts_with_any(b"/*")
-        || ["//", "/*", "*/"]
-            .iter()
-            .any(|marker| line.contains(marker))
-        || line.ends_with_any(b";{}=")
+    if line.ends_with_any(b";{}=")
         || line.contains_any_byte(b"([)],")
+        || line.trimmed_start().starts_with_any(b"/*")
+        || line.as_bytes().contains(&b'/')
+            && ["//", "/*", "*/"]
+                .iter()
+                .any(|marker| line.contains(marker))
     {
         return false;
     }
