@@ -21940,6 +21940,14 @@ fn an_assignment_operator_body_breaks_its_brace_as_any_function_body() {
 }
 
 #[test]
+fn a_one_line_call_operator_body_breaks_whatever_its_parameter_count() {
+    // A parameter list before a body reads as no cast to a literal.
+    let input = "struct Item {\n    int operator()(int n) { return n; }\n    int operator()() { return 1; }\n};\n";
+    let expected = "struct Item {\n    int operator()(int n)\n    {\n        return n;\n    }\n    int operator()()\n    {\n        return 1;\n    }\n};\n";
+    check(input, &["--style=kr"], expected);
+}
+
+#[test]
 fn arguments_after_a_block_spanning_or_leading_rows_in_a_call_stand_at_the_statement() {
     // As after a lambda's body, the rest of the statement stands at it; a
     // block run in on a row of arguments leaves them their column.

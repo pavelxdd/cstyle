@@ -362,6 +362,25 @@ fn one_line_parameterized_lambda_in_braced_initializer_breaks_body() {
     );
 }
 
+// A parameter list before a body reads as no cast to a literal: one parameter
+// breaks the body like none or several.
+#[test]
+fn one_line_lambda_argument_breaks_its_body_whatever_its_parameter_count() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=kr".to_owned()]).expect("valid options");
+
+    for parameters in ["()", "(int n)", "(Item item)", "(int)", "(int n, int m)"] {
+        assert_eq!(
+            format_exact(
+                &format!("void f() {{\n    x.on([]{parameters} {{ return n; }});\n}}\n"),
+                &options,
+            ),
+            format!("void f()\n{{\n    x.on([]{parameters} {{\n        return n;\n    }});\n}}\n"),
+            "{parameters}"
+        );
+    }
+}
+
 #[test]
 fn top_level_lambda_assignment_does_not_indent_brace_vtk() {
     let mut options = FormatOptions::default();
