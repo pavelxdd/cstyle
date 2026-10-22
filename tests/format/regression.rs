@@ -17011,6 +17011,14 @@ fn a_definition_among_conditionals_leaves_an_operator_continuation_going_on() {
 }
 
 #[test]
+fn pad_oper_keeps_a_dereference_of_a_parenthesized_operand_attached_inside_parentheses() {
+    // A star after an operator dereferences: it stays on its operand in
+    // parentheses as outside them.
+    let input = "void f()\n{\n    x = a + *(p - 1);\n    x = (a + *(p - 1));\n    call(a + *(p - 1));\n    if (a + *(p - 1)) go();\n}\n";
+    check(input, &["-p"], input);
+}
+
+#[test]
 fn pad_oper_pads_a_binary_xor_after_a_closing_paren_as_after_a_name() {
     check(
         "void f()\n{\n    x = a^b;\n    x = (a | b)^c;\n    x = f(a)^b;\n}\n",
