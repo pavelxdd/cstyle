@@ -3447,6 +3447,21 @@ fn a_body_run_in_after_else_or_do_continues_its_arguments_a_level_in_as_after_an
 }
 
 #[test]
+fn break_blocks_pads_a_header_after_a_comment_led_code_line_as_after_its_code() {
+    // Comments around a statement leave it code: the blank goes before the
+    // header, not before the statement.
+    for lead in ["", "/* note */ "] {
+        let input = format!(
+            "void f()\n{{\n    x();\n    {lead}result=0; /* note */\n    if (y) z();\n    if (ready)\n        value=0;\n    else\n        {lead}result=0; /* note */\n    if (y) z();\n}}\n"
+        );
+        let expected = format!(
+            "void f()\n{{\n    x();\n    {lead}result=0; /* note */\n\n    if (y) z();\n\n    if (ready)\n        value=0;\n    else\n        {lead}result=0; /* note */\n\n    if (y) z();\n}}\n"
+        );
+        check(&input, &["--style=kr", "--break-blocks"], &expected);
+    }
+}
+
+#[test]
 fn break_all_blocks_keeps_a_one_line_statement_body_with_its_else() {
     let input = "void f()\n{   for (i = 0; i < n; i++)\n    {   if (type == TCP)\n            a();\n        else\n            b(); }\n\n    x = 1;\n\n    if (c)\n        d();\n    else\n        e(); }\n";
     check(input, &["--style=pico", "--break-blocks=all"], input);
