@@ -3407,6 +3407,35 @@ fn break_blocks_add_no_blank_between_a_comment_and_its_closing_header() {
 }
 
 #[test]
+fn break_blocks_keeps_comments_after_a_block_with_its_closing_header_across_empty_lines() {
+    // A header's block goes on past comments and empty lines to its closing
+    // header; a statement body ends at its `;`.
+    let input = "void f()\n{\n    if (a) {\n        b();\n    }\n    /* otherwise */\n\n    else {\n        c();\n    }\n\n    try {\n        b();\n    }\n    // failed\n\n    /* more */\n\n    catch (...) {\n        c();\n    }\n\n    if (a) {\n        b();\n    }\n    /* first\n       second */\n\n    else {\n        c();\n    }\n}\n";
+    check(input, &["--style=kr", "--break-blocks"], input);
+    let input =
+        "void f()\n{\n    if (a)\n        b();\n    /* otherwise */\n\n    else\n        c();\n}\n";
+    check(
+        input,
+        &["--style=kr", "--break-blocks"],
+        "void f()\n{\n    if (a)\n        b();\n\n    /* otherwise */\n\n    else\n        c();\n}\n",
+    );
+}
+
+#[test]
+fn break_blocks_ends_a_header_at_a_directive_after_its_block() {
+    let input = "void f()\n{\n    x();\n#ifdef A\n\n    if (a) {\n        b();\n    }\n\n#endif\n    /* note */\n\n    if (c) {\n        d();\n    }\n}\n";
+    check(input, &["--style=kr", "--break-blocks"], input);
+}
+
+#[test]
+fn break_blocks_keeps_a_row_of_comments_after_a_block_with_its_closing_header() {
+    // Any number of comments on the row hold to the closing header as one
+    // does.
+    let input = "void f()\n{\n    if (a) {\n        b();\n    }\n    /* first */ /* second */\n\n    else {\n        c();\n    }\n}\n";
+    check(input, &["--style=kr", "--break-blocks"], input);
+}
+
+#[test]
 fn break_all_blocks_keeps_a_one_line_statement_body_with_its_else() {
     let input = "void f()\n{   for (i = 0; i < n; i++)\n    {   if (type == TCP)\n            a();\n        else\n            b(); }\n\n    x = 1;\n\n    if (c)\n        d();\n    else\n        e(); }\n";
     check(input, &["--style=pico", "--break-blocks=all"], input);

@@ -907,9 +907,11 @@ impl FormatEngine<'_> {
     }
 
     fn following_break_blocks_header(&self, tokens: &[Token], start: usize) -> Option<String> {
-        // Within a switch the lookahead runs past empty lines.
+        // Within a switch the lookahead runs past empty lines, as it does
+        // while a header's block just closed.
         let stop_on_blank = self.block_spacing.active_header.is_none()
-            && self.layout.line_adjuster.switch_depth() == 0;
+            && self.layout.line_adjuster.switch_depth() == 0
+            && !self.follows_header_block_close(start);
         let mut newline_run = 0usize;
         for token in &tokens[start.min(tokens.len())..] {
             match token {
@@ -926,6 +928,26 @@ impl FormatEngine<'_> {
             }
         }
         None
+    }
+
+    /// Whether the code before `index` is the closer of a header's block,
+    /// with no directive between them.
+    fn follows_header_block_close(&self, index: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        self.tree
+            .previous_code_token(index)
+            .filter(|&close| {
+                matches!(tokens[close], Token::Symbol('}'))
+                    && !self.tree.has_directive_in(close..index)
+            })
+            .and_then(|close| self.tree.groups.closed_at(close))
+            .and_then(|group| self.tree.blocks.owner(group))
+            .is_some_and(|owner| {
+                matches!(&tokens[owner], Token::Word(word)
+                    if !matches!(word.as_str(), "case" | "default")
+                        && (is_break_blocks_opening_header(self.options, word)
+                            || is_break_blocks_closing_header(word)))
+            })
     }
 
     /// Whether the directive lines just output follow a comment-only
