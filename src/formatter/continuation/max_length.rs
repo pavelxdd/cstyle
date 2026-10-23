@@ -308,8 +308,12 @@ impl FormatEngine<'_> {
                     .or_else(|| max_length_inline_access_body_indent_extra(self.options, line))
             })
             .flatten();
+        // The rest of a line split after a statement is the next statement.
+        let head_ends_statement = self.split_ends_statement(&line[..line.len() - split.tail.len()]);
         if ends_statement_before_comment(&split.head) {
             next_indent = indent;
+        } else if head_ends_statement {
+            next_indent = ContinuationIndent::Spaces(block_spaces);
         }
         // A `goto` split from its label continues one level in.
         if split
@@ -320,7 +324,9 @@ impl FormatEngine<'_> {
         {
             next_indent = ContinuationIndent::Spaces(base_indent_width + self.options.indent_width);
         }
-        if let Some(extra) = inline_body_indent_extra {
+        if let Some(extra) = inline_body_indent_extra
+            && !head_ends_statement
+        {
             next_indent =
                 ContinuationIndent::Spaces(next_indent.columns(self.options.indent_width) + extra);
         }
@@ -397,6 +403,9 @@ impl FormatEngine<'_> {
                 && following_indent.columns(self.options.indent_width) < floor
             {
                 following_indent = ContinuationIndent::Spaces(floor);
+            }
+            if self.split_ends_statement(&line[..line.len() - split.tail.len()]) {
+                following_indent = ContinuationIndent::Spaces(block_spaces);
             }
             self.set_split_part_tokens(source_tokens, line, tail, &mut part_scan);
             if let Some(spaces) = self.split_part_indent(tail) {
@@ -557,6 +566,25 @@ fn ends_statement_before_comment(head: &str) -> bool {
 }
 
 impl FormatEngine<'_> {
+    /// Whether the text of a line before a split ends with a `;` outside
+    /// parens.
+    fn split_ends_statement(&self, before: &str) -> bool {
+        if !before.trimmed_end().ends_with(';') {
+            return false;
+        }
+        let groups = &self.tree.groups;
+        let open_at_start = self.output.pending_tokens().map_or(0, |span| {
+            groups.enclosing(span.first).map_or(0, |group| {
+                groups
+                    .ancestors(group)
+                    .take_while(|&group| groups.get(group).delimiter != Delimiter::Brace)
+                    .count()
+            })
+        });
+        let (closers, opens) = line_paren_imbalance(before);
+        open_at_start + opens.len() == closers
+    }
+
     /// Rows of an initializer, and of the braces astyle takes for one,
     /// stay whole.
     fn initializer_row(&self) -> bool {

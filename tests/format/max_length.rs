@@ -3264,3 +3264,41 @@ fn max_code_length_pico_keeps_a_run_in_do_block_row_at_its_column_when_its_closi
         ),
     );
 }
+
+#[test]
+fn max_code_length_starts_a_statement_split_off_after_a_semicolon_at_its_level() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=kr".to_owned(),
+            "--keep-one-line-statements".to_owned(),
+            "--max-code-length=60".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "void f()\n{\n    result = helper(first, second); value = compute(first, second);\n    result = helper(first, second); return compute(first, second);\n    if (ready) result = helper(first); value = compute(first, second);\n    result = helper(first, second); if (ready) value = compute(first);\n    for (index = 0, total = 0; index < count; index++, total += index)\n        helper(index);\n}\n",
+        &options,
+        "void f()\n{\n    result = helper(first, second);\n    value = compute(first, second);\n    result = helper(first, second);\n    return compute(first, second);\n    if (ready) result = helper(first);\n    value = compute(first, second);\n    result = helper(first, second);\n    if (ready) value = compute(first);\n    for (index = 0, total = 0; index < count;\n            index++, total += index)\n        helper(index);\n}\n",
+    );
+}
+
+#[test]
+fn max_code_length_starts_a_statement_split_off_a_body_or_label_line_where_statements_stand() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=kr".to_owned(),
+            "--keep-one-line-statements".to_owned(),
+            "--max-code-length=60".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "void f()\n{\n    x();\n    result = helper(first, second); value = compute(first, second); other = third(first);\n    if (ready)\n        result = helper(first, second); value = compute(first, second);\n    while (ready) {\n        result = helper(first, second); value = compute(first, second);\n    }\n    switch (kind) {\n    case 1: result = helper(first, second); value = compute(first, second);\n        break;\n    case 2: {\n        result = helper(first, second); value = compute(first, second);\n    }\n    }\n    for (index = 0; index < count; index++) result = helper(first, second); value = compute(first, second);\n}\n",
+        &options,
+        "void f()\n{\n    x();\n    result = helper(first, second);\n    value = compute(first, second); other = third(first);\n    if (ready)\n        result = helper(first, second);\n    value = compute(first, second);\n    while (ready) {\n        result = helper(first, second);\n        value = compute(first, second);\n    }\n    switch (kind) {\n    case 1: result = helper(first, second);\n        value = compute(first, second);\n        break;\n    case 2: {\n        result = helper(first, second);\n        value = compute(first, second);\n    }\n    }\n    for (index = 0; index < count;\n            index++) result = helper(first, second);\n    value = compute(first, second);\n}\n",
+    );
+}
