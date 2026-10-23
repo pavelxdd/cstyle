@@ -1523,3 +1523,11 @@ fn conditionals_in_an_interface_without_ivars_stand_with_its_declarations() {
     let with_ivars = "@interface Item : NSObject\n{\n    int value;\n}\n#ifdef FEATURE\n@property (nonatomic) int value;\n#endif\n- (void)update:(int)value;\n@end\n";
     assert_eq!(format_exact(with_ivars, &options), with_ivars);
 }
+
+#[test]
+fn objc_message_continuation_aligns_under_its_first_selector_after_return_too() {
+    // A returned message's rows stand under its first selector, as they do
+    // after an assignment, an operator or in a call.
+    let source = "void f(void) {\n    result = [helper alpha:a\n                     beta:b];\n    return [helper alpha:a\n                   beta:b];\n    return 1 + [helper alpha:a\n                       beta:b];\n    call([helper alpha:a\n                 beta:b]);\n}\n";
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
+}
