@@ -23982,3 +23982,13 @@ fn a_lambda_parameter_row_opening_the_body_drops_the_stack_at_any_scope() {
     check(input, &["--style=java"], expected);
     check(expected, &["--style=java"], expected);
 }
+
+#[test]
+fn a_function_try_member_opening_its_class_stands_with_the_members() {
+    // The brace a trailing `try` opens on the next row leaves the member at
+    // the class body's column, as any member after the class brace stands.
+    let input = "class Item {\n    void run() try {\n        go();\n    } catch (...) {\n        stop();\n    }\n    void other() {\n        go();\n    }\n};\n";
+    let expected = "class Item\n    {\n        void run() try\n            {\n            go();\n            }\n        catch (...)\n            {\n            stop();\n            }\n        void other()\n            {\n            go();\n            }\n    };\n";
+    check(input, &["--style=whitesmith"], expected);
+    check(expected, &["--style=whitesmith"], expected);
+}

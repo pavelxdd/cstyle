@@ -365,18 +365,28 @@ impl FormatEngine<'_> {
         line_kind: LineKind,
     ) -> Option<usize> {
         let line_start = line.trimmed_start();
+        // A brace style may open the body of a header the line ends with, as
+        // `try`, before the line is laid out; that header continues nothing.
+        let opens_header_body = self.layout.frame_stack.active_brace().is_some_and(|frame| {
+            frame.header.is_some()
+                && frame
+                    .open_token
+                    .zip(self.output.pending_tokens())
+                    .is_some_and(|(open, span)| open > span.first)
+        });
         if line_kind != LineKind::Normal
             || line_start.starts_with_any(b"{}#")
             || ["do", "if", "for", "while", "switch"]
                 .iter()
                 .any(|word| starts_header_word(line_start, word))
             // A list in a header's parens continues the header.
-            || self.layout.frame_stack.active_brace().is_some_and(|frame| {
-                frame.header.is_some()
-                    || frame
-                        .open_token
-                        .is_some_and(|open| self.token_in_header_parens(open))
-            })
+            || !opens_header_body
+                && self.layout.frame_stack.active_brace().is_some_and(|frame| {
+                    frame.header.is_some()
+                        || frame
+                            .open_token
+                            .is_some_and(|open| self.token_in_header_parens(open))
+                })
         {
             return None;
         }
