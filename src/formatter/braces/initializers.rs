@@ -1402,6 +1402,19 @@ impl FormatEngine<'_> {
             .map(|frame| frame.body_column)
     }
 
+    /// The column of the rows of the list the line is in, when they stand a
+    /// level past the column the list closes at rather than past its brace.
+    pub(crate) fn current_leveled_list_row_column(&self) -> Option<usize> {
+        self.inline_array
+            .frames
+            .last()
+            .filter(|frame| {
+                frame.depth == self.layout.nesting.brace_header_stack.len()
+                    && frame.body_column == frame.brace_column + self.options.indent_width
+            })
+            .map(|frame| frame.body_column)
+    }
+
     /// The column of the list the pending line continues; lists its own
     /// braces open do not hold it.
     pub(crate) fn line_start_inline_array_column(&self) -> Option<usize> {

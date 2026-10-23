@@ -1724,10 +1724,15 @@ impl FormatEngine<'_> {
                 .or(user_label_comment_indent)
                 .or(lambda_parameter_comment_indent)
                 .or(header_condition_row_indent)
+                // Indenting after parens sets the comment at the block's
+                // continuation, or among the rows of a list a level in.
                 .or_else(|| {
                     self.options
                         .indent_after_parens
-                        .then_some(block_comment_continuation_indent)
+                        .then(|| {
+                            self.current_leveled_list_row_column()
+                                .or(block_comment_continuation_indent)
+                        })
                         .flatten()
                 })
                 .or_else(|| {

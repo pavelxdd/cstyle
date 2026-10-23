@@ -23076,3 +23076,18 @@ fn ternary_row_after_a_directive_and_a_comment_led_row_keeps_its_column() {
         "void f()\n{\n#ifdef FEATURE\n    result = ready ? first\n#endif\n             /* note */ : other ? second\n             : third;\n}\n",
     );
 }
+
+#[test]
+fn comment_led_first_row_of_a_compound_literal_stands_with_its_rows_when_parens_indent() {
+    let input = "void f()\n{\n    x = (struct Item){\n        /* note */ .value = 1,\n        .other = 2\n    };\n}\n";
+    check(
+        input,
+        &["--style=kr", "--indent-after-parens"],
+        "void f()\n{\n    x = (struct Item) {\n        /* note */ .value = 1,\n        .other = 2\n    };\n}\n",
+    );
+    check(
+        input,
+        &["--style=lisp", "--indent-after-parens"],
+        "void f() {\n    x = (struct Item) {\n        /* note */ .value = 1,\n        .other = 2 }; }\n",
+    );
+}
