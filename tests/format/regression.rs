@@ -23100,3 +23100,12 @@ fn comment_led_row_of_an_aligned_list_stands_with_its_rows_when_parens_indent() 
         "static double values[] = { 1.5, 2.5,\n        /* note */ 3.5, 4.5\n    };\n",
     );
 }
+
+#[test]
+fn standalone_comment_in_an_aligned_list_stands_at_its_rows_when_parens_indent() {
+    check(
+        "static double values[] = { 1.5, 2.5,\n#ifdef FEATURE\n\t\t3.5\n\t\t/* note */\n#else\n\t\t4.5\n#endif\n\t\t};\n",
+        &["--style=kr", "--indent-after-parens"],
+        "static double values[] = { 1.5, 2.5,\n#ifdef FEATURE\n        3.5\n        /* note */\n#else\n        4.5\n#endif\n    };\n",
+    );
+}

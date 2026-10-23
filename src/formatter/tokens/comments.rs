@@ -2582,14 +2582,17 @@ impl FormatEngine<'_> {
             })
     }
 
-    /// The column of the initializer row the comment at `index` leads, as
-    /// the row's code would stand without it.
+    /// The column of the initializer row the comment at `index` leads or
+    /// stands before, as the row's code would stand without it.
     fn comment_led_initializer_row_indent(&self, index: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
         let first = next_code_token(tokens, index.checked_add(1)?)?;
-        if tokens[index + 1..first]
-            .iter()
-            .any(|token| matches!(token, Token::Newline))
+        // A comment alone on its line stands at the row after it, unless
+        // the list closes there.
+        if matches!(tokens[first], Token::Symbol('}'))
+            && tokens[index + 1..first]
+                .iter()
+                .any(|token| matches!(token, Token::Newline))
         {
             return None;
         }
