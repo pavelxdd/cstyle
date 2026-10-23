@@ -4725,18 +4725,23 @@ impl FormatEngine<'_> {
 
     fn return_value_indent(&self, first: usize) -> Option<usize> {
         let keyword = self.tree.previous_code_token(first)?;
-        // A list's brace a style sets at its statement stands as one after
-        // an assignment's `=`.
+        // A list's brace stands as one after an assignment's `=`: at its
+        // statement, or a level in where the style indents it.
+        let opens_list = matches!(self.tree.tokens[first], Token::Symbol('{'));
         if !matches!(&self.tree.tokens[keyword], Token::Word(word) if word == "return")
-            || matches!(self.tree.tokens[first], Token::Symbol('{'))
-                && !self.should_indent_brace_line(BraceType::Array)
+            || opens_list && !self.should_indent_brace_line(BraceType::Array)
         {
             return None;
         }
+        let levels = if opens_list {
+            1
+        } else {
+            self.options.continuation_indent
+        };
         let line = self.line_led_by(keyword)?;
         (self.output.line_tokens(line)?.last == keyword).then(|| {
             self.output.lead_width(line, self.options.tab_width)
-                + self.options.continuation_indent * self.options.indent_width
+                + levels * self.options.indent_width
                 + self.case_unindent_spaces()
         })
     }

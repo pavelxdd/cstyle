@@ -24077,3 +24077,24 @@ fn an_empty_operator_body_keeps_the_comment_after_it() {
         check(expected, &[&style], expected);
     }
 }
+
+#[test]
+fn a_list_brace_after_a_return_ending_its_line_stands_a_level_in_whatever_the_continuation() {
+    // The brace a style indents stands a level past the `return` as past an
+    // assignment's `=`; the value's other rows take the continuation indent.
+    let input = "int g()\n{\n    return\n        value + 1;\n}\nPair h()\n{\n    value =\n    {\n        first,\n    };\n    return\n    {\n        first,\n    };\n}\n";
+    for (style, expected) in [
+        (
+            "whitesmith",
+            "int g()\n    {\n    return\n            value + 1;\n    }\nPair h()\n    {\n    value =\n        {\n        first,\n        };\n    return\n        {\n        first,\n        };\n    }\n",
+        ),
+        (
+            "vtk",
+            "int g()\n{\n    return\n            value + 1;\n}\nPair h()\n{\n    value =\n        {\n        first,\n        };\n    return\n        {\n        first,\n        };\n}\n",
+        ),
+    ] {
+        let args = [&format!("--style={style}")[..], "--indent-continuation=2"];
+        check(input, &args, expected);
+        check(expected, &args, expected);
+    }
+}
