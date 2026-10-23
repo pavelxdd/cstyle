@@ -4195,6 +4195,34 @@ impl FormatEngine<'_> {
             && matches!(next, Some(Token::Comment(CommentKind::Block, comment)) if comment.contains('\n'))
     }
 
+    /// Whether attaching inline functions attaches the brace of type
+    /// `brace_type` opening in a class; run-in braces leave them broken.
+    fn attaches_inline_brace(&self, brace_type: BraceType) -> bool {
+        self.options.attach_inline
+            && !matches!(
+                self.options.brace_style,
+                BraceStyle::Horstmann | BraceStyle::Pico
+            )
+            && matches!(
+                brace_type,
+                BraceType::Command
+                    | BraceType::NonStatement
+                    | BraceType::Definition
+                    | BraceType::Initializer
+            )
+            && self
+                .layout
+                .nesting
+                .brace_type_stack
+                .iter()
+                .any(|enclosing| {
+                    matches!(
+                        enclosing,
+                        BraceType::Class | BraceType::Struct | BraceType::Union
+                    )
+                })
+    }
+
     pub(crate) fn style_attaches_opening_brace(
         &self,
         brace_type: BraceType,
@@ -4203,6 +4231,7 @@ impl FormatEngine<'_> {
         if self.options.break_one_line_blocks
             && self.options.brace_style == BraceStyle::OneTrueBrace
             && brace_type != BraceType::Command
+            && !self.attaches_inline_brace(brace_type)
             && !matches!(next, None | Some(Token::Newline))
             // A comment ending the line holds no code of the block.
             && !self.comments.next_comment_ends_line
@@ -4280,31 +4309,7 @@ impl FormatEngine<'_> {
         {
             return !self.token_input.token_begins_source_line;
         }
-        // Run-in braces leave inline functions broken.
-        if self.options.attach_inline
-            && !matches!(
-                self.options.brace_style,
-                BraceStyle::Horstmann | BraceStyle::Pico
-            )
-            && matches!(
-                brace_type,
-                BraceType::Command
-                    | BraceType::NonStatement
-                    | BraceType::Definition
-                    | BraceType::Initializer
-            )
-            && self
-                .layout
-                .nesting
-                .brace_type_stack
-                .iter()
-                .any(|enclosing| {
-                    matches!(
-                        enclosing,
-                        BraceType::Class | BraceType::Struct | BraceType::Union
-                    )
-                })
-        {
+        if self.attaches_inline_brace(brace_type) {
             return true;
         }
         // A compound literal's brace nested in an aggregate keeps its place

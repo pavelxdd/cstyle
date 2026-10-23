@@ -23889,3 +23889,15 @@ fn a_constructor_colon_after_qualifiers_leads_its_initializers_at_a_level() {
     check(input, &["--style=kr", "--indent=tab=4"], expected);
     check(expected, &["--style=kr", "--indent=tab=4"], expected);
 }
+
+#[test]
+fn attach_inlines_keeps_the_brace_of_an_expanded_one_line_member_body() {
+    // A member body kept on one line in the source attaches as one already
+    // broken does, at file scope and in a local class.
+    let input = "struct Item {\n    int value;\n    void go() { value++; }\n};\nvoid f()\n{\n    struct Local {\n        void go() { run(); }\n    };\n}\n";
+    let expected = "struct Item {\n    int value;\n    void go() {\n        value++;\n    }\n};\nvoid f()\n{\n    struct Local {\n        void go() {\n            run();\n        }\n    };\n}\n";
+    for style in ["--style=kr", "--style=linux", "--style=stroustrup"] {
+        check(input, &[style, "--attach-inlines"], expected);
+        check(expected, &[style, "--attach-inlines"], expected);
+    }
+}
