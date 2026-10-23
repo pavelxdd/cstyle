@@ -1696,13 +1696,25 @@ impl FormatEngine<'_> {
             && let Some(previous) = self.output.last()
             && previous.trimmed_end().ends_with('{')
         {
-            if previous.trimmed() == "{"
-                && self
-                    .layout
-                    .frame_stack
-                    .active_brace()
-                    .is_some_and(|frame| self.should_indent_brace_line(frame.brace_type))
-            {
+            // The list holding the row sets it, not a brace the row opens;
+            // VTK sets a list's brace flush at a declaration scope.
+            let list = if self.pending_row_opens_innermost_brace() {
+                self.layout.frame_stack.enclosing_brace()
+            } else {
+                self.layout.frame_stack.active_brace()
+            };
+            let list_brace_indented = list.is_some_and(|frame| {
+                match frame
+                    .open_token
+                    .and_then(|open| self.tree.groups.opened_at(open))
+                {
+                    Some(group) if self.options.brace_style == BraceStyle::Vtk => {
+                        !self.vtk_flush_scope(group)
+                    }
+                    _ => self.should_indent_brace_line(frame.brace_type),
+                }
+            });
+            if previous.trimmed() == "{" && list_brace_indented {
                 return Some(
                     leading_visual_width(previous, self.options.tab_width)
                         + self.case_unindent_spaces(),

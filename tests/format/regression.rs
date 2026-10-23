@@ -24142,3 +24142,13 @@ fn vtk_keeps_a_member_lambda_brace_flush_with_its_declaration() {
     check(input, &["--style=vtk"], expected);
     check(expected, &["--style=vtk"], expected);
 }
+
+#[test]
+fn a_lambda_element_of_a_list_after_a_declaration_stands_with_the_elements() {
+    // A capture list leading an element designates nothing: the row stands
+    // at the elements, as the list's first line would set it.
+    let input = "int count;\nItem items[] = {\n    [] {\n        go();\n    },\n    [&](int v) {\n        use(v);\n    },\n};\n";
+    let expected = "int count;\nItem items[] =\n{\n    [] {\n        go();\n        },\n    [&](int v) {\n        use(v);\n        },\n};\n";
+    check(input, &["--style=vtk"], expected);
+    check(expected, &["--style=vtk"], expected);
+}
