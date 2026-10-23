@@ -23962,3 +23962,23 @@ fn directives_between_constructor_initializers_keep_the_member_column() {
         check(expected, args, expected);
     }
 }
+
+#[test]
+fn a_split_lambda_parameter_row_opening_the_body_stands_at_the_statement() {
+    // The code length splits the parameters as the source would, and the
+    // row opening the body stands where it would then.
+    let input = "void f()\n{\n    std::sort(items.begin(), items.end(), [](const Item &a, const Item &b) {\n        return a.value < b.value;\n    });\n}\n";
+    let expected = "void f()\n{\n    std::sort(items.begin(), items.end(), [](const Item &a,\n    const Item &b) {\n        return a.value < b.value;\n    });\n}\n";
+    check(input, &["--style=kr", "--max-code-length=60"], expected);
+    check(expected, &["--style=kr", "--max-code-length=60"], expected);
+}
+
+#[test]
+fn a_lambda_parameter_row_opening_the_body_drops_the_stack_at_any_scope() {
+    // Declarations at file, namespace, or class scope stand the row at the
+    // statement as statements in a body do.
+    let input = "class Item {\n    Callback run = make(alpha, [](int first,\n                                  int value) {\n        return value;\n    });\n};\nnamespace space {\nCallback run = make(alpha, [](int first,\n                              int value) {\n    return value;\n});\n}\n";
+    let expected = "class Item {\n    Callback run = make(alpha, [](int first,\n    int value) {\n        return value;\n    });\n};\nnamespace space {\nCallback run = make(alpha, [](int first,\nint value) {\n    return value;\n});\n}\n";
+    check(input, &["--style=java"], expected);
+    check(expected, &["--style=java"], expected);
+}

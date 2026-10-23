@@ -2211,10 +2211,22 @@ impl FormatEngine<'_> {
 
     /// Whether `line` opens a lambda's body outside a message: the row
     /// stands at the statement however far the parens before it reach.
+    /// Whether the line being laid out opens a lambda's body that ends what
+    /// its statement continued: anywhere but among a constructor's
+    /// initializers, whose rows go on past it.
+    pub(crate) fn pending_line_opens_statement_lambda_body(&self) -> bool {
+        self.pending_line_opens_lambda_body()
+            && self
+                .layout
+                .frame_stack
+                .active_constructor_initializer()
+                .is_none()
+    }
+
     pub(crate) fn line_opens_statement_level_lambda(&self, line: &LineView<'_>) -> bool {
         // A row of a lambda's parameters may open its body too.
         (line.opens_attachable_lambda_block(self.options)
-            || line.trimmed_end().ends_with('{') && self.pending_line_opens_lambda_body())
+            || line.trimmed_end().ends_with('{') && self.pending_line_opens_statement_lambda_body())
             && !self.pending_line_in_message()
             || self.line_opens_block_argument(line)
     }

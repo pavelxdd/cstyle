@@ -448,6 +448,17 @@ impl FormatEngine<'_> {
         if !part.trimmed_start().starts_with(&*token_text(token)) {
             return None;
         }
+        // A part opening a lambda's body ends what the statement continued.
+        if part.trimmed_end().ends_with('{') && self.pending_line_opens_statement_lambda_body() {
+            return Some(
+                (self
+                    .layout
+                    .indentation
+                    .line_indent(LineKind::Normal, self.options)
+                    + self.case_body_indent_extra(LineKind::Normal))
+                    * self.options.indent_width,
+            );
+        }
         self.split_part_stack_indent(first)
             .or_else(|| self.tree_anchor_indent(first, part))
     }
