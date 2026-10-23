@@ -23817,3 +23817,27 @@ fn a_constructor_colon_leading_its_line_registers_the_first_initializer() {
         check(expected, args, expected);
     }
 }
+
+#[test]
+fn a_member_macro_call_after_an_indented_closing_brace_stands_with_the_members() {
+    // Styles that indent a body's closing brace leave the member after it
+    // at the members' level, a macro call as any other.
+    let input = "struct Item {\n    void f() {\n        call();\n    }\n\n    HELPER(int, visit, (T));\n    HELPER(void, other);\n};\n";
+    for (style, expected) in [
+        (
+            "--style=ratliff",
+            "struct Item {\n    void f() {\n        call();\n        }\n\n    HELPER(int, visit, (T));\n    HELPER(void, other);\n    };\n",
+        ),
+        (
+            "--style=whitesmith",
+            "struct Item\n    {\n    void f()\n        {\n        call();\n        }\n\n    HELPER(int, visit, (T));\n    HELPER(void, other);\n    };\n",
+        ),
+        (
+            "--style=banner",
+            "struct Item {\n    void f() {\n        call();\n        }\n\n    HELPER(int, visit, (T));\n    HELPER(void, other);\n    };\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}

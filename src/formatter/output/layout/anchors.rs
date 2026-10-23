@@ -5237,13 +5237,6 @@ impl FormatEngine<'_> {
                 })
     }
 
-    /// Whether the line being laid out starts outside every block.
-    pub(crate) fn pending_line_at_file_scope(&self) -> bool {
-        self.output
-            .pending_tokens()
-            .is_some_and(|span| self.tree.groups.enclosing(span.first).is_none())
-    }
-
     /// Whether the line being laid out starts an enum member after a comma.
     pub(crate) fn pending_line_starts_enum_member(&self) -> bool {
         let groups = &self.tree.groups;

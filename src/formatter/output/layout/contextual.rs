@@ -3158,22 +3158,6 @@ impl FormatEngine<'_> {
         // with `;` and no comment.
         let plain = self.plain_statement_line;
         if !plain
-            && layout.line_kind == LineKind::Normal
-            && let Some(previous) = self.output.last_line_outside_comment()
-            && previous.trimmed() == "}"
-            && line
-                .trimmed_start()
-                .split_once('(')
-                .is_some_and(|(word, _)| is_macro_like_word(word.trimmed()))
-            && !self.pending_line_at_file_scope()
-        {
-            layout.exact_indent_spaces = Some(
-                leading_visual_width(previous, self.options.tab_width)
-                    + self.layout.line_adjuster.total_case_unindent_depth()
-                        * self.options.indent_width,
-            );
-        }
-        if !plain
             && !self.options.indent_after_parens
             && layout.line_kind == LineKind::Normal
             && !line_start.starts_with_any(b"#(){}")
