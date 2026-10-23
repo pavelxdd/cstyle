@@ -1108,6 +1108,10 @@ impl FormatEngine<'_> {
         let Some(previous) = self.tree.previous_code_token(body) else {
             return true;
         };
+        // A body follows `else` and `do` themselves.
+        if matches!(header, "else" | "do") {
+            return matches!(&tokens[previous], Token::Word(word) if word == header);
+        }
         match &tokens[previous] {
             Token::Symbol(')') => self
                 .tree

@@ -3486,6 +3486,28 @@ fn a_body_run_in_after_a_case_label_continues_its_arguments_a_level_in_whatever_
 }
 
 #[test]
+fn add_braces_leaves_a_statement_run_in_after_else_or_do_over_rows_unbraced() {
+    // Only a body the header's line holds whole takes braces; a row of a
+    // statement continued from the header's line is no body.
+    let input = "void f()\n{\n    if (ready)\n        x();\n    else return helper(first,\n                       second);\n    do total += helper(first,\n                       second);\n    while (ready);\n    if (ready)\n        x();\n    else value = first\n                 + second;\n}\n";
+    check(
+        input,
+        &["--style=kr", "--add-braces"],
+        "void f()\n{\n    if (ready) {\n        x();\n    } else return helper(first,\n                             second);\n    do total += helper(first,\n                           second);\n    while (ready);\n    if (ready) {\n        x();\n    } else value = first\n                       + second;\n}\n",
+    );
+    check(
+        input,
+        &["--style=kr", "--add-one-line-braces"],
+        "void f()\n{\n    if (ready)\n    { x(); }\n    else return helper(first,\n                           second);\n    do total += helper(first,\n                           second);\n    while (ready);\n    if (ready)\n    { x(); }\n    else value = first\n                     + second;\n}\n",
+    );
+    check(
+        input,
+        &["--style=allman", "--add-braces"],
+        "void f()\n{\n    if (ready)\n    {\n        x();\n    }\n    else return helper(first,\n                           second);\n    do total += helper(first,\n                           second);\n    while (ready);\n    if (ready)\n    {\n        x();\n    }\n    else value = first\n                     + second;\n}\n",
+    );
+}
+
+#[test]
 fn break_all_blocks_keeps_a_one_line_statement_body_with_its_else() {
     let input = "void f()\n{   for (i = 0; i < n; i++)\n    {   if (type == TCP)\n            a();\n        else\n            b(); }\n\n    x = 1;\n\n    if (c)\n        d();\n    else\n        e(); }\n";
     check(input, &["--style=pico", "--break-blocks=all"], input);
