@@ -2175,7 +2175,9 @@ pub(crate) struct InlineArrayState {
     pub(crate) frames: Vec<InlineArrayFrame>,
     pub(crate) current_closed_body_column: Option<(usize, bool)>,
     pub(super) aggregate_braces: Vec<bool>,
-    pub(crate) list_rows: BraceListRows,
+    /// Shared with the snapshots taken at conditionals, which never change
+    /// it.
+    pub(crate) list_rows: std::rc::Rc<BraceListRows>,
     /// The line after the last published one, the lists open where it
     /// starts, and the column of the innermost.
     pub(crate) line_start: (usize, usize, Option<usize>),

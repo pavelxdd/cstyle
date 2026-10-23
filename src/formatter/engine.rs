@@ -758,14 +758,14 @@ impl<'a> FormatEngine<'a> {
         );
         self.preprocessor.indentable_blocks = preprocessor_block_indentability(tokens);
         self.access_modified_braces = syntax::access_modified_brace_indices(tokens);
-        self.inline_array.list_rows = syntax::brace_list_rows(
+        self.inline_array.list_rows = std::rc::Rc::new(syntax::brace_list_rows(
             tokens,
             &self.tree,
             matches!(
                 self.options.brace_style,
                 BraceStyle::Horstmann | BraceStyle::Pico
             ),
-        );
+        ));
         let mut cursor = TokenLineCursor::new(tokens);
         while let Some(line) = cursor.next_line() {
             self.format_line(tokens, line);

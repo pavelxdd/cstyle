@@ -571,6 +571,17 @@ fn runs_that_each_line_looked_across_stay_bounded() {
             FormatOptions::default(),
         ),
         (
+            "brace lists each followed by a conditional",
+            (0..n / 2)
+                .map(|i| {
+                    format!(
+                        "static int t{i}[][2] = {{\n    {{\n        1, 2\n    }},\n}};\n#if FEATURE\nint v{i};\n#endif\n"
+                    )
+                })
+                .collect::<String>(),
+            FormatOptions::default(),
+        ),
+        (
             "enums each with a comment after a member",
             (0..n / 4)
                 .map(|i| {
