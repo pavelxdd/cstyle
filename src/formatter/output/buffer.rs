@@ -473,6 +473,11 @@ pub(crate) struct OutputBuffer {
     recent_case_edge_cache: Cell<Option<RecentMatch>>,
     /// The last look back for a line that is `{` alone.
     recent_brace_alone_cache: Cell<Option<RecentMatch>>,
+    /// The last look back for a line of code past comment rows.
+    recent_code_line_cache: Cell<Option<RecentMatch>>,
+    /// The opening line found last for a block comment's rows: the
+    /// comment, the line asked from, the answer, and the version then.
+    comment_opening_cache: Cell<Option<(usize, usize, usize, u64)>>,
     /// The last look back for a line that holds `@ {`.
     recent_at_brace_cache: Cell<Option<RecentMatch>>,
     /// The last look back for a line that is `else` or ends with `} else`.
@@ -1877,17 +1882,15 @@ impl OutputBuffer {
     /// The last non-empty line in the current scope that is not only a
     /// comment: comments take no part in the layout of the code around them.
     pub(crate) fn last_code_line_in_scope(&self) -> Option<&String> {
-        (self.scope_start.min(self.lines.len())..self.lines.len())
-            .rev()
-            .find(|&index| {
-                let text = self.trimmed(index);
-                !text.is_empty()
-                    && (self.line_tokens(index).is_some()
-                        || self.comment_start_index(index) == index
-                            && !text.starts_with("/*")
-                            && !text.starts_with("//"))
-            })
-            .map(|index| &self.lines[index])
+        self.last_line_from(&self.recent_code_line_cache, self.scope_start, |index| {
+            let text = self.trimmed(index);
+            !text.is_empty()
+                && (self.line_tokens(index).is_some()
+                    || self.comment_start_index(index) == index
+                        && !text.starts_with("/*")
+                        && !text.starts_with("//"))
+        })
+        .map(|index| &self.lines[index])
     }
 
     /// The directive line that line `index` continues through
@@ -1944,14 +1947,37 @@ impl OutputBuffer {
     /// First line up to `index` holding text of the block comment token
     /// `comment`; blank lines inside the comment record no tokens.
     fn comment_opening_line(&self, index: usize, comment: usize) -> usize {
+        // A later row reads back only to the row asked last, while the lines
+        // before that row stand as they were.
+        let cached = self
+            .comment_opening_cache
+            .get()
+            .filter(|&(cached, from, _, version)| {
+                cached == comment
+                    && from <= index
+                    && self
+                        .lowest_change_since(version)
+                        .is_some_and(|lowest| lowest >= from)
+            });
+        let floor = cached.map_or(0, |(_, from, _, _)| from);
         let mut start = index;
-        for line in (0..index).rev() {
+        let mut parted = false;
+        for line in (floor..index).rev() {
             if self.comments[line].get().mentions(comment) {
                 start = line;
             } else if !self.lines[line].trimmed().is_empty() {
+                parted = true;
                 break;
             }
         }
+        if !parted
+            && let Some((_, from, opening, _)) = cached
+            && opening < from
+        {
+            start = opening;
+        }
+        self.comment_opening_cache
+            .set(Some((comment, index, start, self.version)));
         start
     }
 

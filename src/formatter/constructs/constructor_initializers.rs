@@ -589,13 +589,19 @@ impl FormatEngine<'_> {
             return None;
         }
         // Directives between the members leave the member before them.
-        let previous_index = self.output.scoped_range().rev().find(|&index| {
-            let head = self.output.trimmed(index);
-            !head.is_empty()
-                && !head.starts_with("//")
-                && !head.starts_with('#')
-                && self.output.directive_of_continuation(index).is_none()
-        })?;
+        let range = self.output.scoped_range();
+        let previous_index = self.output.last_line_looked(
+            &self.initializer_member_look,
+            range.start,
+            range.end,
+            |index| {
+                let head = self.output.trimmed(index);
+                !head.is_empty()
+                    && !head.starts_with("//")
+                    && !head.starts_with('#')
+                    && self.output.directive_of_continuation(index).is_none()
+            },
+        )?;
         let previous = &self.output[previous_index];
         let previous_code = self.output.code_trimmed_of(previous);
         if !previous_code.ends_with(',') && previous_code.trimmed() != ":" {

@@ -679,13 +679,10 @@ impl FormatEngine<'_> {
                     // Horstmann runs the comment into the brace line later.
                     && self.options.brace_style != BraceStyle::Horstmann
                     && let Some(spaces) = comment_indent
-                    && self
-                        .output
-                        .scoped()
-                        .iter()
+                    // Only comment rows and blanks follow the brace line.
+                    && (self.output.scoped_range().start..stop)
                         .rev()
-                        .skip_while(|line| line.as_str() != previous.as_str())
-                        .skip(1)
+                        .map(|index| &self.output[index])
                         .find(|line| !line.trimmed().is_empty())
                         .is_some_and(|before| {
                             let code = self.output.code_trimmed_of(before);
@@ -1109,25 +1106,35 @@ impl FormatEngine<'_> {
     /// lines, which leave the statement they interrupt going on.
     pub(crate) fn previous_code_line_past_comments_and_directives(&self) -> Option<&str> {
         self.output.last_line_outside_comment()?;
-        self.output
-            .scoped_range()
-            .rev()
-            .find(|&index| {
-                let trimmed = self.output.trimmed(index);
-                !trimmed.is_empty()
-                    && !is_bare_comment_line(trimmed)
-                    && !trimmed.starts_with('#')
-                    && self.output.directive_of_continuation(index).is_none()
-            })
+        self.last_code_row_past_comments_and_directives()
             .map(|index| self.output[index].as_str())
+    }
+
+    /// The last line in scope that holds code, past comment rows and
+    /// directives.
+    fn last_code_row_past_comments_and_directives(&self) -> Option<usize> {
+        let range = self.output.scoped_range();
+        self.output.last_line_looked(
+            &self.code_past_comments_look,
+            range.start,
+            range.end,
+            |index| self.is_code_row_past_comments_and_directives(index),
+        )
+    }
+
+    fn is_code_row_past_comments_and_directives(&self, index: usize) -> bool {
+        let trimmed = self.output.trimmed(index);
+        !trimmed.is_empty()
+            && !is_bare_comment_line(trimmed)
+            && !trimmed.starts_with('#')
+            && self.output.directive_of_continuation(index).is_none()
     }
 
     /// The column of the rows a `:`-led row that a comma continues leads,
     /// for the line after the rows so far: the rows of a class's bases go
     /// on at it past each other.
     fn colon_led_rows_column(&self) -> Option<usize> {
-        let mut rows = self.colon_rows_before(self.output.scoped_range().end);
-        let previous = rows.next()?;
+        let previous = self.last_code_row_past_comments_and_directives()?;
         if let Some(spaces) = self.colon_led_row_indent_spaces(&self.output[previous]) {
             return Some(spaces);
         }
@@ -1138,7 +1145,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let row = rows.next()?;
+        let row = self.colon_rows_before(previous).next()?;
         self.colon_led_run_column(row)
     }
 
@@ -1194,13 +1201,7 @@ impl FormatEngine<'_> {
     fn colon_rows_before(&self, end: usize) -> impl Iterator<Item = usize> + '_ {
         (self.output.scoped_range().start..end)
             .rev()
-            .filter(|&index| {
-                let trimmed = self.output.trimmed(index);
-                !trimmed.is_empty()
-                    && !is_bare_comment_line(trimmed)
-                    && !trimmed.starts_with('#')
-                    && self.output.directive_of_continuation(index).is_none()
-            })
+            .filter(|&index| self.is_code_row_past_comments_and_directives(index))
     }
 
     /// The column of the `:`-led row that the run of comma-ended rows

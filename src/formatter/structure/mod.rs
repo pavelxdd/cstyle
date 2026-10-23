@@ -61,7 +61,30 @@ pub(crate) struct SourceTree {
     pub(crate) statements: Statements,
     /// Indices of the directive tokens, in order.
     directives: Vec<usize>,
+    code_look_back: CodeLookBack,
 }
+
+/// How many tokens back a code token is looked for before the looks back
+/// are read.
+const NEAR_CODE_TOKENS: usize = 8;
+
+/// The last two looks back for a code token, the latest first, kept to
+/// read on from: a start among the tokens one passed has its answer, and
+/// one past them reads back only to them. They take no part in what the
+/// tree is.
+#[derive(Debug, Clone, Default)]
+struct CodeLookBack(std::cell::Cell<[Option<CodeLook>; 2]>);
+
+/// A look back's start and the code token it found before it.
+type CodeLook = (usize, Option<usize>);
+
+impl PartialEq for CodeLookBack {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+impl Eq for CodeLookBack {}
 
 impl SourceTree {
     pub(crate) fn build(tokens: &[Token]) -> Self {
@@ -98,6 +121,7 @@ impl SourceTree {
             functions,
             statements,
             directives,
+            code_look_back: CodeLookBack::default(),
         }
     }
 
@@ -285,7 +309,55 @@ impl SourceTree {
     }
 
     /// Last code token before `index`.
+    #[inline]
     pub(crate) fn previous_code_token(&self, index: usize) -> Option<usize> {
-        blocks::previous_code_token(&self.tokens, index)
+        if index > self.tokens.len() {
+            return None;
+        }
+        // Most code tokens stand a few tokens back; only longer walks read
+        // on from the looks.
+        let near = index.saturating_sub(NEAR_CODE_TOKENS);
+        if let Some(found) = (near..index)
+            .rev()
+            .find(|&token| is_code_token(&self.tokens[token]))
+        {
+            return Some(found);
+        }
+        if near == 0 {
+            return None;
+        }
+        self.previous_code_token_far(near)
+    }
+
+    #[inline(never)]
+    fn previous_code_token_far(&self, index: usize) -> Option<usize> {
+        let mut looks = self.code_look_back.0.get();
+        let mut base: Option<usize> = None;
+        for (slot, &(before, found)) in looks
+            .iter()
+            .enumerate()
+            .filter_map(|(slot, look)| look.as_ref().map(|look| (slot, look)))
+        {
+            if index <= before && found.is_none_or(|found| found < index) {
+                return found;
+            }
+            if before < index
+                && base.is_none_or(|base| looks[base].is_some_and(|(far, _)| far < before))
+            {
+                base = Some(slot);
+            }
+        }
+        let found = match base.and_then(|base| looks[base]) {
+            Some((before, found)) => (before..index)
+                .rev()
+                .find(|&token| is_code_token(&self.tokens[token]))
+                .or(found),
+            None => blocks::previous_code_token(&self.tokens, index),
+        };
+        let replaced = base.unwrap_or(1);
+        looks[replaced] = Some((index, found));
+        looks.swap(0, replaced);
+        self.code_look_back.0.set(looks);
+        found
     }
 }

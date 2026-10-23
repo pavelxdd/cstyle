@@ -555,6 +555,42 @@ fn runs_that_each_line_looked_across_stay_bounded() {
             kr.clone(),
         ),
         (
+            "a run of line comments in a body",
+            format!(
+                "void f() {{\n{}    x();\n}}\n",
+                (0..n).map(|i| format!("    // c{i}\n")).collect::<String>()
+            ),
+            FormatOptions::default(),
+        ),
+        (
+            "a run of block comment rows in a body",
+            format!(
+                "void f() {{\n{}    x();\n}}\n",
+                (0..n)
+                    .map(|i| format!("    /* c{i} */\n"))
+                    .collect::<String>()
+            ),
+            FormatOptions::default(),
+        ),
+        (
+            "a block comment of many rows",
+            format!(
+                "void f() {{\n    /*\n{}     */\n    x();\n}}\n",
+                (0..n).map(|i| format!("     * c{i}\n")).collect::<String>()
+            ),
+            FormatOptions::default(),
+        ),
+        (
+            "an asm statement of many string rows",
+            format!(
+                "void f() {{\n    asm volatile(\n{}    );\n}}\n",
+                (0..n)
+                    .map(|i| format!("        \"mov r{i}, r{i}\\n\"\n"))
+                    .collect::<String>()
+            ),
+            FormatOptions::default(),
+        ),
+        (
             "a long argument list a row each",
             format!(
                 "void f() {{\n    call({});\n}}\n",

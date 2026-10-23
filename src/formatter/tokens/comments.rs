@@ -871,15 +871,22 @@ impl FormatEngine<'_> {
     fn previous_case_label_body_indent_spaces(&self) -> Option<usize> {
         // Comments, a conditional opening or a plain directive after the
         // label leave the comment in its body.
-        let line = self.output.scoped().iter().rev().find(|line| {
-            let trimmed = line.trimmed_start();
-            !trimmed.is_empty()
-                && (!is_comment_only_line(trimmed) || holds_code_after_leading_comments(trimmed))
-                && !preprocessor_directive(trimmed).is_some_and(|directive| {
-                    matches!(directive, "if" | "ifdef" | "ifndef")
-                        || !is_conditional_preprocessor(directive)
-                })
-        })?;
+        let range = self.output.scoped_range();
+        let line = &self.output[self.output.last_line_looked(
+            &self.case_body_line_look,
+            range.start,
+            range.end,
+            |index| {
+                let trimmed = self.output[index].trimmed_start();
+                !trimmed.is_empty()
+                    && (!is_comment_only_line(trimmed)
+                        || holds_code_after_leading_comments(trimmed))
+                    && !preprocessor_directive(trimmed).is_some_and(|directive| {
+                        matches!(directive, "if" | "ifdef" | "ifndef")
+                            || !is_conditional_preprocessor(directive)
+                    })
+            },
+        )?];
         let code = self.output.code_trimmed_of(line);
         let trimmed = code.trimmed_start();
         let lead = code.len() - trimmed.len();
@@ -2260,17 +2267,11 @@ impl FormatEngine<'_> {
     fn comment_precedes_switch_label(&self) -> bool {
         let tokens = &self.tree.tokens;
         self.current.active_comment().is_some_and(|comment| {
-            tokens[comment + 1..]
-                .iter()
-                .find(|token| {
-                    !matches!(
-                        token,
-                        Token::Whitespace(_) | Token::Newline | Token::Comment(_, _)
-                    )
+            self.after_comments_look
+                .find(tokens, comment + 1, is_past_comments)
+                .is_some_and(|next| {
+                    matches!(&tokens[next], Token::Word(word) if word == "case" || word == "default")
                 })
-                .is_some_and(
-                    |token| matches!(token, Token::Word(word) if word == "case" || word == "default"),
-                )
         })
     }
 
@@ -2574,15 +2575,10 @@ impl FormatEngine<'_> {
     fn comment_leads_closer(&self, comment: &str, index: usize) -> bool {
         let tokens = &self.tree.tokens;
         matches!(tokens.get(index), Some(Token::Comment(_, text)) if text == comment)
-            && tokens[index + 1..]
-                .iter()
-                .find(|token| {
-                    !matches!(
-                        token,
-                        Token::Whitespace(_) | Token::Newline | Token::Comment(..)
-                    )
-                })
-                .is_some_and(|token| matches!(token, Token::Symbol('}')))
+            && self
+                .after_comments_look
+                .find(tokens, index + 1, is_past_comments)
+                .is_some_and(|next| matches!(tokens[next], Token::Symbol('}')))
     }
 
     /// Whether output line `line`, ending with a brace, opens the body of a
@@ -5115,4 +5111,12 @@ fn astyle_comment_row_rest_at<'a>(
         (*trim).max(opener_tab_extra)
     };
     (&line[index..], column)
+}
+
+/// Whether a token is past the blanks and comments after a comment.
+fn is_past_comments(token: &Token) -> bool {
+    !matches!(
+        token,
+        Token::Whitespace(_) | Token::Newline | Token::Comment(..)
+    )
 }

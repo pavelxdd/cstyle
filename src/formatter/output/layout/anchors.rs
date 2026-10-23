@@ -32,6 +32,10 @@ use crate::formatter::text::trim::Trimmed;
 /// `None` when the look gave up.
 pub(crate) type OperandAssignLook = (usize, usize, GroupId, Option<Option<usize>>);
 
+/// A walk back over adjacent literals: the literal it set out from, the
+/// group holding them, and the `=` it found.
+pub(crate) type StringAssignWalk = (usize, Option<GroupId>, Option<usize>);
+
 /// The output line a token column walk read: the tokens' address, the
 /// line, the output version, and the line text's address and length.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -4266,18 +4270,30 @@ impl FormatEngine<'_> {
         if group.is_some_and(|group| self.tree.blocks.kind(group) == Some(BlockKind::Initializer)) {
             return None;
         }
+        // Each literal's walk passes the one before it, whose answer holds.
+        let walked = self.string_assign_walk.get();
         let mut index = previous;
         let assign = loop {
-            index = self.tree.previous_code_token(index)?;
+            if let Some((_, _, assign)) =
+                walked.filter(|&(from, within, _)| from == index && within == group)
+            {
+                break assign;
+            }
+            let Some(before) = self.tree.previous_code_token(index) else {
+                break None;
+            };
+            index = before;
             if groups.enclosing(index) != group {
-                return None;
+                break None;
             }
             match &tokens[index] {
-                Token::Operator(operator) if operator == "=" => break index,
+                Token::Operator(operator) if operator == "=" => break Some(index),
                 Token::StringLiteral(_) | Token::Word(_) => {}
-                _ => return None,
+                _ => break None,
             }
         };
+        self.string_assign_walk.set(Some((previous, group, assign)));
+        let assign = assign?;
         // The value's line is published: the literal continues it, a level
         // in when the statement runs in after a header.
         let value = next_code_token(tokens, assign + 1)?;

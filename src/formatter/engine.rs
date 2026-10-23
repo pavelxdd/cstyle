@@ -265,6 +265,21 @@ pub(crate) struct FormatEngine<'a> {
     /// block other than its `if`'s body may part from.
     pub(crate) dangling_chain_head:
         std::cell::Cell<Option<crate::formatter::output::layout::anchors::ElseChainHead>>,
+    /// The look back for a line of code past comments and directives.
+    pub(crate) code_past_comments_look: crate::formatter::output::buffer::LineLook,
+    /// The look back for the member row a constructor initializer row
+    /// goes on from.
+    pub(crate) initializer_member_look: crate::formatter::output::buffer::LineLook,
+    /// The look back for a line a comment after a case label reads.
+    pub(crate) case_body_line_look: crate::formatter::output::buffer::LineLook,
+    /// The `=` the last walk back over adjacent literals found, by the
+    /// literal it set out from and the group holding them.
+    pub(crate) string_assign_walk:
+        std::cell::Cell<Option<crate::formatter::output::layout::anchors::StringAssignWalk>>,
+    /// The look for the code after the comments leading a line.
+    next_code_look: crate::formatter::structure::blocks::TokenLook,
+    /// The look for the token after the comments from a comment on.
+    pub(crate) after_comments_look: crate::formatter::structure::blocks::TokenLook,
     /// The look back for a line no directive holds.
     non_directive_look: crate::formatter::output::buffer::LineLook,
     /// The look back for a line ending the lines of a `new` call.
@@ -471,6 +486,12 @@ impl<'a> FormatEngine<'a> {
             empty_new_call_look: Default::default(),
             paren_alone_look: Default::default(),
             else_code_look: Default::default(),
+            code_past_comments_look: Default::default(),
+            case_body_line_look: Default::default(),
+            initializer_member_look: Default::default(),
+            string_assign_walk: std::cell::Cell::new(None),
+            next_code_look: Default::default(),
+            after_comments_look: Default::default(),
             braced_chain_blocks: std::cell::OnceCell::new(),
             else_chain_head: std::cell::Cell::new(None),
             dangling_chain_head: std::cell::Cell::new(None),
@@ -981,7 +1002,11 @@ impl<'a> FormatEngine<'a> {
         // Comments before the next line's code leave its shape to the code.
         let (code_following, code_after_following) =
             if matches!(following, Some(Token::Comment(..))) {
-                let first = next_code_token(tokens, index + 1);
+                let first = if std::ptr::eq(tokens, self.tree.tokens.as_slice()) {
+                    self.next_code_look.find(tokens, index + 1, is_code_token)
+                } else {
+                    next_code_token(tokens, index + 1)
+                };
                 let second = first.and_then(|first| next_code_token(tokens, first + 1));
                 (first.map(|i| &tokens[i]), second.map(|i| &tokens[i]))
             } else {

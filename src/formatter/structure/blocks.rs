@@ -164,6 +164,34 @@ pub(crate) fn next_code_token(tokens: &[Token], start: usize) -> Option<usize> {
     (start..tokens.len()).find(|&index| is_code_token(&tokens[index]))
 }
 
+/// A look forward for the first token from a start that a test admits,
+/// kept to read on from: a start among the tokens it passed has the same
+/// answer, and one before them reads on only to them. Each look holds to
+/// one test over one token sequence.
+#[derive(Default)]
+pub(crate) struct TokenLook(std::cell::Cell<Option<(usize, Option<usize>)>>);
+
+impl TokenLook {
+    pub(crate) fn find(
+        &self,
+        tokens: &[Token],
+        start: usize,
+        matches: impl Fn(&Token) -> bool,
+    ) -> Option<usize> {
+        let found = match self.0.get() {
+            Some((from, found)) if from <= start && start <= found.unwrap_or(tokens.len()) => {
+                return found;
+            }
+            Some((from, found)) if start < from => (start..from)
+                .find(|&index| matches(&tokens[index]))
+                .or(found),
+            _ => (start..tokens.len()).find(|&index| matches(&tokens[index])),
+        };
+        self.0.set(Some((start, found)));
+        found
+    }
+}
+
 fn word_at(tokens: &[Token], index: usize) -> Option<&str> {
     match tokens.get(index) {
         Some(Token::Word(word)) => Some(word),
