@@ -23512,3 +23512,9 @@ fn a_closer_after_a_do_body_run_in_after_else_stands_at_its_own_block() {
         "void f() {\n#ifdef FLAG\n    value=0;\n#else\n    value=1;\n#endif\n    if (ready) helper();\n    else do {\n            first();\n            } while (state);\n    }\n",
     );
 }
+
+#[test]
+fn comparisons_in_a_template_head_leave_the_rows_of_the_body_after_it() {
+    let input = "template <long long Num, long long Den, int N = 0,\n          bool Enabled = (N < 19) && (Num <= max_value<long long>() / 10)>\nstruct Item {\n    static constexpr int value =\n        Num % Den == 0 ? N : 1;\n};\n";
+    check(input, &["--style=kr", "--indent-classes"], input);
+}
