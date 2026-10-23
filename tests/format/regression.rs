@@ -22007,6 +22007,8 @@ fn every_split_class_head_continues_at_its_name() {
     let expected = "struct Holder<T,\n       int>\n       : Base {};\nclass Holder<T, decltype(first<T>()),\n      int>\n      : public Base {};\nunion Holder<T,\n      int> {};\n";
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
+    let input = "struct Holder<\n    T, decltype(first(value<T>()))>\n    : Base {};\n";
+    check(input, &["--style=kr"], input);
 }
 
 #[test]
@@ -23485,5 +23487,17 @@ fn whitesmith_sets_a_class_brace_after_an_access_label_a_level_past_its_head() {
         "class Item {\n private:\n  struct Node {\n    int value;\n  };\n};\n",
         &["--style=whitesmith"],
         "class Item\n    {\n    private:\n        struct Node\n            {\n            int value;\n            };\n    };\n",
+    );
+}
+
+#[test]
+fn rows_continuing_a_split_trailing_return_stand_as_in_a_namespace_at_file_scope() {
+    // Template argument rows stay at the arrow row, a paren's rows align
+    // in it, wherever the declaration stands.
+    let input = "auto get(T&& rng)\n    -> Item<int,\n            long>;\nauto make(T&& rng)\n    -> decltype(call(a,\n                     b));\nnamespace n {\nauto get(T&& rng)\n    -> Item<int,\n            long>;\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "auto get(T&& rng)\n-> Item<int,\nlong>;\nauto make(T&& rng)\n-> decltype(call(a,\n                 b));\nnamespace n\n{\nauto get(T&& rng)\n-> Item<int,\nlong>;\n}\n",
     );
 }
