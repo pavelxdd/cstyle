@@ -4642,3 +4642,20 @@ fn closing_conditional_past_a_switch_closer_stands_at_its_opener_in_whitesmith()
         "void f()\n    {\n    switch (flags)\n        {\n        case THIRD:\n            {\n            value = 2;\n            break;\n            }\n        #ifdef FEATURE\n        }\n        #endif\n    }\n"
     );
 }
+
+#[test]
+fn conditional_before_the_closer_of_an_attached_compound_literal_stands_at_its_rows() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_owned(), "--indent-preproc-cond".to_owned()],
+    )
+    .expect("valid options");
+    assert_eq!(
+        format_exact(
+            "void f()\n{\n    x = (struct Item){\n        .value = 1,\n        .other = 2\n#ifdef FEATURE\n    };\n#endif\n}\n",
+            &options,
+        ),
+        "void f()\n{\n    x = (struct Item) {\n        .value = 1,\n        .other = 2\n        #ifdef FEATURE\n    };\n        #endif\n}\n"
+    );
+}

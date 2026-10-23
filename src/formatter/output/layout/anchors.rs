@@ -4000,7 +4000,10 @@ impl FormatEngine<'_> {
         if matches!(tokens[next], Token::Symbol('}')) {
             let groups = &self.tree.groups;
             let group = groups.closed_at(next)?;
-            if self.tree.blocks.kind(group) != Some(BlockKind::Initializer) {
+            if !matches!(
+                self.tree.blocks.kind(group),
+                Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+            ) {
                 return None;
             }
             let line = self
