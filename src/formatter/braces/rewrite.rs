@@ -2111,8 +2111,16 @@ impl FormatEngine<'_> {
         let empty_value_block_continues_expression = is_empty_block
             && (matches!(next, Some(Token::Symbol('(' | ')')))
                 || (empty_block_after_operator && next.is_some()));
-        let lambda_block_continues_expression =
-            (lambda_header || operator_header) && matches!(next, Some(Token::Symbol('(' | ')')));
+        // A lambda is a value: the code after its body on the line goes on
+        // with the expression.
+        let opens_lambda_body = self
+            .tree
+            .groups
+            .opened_at(start)
+            .is_some_and(|group| self.tree.blocks.kind(group) == Some(BlockKind::Lambda));
+        let lambda_block_continues_expression = (lambda_header || operator_header)
+            && matches!(next, Some(Token::Symbol('(' | ')')))
+            || opens_lambda_body && next_on_source_line;
         let next_is_pointer_declarator =
             matches!(next, Some(Token::Operator(op)) if matches!(op.as_str(), "*" | "&"));
         let aggregate_trailing_declarator = (is_class_like_brace_type(brace_type)

@@ -24117,3 +24117,18 @@ fn an_exported_namespace_opens_as_any_namespace() {
         check(expected, &[&style], expected);
     }
 }
+
+#[test]
+fn code_after_a_kept_one_line_lambda_body_continues_its_expression() {
+    let input = "void f()\n{\n    auto two = ready ? [](int v) { return v; } : [](int v) { return -v; };\n    auto three = ready ? [](int v) { return v; } + 1 : 2;\n    auto four = [](int v) { return v; } (3);\n}\n";
+    for style in ["kr", "allman", "java"] {
+        let args = [&format!("--style={style}")[..], "--keep-one-line-blocks"];
+        let expected = if style == "java" {
+            input.replacen("f()\n{", "f() {", 1)
+        } else {
+            input.to_owned()
+        };
+        check(input, &args, &expected);
+        check(&expected, &args, &expected);
+    }
+}
