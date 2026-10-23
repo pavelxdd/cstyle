@@ -19,17 +19,17 @@ use crate::formatter::syntax::{
     TemplateAngle, function_name_start, known_template_angle_role, scoped_name_is_constructor,
     template_openers,
 };
-use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
-    advance_quoted_literal, last_unmatched_open_delimiter, line_paren_imbalance,
-    trailing_comment_split_limit, unmatched_open_bracket_column, unmatched_open_paren_column,
-    unmatched_open_paren_columns,
+    advance_quoted_literal, after_leading_comments, last_unmatched_open_delimiter,
+    line_paren_imbalance, trailing_comment_split_limit, unmatched_open_bracket_column,
+    unmatched_open_paren_column, unmatched_open_paren_columns,
 };
 use crate::formatter::text::trim::Trimmed;
-use crate::formatter::tokens::operators::find_assignment_operator;
 use crate::formatter::tokens::operators::{
-    array_bound_operator_column, head_ends_assignment_operator, leads_keyword_colon,
+    array_bound_operator_column, find_assignment_operator, head_ends_assignment_operator,
+    leads_keyword_colon,
 };
 use crate::formatter::tokens::pointers::is_pointer_declaration_segment;
 use crate::source::lex::{is_identifier_continue, is_identifier_start, trailing_word};
@@ -623,34 +623,64 @@ impl FormatEngine<'_> {
         let split = split_result(code, width, SplitRules::new(self.options))?;
         let lead_width = leading_visual_width(line, self.options.tab_width);
         let head = format!("{lead}{}", split.head);
-        // Rows split off inside parens align after the paren they continue.
-        let paren_column = (!self.options.indent_after_parens)
-            .then(|| unmatched_open_paren_column(&head))
-            .flatten()
-            .map(|open| visual_width_from(&head[..=open], 0, self.options.tab_width));
-        // Past an assignment they align at its value.
-        let value_column = (!self.options.indent_after_parens)
-            .then(|| find_assignment_operator(&head))
-            .flatten()
-            .map(|(start, operator)| start + operator.len())
-            .filter(|&value| !head[value..].trim().is_empty())
-            .map(|value| {
-                let value = value + (head[value..].len() - head[value..].trim_start().len());
-                visual_width_from(&head[..value], 0, self.options.tab_width)
-            });
+        // The rows split off continue as those of any line split there, the
+        // comments leading it read as the blanks they stand in for.
+        let step = self.options.continuation_indent * self.options.indent_width;
+        let code_start = code.len() - after_leading_comments(code).len();
+        let blanked = format!("{}{}", " ".repeat(code_start), &code[code_start..]);
+        let blanked_split = (split.split_at > code_start)
+            .then(|| {
+                split_result_at(
+                    &blanked,
+                    split.split_at,
+                    width,
+                    SplitRules::new(self.options),
+                )
+            })
+            .flatten();
+        let inputs = SplitIndentInputs {
+            base_indent_width: lead_width,
+            limit_base_indent_width: lead_width,
+            current_indent_width: lead_width,
+            indent_width: self.options.indent_width,
+            max_continuation_indent: self.options.max_continuation_indent,
+            configured_continuation_spaces: step,
+            min_conditional_spaces: min_conditional_indent_spaces(self.options),
+            configured_indent: ContinuationIndent::Spaces(lead_width + step),
+            indent_after_parens: self.options.indent_after_parens,
+            following_split: false,
+            break_lambda_parameters: matches!(
+                self.options.brace_style,
+                BraceStyle::Allman
+                    | BraceStyle::Whitesmith
+                    | BraceStyle::Vtk
+                    | BraceStyle::Gnu
+                    | BraceStyle::Horstmann
+            ),
+            block_spaces: lead_width,
+            brace_follows: false,
+            held: LastHeldBytes::of(&blanked).from(0),
+        };
         // Indenting after parens, an assignment before the paren stacks a
         // level of its own.
-        let step = self.options.continuation_indent * self.options.indent_width;
         let stacked_assignment = self.options.indent_after_parens
             && unmatched_open_paren_column(&head).is_some_and(|open| {
                 find_assignment_operator(&head).is_some_and(|(start, _)| start < open)
             });
-        let tail_spaces = if let Some(column) = paren_column.or(value_column) {
-            column
-        } else if ends_statement_before_comment(&split.head) {
+        let tail_spaces = if ends_statement_before_comment(&split.head) {
             lead_width
-        } else {
+        } else if self.options.indent_after_parens {
             lead_width + step * (1 + usize::from(stacked_assignment))
+        } else {
+            // A row in parens opened before it goes on at its own column.
+            let fallback = if line_paren_imbalance(&blanked).0 > 0 {
+                lead_width
+            } else {
+                lead_width + step
+            };
+            blanked_split
+                .and_then(|split| continuation_indent_for_split(&blanked, &split, &inputs))
+                .map_or(fallback, |indent| indent.columns(self.options.indent_width))
         };
         Some((head, split.tail.to_string(), tail_spaces))
     }

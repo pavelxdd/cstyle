@@ -114,8 +114,7 @@ fn allman_keeps_malformed_define_after_bracket_brace_idempotent() {
 fn gnu_keeps_close_word_after_malformed_define_idempotent() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=gnu".to_owned()]).expect("valid options");
-    let expected =
-        "+  !do&)(&#define X(x) \\...defaulttry->==xNULL[1\n    call\n} x0->]  gamma>=classy>\n";
+    let expected = "+  !do&)(&#define X(x) \\...defaulttry->==xNULL[1\n         call\n} x0->]  gamma>=classy>\n";
 
     assert_eq!(
         format_exact(

@@ -3154,13 +3154,14 @@ impl FormatEngine<'_> {
         let previous_line = self.output.len().checked_sub(1)?;
         let previous = self.output.get(previous_line)?;
         let previous_code = self.output.code_trimmed_of(previous);
+        // A row closing parens it did not open ends the chain inside them.
         if !starts_with_chain_operator(previous_code.trimmed_start())
             || self.layout.frame_stack.active_delimiter().is_none()
             || self
                 .layout
                 .frame_stack
                 .active_stream_on_output_line(previous_line)
-                .is_none()
+                .is_none_or(|frame| frame.line_has_positive_paren_delta)
         {
             return None;
         }

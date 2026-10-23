@@ -3339,3 +3339,38 @@ fn max_code_length_registers_no_assignment_a_kept_block_before_the_split_closed(
         "void f()\n{\n    do { result = helper(first, second); } while (compute(first,\n            second) > limit);\n    x();\n}\n",
     );
 }
+
+#[test]
+fn a_line_a_comment_leads_splits_its_code_with_the_continuation_of_any_line() {
+    let source = "void f()\n{\n    /* note */ result = (unsigned long)(value) << 8 | (unsigned long)other;\n    /* note */ total = compute(first_value, helper(second_value, third_value));\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=stroustrup", "--max-code-length=50"][..],
+            "void f()\n{\n    /* note */ result = (unsigned long)(\n                            value) << 8 | (unsigned long)other;\n    /* note */ total = compute(first_value,\n                               helper(second_value, third_value));\n}\n",
+        ),
+        (
+            &["--max-code-length=60"][..],
+            "void f()\n{\n    /* note */ result = (unsigned long)(value) << 8 |\n                        (unsigned long)other;\n    /* note */ total = compute(first_value, helper(second_value,\n                               third_value));\n}\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        let args: Vec<String> = args.iter().map(|arg| arg.to_string()).collect();
+        apply_command_line_args(&mut options, &args).expect("valid options");
+        assert_stable_max_length_format(source, &options, expected);
+    }
+}
+
+#[test]
+fn an_argument_row_a_comment_leads_splits_at_the_column_of_its_arguments() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_owned(), "--max-code-length=60".to_owned()],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "void f()\n{\n    handle = open_item(path, ACCESS_READ, SHARE_READ,\n                       /*attributes=*/nullptr, OPEN_EXISTING, NORMAL_ITEM, nullptr);\n}\n",
+        &options,
+        "void f()\n{\n    handle = open_item(path, ACCESS_READ, SHARE_READ,\n                       /*attributes=*/nullptr, OPEN_EXISTING, NORMAL_ITEM,\n                       nullptr);\n}\n",
+    );
+}

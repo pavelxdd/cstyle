@@ -15,7 +15,9 @@ use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     ContainsAnyByte, has_unclosed_delimiter_after, last_unmatched_open_delimiter,
 };
-use crate::formatter::text::line_scan::{has_hash_outside_literals, trailing_comment_split_limit};
+use crate::formatter::text::line_scan::{
+    has_hash_outside_literals, has_top_level_char, trailing_comment_split_limit,
+};
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::pointers::{is_pointer_declaration_segment, resolved_pointer_align};
 use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
@@ -1790,9 +1792,12 @@ impl FormatEngine<'_> {
             .active_stream()
             .map(|frame| frame.chain_anchor_column)
             .unwrap_or(operator_output_column);
+        // An assignment a `;` on the line ended leaves the chain to the
+        // statement after it.
         let assignment_value_start_column = self
             .current
             .first_assignment()
+            .filter(|&(assignment, _)| !has_top_level_char(&self.current[assignment..], ';'))
             .map(|(assignment, assignment_operator)| {
                 self.current[assignment + assignment_operator.len()..]
                     .char_indices()

@@ -45,6 +45,20 @@ pub(crate) struct CaseLabelLook {
     answer: bool,
 }
 
+/// Where a walk past the run-in headers of a line stopped: the tokens'
+/// address and the line's first token, the start of the statement it stopped in with the levels
+/// and label levels before that statement, and the statement's first token
+/// past its headers with the token its look stopped at.
+#[derive(Clone, Copy)]
+pub(crate) struct RunInWalk {
+    address: usize,
+    first: usize,
+    statement: usize,
+    levels: usize,
+    labels: usize,
+    scanned: Option<(usize, usize)>,
+}
+
 /// The tokens the last looks back for a statement start passed, all of
 /// which look back to the same start: the tokens' address, the tokens in
 /// order, and the start.
@@ -407,10 +421,12 @@ impl FormatEngine<'_> {
         stop
     }
 
-    /// The headers whose bodies run in on output line `line` before the
-    /// token `until`, past a leading `}`: how many levels they indent the
-    /// statement after them, as astyle indents those bodies, and the first
-    /// token past them. An `else if` is one header.
+    /// The headers whose bodies hold the token `until` on output line
+    /// `line`, past a leading `}` and the statements that end on the line
+    /// before it: how many levels they indent the statement holding
+    /// `until`, as astyle indents those bodies, and that statement's first
+    /// token. An `else if` is one header; a label's level lasts past the
+    /// statements after it.
     pub(super) fn run_in_headers(&self, line: usize, until: usize) -> Option<(usize, usize)> {
         let first = self.output.line_tokens(line)?.first;
         self.run_in_headers_from(first, until, |index| {
@@ -427,47 +443,124 @@ impl FormatEngine<'_> {
         on_line: impl Fn(usize) -> bool,
     ) -> Option<(usize, usize)> {
         let tokens = &self.tree.tokens;
-        let mut cursor = next_code_token(tokens, first)?;
-        if cursor < until && matches!(tokens[cursor], Token::Symbol('}')) {
-            cursor = next_code_token(tokens, cursor + 1)?;
-        }
-        let mut levels = 0;
-        while cursor < until {
-            let Token::Word(word) = &tokens[cursor] else {
-                break;
-            };
-            let body = match word.as_str() {
-                "else" | "do" => next_code_token(tokens, cursor + 1)?,
-                // A label's statements stand in its body.
-                "case" | "default" => {
-                    let level = self.tree.groups.enclosing(cursor);
-                    let Some(colon) = (cursor + 1..until).find(|&index| {
-                        matches!(tokens[index], Token::Symbol(':'))
-                            && self.tree.groups.enclosing(index) == level
-                    }) else {
-                        break;
-                    };
-                    next_code_token(tokens, colon + 1)?
-                }
-                "if" | "while" | "for" => {
-                    let Some(close) = next_code_token(tokens, cursor + 1)
-                        .filter(|&open| matches!(tokens[open], Token::Symbol('(')))
-                        .and_then(|open| self.tree.groups.opened_at(open))
-                        .and_then(|group| self.tree.groups.get(group).close)
-                        .filter(|&close| close < until && on_line(close))
-                    else {
-                        break;
-                    };
-                    next_code_token(tokens, close + 1)?
-                }
-                _ => break,
-            };
-            if !(word == "else" && matches!(&tokens[body], Token::Word(next) if next == "if")) {
-                levels += 1;
+        let address = tokens.as_ptr() as usize;
+        // A walk on the line to an earlier token reads on from the start of
+        // the statement it stopped in, and from where it stopped in it.
+        let cached = self.run_in_walk_cache.get().filter(|walk| {
+            (walk.address, walk.first) == (address, first) && walk.statement < until
+        });
+        let (mut cursor, mut levels, mut labels) = match cached {
+            Some(walk) => (walk.statement, walk.levels, walk.labels),
+            None => (next_code_token(tokens, first)?, 0, 0),
+        };
+        loop {
+            let at_statement = (cursor, levels, labels);
+            // A block closing on the line ends the headers and labels in it.
+            if cursor < until && matches!(tokens[cursor], Token::Symbol('}')) {
+                levels = 0;
+                labels = 0;
+                cursor = next_code_token(tokens, cursor + 1)?;
+                continue;
             }
-            cursor = body;
+            while cursor < until {
+                let Token::Word(word) = &tokens[cursor] else {
+                    break;
+                };
+                let body = match word.as_str() {
+                    "else" | "do" => next_code_token(tokens, cursor + 1)?,
+                    // A label's statements stand in its body.
+                    "case" | "default" => {
+                        let level = self.tree.groups.enclosing(cursor);
+                        let Some(colon) = (cursor + 1..until).find(|&index| {
+                            matches!(tokens[index], Token::Symbol(':'))
+                                && self.tree.groups.enclosing(index) == level
+                        }) else {
+                            break;
+                        };
+                        labels += 1;
+                        next_code_token(tokens, colon + 1)?
+                    }
+                    "if" | "while" | "for" => {
+                        let Some(close) = next_code_token(tokens, cursor + 1)
+                            .filter(|&open| matches!(tokens[open], Token::Symbol('(')))
+                            .and_then(|open| self.tree.groups.opened_at(open))
+                            .and_then(|group| self.tree.groups.get(group).close)
+                            .filter(|&close| close < until && on_line(close))
+                        else {
+                            break;
+                        };
+                        next_code_token(tokens, close + 1)?
+                    }
+                    _ => break,
+                };
+                if !(word == "else" && matches!(&tokens[body], Token::Word(next) if next == "if")) {
+                    levels += 1;
+                }
+                cursor = body;
+            }
+            let scan_from = cached
+                .filter(|walk| (walk.statement, walk.levels, walk.labels) == at_statement)
+                .and_then(|walk| walk.scanned)
+                .filter(|&(body, scanned)| body == cursor && scanned <= until)
+                .map_or(cursor, |(_, scanned)| scanned);
+            match self.statement_end_before(cursor, scan_from, until, &on_line) {
+                Ok(end) => {
+                    levels = labels;
+                    cursor = next_code_token(tokens, end + 1)?;
+                }
+                Err(stopped) => {
+                    let (statement, before_levels, before_labels) = at_statement;
+                    self.run_in_walk_cache.set(Some(RunInWalk {
+                        address,
+                        first,
+                        statement,
+                        levels: before_levels,
+                        labels: before_labels,
+                        scanned: Some((cursor, stopped)),
+                    }));
+                    break;
+                }
+            }
         }
         Some((levels, cursor))
+    }
+
+    /// The last token of the statement starting at `start` when it ends
+    /// on its line before `until`, its `;` or the `}` of a block, read on
+    /// from `from`; else where the look stopped.
+    fn statement_end_before(
+        &self,
+        start: usize,
+        from: usize,
+        until: usize,
+        on_line: &impl Fn(usize) -> bool,
+    ) -> Result<usize, usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let level = groups.enclosing(start);
+        let mut index = from;
+        while index < until {
+            if let Some(group) = groups.opened_at(index) {
+                let Some(close) = groups
+                    .get(group)
+                    .close
+                    .filter(|&close| close < until && on_line(close))
+                else {
+                    return Err(index);
+                };
+                if index == start && matches!(tokens[index], Token::Symbol('{')) {
+                    return Ok(close);
+                }
+                index = close + 1;
+                continue;
+            }
+            match tokens[index] {
+                Token::Symbol(';') if groups.enclosing(index) == level => return Ok(index),
+                Token::Symbol('}') => return Err(index),
+                _ => index += 1,
+            }
+        }
+        Err(index)
     }
 
     /// The indent astyle's continuation stack gives the line starting at

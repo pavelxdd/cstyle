@@ -333,6 +333,9 @@ pub(crate) struct FormatEngine<'a> {
     /// The last brace or newline token looked for: the tokens' address,
     /// where the look started, and the token found.
     pub(crate) brace_or_newline_cache: std::cell::Cell<Option<(usize, usize, usize)>>,
+    /// Where the last walk past run-in headers stopped, to read on from.
+    pub(crate) run_in_walk_cache:
+        std::cell::Cell<Option<crate::formatter::output::layout::astyle_stack::RunInWalk>>,
     /// The last `return` an operand row looked back to: the tokens'
     /// address, the row's first token, and the `return`.
     pub(crate) operand_return_cache: std::cell::Cell<Option<(usize, usize, Option<usize>)>>,
@@ -520,6 +523,7 @@ impl<'a> FormatEngine<'a> {
             macro_block_cache: std::cell::RefCell::default(),
             stack_start_cache: std::cell::RefCell::default(),
             brace_or_newline_cache: std::cell::Cell::new(None),
+            run_in_walk_cache: std::cell::Cell::new(None),
             operand_return_cache: std::cell::Cell::new(None),
             paren_braces_cache: std::cell::Cell::new(None),
             case_label_cache: std::cell::Cell::new(None),
@@ -2659,7 +2663,7 @@ impl<'a> FormatEngine<'a> {
             && self.open_paren_column_of(code).is_none()
     }
 
-    fn incomplete_control_header(&self) -> bool {
+    pub(crate) fn incomplete_control_header(&self) -> bool {
         let Some(header @ ("if" | "for" | "while" | "switch")) =
             self.layout.command_state.current_header.as_deref()
         else {

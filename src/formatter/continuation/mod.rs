@@ -855,7 +855,50 @@ impl FormatEngine<'_> {
             && !self.innermost_init_block_brace()
             && !self.in_aggregate_declaration_brace()
             && (self.layout.command_state.current_header.is_none()
-                || self.layout.indentation.statement_depth() != 0)
+                || self.layout.indentation.statement_depth() != 0
+                || self.header_body_runs_in())
+    }
+
+    /// Whether the statement under the line's header has begun on the line,
+    /// past the header's keyword or condition.
+    fn header_body_runs_in(&self) -> bool {
+        let Some(header) = self.layout.command_state.current_header.as_deref() else {
+            return false;
+        };
+        let tokens = &self.tree.tokens;
+        let Some(last) = self
+            .current
+            .tokens()
+            .filter(|span| span.last < tokens.len())
+            .and_then(|span| {
+                self.tree
+                    .previous_code_token(span.last + 1)
+                    .filter(|&last| last >= span.first)
+            })
+        else {
+            return false;
+        };
+        match header {
+            "else" | "do" => !matches!(&tokens[last], Token::Word(word) if word == header),
+            "if" | "while" | "for" | "switch" => {
+                self.header_paren.depth.is_none()
+                    && !self.incomplete_control_header()
+                    && !(matches!(tokens[last], Token::Symbol(')'))
+                        && self
+                            .tree
+                            .groups
+                            .closed_at(last)
+                            .and_then(|group| {
+                                self.tree
+                                    .previous_code_token(self.tree.groups.get(group).open)
+                            })
+                            .is_some_and(|keyword| {
+                                matches!(&tokens[keyword], Token::Word(word)
+                                    if word == header || matches!(word.as_str(), "constexpr" | "consteval"))
+                            }))
+            }
+            _ => false,
+        }
     }
 
     pub(crate) fn current_ends_base_clause_colon(&self) -> bool {

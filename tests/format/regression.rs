@@ -3538,6 +3538,78 @@ fn a_shift_chain_run_in_after_a_header_continues_a_level_in() {
 }
 
 #[test]
+fn keeping_one_line_statements_continues_arguments_run_in_after_a_header_past_a_statement_a_level_in()
+ {
+    let input = "void f(void)\n{\n    if (ready) x = 1; else value = compute(first,\n            second);\n    x = 1; if (ready) value = compute(first,\n            second);\n    x = 1; while (ready) value = compute(first,\n            second);\n    x = 1; do value = compute(first,\n            second); while (ready);\n    if (ready) x = 1; else if (other) value = compute(first,\n            second);\n    if (ready) x = 1; value = compute(first,\n            second);\n}\n";
+    check(
+        input,
+        &["--keep-one-line-statements"],
+        "void f(void)\n{\n    if (ready) x = 1; else value = compute(first,\n                                               second);\n    x = 1; if (ready) value = compute(first,\n                                          second);\n    x = 1; while (ready) value = compute(first,\n                                             second);\n    x = 1; do value = compute(first,\n                                  second); while (ready);\n    if (ready) x = 1; else if (other) value = compute(first,\n                second);\n    if (ready) x = 1; value = compute(first,\n                                      second);\n}\n",
+    );
+}
+
+#[test]
+fn keeping_one_line_statements_continues_a_value_run_in_after_a_header_past_a_statement_a_level_in()
+{
+    let input = "void f()\n{\n    x = 1; if (ready) value = \"first part\"\n            \" second part\";\n    if (ready) x = 1; else value = \"first part\"\n            \" second part\";\n    x = 1; if (ready) value = first\n            + second;\n    x = 1; if (ready) result = first &&\n            second;\n    x = 1; if (ready) stream << first\n            << second;\n}\n";
+    check(
+        input,
+        &["--style=kr", "--keep-one-line-statements"],
+        "void f()\n{\n    x = 1; if (ready) value = \"first part\"\n                                  \" second part\";\n    if (ready) x = 1; else value = \"first part\"\n                                       \" second part\";\n    x = 1; if (ready) value = first\n                                  + second;\n    x = 1; if (ready) result = first &&\n                                   second;\n    x = 1; if (ready) stream << first\n                                 << second;\n}\n",
+    );
+}
+
+#[test]
+fn a_line_comment_after_a_shift_row_closing_outer_parens_continues_the_enclosing_parens() {
+    let expected = "void f()\n{\n    out << helper(first, (second\n                          << third));\n    mask = 1 << (((value & (size - 1))\n                  >> shift)\n                 // note\n                 + offset);\n}\n";
+    check(
+        "void f()\n{\n    out << helper(first, (second\n                          << third));\n    mask = 1 << (((value & (size - 1))\n                  >> shift)\n                 // note\n                 + offset); }\n",
+        &["--style=kr"],
+        expected,
+    );
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn lisp_parts_a_comment_led_closer_of_a_block_after_an_attribute_as_after_a_bare_condition() {
+    let expected = "void f() {\n    if (ready) [[likely]] {\n        value = 1;\n        /* note */\n    }\n    next(); }\n";
+    check(
+        "void f()\n{\n    if (ready) [[likely]] {\n        value = 1;\n    /* note */ }\n    next();\n}\n",
+        &["--style=lisp"],
+        expected,
+    );
+    check(
+        "void f()\n{\n    if (ready) {\n        value = 1;\n    /* note */ }\n    next();\n}\n",
+        &["--style=lisp"],
+        &expected.replace(" [[likely]]", ""),
+    );
+}
+
+#[test]
+fn whitesmith_sets_a_comment_led_first_element_brace_where_it_stands_without_the_comment() {
+    check(
+        "void f()\n{\n    static const struct Item items[] = {\n        /* note */ { name(\"a\"), first,\n          0 },\n        { name(\"b\"), second },\n    };\n}\n",
+        &["--style=whitesmith"],
+        "void f()\n    {\n    static const struct Item items[] =\n        {\n            /* note */ {\n            name(\"a\"), first,\n            0\n            },\n            { name(\"b\"), second },\n        };\n    }\n",
+    );
+    check(
+        "void f()\n{\n    static const struct Item items[] = {\n        { name(\"a\"), first,\n          0 },\n        { name(\"b\"), second },\n    };\n}\n",
+        &["--style=whitesmith"],
+        "void f()\n    {\n    static const struct Item items[] =\n        {\n            {\n            name(\"a\"), first,\n            0\n            },\n            { name(\"b\"), second },\n        };\n    }\n",
+    );
+}
+
+#[test]
+fn keeping_one_line_blocks_continues_arguments_run_in_after_else_past_a_block_a_level_in() {
+    let input = "void f(void)\n{\n    if (ready) { x = 1; } else value = compute(first,\n            second);\n    while (ready) { x = 1; } value = compute(first,\n            second);\n}\n";
+    check(
+        input,
+        &["--keep-one-line-statements", "--keep-one-line-blocks"],
+        "void f(void)\n{\n    if (ready) { x = 1; } else value = compute(first,\n                                           second);\n    while (ready) { x = 1; } value = compute(first,\n                                     second);\n}\n",
+    );
+}
+
+#[test]
 fn break_all_blocks_keeps_a_one_line_statement_body_with_its_else() {
     let input = "void f()\n{   for (i = 0; i < n; i++)\n    {   if (type == TCP)\n            a();\n        else\n            b(); }\n\n    x = 1;\n\n    if (c)\n        d();\n    else\n        e(); }\n";
     check(input, &["--style=pico", "--break-blocks=all"], input);

@@ -974,6 +974,12 @@ impl FormatEngine<'_> {
             // header within it ends its condition at a zero count.
             adding_braces &= self.layout.nesting.paren_depth == 0;
         }
+        // A body begun on the header's line goes on past the line's end.
+        if matches!(header, "else" | "do")
+            && !self.follows_header_end(tokens, newline_index, header)
+        {
+            return false;
+        }
         let Some(body_index) = next_non_layout_token_index(tokens, newline_index + 1) else {
             return false;
         };
