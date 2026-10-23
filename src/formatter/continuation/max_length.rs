@@ -1252,6 +1252,9 @@ fn top_level_assignment_index(line: &str) -> Option<usize> {
     let mut paren_depth = 0usize;
     let mut bracket_depth = 0usize;
     let mut angle_depth = 0usize;
+    // An assignment in a block the line closes is no assignment of its
+    // statement.
+    let mut brace_depth = 0usize;
     let mut previous = '\0';
     let mut iter = line.char_indices().peekable();
     while let Some((index, ch)) = iter.next() {
@@ -1260,9 +1263,17 @@ fn top_level_assignment_index(line: &str) -> Option<usize> {
             ')' => paren_depth = paren_depth.saturating_sub(1),
             '[' => bracket_depth += 1,
             ']' => bracket_depth = bracket_depth.saturating_sub(1),
+            '{' if paren_depth == 0 && bracket_depth == 0 => brace_depth += 1,
+            '}' if paren_depth == 0 && bracket_depth == 0 => {
+                brace_depth = brace_depth.saturating_sub(1);
+            }
             '<' if paren_depth == 0 && bracket_depth == 0 => angle_depth += 1,
             '>' if angle_depth > 0 => angle_depth -= 1,
-            '=' if paren_depth == 0 && bracket_depth == 0 && angle_depth == 0 => {
+            '=' if paren_depth == 0
+                && bracket_depth == 0
+                && angle_depth == 0
+                && (brace_depth == 0 || !line[index..].contains('}')) =>
+            {
                 let next = iter.peek().map(|(_, ch)| *ch).unwrap_or('\0');
                 if !matches!(
                     previous,

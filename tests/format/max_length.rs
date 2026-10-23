@@ -3319,3 +3319,23 @@ fn max_code_length_starts_a_statement_split_off_a_body_or_label_line_where_state
         "void f()\n{\n    x();\n    result = helper(first, second);\n    value = compute(first, second); other = third(first);\n    if (ready)\n        result = helper(first, second);\n    value = compute(first, second);\n    while (ready) {\n        result = helper(first, second);\n        value = compute(first, second);\n    }\n    switch (kind) {\n    case 1: result = helper(first, second);\n        value = compute(first, second);\n        break;\n    case 2: {\n        result = helper(first, second);\n        value = compute(first, second);\n    }\n    }\n    for (index = 0; index < count;\n            index++) result = helper(first, second);\n    value = compute(first, second);\n}\n",
     );
 }
+
+#[test]
+fn max_code_length_registers_no_assignment_a_kept_block_before_the_split_closed() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=kr".to_owned(),
+            "--keep-one-line-statements".to_owned(),
+            "--keep-one-line-blocks".to_owned(),
+            "--max-code-length=70".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "void f()\n{\n    do { result = helper(first, second); } while (compute(first, second) > limit);\n    x();\n}\n",
+        &options,
+        "void f()\n{\n    do { result = helper(first, second); } while (compute(first,\n            second) > limit);\n    x();\n}\n",
+    );
+}
