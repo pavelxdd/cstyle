@@ -23067,3 +23067,12 @@ fn a_list_brace_leading_its_line_in_a_breaking_style_leaves_its_first_row_below(
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn ternary_row_after_a_directive_and_a_comment_led_row_keeps_its_column() {
+    check(
+        "void f()\n{\n#ifdef FEATURE\n    result = ready ? first\n#endif\n             /* note */ : other ? second\n             : third;\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n#ifdef FEATURE\n    result = ready ? first\n#endif\n             /* note */ : other ? second\n             : third;\n}\n",
+    );
+}

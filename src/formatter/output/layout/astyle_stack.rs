@@ -323,7 +323,6 @@ impl FormatEngine<'_> {
                     )
                 )
             })
-            || !self.options.indent_after_parens && self.tree.has_directive_in(start..first)
             // A line past `#else` stands where the branch's `#if` left the stack.
             || self.tree.switches_outer_branch_in(start..first)
             || !self.stacks_assignment_before(start, first, group)
