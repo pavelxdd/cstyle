@@ -23678,3 +23678,31 @@ fn an_operand_after_a_kept_one_line_lambda_body_stands_at_the_statement() {
         check(expected, args, expected);
     }
 }
+
+#[test]
+fn a_lambda_body_broken_off_its_row_in_a_case_block_stands_within_the_block() {
+    let input = "void f()\n{\n    switch (value) {\n    case 1: {\n        call([](int item) {\n            return item;\n        });\n        break;\n    }\n    }\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=allman"][..],
+            "void f()\n{\n    switch (value)\n    {\n    case 1:\n    {\n        call([](int item)\n        {\n            return item;\n        });\n        break;\n    }\n    }\n}\n",
+        ),
+        (
+            &["--style=gnu"][..],
+            "void f()\n{\n    switch (value)\n        {\n        case 1:\n        {\n            call([](int item)\n            {\n                return item;\n            });\n            break;\n        }\n        }\n}\n",
+        ),
+        (
+            &["--style=allman", "--indent-switches"][..],
+            "void f()\n{\n    switch (value)\n    {\n        case 1:\n        {\n            call([](int item)\n            {\n                return item;\n            });\n            break;\n        }\n    }\n}\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+    // So does an assigned lambda, and one in a nested case block.
+    let input = "void f()\n{\n    switch (a) {\n    case 1: {\n        auto fn = [](int item) {\n            return item;\n        };\n        switch (b) {\n        case 2: {\n            call([](int item) {\n                return item;\n            });\n            break;\n        }\n        }\n    }\n    }\n}\n";
+    let args = ["--style=allman"];
+    let expected = "void f()\n{\n    switch (a)\n    {\n    case 1:\n    {\n        auto fn = [](int item)\n        {\n            return item;\n        };\n        switch (b)\n        {\n        case 2:\n        {\n            call([](int item)\n            {\n                return item;\n            });\n            break;\n        }\n        }\n    }\n    }\n}\n";
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}

@@ -705,6 +705,18 @@ impl FormatEngine<'_> {
         } else {
             sibling
         };
+        // A lambda's rows take its columns as exact indents, which come
+        // before the case unindent the brace's line took.
+        let sibling = if self
+            .layout
+            .frame_stack
+            .active_brace()
+            .is_some_and(|frame| frame.semantic_kind == BraceSemanticKind::Lambda)
+        {
+            sibling + self.case_unindent_spaces()
+        } else {
+            sibling
+        };
         let body = if body_uses_brace_column {
             sibling
         } else {
