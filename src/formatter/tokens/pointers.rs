@@ -940,7 +940,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn current_paren_is_lambda_parameter_list(&self) -> bool {
         let Some(open) = self.current.last_open_paren() else {
-            return false;
+            return self.active_paren_heads_lambda_body();
         };
         let mut before = self.current[..open].trimmed_end();
         if before.ends_with('>') {
@@ -988,6 +988,42 @@ impl FormatEngine<'_> {
         };
         let prefix = before[..start].trimmed_end();
         !prefix.ends_with(|ch: char| is_identifier_continue(ch) || matches!(ch, ')' | ']'))
+    }
+
+    /// Whether the parens around the token being pushed, opened on an
+    /// earlier line, hold a lambda's parameters: its body's brace follows
+    /// them past any specifiers and trailing return type.
+    fn active_paren_heads_lambda_body(&self) -> bool {
+        let tree = &self.tree;
+        let groups = &tree.groups;
+        let Some(params) = self
+            .current
+            .active_token()
+            .and_then(|token| groups.enclosing(token))
+            .filter(|&group| groups.get(group).delimiter == Delimiter::Paren)
+        else {
+            return false;
+        };
+        let Some(close) = groups.get(params).close else {
+            return false;
+        };
+        let mut index = close + 1;
+        while index < tree.tokens.len() {
+            match &tree.tokens[index] {
+                Token::Symbol('{') => {
+                    return groups
+                        .opened_at(index)
+                        .is_some_and(|body| tree.blocks.kind(body) == Some(BlockKind::Lambda));
+                }
+                Token::Symbol(';' | ',' | ')' | ']' | '}') => return false,
+                _ => {}
+            }
+            index = groups
+                .opened_at(index)
+                .and_then(|group| groups.get(group).close)
+                .map_or(index + 1, |close| close + 1);
+        }
+        false
     }
 
     fn current_paren_context_is_constructor_declaration(&self, segment: &str) -> bool {

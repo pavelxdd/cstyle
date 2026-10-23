@@ -24229,3 +24229,13 @@ fn a_declarator_split_off_its_template_type_stands_with_the_statement() {
     check(input, &["--max-code-length=50"], expected);
     check(expected, &["--max-code-length=50"], expected);
 }
+
+#[test]
+fn a_lambda_parameter_declarator_on_a_continued_row_spaces_as_on_the_first() {
+    // Every row of a lambda's parameters declares them, the one the list
+    // opens on or a later one.
+    let input = "void f()\n{\n    call([](const Item &a,\n    const Item &b) {\n        return a.value < b.value;\n    });\n}\n";
+    check(input, &["--style=kr", "--pad-oper"], input);
+    let typed = input.replace("Item &b", "Item& b");
+    check(&typed, &["--style=kr", "--align-pointer=name"], input);
+}
