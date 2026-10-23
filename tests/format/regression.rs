@@ -18194,6 +18194,8 @@ fn indent_preproc_define_leaves_a_case_block_outside_definitions_as_without_it()
     }
     let expected = "void f()\n{\n    switch (kind)\n        {\n#ifdef FEATURE\n        case 1: // first\n#endif\n            {\n            value=0;\n            }\n        default:\n            break;\n        }\n}\n";
     check(input, &["--style=vtk", "--indent-preproc-define"], expected);
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: // first\n#ifdef FEATURE\n    {\n#endif\n#ifdef FEATURE\n        value=0;\n#endif\n    }\n    default:\n        break;\n    }\n}\n";
+    check(input, &["--indent-preproc-define"], input);
 }
 
 #[test]
