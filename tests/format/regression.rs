@@ -17037,6 +17037,15 @@ fn pico_runs_a_bare_block_after_a_switch_in_as_after_any_statement() {
 }
 
 #[test]
+fn pico_runs_lists_and_lambda_bodies_after_a_switch_in_as_after_any_statement() {
+    check(
+        "void f()\n{\n    switch (state) {\n    case 1:\n        break;\n    }\n    struct Item item = {\n        .value = 1,\n    };\n}\nvoid g()\n{\n    switch (state) {\n    case 1:\n        break;\n    }\n    helper(items, [](const Item &item) {\n        return item.value;\n    });\n}\n",
+        &["--style=pico"],
+        "void f()\n{   switch (state)\n    {   case 1:\n            break; }\n    struct Item item =\n    {   .value = 1, }; }\nvoid g()\n{   switch (state)\n    {   case 1:\n            break; }\n    helper(items, [](const Item &item)\n    {   return item.value; }); }\n",
+    );
+}
+
+#[test]
 fn a_block_kept_after_a_label_leaves_the_comments_leading_the_next_line() {
     let input = "void f()\n{\ndone:\n    { value=0; }\n    /* note */ value = 1;\n}\n";
     check(input, &["--style=1tbs", "--keep-one-line-blocks"], input);
