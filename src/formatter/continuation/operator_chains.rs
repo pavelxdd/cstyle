@@ -529,20 +529,17 @@ impl FormatEngine<'_> {
         }
     }
 
-    /// Marks a ready line led by `:`; returns the `:` line and the tail
-    /// line it splits into, if it does.
-    pub(crate) fn postprocess_ready_operator_chain_line(
+    /// Marks a ready line led by `:`.
+    pub(crate) fn observe_ready_ternary_colon_line(
         &mut self,
         output_line_index: usize,
         line: &LineView<'_>,
-    ) -> Option<(String, String)> {
-        if !line.trimmed_start().starts_with(':') {
-            return None;
+    ) {
+        if line.trimmed_start().starts_with(':') {
+            self.layout
+                .frame_stack
+                .mark_last_ternary_colon_output_line(output_line_index);
         }
-        self.layout
-            .frame_stack
-            .mark_last_ternary_colon_output_line(output_line_index);
-        self.split_ternary_colon_after_chained_true_arm(line)
     }
 
     pub(crate) fn stream_chain_frame_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {
@@ -1795,46 +1792,6 @@ impl FormatEngine<'_> {
                 None
             }
         })
-    }
-
-    fn split_ternary_colon_after_chained_true_arm(
-        &self,
-        line: &LineView<'_>,
-    ) -> Option<(String, String)> {
-        let current = line.trimmed_start();
-        let tail = current.strip_prefix(": ")?;
-        if tail.is_empty() {
-            return None;
-        }
-        let previous = self.output.last_non_empty_scoped()?;
-        if !self
-            .output
-            .code_of(previous)
-            .trimmed_start()
-            .starts_with('.')
-        {
-            return None;
-        }
-        let question_indent =
-            self.output
-                .scoped()
-                .iter()
-                .rev()
-                .skip(1)
-                .take(8)
-                .find_map(|line| {
-                    self.output
-                        .code_of(line)
-                        .trimmed_start()
-                        .starts_with('?')
-                        .then(|| leading_visual_width(line, self.options.tab_width))
-                })?;
-        let indent = leading_visual_width(line, self.options.tab_width);
-        if indent != question_indent {
-            return None;
-        }
-        let prefix = &line[..line.len() - current.len()];
-        Some((format!("{prefix}:"), format!("{prefix}{tail}")))
     }
 
     pub(crate) fn return_ternary_colon_after_multiline_template_declaration_indent_spaces(

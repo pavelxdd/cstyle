@@ -1080,7 +1080,7 @@ fn lambda_return_ternary_with_braced_true_arm_aligns_to_return_value() {
             "void f() {\n  return apply_result<char>(\n      dst, rules, count, content_count, [=](generic_iterator<ResultIt> at) {\n        return is_ready\n                   ? create_generic_value(bounded_result_iterator{at, count}, v)\n                         .stored_iterator_ref\n                   : copy<char>(v.data(), v.data() + count, at);\n      });\n}\n",
             &FormatOptions::default(),
         ),
-        "void f() {\n    return apply_result<char>(\n    dst, rules, count, content_count, [=](generic_iterator<ResultIt> at) {\n        return is_ready\n               ? create_generic_value(bounded_result_iterator{at, count}, v)\n               .stored_iterator_ref\n               :\n               copy<char>(v.data(), v.data() + count, at);\n    });\n}\n",
+        "void f() {\n    return apply_result<char>(\n    dst, rules, count, content_count, [=](generic_iterator<ResultIt> at) {\n        return is_ready\n               ? create_generic_value(bounded_result_iterator{at, count}, v)\n               .stored_iterator_ref\n               : copy<char>(v.data(), v.data() + count, at);\n    });\n}\n",
     );
 }
 

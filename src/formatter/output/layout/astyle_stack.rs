@@ -1230,17 +1230,18 @@ impl FormatEngine<'_> {
             let Some(before) = self.tree.previous_code_token_in_first_branches(start) else {
                 break None;
             };
-            // A directive outside parentheses ends what astyle stacks when
-            // the lines before it carry the indent of their block.
+            // A directive of a block the option indents, at file scope or
+            // right in a namespace, ends what astyle stacks.
             if self.options.indent_preproc_block
                 && tokens[before + 1..start]
                     .iter()
                     .enumerate()
                     .any(|(offset, token)| {
                         matches!(token, Token::Preprocessor(_))
-                            && groups
-                                .enclosing(before + 1 + offset)
-                                .is_none_or(|group| groups.get(group).delimiter == Delimiter::Brace)
+                            && groups.enclosing(before + 1 + offset).is_none_or(|group| {
+                                !self.options.indent_namespaces
+                                    && self.tree.blocks.kind(group) == Some(BlockKind::Namespace)
+                            })
                     })
             {
                 break None;

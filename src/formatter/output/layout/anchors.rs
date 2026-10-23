@@ -276,9 +276,10 @@ impl FormatEngine<'_> {
             )
         })
         .or_else(|| {
-            when(matches!(previous, Some(Token::Operator(_))), || {
-                self.assigned_operand_indent(first)
-            })
+            when(
+                parens_align && matches!(previous, Some(Token::Operator(_))),
+                || self.assigned_operand_indent(first),
+            )
         })
         .or_else(|| {
             when(parens_align && leads_operator, || {

@@ -325,19 +325,13 @@ impl FormatEngine<'_> {
             .filter(|&spaces| leading_visual_width(&view, self.options.tab_width) != spaces)
             .map(|spaces| reindented(spaces, &view));
         let view = tail.as_deref().map_or(view, LineView::new);
-        let split = self.postprocess_ready_operator_chain_line(output_line_index, &view);
+        self.observe_ready_ternary_colon_line(output_line_index, &view);
         drop(view);
-        self.published_line_shift = 0;
-        if let Some((colon, tail)) = split {
-            self.output.push(colon);
-            self.output.push(tail);
-        } else {
-            let laid_out = leading_visual_width(&line, self.options.tab_width);
-            let line = tail.or(embedded).or(closing).or(normalized).unwrap_or(line);
-            self.published_line_shift =
-                leading_visual_width(&line, self.options.tab_width) as isize - laid_out as isize;
-            self.output.push_with_hints(line, output_line_hints);
-        }
+        let laid_out = leading_visual_width(&line, self.options.tab_width);
+        let line = tail.or(embedded).or(closing).or(normalized).unwrap_or(line);
+        self.published_line_shift =
+            leading_visual_width(&line, self.options.tab_width) as isize - laid_out as isize;
+        self.output.push_with_hints(line, output_line_hints);
     }
 
     pub(super) fn deferred_post_emission_layout(

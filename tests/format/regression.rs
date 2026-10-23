@@ -3600,6 +3600,61 @@ fn whitesmith_sets_a_comment_led_first_element_brace_where_it_stands_without_the
 }
 
 #[test]
+fn a_broken_list_brace_leaves_two_comments_after_it_where_it_leaves_one() {
+    for comments in ["/* a */", "/* a */ /* b */"] {
+        check(
+            &format!(
+                "void f()\n{{\n    static const int items[] = {{ {comments}\n        1,\n    }};\n}}\n"
+            ),
+            &["--style=allman"],
+            &format!(
+                "void f()\n{{\n    static const int items[] =   {comments}\n    {{\n        1,\n    }};\n}}\n"
+            ),
+        );
+    }
+}
+
+#[test]
+fn indenting_after_parens_indents_operand_and_arm_rows_after_a_block_directive_as_any_rows() {
+    check(
+        "void f()\n{\n    result = ready ? first\n#ifdef FEATURE\n                    : other ? second\n#endif\n                    : third;\n    value = first +\n#ifdef FEATURE\n                          second +\n#endif\n                    third;\n}\n",
+        &[
+            "--style=kr",
+            "--indent-preproc-block",
+            "--indent-after-parens",
+        ],
+        "void f()\n{\n    result = ready ? first\n#ifdef FEATURE\n        : other ? second\n#endif\n        : third;\n    value = first +\n#ifdef FEATURE\n        second +\n#endif\n        third;\n}\n",
+    );
+}
+
+#[test]
+fn a_template_parameter_row_inside_parens_its_default_opened_continues_the_parens() {
+    let input = "template <typename Range, typename S,\n          typename Char = decltype(convert(\n              first))::value_type,\n          typename T>\nauto join(Range &&r) -> int;\n";
+    for style in ["--style=kr", "--style=allman"] {
+        check(
+            input,
+            &[style],
+            "template <typename Range, typename S,\n          typename Char = decltype(convert(\n                                       first))::value_type,\n          typename T>\nauto join(Range &&r) -> int;\n",
+        );
+    }
+}
+
+#[test]
+fn a_ternary_colon_after_a_member_row_of_the_true_arm_keeps_its_line() {
+    let input = "int f()\n{\n    return ready\n           ? write(first, second)\n                 .member\n           : copy(third);\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "int f()\n{\n    return ready\n           ? write(first, second)\n           .member\n           : copy(third);\n}\n",
+    );
+    check(
+        input,
+        &["--style=linux", "--indent-after-parens"],
+        "int f()\n{\n    return ready\n        ? write(first, second)\n        .member\n        : copy(third);\n}\n",
+    );
+}
+
+#[test]
 fn keeping_one_line_blocks_continues_arguments_run_in_after_else_past_a_block_a_level_in() {
     let input = "void f(void)\n{\n    if (ready) { x = 1; } else value = compute(first,\n            second);\n    while (ready) { x = 1; } value = compute(first,\n            second);\n}\n";
     check(

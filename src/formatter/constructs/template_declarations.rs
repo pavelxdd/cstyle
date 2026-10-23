@@ -290,8 +290,11 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn prepare_template_continuation_token_indent(&mut self, source_column: usize) {
+        // A row in parens the head opened continues them where parens
+        // align their rows.
         if !self.layout.template_declaration.uses_source_indent
             || !self.token_input.token_begins_source_line
+            || self.layout.nesting.paren_depth > 0 && !self.options.indent_after_parens
         {
             return;
         }
