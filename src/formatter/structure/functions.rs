@@ -933,8 +933,10 @@ fn head_end(
                     .and_then(|before| groups.closed_at(before))
                     .is_some());
         // A trailing return type holds groups, as `decltype(x)`, and the
-        // commas of its template arguments.
+        // commas of its template arguments; constructor initializers follow
+        // none.
         if matches!(tokens[next], Token::Symbol('(' | ','))
+            && !constructor_initializers
             && trailing_return_angle_depth(tokens, groups, level, walk.arrow, walk.reached, next)
                 .is_some_and(|depth| depth > 0 || tokens[next] == Token::Symbol('('))
         {
@@ -992,7 +994,9 @@ fn head_end(
             Token::Operator(operator) if operator == "=" && knr_semicolon.is_some() => {
                 return unterminated(knr_semicolon);
             }
-            Token::Symbol(',') if knr_semicolon.is_none() => return Some(HeadEnd::Found(None)),
+            Token::Symbol(',') if knr_semicolon.is_none() && !constructor_initializers => {
+                return Some(HeadEnd::Found(None));
+            }
             _ => {}
         }
         index = match groups.opened_at(next) {

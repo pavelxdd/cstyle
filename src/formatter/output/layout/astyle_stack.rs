@@ -629,7 +629,12 @@ impl FormatEngine<'_> {
         let start_line = self.output.line_with_token(start)?;
         // The start leads its line, after at most a `}` and headers.
         let (header_levels, line_first) = self.run_in_headers(start_line, start)?;
-        if line_first != start {
+        // A constructor's `:` leading the line registers the initializer
+        // after it.
+        let after_colon = self.tree.previous_code_token(start) == Some(line_first)
+            && matches!(tokens[line_first], Token::Symbol(':'))
+            && self.separates_constructor_initializers(line_first);
+        if line_first != start && !after_colon {
             return None;
         }
         // astyle takes a bare block brace after a directive for an array
@@ -678,7 +683,16 @@ impl FormatEngine<'_> {
                 cached.shift_stacked,
                 cached.conditionals,
             ),
-            None => (Replay::default(), None, false, start, false, Vec::new()),
+            None => {
+                let mut replay = Replay::default();
+                if after_colon {
+                    replay
+                        .stack
+                        .push(self.token_column(start)?.checked_sub(column_base)?);
+                    replay.continuation = true;
+                }
+                (replay, None, false, start, false, Vec::new())
+            }
         };
         if shift_stacked && first_is_shift {
             return None;
@@ -1212,6 +1226,8 @@ impl FormatEngine<'_> {
                 self.is_stack_block(closed) || self.closes_control_header(closed)
             }),
             Token::Word(word) => word == "else" || word == "do",
+            // Each of a constructor's initializers continues on its own.
+            Token::Symbol(':' | ',') => self.separates_constructor_initializers(before),
             _ => false,
         }
     }
@@ -1342,6 +1358,7 @@ impl FormatEngine<'_> {
                 // A template head ending its line leaves the declaration it
                 // introduces to start the statement.
                 || self.ends_template_head_line(before)
+                || self.separates_constructor_initializers(before)
             {
                 break None;
             }

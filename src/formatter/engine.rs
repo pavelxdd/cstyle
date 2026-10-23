@@ -313,6 +313,8 @@ pub(crate) struct FormatEngine<'a> {
     /// Indices of the closers of the groups other than a lambda's body that
     /// hold a `;` at their own level, in order.
     statement_group_closes: std::cell::OnceCell<Vec<u32>>,
+    /// The `:` and `,` tokens that separate constructor initializers.
+    constructor_initializer_separators: std::cell::OnceCell<Vec<u32>>,
     /// The source columns of the line being formatted, kept to reuse their
     /// buffers.
     line_columns: LineSourceColumns,
@@ -549,6 +551,7 @@ impl<'a> FormatEngine<'a> {
             case_labels: std::cell::OnceCell::new(),
             lambda_body_braces: std::cell::OnceCell::new(),
             statement_group_closes: std::cell::OnceCell::new(),
+            constructor_initializer_separators: std::cell::OnceCell::new(),
             constructor_colon_cache: std::cell::Cell::new(None),
             layout: LayoutState {
                 indentation: IndentationState::default(),
@@ -1152,6 +1155,53 @@ impl<'a> FormatEngine<'a> {
             closes.sort_unstable();
             closes
         })
+    }
+
+    /// Whether the token at `index` is the `:` opening a constructor's
+    /// initializers or a `,` between them.
+    pub(crate) fn separates_constructor_initializers(&self, index: usize) -> bool {
+        self.constructor_initializer_separators
+            .get_or_init(|| {
+                let tokens = &self.tree.tokens;
+                let groups = &self.tree.groups;
+                let mut separators = Vec::new();
+                for head in self.tree.functions.heads() {
+                    let (Some(close), Some(body)) = (groups.get(head.params).close, head.body)
+                    else {
+                        continue;
+                    };
+                    let level = groups.enclosing(close);
+                    let mut colon = false;
+                    // Between initializers, angles only hold template
+                    // arguments.
+                    let mut angles = 0usize;
+                    for at in close + 1..groups.get(body).open {
+                        if groups.enclosing(at) != level {
+                            continue;
+                        }
+                        match &tokens[at] {
+                            Token::Symbol(':') if !colon => {
+                                colon = true;
+                                separators.push(at as u32);
+                            }
+                            Token::Symbol(',') if colon && angles == 0 => {
+                                separators.push(at as u32);
+                            }
+                            Token::Operator(operator) if colon => match operator.as_str() {
+                                "<" => angles += 1,
+                                ">" => angles = angles.saturating_sub(1),
+                                ">>" => angles = angles.saturating_sub(2),
+                                _ => {}
+                            },
+                            _ => {}
+                        }
+                    }
+                }
+                separators.sort_unstable();
+                separators
+            })
+            .binary_search(&(index as u32))
+            .is_ok()
     }
 
     /// Whether the `[` at `open` starts an initializer designator. Each `[`

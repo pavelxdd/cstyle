@@ -23777,3 +23777,43 @@ fn an_argument_row_after_a_run_in_header_takes_its_level_past_a_closed_brace_lis
         check(expected, args, expected);
     }
 }
+
+#[test]
+fn paren_rows_in_a_later_constructor_initializer_stack_from_its_member() {
+    // Commas between initializers keep the head going, so each member
+    // starts the stack its argument rows count from.
+    let input = "Item::Item()\n    : one(1),\n      two(make(first,\n               other(\n                   second)))\n{\n}\nclass Item {\n    Item()\n        : one(1), two(2),\n          three(make(first,\n                     other(\n                         second))) {}\n};\nItem::Item() :\n    one(1),\n    two(make(first,\n             other(\n                 second)))\n{\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=kr"][..],
+            "Item::Item()\n    : one(1),\n      two(make(first,\n               other(\n                   second)))\n{\n}\nclass Item\n{\n    Item()\n        : one(1), two(2),\n          three(make(first,\n                     other(\n                         second))) {}\n};\nItem::Item() :\n    one(1),\n    two(make(first,\n             other(\n                 second)))\n{\n}\n",
+        ),
+        (
+            &["--style=kr", "--indent-after-parens"][..],
+            "Item::Item()\n    : one(1),\n      two(make(first,\n              other(\n                  second)))\n{\n}\nclass Item\n{\n    Item()\n        : one(1), two(2),\n          three(make(first,\n                  other(\n                      second))) {}\n};\nItem::Item() :\n    one(1),\n    two(make(first,\n            other(\n                second)))\n{\n}\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
+fn a_constructor_colon_leading_its_line_registers_the_first_initializer() {
+    // The first initializer's rows count from its own column, as a later
+    // one's do from its line's; template arguments hold no separator.
+    let input = "Item::Item()\n    : Base<A, B>(make(first,\n                      other(\n                          second))),\n      two(make(\n                third))\n{\n}\nItem::Item()\n    : Base(make(\n                 first)),\n      two(second)\n{\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=kr"][..],
+            "Item::Item()\n    : Base<A, B>(make(first,\n                      other(\n                          second))),\n      two(make(\n              third))\n{\n}\nItem::Item()\n    : Base(make(\n               first)),\n      two(second)\n{\n}\n",
+        ),
+        (
+            &["--style=kr", "--indent-after-parens"][..],
+            "Item::Item()\n    : Base<A, B>(make(first,\n              other(\n                  second))),\n      two(make(\n              third))\n{\n}\nItem::Item()\n    : Base(make(\n              first)),\n      two(second)\n{\n}\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
