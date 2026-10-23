@@ -224,6 +224,10 @@ impl FormatEngine<'_> {
     /// the brace into that row; a block comment does where braces attach.
     fn comment_opens_list_rows(&self, brace: usize) -> bool {
         let tokens = &self.tree.tokens;
+        // A brace a rewrite made has no index in the source.
+        if brace >= tokens.len() {
+            return false;
+        }
         let leads_line = tokens[..brace]
             .iter()
             .rev()

@@ -502,3 +502,19 @@ fn whitesmith_brace_after_same_line_closing_brace_keeps_case_body_indent() {
         ),
     );
 }
+
+#[test]
+fn braces_added_after_an_unclosed_list_in_parens_format_without_panic() {
+    for style in ["--style=lisp", "--style=allman"] {
+        let mut options = FormatOptions::default();
+        let args = [style, "--add-braces"].map(str::to_owned);
+        apply_command_line_args(&mut options, &args).expect("valid options");
+        let source = "helper((Item) {\nelse\n    n = 0;\n";
+        let output = format_bytes(source.as_bytes(), &options).expect("format bytes");
+        assert_eq!(
+            format_bytes(&output, &options).expect("format bytes"),
+            output,
+            "{style}"
+        );
+    }
+}
