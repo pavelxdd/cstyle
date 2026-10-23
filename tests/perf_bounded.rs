@@ -560,6 +560,17 @@ fn runs_that_each_line_looked_across_stay_bounded() {
             kr.clone(),
         ),
         (
+            "enums each with a comment after a member",
+            (0..n / 4)
+                .map(|i| {
+                    format!(
+                        "enum kind{i} {{\n    FIRST = 1,\n    /* note */\n    SECOND = 2,\n}};\n"
+                    )
+                })
+                .collect::<String>(),
+            FormatOptions::default(),
+        ),
+        (
             "a run of line comments in a body",
             format!(
                 "void f() {{\n{}    x();\n}}\n",

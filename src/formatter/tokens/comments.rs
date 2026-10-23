@@ -2650,6 +2650,8 @@ impl FormatEngine<'_> {
         let comment = self.current.active_comment()?;
         let previous = self.tree.previous_code_token(comment)?;
         let group = groups.enclosing(previous);
+        // The statement starts inside its group, past the groups nested in it.
+        let opener = group.map(|group| groups.get(group).open);
         let mut index = previous;
         let keyword = loop {
             match &tokens[index] {
@@ -2661,7 +2663,13 @@ impl FormatEngine<'_> {
                 }
                 _ => {}
             }
+            if let Some(nested) = groups.closed_at(index) {
+                index = groups.get(nested).open;
+            }
             index = self.tree.previous_code_token(index)?;
+            if opener.is_some_and(|opener| index <= opener) {
+                return None;
+            }
         };
         let value = next_code_token(tokens, keyword + 1).filter(|&value| value <= previous)?;
         let line = self.output.line_with_token(keyword)?;
