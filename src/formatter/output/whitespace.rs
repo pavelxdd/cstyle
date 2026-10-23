@@ -1,5 +1,6 @@
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::state::PreviousToken;
+use crate::formatter::text::trim::Trimmed;
 
 impl FormatEngine<'_> {
     pub(crate) fn ensure_space(&mut self) {
@@ -69,7 +70,8 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn pad_before_open_paren_space(&mut self) {
-        if self.options.unpad_parens {
+        // The whitespace after a brace is an indent, not paren padding.
+        if self.options.unpad_parens && !self.current.trimmed_end().ends_with('{') {
             let use_tab = self.layout.previous != PreviousToken::OpenParen
                 && self
                     .token_input

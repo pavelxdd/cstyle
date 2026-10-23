@@ -24295,3 +24295,20 @@ fn pad_method_colon_pads_a_selector_colon_before_an_objc_literal() {
         check(expected, &[&option], expected);
     }
 }
+
+#[test]
+fn unpad_paren_keeps_the_indent_after_a_brace_before_an_outside_padded_paren() {
+    // The whitespace after a brace is an indent, not paren padding.
+    let input = "void f()\n{ (use(v)); }\nint a[] = {   (1), 2 };\n";
+    let pico = "void f()\n{   (use (v)); }\nint a[] = {   (1), 2 };\n";
+    for option in ["--pad-paren-out", "--pad-paren"] {
+        let expected = if option == "--pad-paren" {
+            "void f()\n{   ( use ( v ) ); }\nint a[] = {   ( 1 ), 2 };\n"
+        } else {
+            pico
+        };
+        let args = ["--style=pico", "--unpad-paren", option];
+        check(input, &args, expected);
+        check(expected, &args, expected);
+    }
+}
