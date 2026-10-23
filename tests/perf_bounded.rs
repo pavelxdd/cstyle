@@ -425,6 +425,11 @@ fn runs_that_each_line_looked_across_stay_bounded() {
     capped.max_code_length = Some(100);
     let mut kr = FormatOptions::default();
     kr.set_style(cstyle::config::StylePreset::Kr);
+    let mut whitesmith = FormatOptions::default();
+    whitesmith.set_style(cstyle::config::StylePreset::Whitesmith);
+    let mut lisp = FormatOptions::default();
+    lisp.set_style(cstyle::config::StylePreset::Lisp);
+    lisp.indent_width = 2;
     let blocks = |block: &dyn Fn(usize) -> String| {
         format!(
             "void f(void)\n{{\n{}}}\n",
@@ -589,6 +594,25 @@ fn runs_that_each_line_looked_across_stay_bounded() {
                     .collect::<String>()
             ),
             FormatOptions::default(),
+        ),
+        (
+            "rows of a long conditional chain",
+            format!(
+                "int x = a\n{};\n",
+                (0..n / 2)
+                    .map(|i| format!("        ? b{i}\n        : c{i} "))
+                    .collect::<String>()
+            ),
+            whitesmith.clone(),
+        ),
+        (
+            "closers a line each joining deep blocks",
+            format!(
+                "void f() {{\n{}x();\n{}}}\n",
+                "{\n".repeat(n / 12),
+                "}\n".repeat(n / 12)
+            ),
+            lisp.clone(),
         ),
         (
             "a long argument list a row each",

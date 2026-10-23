@@ -1360,21 +1360,37 @@ impl FormatEngine<'_> {
         if !joins(line) {
             return None;
         }
+        let tab_width = self.options.tab_width;
+        let gap =
+            |previous: usize| usize::from(!self.output[previous].trimmed_end().ends_with('{'));
+        // A line joining the line asked last goes on from that line's column,
+        // while the lines up to it stand as they were.
+        if let Some((asked, column, version)) = self.lisp_join_column.get()
+            && asked + 1 == line
+            && self
+                .output
+                .lowest_change_since(version)
+                .is_some_and(|lowest| lowest > asked)
+            && joins(asked)
+        {
+            let end = visual_width_from(self.output.trimmed(asked), column, tab_width) + gap(asked);
+            self.lisp_join_column
+                .set(Some((line, end, self.output.version())));
+            return Some(end);
+        }
         let mut start = line;
         while joins(start) {
             start -= 1;
         }
-        let tab_width = self.options.tab_width;
         let mut end = visual_width_from(self.output[start].trimmed_end(), 0, tab_width);
         for index in start + 1..=line {
-            let previous = &self.output[index - 1];
-            if !previous.trimmed_end().ends_with('{') {
-                end += 1;
-            }
+            end += gap(index - 1);
             if index < line {
                 end = visual_width_from(self.output.trimmed(index), end, tab_width);
             }
         }
+        self.lisp_join_column
+            .set(Some((line, end, self.output.version())));
         Some(end)
     }
 

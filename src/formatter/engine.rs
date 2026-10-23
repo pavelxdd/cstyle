@@ -276,6 +276,9 @@ pub(crate) struct FormatEngine<'a> {
     /// literal it set out from and the group holding them.
     pub(crate) string_assign_walk:
         std::cell::Cell<Option<crate::formatter::output::layout::anchors::StringAssignWalk>>,
+    /// The column a closer joining lines in Lisp style was last found at:
+    /// its line, the column, and the output version then.
+    pub(crate) lisp_join_column: std::cell::Cell<Option<(usize, usize, u64)>>,
     /// The look for the code after the comments leading a line.
     next_code_look: crate::formatter::structure::blocks::TokenLook,
     /// The look for the token after the comments from a comment on.
@@ -490,6 +493,7 @@ impl<'a> FormatEngine<'a> {
             case_body_line_look: Default::default(),
             initializer_member_look: Default::default(),
             string_assign_walk: std::cell::Cell::new(None),
+            lisp_join_column: std::cell::Cell::new(None),
             next_code_look: Default::default(),
             after_comments_look: Default::default(),
             braced_chain_blocks: std::cell::OnceCell::new(),

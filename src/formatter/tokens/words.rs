@@ -95,7 +95,6 @@ impl FormatEngine<'_> {
             && self.layout.nesting.paren_depth == 0
             && !self.current_line_has_class_initializer_colon
             && !self.layout.in_class_base_clause
-            && !self.line_colon_ends_class_head()
             && !self.layout.line_state.ternary_colon
             && !self.layout.objc.message_active
             && !after_leading_comments(self.current.trimmed_start()).starts_with("@interface ")
@@ -111,6 +110,7 @@ impl FormatEngine<'_> {
             )
             .is_none()
             && !self.current.trimmed_start().starts_with('#')
+            && !self.line_colon_ends_class_head()
             && after_leading_comments(self.current.trimmed_end().trim_end_matches(':').trimmed_end())
                 .contains(|ch: char| {
                     !(ch.is_ascii_alphanumeric() || ch == '_' || ch.is_whitespace())
