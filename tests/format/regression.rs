@@ -24312,3 +24312,27 @@ fn unpad_paren_keeps_the_indent_after_a_brace_before_an_outside_padded_paren() {
         check(expected, &args, expected);
     }
 }
+
+#[test]
+fn rvalue_reference_after_template_arguments_in_a_header_aligns_as_in_a_statement() {
+    // A header's parens read `&&` after a template's `>` as a reference,
+    // as a statement or an argument list does.
+    let input = "void f()\n{\n    for (Pair<A, B> && item : items) go();\n    if (is_v<T> && ok) go();\n    while (Box<T>&&ok) go();\n    bool b = is_v<T> && ok;\n    if (n>m && w) go();\n}\n";
+    for (args, expected) in [
+        (
+            &["--align-pointer=name"][..],
+            "void f()\n{\n    for (Pair<A, B> &&item : items) go();\n    if (is_v<T> &&ok) go();\n    while (Box<T> &&ok) go();\n    bool b = is_v<T> &&ok;\n    if (n>m && w) go();\n}\n",
+        ),
+        (
+            &["--align-pointer=type"][..],
+            "void f()\n{\n    for (Pair<A, B>&& item : items) go();\n    if (is_v<T>&& ok) go();\n    while (Box<T>&& ok) go();\n    bool b = is_v<T>&& ok;\n    if (n>m && w) go();\n}\n",
+        ),
+        (
+            &["--pad-oper"][..],
+            "void f()\n{\n    for (Pair<A, B> && item : items) go();\n    if (is_v<T> && ok) go();\n    while (Box<T>&&ok) go();\n    bool b = is_v<T> && ok;\n    if (n > m && w) go();\n}\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}

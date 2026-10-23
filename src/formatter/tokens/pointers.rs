@@ -149,7 +149,10 @@ impl FormatEngine<'_> {
             return true;
         }
         let previous_word = trailing_word(&self.current);
-        if (self.layout.command_state.current_header.is_some() && previous_word != language::AUTO)
+        let follows_template_arguments = self.current.trimmed_end().ends_with('>');
+        if (self.layout.command_state.current_header.is_some()
+            && previous_word != language::AUTO
+            && !follows_template_arguments)
             || (self.layout.nesting.paren_depth > 0
                 && self
                     .layout
@@ -161,7 +164,7 @@ impl FormatEngine<'_> {
             return false;
         }
         previous_word == language::AUTO
-            || self.current.trimmed_end().ends_with('>')
+            || follows_template_arguments
             || self.looks_like_pointer_declaration_context()
     }
 

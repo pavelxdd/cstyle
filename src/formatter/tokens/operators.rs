@@ -1335,7 +1335,7 @@ impl FormatEngine<'_> {
                 && (split_rvalue_reference
                     || (!self.current_paren_is_expression_context()
                         || trailing_word(&self.current) == language::AUTO
-                        || self.current.trimmed_end().ends_with('*')
+                        || self.current.trimmed_end().ends_with(['*', '>'])
                         || self.current_in_cast_type_group()
                         || self.current_in_parenthesized_type_operand()
                         || self.current_paren_context_is_declaration()
