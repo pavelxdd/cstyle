@@ -24263,3 +24263,11 @@ fn a_class_in_a_define_body_sets_its_access_labels_as_in_code() {
         check(expected, &args, expected);
     }
 }
+
+#[test]
+fn attach_return_type_joins_an_old_style_definition_as_any_definition() {
+    let input = "int\nadd(a, b)\nint a;\nint b;\n{\n    return a + b;\n}\nint\nsum(int a, int b)\n{\n    return a + b;\n}\n";
+    let expected = "int add(a, b)\nint a;\nint b;\n{\n    return a + b;\n}\nint sum(int a, int b)\n{\n    return a + b;\n}\n";
+    check(input, &["--attach-return-type"], expected);
+    check(expected, &["--attach-return-type"], expected);
+}
