@@ -3462,6 +3462,30 @@ fn break_blocks_pads_a_header_after_a_comment_led_code_line_as_after_its_code() 
 }
 
 #[test]
+fn a_body_run_in_after_a_case_label_continues_its_arguments_a_level_in_whatever_headers_follow() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: value = compute(first,\n                                second);\n        break;\n    case 2: if (ready) value = compute(first,\n                                           second);\n        break;\n    default: if (ready) value = helper(first,\n                                           second);\n        break;\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr", "--keep-one-line-statements"],
+        "void f()\n{\n    switch (kind) {\n    case 1: value = compute(first,\n                                second);\n        break;\n    case 2: if (ready) value = compute(first,\n                                               second);\n        break;\n    default: if (ready) value = helper(first,\n                                               second);\n        break;\n    }\n}\n",
+    );
+    check(
+        input,
+        &[
+            "--style=kr",
+            "--keep-one-line-statements",
+            "--indent-switches",
+        ],
+        "void f()\n{\n    switch (kind) {\n        case 1: value = compute(first,\n                                    second);\n            break;\n        case 2: if (ready) value = compute(first,\n                                                   second);\n            break;\n        default: if (ready) value = helper(first,\n                                                   second);\n            break;\n    }\n}\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith", "--keep-one-line-statements"],
+        "void f()\n    {\n    switch (kind)\n        {\n        case 1: value = compute(first,\n                                    second);\n            break;\n        case 2: if (ready) value = compute(first,\n                                                   second);\n            break;\n        default: if (ready) value = helper(first,\n                                                   second);\n            break;\n        }\n    }\n",
+    );
+}
+
+#[test]
 fn break_all_blocks_keeps_a_one_line_statement_body_with_its_else() {
     let input = "void f()\n{   for (i = 0; i < n; i++)\n    {   if (type == TCP)\n            a();\n        else\n            b(); }\n\n    x = 1;\n\n    if (c)\n        d();\n    else\n        e(); }\n";
     check(input, &["--style=pico", "--break-blocks=all"], input);

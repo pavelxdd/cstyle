@@ -455,6 +455,17 @@ impl FormatEngine<'_> {
             };
             let body = match word.as_str() {
                 "else" | "do" => next_code_token(tokens, line_first + 1)?,
+                // A label's statements stand in its body.
+                "case" | "default" => {
+                    let level = self.tree.groups.enclosing(line_first);
+                    let Some(colon) = (line_first + 1..start).find(|&index| {
+                        matches!(tokens[index], Token::Symbol(':'))
+                            && self.tree.groups.enclosing(index) == level
+                    }) else {
+                        break;
+                    };
+                    next_code_token(tokens, colon + 1)?
+                }
                 "if" | "while" | "for" => {
                     let Some(close) = next_code_token(tokens, line_first + 1)
                         .filter(|&open| matches!(tokens[open], Token::Symbol('(')))
