@@ -5323,6 +5323,16 @@ fn pico_pads_no_closing_brace_after_a_comment_or_on_the_line_after_a_directive()
 }
 
 #[test]
+fn pico_pads_a_one_line_bare_block_alike_whatever_lines_part_it_from_its_enclosing_brace() {
+    // Directive lines between the braces leave the block as a comment does.
+    for between in ["", "// note\n", "#ifdef FEATURE\n#endif\n"] {
+        let input = format!("void f()\n{{\n{between}    {{ value=0; }}\n    x();\n}}\n");
+        let expected = format!("void f()\n{{\n{between}    {{   value=0; }}\n    x(); }}\n");
+        check(&input, &["--style=pico"], &expected);
+    }
+}
+
+#[test]
 fn lisp_pads_no_closing_brace_right_after_a_comment() {
     let input = "int uv__random_sysctl(void* buf, size_t buflen)\n{\n  static int name[] = {1 /*CTL_KERN*/, 40 /*KERN_RANDOM*/, 6 /*RANDOM_UUID*/};\n  static const char *azSub[] = {\"count\", \"depth\", 0};\n  int a[] = {1, 2};\n  return 0;\n}\n";
     check(
@@ -16879,6 +16889,19 @@ fn lisp_parts_a_closer_from_a_comment_before_it_whatever_attribute_leads_the_blo
         );
         let expected = format!(
             "void f() {{\n    if (ready){attribute} {{\n        value = 1;\n        /* note */\n    }}\n    other(); }}\n"
+        );
+        check(&input, &["--style=lisp"], &expected);
+    }
+}
+
+#[test]
+fn lisp_parts_a_closer_from_a_comment_before_it_whatever_parameters_a_lambda_takes() {
+    for parameters in ["()", "(const Item &item)"] {
+        let input = format!(
+            "void f()\n{{\n    helper(items, [&]{parameters} {{\n        return 0;\n    /* note */ }});\n    other();\n}}\n"
+        );
+        let expected = format!(
+            "void f() {{\n    helper(items, [&]{parameters} {{\n        return 0;\n        /* note */\n    }});\n    other(); }}\n"
         );
         check(&input, &["--style=lisp"], &expected);
     }
