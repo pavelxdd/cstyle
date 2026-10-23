@@ -23849,3 +23849,33 @@ fn members_after_a_function_try_colon_ending_its_line_stand_a_level_in() {
     let input = "Item::Item() try :\n    one(1),\n    two(2)\n{\n    go();\n}\ncatch (...)\n{\n}\nItem::Item()\ntry :\n    one(1)\n{\n    go();\n}\ncatch (...)\n{\n}\nclass Item\n{\n    Item()\ntry :\n        one(1)\n    {\n        go();\n    }\n    catch (...)\n    {\n    }\n};\n";
     check(input, &["--style=allman"], input);
 }
+
+#[test]
+fn a_constructor_member_row_opening_the_body_stands_with_the_members() {
+    // The body's brace on the last member's row leaves the row a member's,
+    // whatever the continuation indent.
+    let input = "class Item {\npublic:\n    Item() :\n        one(1),\n        two(2),\n        three(3) {\n        go();\n    }\n};\n";
+    for args in [
+        &["--style=java", "--indent-continuation=2"][..],
+        &["--style=java", "--indent-continuation=3"][..],
+        &["--style=kr", "--attach-inlines", "--indent-continuation=2"][..],
+    ] {
+        let expected = if args[0] == "--style=kr" {
+            "class Item\n{\npublic:\n    Item() :\n        one(1),\n        two(2),\n        three(3) {\n        go();\n    }\n};\n"
+        } else {
+            input
+        };
+        check(input, args, expected);
+    }
+    let expected = "class Item {\npublic:\n    Item() :\n        one(1),\n        two(2),\n        three(3) {\n        go(); } };\n";
+    check(
+        input,
+        &["--style=lisp", "--indent-continuation=2"],
+        expected,
+    );
+    check(
+        expected,
+        &["--style=lisp", "--indent-continuation=2"],
+        expected,
+    );
+}

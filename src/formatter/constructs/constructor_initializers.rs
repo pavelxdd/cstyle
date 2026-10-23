@@ -607,11 +607,12 @@ impl FormatEngine<'_> {
         if !previous_code.ends_with(',') && previous_code.trimmed() != ":" {
             return None;
         }
+        // The constructor's body may open on the last member's row.
         if self
             .open_paren_column_of(previous_code.trimmed_start())
             .is_some()
             || has_unmatched_open_brace(previous_code)
-            || has_unmatched_open_brace(trimmed)
+            || has_unmatched_open_brace(trimmed) && !self.pending_line_ends_opening_function_body()
         {
             return None;
         }
@@ -632,6 +633,17 @@ impl FormatEngine<'_> {
             return Some(leading_visual_width(previous, self.options.tab_width));
         }
         Some(base_indent)
+    }
+
+    /// Whether the line being laid out ends with the brace of a function's
+    /// body.
+    fn pending_line_ends_opening_function_body(&self) -> bool {
+        self.output.pending_tokens().is_some_and(|span| {
+            matches!(self.tree.tokens[span.last], Token::Symbol('{'))
+                && self.tree.groups.opened_at(span.last).is_some_and(|group| {
+                    self.tree.blocks.kind(group) == Some(BlockKind::FunctionBody)
+                })
+        })
     }
 
     pub(crate) fn constructor_initializer_preprocessor_branch_indent_spaces(
