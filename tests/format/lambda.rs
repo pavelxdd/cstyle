@@ -1461,3 +1461,24 @@ fn lambda_argument_head_keeps_its_column_when_a_comment_follows_its_brace() {
         "void f()\n{\n    std::sort(items.begin(), items.end(),\n              [](const Item &first, const Item &second)   /* note */\n    {\n        return first.value < second.value;\n    });\n}\n"
     );
 }
+
+#[test]
+fn a_lambda_in_a_braceless_body_opens_its_body_from_the_line_its_statement_starts() {
+    // Run in after the header the statement starts at the header's level;
+    // on a line of its own it starts at the body's.
+    let input = "void f()\n{\n    while (ready) callback([&](int item) {\n        return item + first;\n    });\n    while (ready)\n        callback([&](int item) {\n        return item + first;\n    });\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void f()\n{\n    while (ready) callback([&](int item) {\n        return item + first;\n    });\n    while (ready)\n        callback([&](int item) {\n            return item + first;\n        });\n}\n",
+        ),
+        (
+            "--style=gnu",
+            "void f()\n{\n    while (ready) callback([&](int item)\n    {\n        return item + first;\n    });\n    while (ready)\n        callback([&](int item)\n        {\n            return item + first;\n        });\n}\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_owned()]).expect("valid options");
+        assert_eq!(format_exact(input, &options), expected, "{style}");
+    }
+}
