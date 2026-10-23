@@ -306,6 +306,9 @@ pub(crate) struct FrameStack {
     constructor_initializer_frame: Option<(ConstructorInitializerFrame, usize)>,
     header_frame: Option<HeaderFrame>,
     braceless_header_frames: Vec<BracelessHeaderFrame>,
+    /// The brace depth each braceless header frame was pushed at; closing
+    /// a block drops the frames inside it.
+    braceless_header_depths: Vec<usize>,
     comment_frame: Option<CommentFrame>,
     declaration_frames: Vec<DeclarationFrame>,
     string_continuation_frames: Vec<StringContinuationFrame>,
@@ -764,10 +767,12 @@ impl FrameStack {
 
     pub(crate) fn push_braceless_header(&mut self, frame: BracelessHeaderFrame) {
         self.braceless_header_frames.push(frame);
+        self.braceless_header_depths.push(self.brace_frames.len());
     }
 
     pub(crate) fn pop_braceless_header(&mut self) {
         self.braceless_header_frames.pop();
+        self.braceless_header_depths.pop();
     }
 
     pub(crate) fn active_braceless_header(&self) -> Option<&BracelessHeaderFrame> {
@@ -781,6 +786,7 @@ impl FrameStack {
             .rposition(|frame| frame.can_match_else)?;
         let indent = self.braceless_header_frames[index].header_indent_spaces;
         self.braceless_header_frames.truncate(index);
+        self.braceless_header_depths.truncate(index);
         Some(indent)
     }
 
@@ -1182,6 +1188,12 @@ impl FrameStack {
         let Some(frame) = self.brace_frames.pop() else {
             return;
         };
+        let depth = self.brace_frames.len();
+        let inside = self
+            .braceless_header_depths
+            .partition_point(|&pushed| pushed <= depth);
+        self.braceless_header_frames.truncate(inside);
+        self.braceless_header_depths.truncate(inside);
         if frame.semantic_kind == BraceSemanticKind::Command {
             self.header_frame = None;
         }

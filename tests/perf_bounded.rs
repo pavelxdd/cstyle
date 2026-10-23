@@ -560,6 +560,17 @@ fn runs_that_each_line_looked_across_stay_bounded() {
             kr.clone(),
         ),
         (
+            "functions each with nested braceless headers and a conditional",
+            (0..n / 6)
+                .map(|i| {
+                    format!(
+                        "void f{i}(void)\n{{\n    if (a)\n        if (b)\n            x();\n#if FEATURE\n    y();\n#endif\n}}\n"
+                    )
+                })
+                .collect::<String>(),
+            FormatOptions::default(),
+        ),
+        (
             "enums each with a comment after a member",
             (0..n / 4)
                 .map(|i| {
