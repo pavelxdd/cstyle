@@ -1446,3 +1446,18 @@ fn capture_only_lambda_body_continues_statements_as_one_with_parameters() {
         )
     );
 }
+
+#[test]
+fn lambda_argument_head_keeps_its_column_when_a_comment_follows_its_brace() {
+    // A comment after the body's brace stays on the head's row when the
+    // brace breaks onto its own; the head keeps the argument column.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=allman".to_owned()]).expect("valid options");
+    assert_eq!(
+        format_exact(
+            "void f()\n{\n    std::sort(items.begin(), items.end(),\n              [](const Item &first, const Item &second) { /* note */\n                  return first.value < second.value;\n              });\n}\n",
+            &options,
+        ),
+        "void f()\n{\n    std::sort(items.begin(), items.end(),\n              [](const Item &first, const Item &second)   /* note */\n    {\n        return first.value < second.value;\n    });\n}\n"
+    );
+}

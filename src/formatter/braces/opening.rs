@@ -3397,6 +3397,9 @@ impl FormatEngine<'_> {
             .clone()
             .unwrap_or_default();
         self.trim_current_end_horizontal_space();
+        // The comment's text stays on the head's line, the brace leaves it.
+        let brace = self.current.active_token();
+        self.current.set_active_token(None);
         if let Some(&target) = self.layout.line_state.trailing_comment_columns.front()
             && !before_gap.contains('\t')
             && !after_gap.contains('\t')
@@ -3419,6 +3422,7 @@ impl FormatEngine<'_> {
             self.current.push_str(&after_gap);
         }
         self.current.push_str(comment.trimmed_end());
+        self.current.set_active_token(brace);
         self.comments.skip_next_attached_comment = true;
         self.attach_comment_run_after_brace();
     }
