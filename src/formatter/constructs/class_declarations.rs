@@ -134,6 +134,55 @@ impl FormatEngine<'_> {
         code_opens_class_base_clause(code.trimmed_end())
     }
 
+    /// The lead of the first row a class head ending on the last output
+    /// line continues on, when its class key stands on an earlier line.
+    pub(crate) fn split_class_head_row_lead(&self) -> Option<usize> {
+        let last = self.output.len().checked_sub(1)?;
+        let key = self.class_head_key_before(self.output.line_tokens(last)?.last + 1)?;
+        let row = self.output.line_with_token(key)? + 1;
+        (row <= last).then(|| self.output.lead_width(row, self.options.tab_width))
+    }
+
+    /// The class key of the class head that ends right before the token
+    /// `end`, outside the template angles the head holds.
+    pub(crate) fn class_head_key_before(&self, end: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let mut cursor = end;
+        // The angles the walk is inside, counted back from the head's end.
+        let mut depth = 0usize;
+        loop {
+            let index = self.tree.previous_code_token(cursor)?;
+            if let Some(group) = groups.closed_at(index) {
+                cursor = groups.get(group).open;
+                continue;
+            }
+            match &tokens[index] {
+                Token::Symbol(';' | '{' | '}') => return None,
+                // A conditional's arms continue no class head.
+                Token::Symbol('?') if depth == 0 => return None,
+                _ if groups.opened_at(index).is_some() => return None,
+                Token::Operator(operator) if operator == ">" && self.closes_template_at(index) => {
+                    depth += 1;
+                }
+                Token::Operator(operator) if operator == ">>" && self.closes_template_at(index) => {
+                    depth += 2;
+                }
+                Token::Operator(operator) if operator == "<" && self.template_opener_at(index) => {
+                    depth = depth.saturating_sub(1);
+                }
+                Token::Word(word)
+                    if depth == 0
+                        && matches!(word.as_str(), "class" | "struct" | "union" | "interface") =>
+                {
+                    return Some(index);
+                }
+                _ => {}
+            }
+            cursor = index;
+        }
+    }
+
     /// Whether the current line ends a class head that the rows before it
     /// open, as template arguments split across rows leave one.
     pub(crate) fn current_ends_split_class_head(&self) -> bool {

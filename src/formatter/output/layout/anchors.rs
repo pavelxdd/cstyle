@@ -101,6 +101,16 @@ pub(crate) struct MemberDeclaratorLook {
     colon: bool,
 }
 
+/// A row standing at its statement past a lambda body: the tokens'
+/// address, the row's first token and its group, and its indent.
+#[derive(Clone, Copy)]
+pub(crate) struct LambdaOperandRow {
+    address: usize,
+    first: usize,
+    group: Option<GroupId>,
+    spaces: usize,
+}
+
 impl FormatEngine<'_> {
     /// The indent the syntax tree anchors the line starting at `first` to.
     pub(crate) fn tree_anchor_indent(&self, first: usize, line: &str) -> Option<usize> {
@@ -167,6 +177,12 @@ impl FormatEngine<'_> {
             when(!in_parens && after_comma, || {
                 self.initializer_after_lambda_initializer_indent(first)
             })
+        })
+        .or_else(|| {
+            when(
+                !brace && matches!(previous, Some(Token::Operator(_))),
+                || self.operand_after_lambda_body_indent(first),
+            )
         })
         .or_else(|| self.braceless_body_indent(first))
         .or_else(|| {
@@ -2977,6 +2993,60 @@ impl FormatEngine<'_> {
         (self.output.line_tokens(line)?.first == head).then(|| {
             self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces()
         })
+    }
+
+    /// An operand after a row that closes a lambda body, or after an operand
+    /// standing so, stands at its statement:
+    /// astyle's continuation stack holds nothing past the body's brace.
+    #[inline(never)]
+    fn operand_after_lambda_body_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let operator = self.tree.previous_code_token(first)?;
+        let group = groups.enclosing(first);
+        if !matches!(&tokens[operator], Token::Operator(operator) if matches!(
+            operator.as_str(),
+            "+" | "-" | "*" | "/" | "%" | "|" | "&" | "^" | "<<" | ">>" | "&&" | "||"
+                | "==" | "!=" | "<" | ">" | "<=" | ">="
+        )) || groups.enclosing(operator) != group
+        {
+            return None;
+        }
+        let line = self.output.line_with_token(operator)?;
+        let span = self.output.line_tokens(line)?;
+        let address = tokens.as_ptr() as usize;
+        if let Some(row) = self.lambda_operand_cache.get()
+            && (row.address, row.first, row.group) == (address, span.first, group)
+        {
+            self.lambda_operand_cache
+                .set(Some(LambdaOperandRow { first, ..row }));
+            return Some(row.spaces);
+        }
+        let body = (span.first..=span.last.min(operator)).find_map(|index| {
+            matches!(tokens[index], Token::Symbol('}'))
+                .then(|| groups.closed_at(index))
+                .flatten()
+                .filter(|&body| self.tree.blocks.kind(body) == Some(BlockKind::Lambda))
+        })?;
+        let open = groups.get(body).open;
+        let open_line = self.output.line_with_token(open)?;
+        // Parens opened past the body register their own column; a header's
+        // condition keeps its own.
+        if group.is_some_and(|group| groups.get(group).open > open)
+            || self.token_in_header_parens(first)
+        {
+            return None;
+        }
+        let start = self.statement_start_line(open_line);
+        let spaces =
+            self.output.lead_width(start, self.options.tab_width) + self.case_unindent_spaces();
+        self.lambda_operand_cache.set(Some(LambdaOperandRow {
+            address,
+            first,
+            group,
+            spaces,
+        }));
+        Some(spaces)
     }
 
     /// A constructor's initializer after one whose lambda body closes on

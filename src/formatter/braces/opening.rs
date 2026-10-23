@@ -407,6 +407,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let opening_indent = leading_visual_width(opening_brace, self.options.tab_width);
+        let depth = self.layout.nesting.brace_type_stack.len();
         let class_body_extra = self
             .layout
             .nesting
@@ -415,7 +416,7 @@ impl FormatEngine<'_> {
             .zip(
                 self.layout
                     .frame_stack
-                    .active_brace()
+                    .brace_at_depth(depth)
                     .and_then(|frame| frame.open_token),
             )
             .map_or(0, |(&brace_type, open)| {

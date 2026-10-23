@@ -502,15 +502,18 @@ impl FormatEngine<'_> {
         let previous_indent = || leading_visual_width(previous, self.options.tab_width);
         let continuation_spaces = self.options.continuation_indent * self.options.indent_width;
         if previous_code.trimmed_start().starts_with("using ") {
-            return Some(if self.options.max_code_length.is_some() {
-                previous_indent() + continuation_spaces
-            } else if self.recent_trailing_return_header_holds_empty_default() {
-                // astyle loses the value's level after a parameter defaulted
-                // to `{}`, which moved the parameter rows back too.
-                previous_indent()
-            } else {
-                previous_indent() + self.options.indent_width
-            });
+            return Some(
+                if self.options.max_code_length.is_none()
+                    && self.recent_trailing_return_header_holds_empty_default()
+                {
+                    // astyle loses the value's level after a parameter
+                    // defaulted to `{}`, which moved the parameter rows back
+                    // too.
+                    previous_indent()
+                } else {
+                    previous_indent() + continuation_spaces
+                },
+            );
         }
         if is_comment_text_line(previous) {
             return None;

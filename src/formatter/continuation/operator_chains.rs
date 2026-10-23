@@ -334,6 +334,13 @@ impl FormatEngine<'_> {
             || current.starts_with("/*")
             // A brace list's designator continues no operator.
             || current.starts_with('.') && self.innermost_brace_is_brace_list()
+            // A class's bases stand where its head puts them.
+            || current.starts_with(':')
+                && !current.starts_with("::")
+                && self
+                    .output
+                    .pending_tokens()
+                    .is_some_and(|span| self.class_head_key_before(span.first).is_some())
         {
             return None;
         }

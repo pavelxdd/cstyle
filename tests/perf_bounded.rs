@@ -682,6 +682,16 @@ fn runs_that_each_line_looked_across_stay_bounded() {
             ),
             FormatOptions::default(),
         ),
+        (
+            "conditional arms a row each",
+            format!(
+                "int value = first\n{};\n",
+                (0..n / 4)
+                    .map(|i| format!("    ? item{i}\n    : other{i}\n"))
+                    .collect::<String>()
+            ),
+            allman.clone(),
+        ),
     ] {
         let start = Instant::now();
         let output = format_bytes(input.as_bytes(), &options).expect("format bytes");

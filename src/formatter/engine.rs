@@ -339,6 +339,9 @@ pub(crate) struct FormatEngine<'a> {
     /// The last `return` an operand row looked back to: the tokens'
     /// address, the row's first token, and the `return`.
     pub(crate) operand_return_cache: std::cell::Cell<Option<(usize, usize, Option<usize>)>>,
+    /// The last row standing at its statement past a lambda body.
+    pub(crate) lambda_operand_cache:
+        std::cell::Cell<Option<crate::formatter::output::layout::anchors::LambdaOperandRow>>,
     /// The braces of the last parens looked in: the tokens' address, the
     /// parens, and their first brace and last that is no compound literal's.
     pub(crate) paren_braces_cache:
@@ -525,6 +528,7 @@ impl<'a> FormatEngine<'a> {
             brace_or_newline_cache: std::cell::Cell::new(None),
             run_in_walk_cache: std::cell::Cell::new(None),
             operand_return_cache: std::cell::Cell::new(None),
+            lambda_operand_cache: std::cell::Cell::new(None),
             paren_braces_cache: std::cell::Cell::new(None),
             case_label_cache: std::cell::Cell::new(None),
             assignment_rhs_cache: std::cell::Cell::new(None),
@@ -2218,11 +2222,17 @@ impl<'a> FormatEngine<'a> {
             self.finish_line();
             self.layout.nesting.clear_continuation_indents();
             // The clause after a head split across rows stands with them.
-            match self.output.last().filter(|_| split_head) {
-                Some(row) => {
-                    let spaces = columns::leading_visual_width(row, self.options.tab_width);
-                    self.layout.continuation_indent.set_next_line_spaces(spaces);
-                }
+            match split_head
+                .then(|| {
+                    self.split_class_head_row_lead().or_else(|| {
+                        self.output
+                            .last()
+                            .map(|row| columns::leading_visual_width(row, self.options.tab_width))
+                    })
+                })
+                .flatten()
+            {
+                Some(spaces) => self.layout.continuation_indent.set_next_line_spaces(spaces),
                 None => self
                     .layout
                     .continuation_indent

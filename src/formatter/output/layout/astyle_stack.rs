@@ -334,6 +334,8 @@ impl FormatEngine<'_> {
                             | BlockKind::Control
                             | BlockKind::Block
                             | BlockKind::Aggregate
+                            | BlockKind::Namespace
+                            | BlockKind::ExternC
                     )
                 )
             })
@@ -374,10 +376,17 @@ impl FormatEngine<'_> {
     fn line_brace_after(&self, first: usize, closes_stacked_brace: bool) -> bool {
         let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
+        // A brace the style broke off the line is no longer on it.
+        let line_end = self
+            .output
+            .pending_tokens()
+            .filter(|span| (span.first..=span.last).contains(&first))
+            .map_or(usize::MAX, |span| span.last + 1);
         let limit = groups
             .enclosing(first)
             .and_then(|group| groups.get(group).close)
-            .unwrap_or(usize::MAX);
+            .unwrap_or(usize::MAX)
+            .min(line_end);
         let mut from = first;
         loop {
             let at = self.next_brace_or_newline(from);
@@ -808,6 +817,20 @@ impl FormatEngine<'_> {
                     if starts_line {
                         replay.line_space = popped;
                     }
+                }
+                // A lambda's body ends what was stacked, and its statements
+                // are none of the statement's.
+                Token::Symbol('{')
+                    if self
+                        .tree
+                        .groups
+                        .opened_at(index)
+                        .is_some_and(|body| self.tree.blocks.kind(body) == Some(BlockKind::Lambda)) =>
+                {
+                    let body = self.tree.groups.opened_at(index)?;
+                    index = self.tree.groups.get(body).close.filter(|&close| close < first)?;
+                    replay.stack.clear();
+                    replay.parens.fill(0);
                 }
                 Token::Symbol('{' | '}' | ';' | ':') => return None,
                 _ if index == start && is_control_keyword(token) => {

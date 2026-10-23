@@ -23532,3 +23532,149 @@ fn pico_keeps_the_tab_before_a_comment_its_brace_runs_in_when_converting_tabs() 
         );
     }
 }
+
+#[test]
+fn a_base_clause_after_a_split_class_head_stands_at_its_first_continued_row_when_parens_indent() {
+    let input = "template <typename T, typename Char>\nstruct formatter<T, Char,\n                 enable_if_t<type_constant<T, Char>::value !=\n                             type::custom_type>>\n    : native_formatter<T, Char> {\n};\n";
+    let args = [
+        "--style=allman",
+        "--indent-after-parens",
+        "--indent-continuation=2",
+    ];
+    let expected = "template <typename T, typename Char>\nstruct formatter<T, Char,\n       enable_if_t<type_constant<T, Char>::value !=\n        type::custom_type>>\n       : native_formatter<T, Char>\n{\n};\n";
+    check(input, &args, expected);
+    check(expected, &args, expected);
+    // Nor do a comment row and an operator-led row of the head move them.
+    let input = "struct formatter<T, Char,\n                 // note\n                 enable_if_t<is_ready<T>::value &&\n                             !has_value<T>::value>>\n    : formatter<T, Char> {\n};\n";
+    let expected = "struct formatter<T, Char,\n       // note\n       enable_if_t<is_ready<T>::value &&\n        !has_value<T>::value>>\n       : formatter<T, Char>\n{\n};\n";
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
+
+#[test]
+fn an_argument_row_whose_lambda_brace_breaks_off_stands_at_the_stacked_paren_indent() {
+    let input = "int f()\n{\n    return helper<Item, 2>(\n      value, [&](int item) {\n        return item;\n      });\n}\n";
+    let args = ["--style=allman", "--indent-after-parens"];
+    let expected = "int f()\n{\n    return helper<Item, 2>(\n            value, [&](int item)\n    {\n        return item;\n    });\n}\n";
+    check(input, &args, expected);
+    check(expected, &args, expected);
+    let args = ["--style=whitesmith", "--indent-after-parens"];
+    let expected = "int f()\n    {\n    return helper<Item, 2>(\n            value, [&](int item)\n        {\n        return item;\n        });\n    }\n";
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
+
+#[test]
+fn an_alias_value_after_its_assignment_takes_the_continuation_indent() {
+    let input = "struct Config\n{\n    using value_type =\n        int;\n};\nusing result_type =\n    long;\n";
+    for (continuation, expected) in [
+        (
+            "0",
+            "struct Config\n{\n    using value_type =\n    int;\n};\nusing result_type =\nlong;\n",
+        ),
+        (
+            "2",
+            "struct Config\n{\n    using value_type =\n            int;\n};\nusing result_type =\n        long;\n",
+        ),
+        (
+            "3",
+            "struct Config\n{\n    using value_type =\n                int;\n};\nusing result_type =\n            long;\n",
+        ),
+    ] {
+        let option = format!("--indent-continuation={continuation}");
+        let args = ["--style=allman", option.as_str()];
+        check(input, &args, expected);
+        check(expected, &args, expected);
+    }
+}
+
+#[test]
+fn template_argument_rows_of_an_assigned_value_in_a_namespace_stand_as_at_file_scope() {
+    let input = "namespace detail\n{\nint value = select<Item,\n    long>;\nusing result_type =\n    select<Item,\n    long>;\n}\nextern \"C\"\n{\nint value = select<Item,\n    long>;\n}\n";
+    let args = ["--style=allman"];
+    let expected = "namespace detail\n{\nint value = select<Item,\n    long>;\nusing result_type =\n    select<Item,\n    long>;\n}\nextern \"C\"\n{\n    int value = select<Item,\n        long>;\n}\n";
+    check(input, &args, expected);
+    check(expected, &args, expected);
+    let args = ["--style=allman", "--indent-namespaces"];
+    let expected = "namespace detail\n{\n    int value = select<Item,\n        long>;\n    using result_type =\n        select<Item,\n        long>;\n}\nextern \"C\"\n{\n    int value = select<Item,\n        long>;\n}\n";
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
+
+#[test]
+fn a_function_heading_a_struct_with_access_labels_stands_with_the_other_members() {
+    let input = "struct Item {\n  int value() {\n    return 0;\n  }\n  int other() {\n    return 1;\n  }\n private:\n  int result;\n};\n";
+    for (args, expected) in [
+        (
+            &["--style=whitesmith"][..],
+            "struct Item\n    {\n        int value()\n            {\n            return 0;\n            }\n        int other()\n            {\n            return 1;\n            }\n    private:\n        int result;\n    };\n",
+        ),
+        (
+            &["--style=allman", "--indent-classes"][..],
+            "struct Item\n{\n        int value()\n        {\n            return 0;\n        }\n        int other()\n        {\n            return 1;\n        }\n    private:\n        int result;\n};\n",
+        ),
+        (
+            &["--style=kr", "--indent-classes"][..],
+            "struct Item {\n        int value()\n        {\n            return 0;\n        }\n        int other()\n        {\n            return 1;\n        }\n    private:\n        int result;\n};\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
+fn an_operand_after_a_lambda_body_closing_its_row_stands_at_the_statement() {
+    let input = "int f()\n{\n    auto value = make(0) | transform([](int item) {\n        return item;\n    }) |\n                 reverse(items);\n    result = call([](int item) {\n        return item;\n    }) *\n        factor;\n    return call([](int item) {\n        return item;\n    }) +\n        offset;\n}\n";
+    let expected = "int f()\n{\n    auto value = make(0) | transform([](int item) {\n        return item;\n    }) |\n    reverse(items);\n    result = call([](int item) {\n        return item;\n    }) *\n    factor;\n    return call([](int item) {\n        return item;\n    }) +\n    offset;\n}\n";
+    for args in [
+        &["--style=kr"][..],
+        &["--style=kr", "--indent-after-parens"][..],
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+    let args = ["--style=whitesmith"];
+    let expected = "int f()\n    {\n    auto value = make(0) | transform([](int item)\n        {\n        return item;\n        }) |\n    reverse(items);\n    result = call([](int item)\n        {\n        return item;\n        }) *\n    factor;\n    return call([](int item)\n        {\n        return item;\n        }) +\n    offset;\n    }\n";
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
+
+#[test]
+fn rows_after_a_lambda_body_stand_where_the_stack_left_past_its_brace_puts_them() {
+    // The operands after it stand at the statement, inside parens opened
+    // before the body too; parens opened past it stack their own column.
+    let input = "void f()\n{\n    auto value = call([](int item) {\n        return item;\n    }) |\n        more |\n        rest;\n    auto other = outer(call([](int item) {\n        return item;\n    }) |\n                       more);\n    auto last = call([](int item) {\n        return item;\n    }) | helper(first +\n                second);\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=kr"][..],
+            "void f()\n{\n    auto value = call([](int item) {\n        return item;\n    }) |\n    more |\n    rest;\n    auto other = outer(call([](int item) {\n        return item;\n    }) |\n    more);\n    auto last = call([](int item) {\n        return item;\n    }) | helper(first +\n                second);\n}\n",
+        ),
+        (
+            &["--style=kr", "--indent-after-parens"][..],
+            "void f()\n{\n    auto value = call([](int item) {\n        return item;\n    }) |\n    more |\n    rest;\n    auto other = outer(call([](int item) {\n        return item;\n    }) |\n    more);\n    auto last = call([](int item) {\n        return item;\n    }) | helper(first +\n        second);\n}\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
+fn an_operand_after_a_kept_one_line_lambda_body_stands_at_the_statement() {
+    let input =
+        "void f()\n{\n    auto value = call([](int item) { return item; }) |\n        more;\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=kr", "--keep-one-line-blocks"][..],
+            "void f()\n{\n    auto value = call([](int item) { return item; }) |\n    more;\n}\n",
+        ),
+        (
+            &["--style=pico"][..],
+            "void f()\n{   auto value = call([](int item) { return item; }) |\n    more; }\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
