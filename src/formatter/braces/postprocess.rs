@@ -1,20 +1,15 @@
 use crate::config::{BraceStyle, FormatOptions, IndentStyle};
-use crate::formatter::braces::classification::{
-    is_lambda_body_header, is_namespace_or_module_block_header,
-};
+use crate::formatter::braces::classification::is_namespace_or_module_block_header;
 use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::braces::initializers::runs_list_rows_in;
 use crate::formatter::constructs::{labels, switch_cases};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{self, Token};
-use crate::formatter::state::indentation::LineKind;
-use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     ContainsAnyByte, is_bare_comment_line, line_ends_with_comment, line_paren_imbalance,
     preprocessor_directive, trailing_comment_split_limit,
 };
-use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 
 pub(crate) struct MaxLengthBraceRowLayout {
@@ -232,61 +227,6 @@ impl FormatEngine<'_> {
             prefix_width,
             attaches_lisp_closer,
         }
-    }
-
-    pub(crate) fn try_split_lambda_body_header(&mut self, line: &LineView<'_>) -> bool {
-        if !matches!(
-            self.options.brace_style,
-            BraceStyle::Allman
-                | BraceStyle::Whitesmith
-                | BraceStyle::Vtk
-                | BraceStyle::Gnu
-                | BraceStyle::Horstmann
-        ) {
-            return false;
-        }
-        let Some(open) = line.rfind('{') else {
-            return false;
-        };
-        // A body that closes on the line was kept whole; splitting the
-        // header off would drop it.
-        if !is_lambda_body_header(line[..open].trimmed_end())
-            || line[open + 1..].contains('}')
-            || self.pending_brace_stands_in_brace_list()
-        {
-            return false;
-        }
-        self.finish_line_text(line[..open].trimmed_end());
-        if matches!(
-            self.options.brace_style,
-            BraceStyle::Whitesmith | BraceStyle::Vtk
-        ) {
-            let base = self
-                .layout
-                .indentation
-                .line_indent(LineKind::Normal, self.options);
-            self.push_output_line("{", base + 1);
-        } else {
-            self.finish_line_text("{");
-        }
-        true
-    }
-
-    /// Whether the `{` ending the pending line stands among a brace list's
-    /// elements, which keep their braces on their rows.
-    fn pending_brace_stands_in_brace_list(&self) -> bool {
-        let groups = &self.tree.groups;
-        self.output
-            .pending_tokens()
-            .and_then(|span| self.tree.previous_code_token(span.last + 1))
-            .filter(|&brace| matches!(self.tree.tokens[brace], Token::Symbol('{')))
-            .and_then(|brace| groups.enclosing(brace))
-            .is_some_and(|list| {
-                matches!(
-                    self.tree.blocks.kind(list),
-                    Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
-                )
-            })
     }
 }
 

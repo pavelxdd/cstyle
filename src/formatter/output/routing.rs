@@ -9,8 +9,7 @@ use crate::formatter::tokens::literals::starts_string_literal_token;
 
 impl FormatEngine<'_> {
     fn route_line_before_layout(&mut self, line: &LineView<'_>) -> LineRoute<LineKind> {
-        if self.try_split_lambda_body_header(line)
-            || self.try_emit_swig_line(line)
+        if self.try_emit_swig_line(line)
             || self.try_emit_backslash_body(line)
             || self.try_join_class_base_line(line)
         {
