@@ -23841,3 +23841,11 @@ fn a_member_macro_call_after_an_indented_closing_brace_stands_with_the_members()
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn members_after_a_function_try_colon_ending_its_line_stand_a_level_in() {
+    // As after a colon alone on its line, the members stand one level past
+    // the head, however the `try` and the colon share their line.
+    let input = "Item::Item() try :\n    one(1),\n    two(2)\n{\n    go();\n}\ncatch (...)\n{\n}\nItem::Item()\ntry :\n    one(1)\n{\n    go();\n}\ncatch (...)\n{\n}\nclass Item\n{\n    Item()\ntry :\n        one(1)\n    {\n        go();\n    }\n    catch (...)\n    {\n    }\n};\n";
+    check(input, &["--style=allman"], input);
+}

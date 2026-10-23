@@ -1702,6 +1702,7 @@ impl FormatEngine<'_> {
             && !is_objc_colon
             && !in_delimiters
             && !is_bit_field
+            && !is_class_initializer
             && !is_class_base
             && !is_enum_underlying_type
             && !is_range_for

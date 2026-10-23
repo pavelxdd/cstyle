@@ -1204,6 +1204,19 @@ impl<'a> FormatEngine<'a> {
             .is_ok()
     }
 
+    /// Whether the line being built ends with the colon opening the
+    /// initializers of a function-try-block's constructor.
+    fn current_ends_function_try_initializer_colon(&self) -> bool {
+        let code = self.current[..self.current_trailing_comment_split_limit()].trimmed();
+        code.ends_with(':')
+            && (code == ":" || self.current_line_has_class_initializer_colon)
+            && self
+                .layout
+                .frame_stack
+                .active_constructor_initializer()
+                .is_some_and(|frame| frame.function_try)
+    }
+
     /// Whether the `[` at `open` starts an initializer designator. Each `[`
     /// of a chain of subscripts has the chain's answer, kept for the next.
     fn bracket_chain_designator(&self, tokens: &[Token], open: usize, end: usize) -> bool {
@@ -2416,13 +2429,7 @@ impl<'a> FormatEngine<'a> {
             self.finish_line();
             self.layout.continuation_indent.set_next_line_spaces(spaces);
             self.previous_was_newline = true;
-        } else if self.current[..self.current_trailing_comment_split_limit()].trimmed() == ":"
-            && self
-                .layout
-                .frame_stack
-                .active_constructor_initializer()
-                .is_some_and(|frame| frame.function_try)
-        {
+        } else if self.current_ends_function_try_initializer_colon() {
             self.finish_line();
             self.layout
                 .continuation_indent
