@@ -23091,3 +23091,12 @@ fn comment_led_first_row_of_a_compound_literal_stands_with_its_rows_when_parens_
         "void f() {\n    x = (struct Item) {\n        /* note */ .value = 1,\n        .other = 2 }; }\n",
     );
 }
+
+#[test]
+fn comment_led_row_of_an_aligned_list_stands_with_its_rows_when_parens_indent() {
+    check(
+        "static double values[] = { 1.5, 2.5,\n\t\t/* note */ 3.5, 4.5\n\t\t};\n",
+        &["--style=kr", "--indent-after-parens"],
+        "static double values[] = { 1.5, 2.5,\n        /* note */ 3.5, 4.5\n    };\n",
+    );
+}

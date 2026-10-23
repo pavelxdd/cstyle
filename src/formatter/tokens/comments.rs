@@ -1590,12 +1590,18 @@ impl FormatEngine<'_> {
                     == Some(self.layout.nesting.paren_depth);
                 brace_element_comment_indent = in_list_rows
                     .then(|| {
-                        self.current_inline_array_column().or_else(|| {
-                            unmatched_open_brace_content_offset(previous_code).map(|offset| {
-                                visual_width_from(&previous[..offset], 0, self.options.tab_width)
-                                    + self.case_unindent_spaces()
+                        // Indenting after parens stacks the row as its code.
+                        self.comment_led_initializer_row_indent(indents.token)
+                            .or_else(|| self.current_inline_array_column())
+                            .or_else(|| {
+                                unmatched_open_brace_content_offset(previous_code).map(|offset| {
+                                    visual_width_from(
+                                        &previous[..offset],
+                                        0,
+                                        self.options.tab_width,
+                                    ) + self.case_unindent_spaces()
+                                })
                             })
-                        })
                     })
                     .flatten();
                 // Else it stands where the row after it goes on, as the row
@@ -1731,6 +1737,7 @@ impl FormatEngine<'_> {
                         .indent_after_parens
                         .then(|| {
                             self.current_leveled_list_row_column()
+                                .or_else(|| self.comment_led_initializer_row_indent(indents.token))
                                 .or(block_comment_continuation_indent)
                         })
                         .flatten()
@@ -2573,6 +2580,20 @@ impl FormatEngine<'_> {
                 Token::Word(word) => word != "case" && word != "default",
                 _ => true,
             })
+    }
+
+    /// The column of the initializer row the comment at `index` leads, as
+    /// the row's code would stand without it.
+    fn comment_led_initializer_row_indent(&self, index: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let first = next_code_token(tokens, index.checked_add(1)?)?;
+        if tokens[index + 1..first]
+            .iter()
+            .any(|token| matches!(token, Token::Newline))
+        {
+            return None;
+        }
+        self.stacked_initializer_row_indent(first)
     }
 
     /// Whether the comment at `index` leads a closer, past the comments

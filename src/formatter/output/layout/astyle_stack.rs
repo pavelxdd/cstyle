@@ -852,7 +852,7 @@ impl FormatEngine<'_> {
 
     /// The row of an initializer that indenting after parens stacks.
     #[inline(never)]
-    pub(super) fn stacked_initializer_row_indent(&self, first: usize) -> Option<usize> {
+    pub(crate) fn stacked_initializer_row_indent(&self, first: usize) -> Option<usize> {
         // Only indenting after parens stacks an initializer.
         if !self.options.indent_after_parens {
             return None;
