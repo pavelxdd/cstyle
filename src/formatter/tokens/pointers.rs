@@ -570,8 +570,9 @@ impl FormatEngine<'_> {
 
     /// Whether a `...` after a declarator's operator names a parameter or
     /// type pack rather than ending a fold expression.
-    fn declares_pack(&self) -> bool {
+    pub(super) fn declares_pack(&self) -> bool {
         self.tree_declaration_context() == Some(true)
+            || self.current_paren_is_lambda_parameter_list()
             || self.layout.line_state.template_angle_depth > 0
                 && self
                     .current

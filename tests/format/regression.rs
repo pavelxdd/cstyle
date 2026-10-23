@@ -24015,3 +24015,31 @@ fn a_template_lambda_at_file_scope_breaks_like_a_definition_whatever_its_source(
         check(expected, &[&style], expected);
     }
 }
+
+#[test]
+fn a_lambda_parameter_pack_takes_the_declarator_of_its_type() {
+    let input = "auto f = [](auto&&... items) {\n    return 1;\n};\nauto g = [](const auto&... items) {\n    return 1;\n};\nvoid run()\n{\n    call([](auto && ... items) {\n        go();\n    });\n}\n";
+    let shaped = |f: &str, g: &str, call: &str| {
+        format!(
+            "auto f = []({f} items) {{\n    return 1;\n}};\nauto g = [](const {g} items) {{\n    return 1;\n}};\nvoid run()\n{{\n    call([]({call} items) {{\n        go();\n    }});\n}}\n"
+        )
+    };
+    for (args, expected) in [
+        (&["-p"][..], input.to_string()),
+        (
+            &["--align-pointer=type"][..],
+            shaped("auto&& ...", "auto& ...", "auto&& ..."),
+        ),
+        (
+            &["--align-pointer=middle"][..],
+            shaped("auto && ...", "auto & ...", "auto && ..."),
+        ),
+        (
+            &["--align-pointer=name"][..],
+            shaped("auto &&...", "auto &...", "auto &&..."),
+        ),
+    ] {
+        check(input, args, &expected);
+        check(&expected, args, &expected);
+    }
+}

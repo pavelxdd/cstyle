@@ -1205,7 +1205,8 @@ impl FormatEngine<'_> {
                             == Some(&BraceType::Command))
                     && self.current_paren_context_is_declaration()
                     && self.looks_like_pointer_declaration_context()
-                    && matches!(next, Some(Token::Word(_)) | Some(Token::Symbol(')' | ','))) =>
+                    && (matches!(next, Some(Token::Word(_)) | Some(Token::Symbol(')' | ',')))
+                        || matches!(next, Some(Token::Symbol('.'))) && self.declares_pack()) =>
             {
                 self.push_pointer_or_reference(operator, next, next_is_adjacent);
             }
