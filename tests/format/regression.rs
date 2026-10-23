@@ -24183,3 +24183,16 @@ fn vtk_sets_a_member_brace_initializer_rows_past_its_flush_brace() {
     check(input, &["--style=vtk"], expected);
     check(expected, &["--style=vtk"], expected);
 }
+
+#[test]
+fn attach_inlines_leaves_a_member_brace_initializer_to_its_style() {
+    // A member's list opens no inline function: its brace takes the style
+    // as without the option, while the bodies attach.
+    let input = "class Item {\n    Config config{\n        .name = \"x\",\n    };\n    void run() {\n        go();\n    }\n};\n";
+    let expected = "class Item\n{\n    Config config\n    {\n        .name = \"x\",\n    };\n    void run() {\n        go();\n    }\n};\n";
+    for style in ["allman", "gnu"] {
+        let args = [&format!("--style={style}")[..], "--attach-inlines"];
+        check(input, &args, expected);
+        check(expected, &args, expected);
+    }
+}

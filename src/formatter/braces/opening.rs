@@ -4245,10 +4245,7 @@ impl FormatEngine<'_> {
             )
             && matches!(
                 brace_type,
-                BraceType::Command
-                    | BraceType::NonStatement
-                    | BraceType::Definition
-                    | BraceType::Initializer
+                BraceType::Command | BraceType::NonStatement | BraceType::Definition
             )
             && self
                 .layout
