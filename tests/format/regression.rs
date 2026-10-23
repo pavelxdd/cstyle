@@ -24271,3 +24271,13 @@ fn attach_return_type_joins_an_old_style_definition_as_any_definition() {
     check(input, &["--attach-return-type"], expected);
     check(expected, &["--attach-return-type"], expected);
 }
+
+#[test]
+fn pico_sets_an_else_if_brace_after_a_header_comment_as_an_if_brace() {
+    // The brace stands at its header after a comment the closer before
+    // the `else` keeps, as after any header comment.
+    let input = "void f()\n{\n    if (a) {\n        go();\n    } // first\n    else if (b) { // second\n        stop();\n    }\n}\n";
+    let expected = "void f()\n{   if (a)\n    {   go(); } // first\n    else if (b)   // second\n    {   stop(); } }\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+}
