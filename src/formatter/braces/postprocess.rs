@@ -317,59 +317,6 @@ impl FormatEngine<'_> {
                 )
             })
     }
-
-    pub(crate) fn try_split_operator_body(&mut self, line: &LineView<'_>) -> bool {
-        if !matches!(
-            self.options.brace_style,
-            BraceStyle::Allman
-                | BraceStyle::Vtk
-                | BraceStyle::Gnu
-                | BraceStyle::Whitesmith
-                | BraceStyle::Horstmann
-        ) {
-            return false;
-        }
-        let Some(open) = line.rfind('{') else {
-            return false;
-        };
-        let Some(close) = line.rfind('}') else {
-            return false;
-        };
-        if !(open < close
-            && line[..open].contains("operator")
-            && line[..open].trimmed_end().ends_with(')'))
-        {
-            return false;
-        }
-        let head = line[..open].trimmed_end();
-        let body = line[open + 1..close].trimmed();
-        let base = self
-            .layout
-            .indentation
-            .line_indent(LineKind::Normal, self.options);
-        if self.options.brace_style == BraceStyle::Horstmann {
-            self.push_output_line(head, base);
-            if !body.is_empty() {
-                self.push_output_line(&format!("{{   {body}"), base);
-            } else {
-                self.push_output_line("{", base);
-            }
-            self.push_output_line("}", base);
-            return true;
-        }
-        let brace_indent = if self.options.brace_style == BraceStyle::Whitesmith {
-            base + 1
-        } else {
-            base
-        };
-        self.push_output_line(head, base);
-        self.push_output_line("{", brace_indent);
-        if !body.is_empty() {
-            self.push_output_line(body, base + 1);
-        }
-        self.push_output_line("}", brace_indent);
-        true
-    }
 }
 
 fn split_output_lines<'a>(output: &'a str, line_break: &str) -> Vec<&'a str> {

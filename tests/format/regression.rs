@@ -24043,3 +24043,37 @@ fn a_lambda_parameter_pack_takes_the_declarator_of_its_type() {
         check(&expected, args, &expected);
     }
 }
+
+#[test]
+fn keep_one_line_blocks_keeps_an_operator_body_as_any_function_body() {
+    let input = "struct Item {\n    Item &operator=(const Item &other) { value = other.value; return *this; }\n    int operator()(int a) { return a; }\n    bool operator==(const Item &other) noexcept(true) { return value == other.value; }\n    int call(int a) { return a; }\n};\nint Item::operator()(int a) { return a; }\n";
+    for style in ["allman", "gnu", "vtk"] {
+        let expected = input.replacen("struct Item {", "struct Item\n{", 1);
+        let args = [
+            format!("--style={style}"),
+            "--keep-one-line-blocks".to_owned(),
+        ];
+        let args = args.each_ref().map(String::as_str);
+        check(input, &args, &expected);
+        check(&expected, &args, &expected);
+    }
+}
+
+#[test]
+fn an_empty_operator_body_keeps_the_comment_after_it() {
+    let input = "struct Item {\n    void operator()(Item) {}  // note\n    void run(Item) {}  // note\n};\n";
+    for (style, expected) in [
+        (
+            "allman",
+            "struct Item\n{\n    void operator()(Item) {}  // note\n    void run(Item) {}  // note\n};\n",
+        ),
+        (
+            "whitesmith",
+            "struct Item\n    {\n    void operator()(Item) {}  // note\n    void run(Item) {}  // note\n    };\n",
+        ),
+    ] {
+        let style = format!("--style={style}");
+        check(input, &[&style], expected);
+        check(expected, &[&style], expected);
+    }
+}
