@@ -767,10 +767,11 @@ impl FormatEngine<'_> {
         let initializer_colon = |index: usize| {
             !statement_scope
                 && matches!(tokens[index], Token::Symbol(':'))
-                && self
+                && (self
                     .tree
                     .previous_code_token(index)
                     .is_some_and(|previous| matches!(tokens[previous], Token::Symbol(')')))
+                    || self.separates_constructor_initializers(index))
         };
         loop {
             // A later branch of a conditional continues the code before its

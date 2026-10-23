@@ -23879,3 +23879,13 @@ fn a_constructor_member_row_opening_the_body_stands_with_the_members() {
         expected,
     );
 }
+
+#[test]
+fn a_constructor_colon_after_qualifiers_leads_its_initializers_at_a_level() {
+    // Qualifiers after the parameters leave the colon row a level in, so
+    // tab indentation fills it with tabs as after a plain head.
+    let input = "class Item {\n    Item(int value) noexcept\n        : one(value),\n          two(value) {}\n    Item(int value) const\n        : one(value) {}\n};\n";
+    let expected = "class Item\n{\n\tItem(int value) noexcept\n\t\t: one(value),\n\t\t  two(value) {}\n\tItem(int value) const\n\t\t: one(value) {}\n};\n";
+    check(input, &["--style=kr", "--indent=tab=4"], expected);
+    check(expected, &["--style=kr", "--indent=tab=4"], expected);
+}
