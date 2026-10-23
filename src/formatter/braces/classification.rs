@@ -162,9 +162,12 @@ pub(crate) fn line_opens_lambda_or_capture_only_block(line: &str) -> bool {
 
 fn is_namespace_block_header(line: &str) -> bool {
     let trimmed = line.trimmed();
-    trimmed == "namespace"
-        || trimmed.starts_with("namespace ")
-        || trimmed.starts_with("inline namespace ")
+    // An inline or exported namespace is a namespace all the same.
+    let trimmed = trimmed
+        .strip_prefix("inline ")
+        .or_else(|| trimmed.strip_prefix("export "))
+        .map_or(trimmed, Trimmed::trimmed_start);
+    trimmed == "namespace" || trimmed.starts_with("namespace ")
 }
 
 pub(crate) fn current_ends_block_literal_header(head: &str) -> bool {

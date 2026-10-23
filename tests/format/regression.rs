@@ -24098,3 +24098,22 @@ fn a_list_brace_after_a_return_ending_its_line_stands_a_level_in_whatever_the_co
         check(expected, &args, expected);
     }
 }
+
+#[test]
+fn an_exported_namespace_opens_as_any_namespace() {
+    let input = "namespace space {\nint value();\n}\nexport namespace other {\nint value();\n}\n";
+    for (style, expected) in [
+        (
+            "horstmann",
+            "namespace space\n{\nint value();\n}\nexport namespace other\n{\nint value();\n}\n",
+        ),
+        (
+            "pico",
+            "namespace space\n{\nint value(); }\nexport namespace other\n{\nint value(); }\n",
+        ),
+    ] {
+        let style = format!("--style={style}");
+        check(input, &[&style], expected);
+        check(expected, &[&style], expected);
+    }
+}
