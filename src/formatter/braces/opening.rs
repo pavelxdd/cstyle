@@ -439,17 +439,24 @@ impl FormatEngine<'_> {
                 .frame_stack
                 .brace_at_depth(self.layout.nesting.brace_type_stack.len())
                 .is_some_and(|frame| {
-                    self.layout.nesting.brace_type_stack.last() == Some(&frame.brace_type)
-                        && !matches!(
-                            frame.semantic_kind,
-                            BraceSemanticKind::Definition | BraceSemanticKind::Aggregate
-                        )
-                        && !(frame.semantic_kind == BraceSemanticKind::Namespace
-                            && self.options.indent_namespaces)
+                    let declaration_brace = matches!(
+                        frame.semantic_kind,
+                        BraceSemanticKind::Definition | BraceSemanticKind::Aggregate
+                    );
+                    // A list a declaration scope holds keeps its brace flush.
+                    let flush_brace = declaration_brace
+                        || frame.semantic_kind == BraceSemanticKind::Namespace
+                            && self.options.indent_namespaces
                         || matches!(
                             frame.semantic_kind,
-                            BraceSemanticKind::Definition | BraceSemanticKind::Aggregate
-                        ) && self.should_indent_brace_line(frame.brace_type)
+                            BraceSemanticKind::Array | BraceSemanticKind::Initializer
+                        ) && frame
+                            .open_token
+                            .and_then(|open| self.tree.groups.opened_at(open))
+                            .is_some_and(|list| self.vtk_flush_scope(list));
+                    self.layout.nesting.brace_type_stack.last() == Some(&frame.brace_type)
+                        && !flush_brace
+                        || declaration_brace && self.should_indent_brace_line(frame.brace_type)
                 });
         // The brace stands at its output column, which the case unindent
         // already moved; a type's members take it back as members.

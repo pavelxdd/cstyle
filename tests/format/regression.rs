@@ -24172,3 +24172,14 @@ fn an_enumeration_brace_takes_its_style_whatever_its_underlying_type() {
     check(input, &["--style=allman"], expected);
     check(expected, &["--style=allman"], expected);
 }
+
+#[test]
+fn vtk_sets_a_member_brace_initializer_rows_past_its_flush_brace() {
+    // A list's brace at a declaration scope stands flush, its rows a level
+    // in, whether an `=` assigns it or not; in a body the brace is set in
+    // and its rows stand at it.
+    let input = "class Item {\n    Config config{\n        .name = \"x\",\n    };\n    Config other = {\n        .name = \"y\",\n    };\n};\nvoid f()\n{\n    Config local{\n        .name = \"x\",\n    };\n}\n";
+    let expected = "class Item\n{\n    Config config\n    {\n        .name = \"x\",\n    };\n    Config other =\n    {\n        .name = \"y\",\n    };\n};\nvoid f()\n{\n    Config local\n        {\n        .name = \"x\",\n        };\n}\n";
+    check(input, &["--style=vtk"], expected);
+    check(expected, &["--style=vtk"], expected);
+}
