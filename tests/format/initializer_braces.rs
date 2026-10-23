@@ -4604,3 +4604,18 @@ fn attached_list_closer_after_a_directive_in_the_list_is_spaced_as_without_one()
         expected_rows(&["        7,"])
     );
 }
+
+#[test]
+fn list_closer_after_an_element_split_by_a_conditional_breaks_in_an_else_branch_too() {
+    // The element's closer leaves its row as it does outside a conditional
+    // branch, whatever branch the split element stands in.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=vtk".to_owned()]).expect("valid options");
+    assert_eq!(
+        format_exact(
+            "void f()\n{\n    static const struct Item items[] = {\n#if FEATURE\n        {1, 2}\n#else\n        {3, 4},\n#ifdef FEATURE\n        {5,\n#endif\n         6}\n#endif\n    };\n}\n",
+            &options,
+        ),
+        "void f()\n{\n    static const struct Item items[] =\n        {\n#if FEATURE\n            {1, 2}\n#else\n            {3, 4},\n#ifdef FEATURE\n            {\n            5,\n#endif\n            6\n            }\n#endif\n        };\n}\n"
+    );
+}
