@@ -125,14 +125,35 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        // No brace may lead the line or come before it in the parens.
+        // No brace may lead the line or come before it in the parens, but
+        // for a list closed on its row, which the replay passes.
         if self
             .first_paren_brace(group)
-            .is_some_and(|brace| brace <= first)
+            .is_some_and(|brace| brace <= first && !self.list_closes_on_its_row(brace, first))
         {
             return None;
         }
         self.astyle_stack_indent(first)
+    }
+
+    /// Whether the `{` at `brace` opens a list, holding no statements, that
+    /// a row holds whole after its first token, before `first`.
+    fn list_closes_on_its_row(&self, brace: usize, first: usize) -> bool {
+        let groups = &self.tree.groups;
+        let Some(line) = self.output.line_with_token(brace) else {
+            return false;
+        };
+        groups.opened_at(brace).is_some_and(|list| {
+            self.tree.blocks.kind(list) == Some(BlockKind::Initializer)
+                && !self.brace_holds_statements(list)
+                && self
+                    .output
+                    .line_tokens(line)
+                    .is_some_and(|span| span.first < brace)
+                && groups.get(list).close.is_some_and(|close| {
+                    close < first && self.output.line_with_token(close) == Some(line)
+                })
+        })
     }
 
     /// A lambda's head on a row its body's brace leaves stands where
@@ -831,6 +852,11 @@ impl FormatEngine<'_> {
                     index = self.tree.groups.get(body).close.filter(|&close| close < first)?;
                     replay.stack.clear();
                     replay.parens.fill(0);
+                }
+                // A list closed on its row registers nothing.
+                Token::Symbol('{') if self.list_closes_on_its_row(index, first) => {
+                    let list = self.tree.groups.opened_at(index)?;
+                    index = self.tree.groups.get(list).close?;
                 }
                 Token::Symbol('{' | '}' | ';' | ':') => return None,
                 _ if index == start && is_control_keyword(token) => {

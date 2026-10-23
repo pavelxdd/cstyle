@@ -23757,3 +23757,23 @@ fn a_typename_before_a_call_in_a_template_default_leaves_its_rows_as_without_it(
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
+
+#[test]
+fn an_argument_row_after_a_run_in_header_takes_its_level_past_a_closed_brace_list() {
+    // A list closed on its row registers nothing, so the row stands as
+    // after any argument there, the header's level included.
+    let input = "void f()\n{\n    if (ready) call(first, Item{1, 2},\n                    second);\n    for (;;) call(first, {1, 2},\n                  second);\n    call(first, Item{1, 2},\n         second);\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=kr"][..],
+            "void f()\n{\n    if (ready) call(first, Item{1, 2},\n                        second);\n    for (;;) call(first, {1, 2},\n                      second);\n    call(first, Item{1, 2},\n         second);\n}\n",
+        ),
+        (
+            &["--style=kr", "--indent-after-parens"][..],
+            "void f()\n{\n    if (ready) call(first, Item{1, 2},\n            second);\n    for (;;) call(first, {1, 2},\n            second);\n    call(first, Item{1, 2},\n        second);\n}\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
