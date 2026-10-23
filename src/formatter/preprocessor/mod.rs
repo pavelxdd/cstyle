@@ -1068,7 +1068,13 @@ impl FormatEngine<'_> {
                 spaces,
             });
         }
-        if self.options.indent_preproc_block && is_conditional_preprocessor(directive) {
+        // Conditionals among a constructor's initializers indent to them.
+        let among_initializers = self.options.indent_preproc_conditional
+            && self.initializer_member_directive_column().is_some();
+        if self.options.indent_preproc_block
+            && is_conditional_preprocessor(directive)
+            && !among_initializers
+        {
             match directive {
                 "if" | "ifdef" | "ifndef" => {
                     // A file scope block opening in parens stands at the
@@ -1237,6 +1243,12 @@ impl FormatEngine<'_> {
                 spaces,
             };
         }
+        if opening && let Some(spaces) = self.initializer_member_directive_column() {
+            return PreprocessorLineIndent::Exact {
+                structural_level: spaces / self.options.indent_width.max(1),
+                spaces,
+            };
+        }
         if opening && let Some(spaces) = self.list_row_directive_column() {
             return PreprocessorLineIndent::Exact {
                 structural_level: spaces / self.options.indent_width.max(1),
@@ -1297,6 +1309,17 @@ impl FormatEngine<'_> {
                     + self.split_else_directive_extra(),
             )
         }
+    }
+
+    /// The column of a constructor's initializers when the active directive
+    /// stands between two of them.
+    fn initializer_member_directive_column(&self) -> Option<usize> {
+        let directive = self.preprocessor.active_directive?;
+        let separator = self.tree.previous_code_token(directive)?;
+        if !self.separates_constructor_initializers(separator) {
+            return None;
+        }
+        self.constructor_initializer_base_indent_spaces()
     }
 
     /// The column, before the line adjuster's case unindent, of the line
@@ -1443,9 +1466,11 @@ impl FormatEngine<'_> {
                 let mut group_block = false;
                 if should_indent_block {
                     // At file scope astyle indents a block's lines by the
-                    // block alone, a statement they continue or not.
+                    // block alone, a statement they continue or not, but for
+                    // a constructor's initializers, which keep their column.
                     let file_scope = self.layout.indentation.indent() == 0;
-                    group_block = file_scope;
+                    group_block =
+                        file_scope && self.initializer_member_directive_column().is_none();
                     self.layout.indentation.enter_block();
                     if file_scope {
                         suspended = self

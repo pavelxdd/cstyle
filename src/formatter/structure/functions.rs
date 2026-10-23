@@ -913,8 +913,11 @@ fn head_end(
             {
                 return Some(HeadEnd::Found(groups.opened_at(next)));
             }
-            // Parameter declarations go on past such conditionals.
-            if !(closes_conditionals && (knr_semicolon.is_some() || knr_parameters)) {
+            // Parameter declarations and constructor initializers go on
+            // past such conditionals.
+            if !(closes_conditionals
+                && (knr_semicolon.is_some() || knr_parameters || constructor_initializers))
+            {
                 return unterminated(knr_semicolon);
             }
         }

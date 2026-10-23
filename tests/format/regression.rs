@@ -23938,3 +23938,27 @@ fn a_lambda_parameter_row_opening_the_body_stands_at_the_statement() {
     let broken = "void f()\n{\n    std::sort(items.begin(), items.end(), [](const Item &a,\n              const Item &b)\n    {\n        return a.value < b.value;\n    });\n}\n";
     check(input, &["--style=allman"], broken);
 }
+
+#[test]
+fn directives_between_constructor_initializers_keep_the_member_column() {
+    // A conditional among the members indents to them, and a member in a
+    // file-scope conditional block stays a member.
+    let input = "Item::Item()\n    : one(1),\n#ifdef FEATURE\n      two(2),\n#endif\n      three(3)\n{\n}\nclass Item {\n    Item()\n        : one(1),\n#ifdef FEATURE\n          two(2),\n#endif\n          three(3) {}\n};\n";
+    let conditional = "Item::Item()\n    : one(1),\n      #ifdef FEATURE\n      two(2),\n      #endif\n      three(3)\n{\n}\nclass Item\n{\n    Item()\n        : one(1),\n          #ifdef FEATURE\n          two(2),\n          #endif\n          three(3) {}\n};\n";
+    let block = "Item::Item()\n    : one(1),\n#ifdef FEATURE\n      two(2),\n#endif\n      three(3)\n{\n}\nclass Item\n{\n    Item()\n        : one(1),\n#ifdef FEATURE\n          two(2),\n#endif\n          three(3) {}\n};\n";
+    for (args, expected) in [
+        (&["--style=kr", "--indent-preproc-cond"][..], conditional),
+        (&["--style=kr", "--indent-preproc-block"][..], block),
+        (
+            &[
+                "--style=kr",
+                "--indent-preproc-cond",
+                "--indent-preproc-block",
+            ][..],
+            conditional,
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
