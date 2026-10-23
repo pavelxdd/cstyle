@@ -24196,3 +24196,26 @@ fn attach_inlines_leaves_a_member_brace_initializer_to_its_style() {
         check(expected, &args, expected);
     }
 }
+
+#[test]
+fn an_enumeration_brace_takes_its_style_whatever_comments_its_body_holds() {
+    let input = "enum color {\n    RED = 1,    /* red */\n    GREEN = 2,  /* green */\n};\nenum shade {\n    DARK,\n    LIGHT,\n};\n";
+    let expected = "enum color\n{\n    RED = 1,    /* red */\n    GREEN = 2,  /* green */\n};\nenum shade\n{\n    DARK,\n    LIGHT,\n};\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+}
+
+#[test]
+fn indent_labels_leaves_a_block_brace_run_into_its_label_at_the_block() {
+    // The label runs in after the brace; indenting labels moves neither the
+    // brace nor the rows after it.
+    let input = "void g(void)\n{\n    {\n    inner:\n        go();\n    }\n}\n";
+    let expected = "void g(void)\n{\n    {   inner:\n        go();\n    }\n}\n";
+    for args in [
+        &["--style=horstmann"][..],
+        &["--style=horstmann", "--indent-labels"],
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
