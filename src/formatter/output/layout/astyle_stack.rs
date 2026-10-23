@@ -441,31 +441,39 @@ impl FormatEngine<'_> {
             return None;
         }
         let start_line = self.output.line_with_token(start)?;
-        // The start leads its line, after at most `}` and `else`.
+        // The start leads its line, after at most a `}` and headers.
         let mut line_first = next_code_token(tokens, self.output.line_tokens(start_line)?.first)?;
-        while line_first < start
-            && (matches!(tokens[line_first], Token::Symbol('}'))
-                || matches!(&tokens[line_first], Token::Word(word) if word == "else"))
-        {
+        if line_first < start && matches!(tokens[line_first], Token::Symbol('}')) {
             line_first = next_code_token(tokens, line_first + 1)?;
         }
         // A body run in after its header on the line continues a level in,
-        // as astyle indents that body.
+        // as astyle indents that body; an `else if` is one header.
         let mut header_levels = 0;
-        while line_first < start
-            && matches!(&tokens[line_first], Token::Word(word) if matches!(word.as_str(), "if" | "while" | "for"))
-            && let Some(open) = next_code_token(tokens, line_first + 1)
-            && matches!(tokens[open], Token::Symbol('('))
-            && let Some(close) = self
-                .tree
-                .groups
-                .opened_at(open)
-                .and_then(|group| self.tree.groups.get(group).close)
-            && close < start
-            && self.output.line_with_token(close) == Some(start_line)
-        {
-            header_levels += 1;
-            line_first = next_code_token(tokens, close + 1)?;
+        while line_first < start {
+            let Token::Word(word) = &tokens[line_first] else {
+                break;
+            };
+            let body = match word.as_str() {
+                "else" | "do" => next_code_token(tokens, line_first + 1)?,
+                "if" | "while" | "for" => {
+                    let Some(close) = next_code_token(tokens, line_first + 1)
+                        .filter(|&open| matches!(tokens[open], Token::Symbol('(')))
+                        .and_then(|open| self.tree.groups.opened_at(open))
+                        .and_then(|group| self.tree.groups.get(group).close)
+                        .filter(|&close| {
+                            close < start && self.output.line_with_token(close) == Some(start_line)
+                        })
+                    else {
+                        break;
+                    };
+                    next_code_token(tokens, close + 1)?
+                }
+                _ => break,
+            };
+            if !(word == "else" && matches!(&tokens[body], Token::Word(next) if next == "if")) {
+                header_levels += 1;
+            }
+            line_first = body;
         }
         if line_first != start {
             return None;

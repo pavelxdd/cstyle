@@ -3436,6 +3436,17 @@ fn break_blocks_keeps_a_row_of_comments_after_a_block_with_its_closing_header() 
 }
 
 #[test]
+fn a_body_run_in_after_else_or_do_continues_its_arguments_a_level_in_as_after_an_if() {
+    // An `else if` is one header; `else` before any other body nests it.
+    let input = "void f()\n{\n    if (ready) {\n        x();\n    } else value = compute(first,\n                               second);\n    if (ready)\n        x();\n    else if (other) value = compute(first,\n                                        second);\n    do value = compute(first,\n                           second); while (x);\n    if (a) if (b) value = compute(first,\n                                      second);\n    if (ready)\n        x();\n    else for (;;) value = compute(first,\n                                      second);\n}\n";
+    check(
+        input,
+        &["--style=kr", "--keep-one-line-statements"],
+        "void f()\n{\n    if (ready) {\n        x();\n    } else value = compute(first,\n                               second);\n    if (ready)\n        x();\n    else if (other) value = compute(first,\n                                        second);\n    do value = compute(first,\n                           second); while (x);\n    if (a) if (b) value = compute(first,\n                                          second);\n    if (ready)\n        x();\n    else for (;;) value = compute(first,\n                                          second);\n}\n",
+    );
+}
+
+#[test]
 fn break_all_blocks_keeps_a_one_line_statement_body_with_its_else() {
     let input = "void f()\n{   for (i = 0; i < n; i++)\n    {   if (type == TCP)\n            a();\n        else\n            b(); }\n\n    x = 1;\n\n    if (c)\n        d();\n    else\n        e(); }\n";
     check(input, &["--style=pico", "--break-blocks=all"], input);
