@@ -23992,3 +23992,13 @@ fn a_function_try_member_opening_its_class_stands_with_the_members() {
     check(input, &["--style=whitesmith"], expected);
     check(expected, &["--style=whitesmith"], expected);
 }
+
+#[test]
+fn vtk_sets_a_member_function_try_block_at_the_function_body() {
+    // A function's own try block and its handlers are its body at any
+    // declaration scope, so their statements stand a level past the brace.
+    let input = "class Item {\n    void run() try {\n        go();\n    } catch (...) {\n        stop();\n    }\n};\nnamespace space {\nvoid helper() try {\n    go();\n} catch (...) {\n    stop();\n}\n}\n";
+    let expected = "class Item\n{\n    void run() try\n    {\n        go();\n    }\n    catch (...)\n    {\n        stop();\n    }\n};\nnamespace space\n{\nvoid helper() try\n{\n    go();\n}\ncatch (...)\n{\n    stop();\n}\n}\n";
+    check(input, &["--style=vtk"], expected);
+    check(expected, &["--style=vtk"], expected);
+}

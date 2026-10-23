@@ -8011,6 +8011,7 @@ impl FormatEngine<'_> {
     /// The column of the statements of the block enclosing `first`, which
     /// a statement there stands at whatever it is.
     fn enclosing_block_statement_column(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
         let block = self.enclosing_block(first)?;
         let column = match self.block_body_anchor(block)? {
             BodyAnchor::BraceLine(lead) => {
@@ -8020,10 +8021,28 @@ impl FormatEngine<'_> {
                     BraceType::Command
                 };
                 // VTK indents the braces of blocks inside a function, not
-                // those of a function's own try block.
+                // those of a function's own try block and its handlers, which
+                // open at a declaration scope.
+                let parent = self.tree.groups.get(block).parent;
+                let opens_after = |word: &str| {
+                    self.tree
+                        .previous_code_token(self.tree.groups.get(block).open)
+                        .is_some_and(
+                            |before| matches!(&tokens[before], Token::Word(found) if found == word),
+                        )
+                };
+                let function_try_block = parent.is_some_and(|parent| {
+                    matches!(
+                        self.tree.blocks.kind(parent),
+                        Some(BlockKind::Namespace | BlockKind::ExternC | BlockKind::Aggregate)
+                    )
+                }) && (opens_after("try")
+                    || self.tree.blocks.owner(block).is_some_and(
+                        |owner| matches!(&tokens[owner], Token::Word(word) if word == "catch"),
+                    ));
                 let vtk_file_scope_block = self.options.brace_style == BraceStyle::Vtk
                     && brace_type == BraceType::Command
-                    && self.tree.groups.get(block).parent.is_none();
+                    && (parent.is_none() || function_try_block);
                 let indented_brace = (self.options.indent_braces
                     || matches!(
                         self.options.brace_style,
