@@ -24152,3 +24152,15 @@ fn a_lambda_element_of_a_list_after_a_declaration_stands_with_the_elements() {
     check(input, &["--style=vtk"], expected);
     check(expected, &["--style=vtk"], expected);
 }
+
+#[test]
+fn a_function_body_after_a_trailing_reference_return_type_takes_the_style_brace() {
+    // A declarator ending the head continues no expression: the body's
+    // brace attaches as after any return type.
+    let input = "auto get() -> int\n{\n    return 1;\n}\nauto Item::get() const -> const T &\n{\n    return value_;\n}\nauto Item::ptr() -> T *\n{\n    return value_;\n}\n";
+    let expected = "auto get() -> int {\n    return 1;\n}\nauto Item::get() const -> const T & {\n    return value_;\n}\nauto Item::ptr() -> T * {\n    return value_;\n}\n";
+    check(input, &["--style=java"], expected);
+    check(expected, &["--style=java"], expected);
+    let ratliff = "auto get() -> int {\n    return 1;\n    }\nauto Item::get() const -> const T & {\n    return value_;\n    }\nauto Item::ptr() -> T * {\n    return value_;\n    }\n";
+    check(input, &["--style=ratliff"], ratliff);
+}

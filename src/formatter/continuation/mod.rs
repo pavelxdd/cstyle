@@ -17,6 +17,7 @@ use crate::formatter::output::buffer::OutputBuffer;
 use crate::formatter::state::frame::{BraceSemanticKind, ColonRole, LogicalOperator};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
+use crate::formatter::structure::blocks::{BlockKind, next_code_token};
 use crate::formatter::structure::functions::FunctionHead;
 use crate::formatter::structure::groups::{Delimiter, GroupId};
 use crate::formatter::syntax::language::{is_leading_continuation_operator, is_macro_like_word};
@@ -360,6 +361,20 @@ impl FormatEngine<'_> {
             || trimmed.ends_with(">>") && self.previous_was_template_close
     }
 
+    /// Whether the line ends a function's head, the body's brace the code
+    /// after it: a declarator ending it continues no expression.
+    fn current_ends_function_head(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        self.next_line.leads_with_open_brace
+            && self
+                .current
+                .tokens()
+                .and_then(|span| next_code_token(tokens, span.last + 1))
+                .filter(|&brace| matches!(tokens[brace], Token::Symbol('{')))
+                .and_then(|brace| self.tree.groups.opened_at(brace))
+                .is_some_and(|body| self.tree.blocks.kind(body) == Some(BlockKind::FunctionBody))
+    }
+
     fn current_ends_with_pointer_declarator(&self) -> bool {
         let trimmed = self.current_code_before_trailing_comment();
         if trimmed.ends_with("||") {
@@ -440,6 +455,7 @@ impl FormatEngine<'_> {
                 && !bare_leading_operator_line
                 && !self.line_ends_with_bare_angle_operator()
                 && !self.current_ends_with_pointer_declarator()
+                && !self.current_ends_function_head()
                 && !trimmed.ends_with("->")
                 && (self.layout.indentation.statement_depth() != 0 || !trimmed.ends_with("::")))
             || (matches!(self.layout.previous, PreviousToken::Comma)
