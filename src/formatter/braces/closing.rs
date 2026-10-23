@@ -339,7 +339,7 @@ impl FormatEngine<'_> {
                 // Styles indenting their closers close a body at its column;
                 // a brace VTK leaves at its statement closes there.
                 let vtk_flush_brace =
-                    self.options.brace_style == BraceStyle::Vtk && frame.header_indent_column == 0;
+                    self.options.brace_style == BraceStyle::Vtk && self.vtk_flush_lambda(frame);
                 if matches!(
                     self.options.brace_style,
                     BraceStyle::Ratliff | BraceStyle::Whitesmith | BraceStyle::Vtk

@@ -234,35 +234,6 @@ impl FormatEngine<'_> {
         }
     }
 
-    pub(crate) fn try_emit_whitesmith_lambda_close(&mut self, line: &LineView<'_>) -> bool {
-        let line_trimmed = line.trimmed();
-        if !(matches!(
-            self.options.brace_style,
-            BraceStyle::Whitesmith | BraceStyle::Vtk
-        ) && line_trimmed == "};"
-            && self
-                .output
-                .scoped()
-                .iter()
-                .rev()
-                .take(4)
-                .any(|line| is_lambda_body_header(line.trimmed_end())))
-        {
-            return false;
-        }
-        let base = self
-            .layout
-            .indentation
-            .line_indent(LineKind::Normal, self.options);
-        let indent = if self.options.brace_style == BraceStyle::Vtk && base == 0 {
-            base
-        } else {
-            base + 1
-        };
-        self.push_output_line(line_trimmed, indent);
-        true
-    }
-
     pub(crate) fn try_split_lambda_body_header(&mut self, line: &LineView<'_>) -> bool {
         if !matches!(
             self.options.brace_style,

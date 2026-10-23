@@ -24132,3 +24132,13 @@ fn code_after_a_kept_one_line_lambda_body_continues_its_expression() {
         check(&expected, &args, &expected);
     }
 }
+
+#[test]
+fn vtk_keeps_a_member_lambda_brace_flush_with_its_declaration() {
+    // Braces at a declaration scope stand flush, as at file scope; those
+    // in a function's body, a local type's included, stand a level in.
+    let input = "struct Item {\n    std::function<int(int)> run = [](int v) {\n        return v;\n    };\n};\nvoid h()\n{\n    struct Local {\n        std::function<void()> run = [] {\n            go();\n        };\n    };\n}\n";
+    let expected = "struct Item\n{\n    std::function<int(int)> run = [](int v)\n    {\n        return v;\n    };\n};\nvoid h()\n{\n    struct Local\n        {\n        std::function<void()> run = []\n            {\n            go();\n            };\n        };\n}\n";
+    check(input, &["--style=vtk"], expected);
+    check(expected, &["--style=vtk"], expected);
+}

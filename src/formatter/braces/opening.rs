@@ -18,7 +18,7 @@ use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{CommentKind, Token, next_non_whitespace, token_char_len};
 use crate::formatter::output::block_spacing::is_break_blocks_closing_header;
-use crate::formatter::state::frame::{BraceSemanticKind, ConstructorInitializerLayout};
+use crate::formatter::state::frame::{BraceFrame, BraceSemanticKind, ConstructorInitializerLayout};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::structure::TokenSpan;
@@ -476,6 +476,29 @@ impl FormatEngine<'_> {
         })
     }
 
+    /// Whether VTK sets the lambda body `frame` opens flush with its
+    /// statement, as a function's: outside any body or list, through the
+    /// parens around it, at file scope, in a namespace or in a class.
+    pub(crate) fn vtk_flush_lambda(&self, frame: &BraceFrame) -> bool {
+        let groups = &self.tree.groups;
+        let Some(block) = frame.open_token.and_then(|open| groups.opened_at(open)) else {
+            return frame.header_indent_column == 0;
+        };
+        let mut parent = groups.get(block).parent;
+        while let Some(group) = parent {
+            if groups.get(group).delimiter == Delimiter::Brace
+                && !matches!(
+                    self.tree.blocks.kind(group),
+                    Some(BlockKind::Namespace | BlockKind::Aggregate)
+                )
+            {
+                return false;
+            }
+            parent = groups.get(group).parent;
+        }
+        true
+    }
+
     pub(crate) fn lambda_opening_brace_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {
         if line.trimmed() != "{" {
             return None;
@@ -487,7 +510,7 @@ impl FormatEngine<'_> {
             .filter(|frame| frame.semantic_kind == BraceSemanticKind::Lambda)?;
         Some(
             if self.options.brace_style == BraceStyle::Whitesmith
-                || self.options.brace_style == BraceStyle::Vtk && frame.header_indent_column > 0
+                || self.options.brace_style == BraceStyle::Vtk && !self.vtk_flush_lambda(frame)
             {
                 frame.body_indent_column
             } else {
@@ -542,7 +565,7 @@ impl FormatEngine<'_> {
         // A brace VTK leaves at its statement sets the body in from it, as a
         // function's.
         Some(
-            if self.options.brace_style == BraceStyle::Vtk && frame.header_indent_column == 0 {
+            if self.options.brace_style == BraceStyle::Vtk && self.vtk_flush_lambda(frame) {
                 frame.sibling_indent_column + self.options.indent_width
             } else {
                 frame.body_indent_column
