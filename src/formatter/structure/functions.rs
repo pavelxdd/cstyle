@@ -742,33 +742,41 @@ enum HeadEnd {
     Unterminated,
 }
 
-/// How the head whose parameter list is `params` and whose declarator ends
-/// with the paren group `last_params` ends; `None` when the tokens after the
-/// declarator show that it is not a function head.
 /// Where walks past the parameter lists of heads reached the first token
 /// that ends a head or changes how the walk reads on: by the token a walk
-/// stood at, the level it walked and the token it reached. Heads follow
-/// each other as calls of a macro list do, so their walks share their
-/// tails.
+/// stood at and whether it passed conditionals. Heads follow each other as
+/// calls of a macro list do, so their walks share their tails.
 #[derive(Default)]
 struct HeadEndWalks {
-    reached: IndexMap<usize, (Option<GroupId>, usize)>,
+    reached: IndexMap<(usize, bool), HeadWalk>,
+}
+
+#[derive(Clone, Copy)]
+struct HeadWalk {
+    level: Option<GroupId>,
+    reached: usize,
+    /// The first `->` the walk passed.
+    arrow: Option<usize>,
 }
 
 /// Whether a walk past a parameter list at `level`, before any `;` or `:`,
 /// goes on past the token `next` it stands before at `index`: a word, an
-/// operator, or the call of an attribute or macro word.
+/// operator, or the call of an attribute or macro word, after conditionals
+/// that only close or open when `pass_conditionals`.
 fn head_walk_passes(
     tokens: &[Token],
     groups: &Groups,
     level: Option<GroupId>,
+    pass_conditionals: bool,
     index: usize,
     next: usize,
 ) -> bool {
-    !tokens[index..next]
-        .iter()
-        .any(|token| matches!(token, Token::Preprocessor(_)))
-        && groups.enclosing(next) == level
+    tokens[index..next].iter().all(|token| match token {
+        Token::Preprocessor(directive) => {
+            pass_conditionals && closes_or_opens_conditional(&directive.text)
+        }
+        _ => true,
+    }) && groups.enclosing(next) == level
         && !matches!(tokens[next], Token::Symbol(':' | '{' | ';' | '}' | ','))
         && (tokens[next] != Token::Symbol('(')
             || previous_head_token(tokens, next).is_some_and(
@@ -776,17 +784,71 @@ fn head_walk_passes(
             ))
 }
 
+fn closes_or_opens_conditional(directive: &str) -> bool {
+    preprocessor_directive(directive)
+        .is_some_and(|name| matches!(name, "endif" | "if" | "ifdef" | "ifndef"))
+}
+
+/// Walks on from `start` past the tokens [`head_walk_passes`] admits.
+fn walk_head_tail(
+    tokens: &[Token],
+    groups: &Groups,
+    walks: &mut HeadEndWalks,
+    level: Option<GroupId>,
+    pass_conditionals: bool,
+    start: usize,
+) -> Option<HeadWalk> {
+    let mut index = start;
+    let mut passed = Vec::new();
+    let tail = loop {
+        if let Some(&walk) = walks.reached.get(&(index, pass_conditionals))
+            && walk.level == level
+        {
+            break walk;
+        }
+        match next_code_token(tokens, index) {
+            Some(next)
+                if head_walk_passes(tokens, groups, level, pass_conditionals, index, next) =>
+            {
+                passed.push((index, next));
+                index = match groups.opened_at(next) {
+                    Some(id) => groups.get(id).close? + 1,
+                    None => next + 1,
+                };
+            }
+            _ => {
+                break HeadWalk {
+                    level,
+                    reached: index,
+                    arrow: None,
+                };
+            }
+        }
+    };
+    let mut walk = tail;
+    for &(from, next) in passed.iter().rev() {
+        if is_operator(tokens, next, "->") {
+            walk.arrow = Some(next);
+        }
+        walks.reached.insert((from, pass_conditionals), walk);
+    }
+    Some(walk)
+}
+
 /// The depth of template angles open at `end` in a trailing return type
-/// that a `->` at `level` starts between `start` and `end`.
+/// that a `->` at `level` starts: `arrow`, or one between `start` and `end`.
 fn trailing_return_angle_depth(
     tokens: &[Token],
     groups: &Groups,
     level: Option<GroupId>,
+    arrow: Option<usize>,
     start: usize,
     end: usize,
 ) -> Option<usize> {
-    let arrow = (start..end)
-        .find(|&index| is_operator(tokens, index, "->") && groups.enclosing(index) == level)?;
+    let arrow = arrow.or_else(|| {
+        (start..end)
+            .find(|&index| is_operator(tokens, index, "->") && groups.enclosing(index) == level)
+    })?;
     Some((arrow + 1..end).fold(0usize, |depth, index| {
         if groups.enclosing(index) != level {
             return depth;
@@ -800,6 +862,9 @@ fn trailing_return_angle_depth(
     }))
 }
 
+/// How the head whose parameter list is `params` and whose declarator ends
+/// with the paren group `last_params` ends; `None` when the tokens after the
+/// declarator show that it is not a function head.
 fn head_end(
     tokens: &[Token],
     groups: &Groups,
@@ -809,29 +874,18 @@ fn head_end(
 ) -> Option<HeadEnd> {
     let group = groups.get(last_params);
     let level = group.parent;
-    let mut index = group.close? + 1;
+    let knr_parameters = is_identifier_list(tokens, groups, params);
     // The walk reads tokens that pass the same way from wherever it starts,
     // until a `;` or `:` changes how it reads on.
-    if let Some(&(walked, reached)) = walks.reached.get(&index)
-        && walked == level
-    {
-        index = reached;
-    } else {
-        let mut passed = Vec::new();
-        while let Some(next) = next_code_token(tokens, index)
-            && head_walk_passes(tokens, groups, level, index, next)
-        {
-            passed.push(index);
-            index = match groups.opened_at(next) {
-                Some(id) => groups.get(id).close? + 1,
-                None => next + 1,
-            };
-        }
-        for start in passed {
-            walks.reached.insert(start, (level, index));
-        }
-    }
-    let knr_parameters = is_identifier_list(tokens, groups, params);
+    let walk = walk_head_tail(
+        tokens,
+        groups,
+        walks,
+        level,
+        knr_parameters,
+        group.close? + 1,
+    )?;
+    let mut index = walk.reached;
     let mut constructor_initializers = false;
     // The first `;` after an identifier list may end a declaration or start
     // K&R parameter declarations; when the tokens after it are no K&R
@@ -849,8 +903,7 @@ fn head_end(
             .any(|token| matches!(token, Token::Preprocessor(_)))
         {
             let closes_conditionals = tokens[index..next].iter().all(|token| match token {
-                Token::Preprocessor(directive) => preprocessor_directive(&directive.text)
-                    .is_some_and(|name| matches!(name, "endif" | "if" | "ifdef" | "ifndef")),
+                Token::Preprocessor(directive) => closes_or_opens_conditional(&directive.text),
                 _ => true,
             });
             if closes_conditionals
@@ -882,7 +935,7 @@ fn head_end(
         // A trailing return type holds groups, as `decltype(x)`, and the
         // commas of its template arguments.
         if matches!(tokens[next], Token::Symbol('(' | ','))
-            && trailing_return_angle_depth(tokens, groups, level, group.close? + 1, next)
+            && trailing_return_angle_depth(tokens, groups, level, walk.arrow, walk.reached, next)
                 .is_some_and(|depth| depth > 0 || tokens[next] == Token::Symbol('('))
         {
             index = match groups.opened_at(next) {

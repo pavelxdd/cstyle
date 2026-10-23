@@ -582,6 +582,19 @@ fn runs_that_each_line_looked_across_stay_bounded() {
             FormatOptions::default(),
         ),
         (
+            "macro calls without semicolons around a conditional",
+            format!(
+                "{}#ifdef FEATURE\n{}#endif\n",
+                (0..n / 2)
+                    .map(|i| format!("DECLARE (name{i})\n"))
+                    .collect::<String>(),
+                (0..n / 2)
+                    .map(|i| format!("DECLARE (other{i})\n"))
+                    .collect::<String>()
+            ),
+            FormatOptions::default(),
+        ),
+        (
             "enums each with a comment after a member",
             (0..n / 4)
                 .map(|i| {
