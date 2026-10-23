@@ -23901,3 +23901,25 @@ fn attach_inlines_keeps_the_brace_of_an_expanded_one_line_member_body() {
         check(expected, &[style, "--attach-inlines"], expected);
     }
 }
+
+#[test]
+fn an_attribute_row_after_an_attribute_row_stands_at_its_level_without_conditional_indent() {
+    // Rows a `[` leads keep their source column only as an initializer's
+    // range designators; attributes start their declarations at a level.
+    let input =
+        "[[nodiscard]] int f();\n[[deprecated(\"old\")]] void g()\n    {\n    go();\n    }\n";
+    for (style, expected) in [
+        ("--style=whitesmith", input),
+        (
+            "--style=allman",
+            "[[nodiscard]] int f();\n[[deprecated(\"old\")]] void g()\n{\n    go();\n}\n",
+        ),
+        (
+            "--style=kr",
+            "[[nodiscard]] int f();\n[[deprecated(\"old\")]] void g()\n{\n    go();\n}\n",
+        ),
+    ] {
+        check(input, &[style, "--min-conditional-indent=0"], expected);
+        check(expected, &[style, "--min-conditional-indent=0"], expected);
+    }
+}

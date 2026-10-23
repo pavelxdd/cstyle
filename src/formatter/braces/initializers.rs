@@ -164,6 +164,20 @@ impl FormatEngine<'_> {
         }
     }
 
+    /// Whether the line being laid out starts among the elements of an
+    /// initializer list.
+    fn pending_line_starts_in_initializer(&self) -> bool {
+        self.output
+            .pending_tokens()
+            .and_then(|span| self.tree.groups.enclosing(span.first))
+            .is_some_and(|group| {
+                matches!(
+                    self.tree.blocks.kind(group),
+                    Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                )
+            })
+    }
+
     pub(crate) fn range_designator_source_indent_spaces(
         &self,
         line: &LineView<'_>,
@@ -171,6 +185,7 @@ impl FormatEngine<'_> {
         let line_start = line.trimmed_start();
         if self.options.min_conditional_indent != MinConditionalIndent::Zero
             || !line_start.starts_with('[')
+            || !self.pending_line_starts_in_initializer()
         {
             return None;
         }
