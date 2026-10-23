@@ -23501,3 +23501,12 @@ fn rows_continuing_a_split_trailing_return_stand_as_in_a_namespace_at_file_scope
         "auto get(T&& rng)\n-> Item<int,\nlong>;\nauto make(T&& rng)\n-> decltype(call(a,\n                 b));\nnamespace n\n{\nauto get(T&& rng)\n-> Item<int,\nlong>;\n}\n",
     );
 }
+
+#[test]
+fn a_closer_after_a_do_body_run_in_after_else_stands_at_its_own_block() {
+    check(
+        "void f()\n{\n#ifdef FLAG\n    value=0;\n#else\n    value=1;\n#endif\n    if (ready) helper(); else do {\n        first();\n    } while (state);\n}\n",
+        &["--style=ratliff", "--attach-closing-while"],
+        "void f() {\n#ifdef FLAG\n    value=0;\n#else\n    value=1;\n#endif\n    if (ready) helper();\n    else do {\n            first();\n            } while (state);\n    }\n",
+    );
+}

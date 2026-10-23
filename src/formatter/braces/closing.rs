@@ -1496,28 +1496,21 @@ impl FormatEngine<'_> {
         if line.trimmed() != "}" {
             return None;
         }
-        for opening in self
-            .output
-            .scoped()
-            .iter()
-            .rev()
-            .filter(|line| !line.trimmed().is_empty())
-        {
-            let code = self.output.code_trimmed_of(opening);
-            let trimmed = code.trimmed_start();
-            if trimmed == "}" {
-                return None;
-            }
-            if code.ends_with('{') {
-                let extra = same_line_nested_header_extra(trimmed);
-                return (extra > 0).then(|| {
-                    let target = leading_visual_width(opening, self.options.tab_width)
-                        + extra * self.options.indent_width;
-                    current_spaces.unwrap_or(0).max(target)
-                });
-            }
+        // The headers before the brace this one closes, on its line.
+        let groups = &self.tree.groups;
+        let close = self.output.pending_tokens()?.first;
+        let open = groups.get(groups.closed_at(close)?).open;
+        let opening = self.output.line_with_token(open)?;
+        let code = self.output.code_trimmed(opening);
+        if !code.ends_with('{') {
+            return None;
         }
-        None
+        let extra = same_line_nested_header_extra(code.trimmed_start());
+        (extra > 0).then(|| {
+            let target = self.output.lead_width(opening, self.options.tab_width)
+                + extra * self.options.indent_width;
+            current_spaces.unwrap_or(0).max(target)
+        })
     }
 
     pub(crate) fn split_else_none_style_closing_indent_spaces(
