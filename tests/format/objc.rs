@@ -1507,3 +1507,19 @@ fn objc_interface_member_a_comment_leads_stays_at_the_members() {
         "@interface Item : NSObject\n/* note */ @property (nonatomic) int value;\n@end\n",
     );
 }
+
+#[test]
+fn conditionals_in_an_interface_without_ivars_stand_with_its_declarations() {
+    // A conditional stands at the level of the declarations around it,
+    // whether or not an ivar block opens the interface.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_owned(), "--indent-preproc-cond".to_owned()],
+    )
+    .expect("valid options");
+    let input = "@interface Item : NSObject\n#ifdef FEATURE\n@property (nonatomic) int value;\n#endif\n- (void)update:(int)value;\n@end\n";
+    assert_eq!(format_exact(input, &options), input);
+    let with_ivars = "@interface Item : NSObject\n{\n    int value;\n}\n#ifdef FEATURE\n@property (nonatomic) int value;\n#endif\n- (void)update:(int)value;\n@end\n";
+    assert_eq!(format_exact(with_ivars, &options), with_ivars);
+}
