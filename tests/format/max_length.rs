@@ -3285,6 +3285,23 @@ fn max_code_length_starts_a_statement_split_off_after_a_semicolon_at_its_level()
 }
 
 #[test]
+fn max_code_length_keeps_a_header_after_a_statement_on_a_line_that_fits() {
+    // Only a line past the limit splits; one-line statements keep the rest.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=kr".to_owned(),
+            "--keep-one-line-statements".to_owned(),
+            "--max-code-length=60".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let input = "void f()\n{\n    value = 1; if (ready) value = 0;\n    value = 1; while (ready) {\n        value = 0;\n    }\n    value = 1; value = 2;\n}\n";
+    assert_stable_max_length_format(input, &options, input);
+}
+
+#[test]
 fn max_code_length_starts_a_statement_split_off_a_body_or_label_line_where_statements_stand() {
     let mut options = FormatOptions::default();
     apply_command_line_args(
