@@ -10852,6 +10852,15 @@ fn break_blocks_pads_an_attributed_header_block_like_any_header_block() {
         &["--break-blocks"],
         "void f()\n{\n    if (ready) [[likely]] {\n        value = 1;\n    }\n\n    done();\n\n    if (ready) {\n        value = 2;\n    }\n\n    done();\n}\n",
     );
+    // So does break-blocks=all before its closing header.
+    let input = "void f()\n{\n    if (ready) [[likely]] {\n        value = 1;\n    } else {\n        value = 2;\n    }\n}\n";
+    let expected = "void f()\n{\n    if (ready) [[likely]] {\n        value = 1;\n\n    } else {\n        value = 2;\n    }\n}\n";
+    check(input, &["--break-blocks=all"], expected);
+    check(
+        &input.replace(" [[likely]]", ""),
+        &["--break-blocks=all"],
+        &expected.replace(" [[likely]]", ""),
+    );
 }
 
 #[test]
