@@ -24219,3 +24219,13 @@ fn indent_labels_leaves_a_block_brace_run_into_its_label_at_the_block() {
         check(expected, args, expected);
     }
 }
+
+#[test]
+fn a_declarator_split_off_its_template_type_stands_with_the_statement() {
+    // A row starting after a type's template arguments continues nothing,
+    // as on a source row of its own.
+    let input = "std::map<std::string, std::vector<std::pair<int, int>>> table;\nvoid f()\n{\n    std::map<std::string, std::vector<std::pair<int, int>>> table;\n}\n";
+    let expected = "std::map<std::string, std::vector<std::pair<int, int>>>\ntable;\nvoid f()\n{\n    std::map<std::string, std::vector<std::pair<int, int>>>\n    table;\n}\n";
+    check(input, &["--max-code-length=50"], expected);
+    check(expected, &["--max-code-length=50"], expected);
+}

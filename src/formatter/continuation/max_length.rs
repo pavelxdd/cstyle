@@ -281,6 +281,12 @@ impl FormatEngine<'_> {
         if self.split_follows_function_parameters(line, split.tail) {
             next_indent = ContinuationIndent::Spaces(base_indent_width);
         }
+        // So does a declarator split off its type's template arguments,
+        // whatever the arguments left open.
+        let mut declarator_part = split_ends_template_type(&split.head);
+        if declarator_part {
+            next_indent = ContinuationIndent::Spaces(base_indent_width);
+        }
         let conditional_floor =
             self.maximum_length_conditional_continuation_floor(line, base_indent_width);
         let objc_message_rows = self
@@ -408,18 +414,22 @@ impl FormatEngine<'_> {
                 following_indent = ContinuationIndent::Spaces(block_spaces);
             }
             self.set_split_part_tokens(source_tokens, line, tail, &mut part_scan);
-            if let Some(spaces) = self.split_part_indent(tail) {
+            if !declarator_part && let Some(spaces) = self.split_part_indent(tail) {
                 next_indent = ContinuationIndent::Spaces(spaces);
                 self.max_length_line.anchored_part = true;
             }
             self.push_output_line_with_indent(&split.head, next_structural_level, next_indent);
             self.max_length_line.anchored_part = false;
+            declarator_part = split_ends_template_type(&line[..line.len() - split.tail.len()]);
+            if declarator_part {
+                following_indent = ContinuationIndent::Spaces(base_indent_width);
+            }
             tail = split.tail;
             next_indent = following_indent;
         }
         if !tail.trimmed().is_empty() {
             self.set_split_part_tokens(source_tokens, line, tail, &mut part_scan);
-            if let Some(spaces) = self.split_part_indent(tail) {
+            if !declarator_part && let Some(spaces) = self.split_part_indent(tail) {
                 next_indent = ContinuationIndent::Spaces(spaces);
                 self.max_length_line.anchored_part = true;
             }
@@ -1356,6 +1366,27 @@ struct SplitResult<'a> {
     priority: usize,
     anchor_column: Option<usize>,
     indent: ContinuationIndent,
+}
+
+/// Whether the split part `before` is a type its line declares, a name
+/// and its template arguments after any qualifiers: the declarator after it
+/// continues nothing, as on a source row of its own.
+fn split_ends_template_type(before: &str) -> bool {
+    let before = before.trimmed_end();
+    let Some(&(open, end)) = template_argument_ranges(before).last() else {
+        return false;
+    };
+    let words = before[..open].trimmed();
+    end == before.len()
+        && words.starts_with(is_identifier_start)
+        && words.split_whitespace().all(|word| {
+            word.chars()
+                .all(|ch| is_identifier_continue(ch) || ch == ':')
+                && !matches!(
+                    word,
+                    "return" | "co_return" | "co_yield" | "throw" | "new" | "delete" | "case"
+                )
+        })
 }
 
 fn template_argument_ranges(line: &str) -> Vec<(usize, usize)> {
