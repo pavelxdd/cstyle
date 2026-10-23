@@ -158,8 +158,13 @@ impl FormatEngine<'_> {
         fn when(applies: bool, rule: impl FnOnce() -> Option<usize>) -> Option<usize> {
             if applies { rule() } else { None }
         }
-        when(closes_brace || is_word(token, "else"), || {
-            self.else_matching_if_indent(first)
+        when(self.template_continuation_active(), || {
+            self.template_head_row_indent(first)
+        })
+        .or_else(|| {
+            when(closes_brace || is_word(token, "else"), || {
+                self.else_matching_if_indent(first)
+            })
         })
         .or_else(|| {
             when(in_parens && brace, || {

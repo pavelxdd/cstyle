@@ -23706,3 +23706,54 @@ fn a_lambda_body_broken_off_its_row_in_a_case_block_stands_within_the_block() {
     check(input, &args, expected);
     check(expected, &args, expected);
 }
+
+#[test]
+fn rows_of_a_template_head_stand_where_its_angles_and_parens_stack_them() {
+    // Each opener registers the code after it, or a continuation past the
+    // one before when it ends its row or parens indent; a default's `=`
+    // registers nothing.
+    let input = "template <typename T, int N = compute(first,\n second)>\nstruct Item {};\ntemplate <typename T,\n int N = compute(\n first, second),\n int M = Pair<\n first, second>::value>\nstruct Other {};\ntemplate <\n typename T, int N>\nstruct Last {};\n";
+    for (args, expected) in [
+        (
+            &["--style=kr"][..],
+            "template <typename T, int N = compute(first,\n                                      second)>\nstruct Item {};\ntemplate <typename T,\n          int N = compute(\n              first, second),\n          int M = Pair<\n              first, second>::value>\nstruct Other {};\ntemplate <\n    typename T, int N>\nstruct Last {};\n",
+        ),
+        (
+            &["--style=kr", "--indent-continuation=2"][..],
+            "template <typename T, int N = compute(first,\n                                      second)>\nstruct Item {};\ntemplate <typename T,\n          int N = compute(\n                  first, second),\n          int M = Pair<\n                  first, second>::value>\nstruct Other {};\ntemplate <\n        typename T, int N>\nstruct Last {};\n",
+        ),
+        (
+            &[
+                "--style=kr",
+                "--indent-after-parens",
+                "--indent-continuation=2",
+            ][..],
+            "template <typename T, int N = compute(first,\n                second)>\nstruct Item {};\ntemplate <typename T,\n        int N = compute(\n                first, second),\n        int M = Pair<\n                first, second>::value>\nstruct Other {};\ntemplate <\n        typename T, int N>\nstruct Last {};\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
+fn a_comparison_in_parens_closes_no_template_angle() {
+    // astyle reads the `>` as closing the angle before it; rows after the
+    // head stand as without the comparison.
+    let input = "template <typename T, typename = select<(sizeof(T) > 4)>>\nstruct Item {};\ntemplate <typename T, typename = select<(sizeof(T) > 4)>,\n int N>\nstruct Other {};\n";
+    let expected = "template <typename T, typename = select<(sizeof(T) > 4)>>\nstruct Item {};\ntemplate <typename T, typename = select<(sizeof(T) > 4)>,\n          int N>\nstruct Other {};\n";
+    for style in ["--style=kr", "--style=allman"] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn a_typename_before_a_call_in_a_template_default_leaves_its_rows_as_without_it() {
+    // astyle drops the call's rows back to the head when `typename` leads
+    // the default; they stand where the parens stack them either way.
+    let input = "template <typename T,\n          typename C = typename decltype(make(\n              first))::type,\n          typename D = decltype(make(\n              first))>\nstruct Item {};\n";
+    let expected = "template <typename T,\n          typename C = typename decltype(make(\n                                             first))::type,\n          typename D = decltype(make(\n                                    first))>\nstruct Item {};\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}

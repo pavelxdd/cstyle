@@ -1187,7 +1187,13 @@ impl<'a> FormatEngine<'a> {
         };
         let mut cursor = index;
         while let Some(before) = self.tree.previous_code_token(cursor) {
+            // An angle in parens closes none outside them.
+            if let Some(group) = self.tree.groups.closed_at(before) {
+                cursor = self.tree.groups.get(group).open;
+                continue;
+            }
             match &tokens[before] {
+                Token::Symbol('(' | '[') => return false,
                 Token::Operator(operator) if operator == ">" => depth += 1,
                 Token::Operator(operator) if operator == ">>" => depth += 2,
                 Token::Operator(operator) if operator == "<" && self.template_opener_at(before) => {

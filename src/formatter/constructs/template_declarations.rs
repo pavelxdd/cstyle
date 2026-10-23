@@ -1,5 +1,7 @@
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
+use crate::formatter::lexer::{Token, token_text};
+use crate::formatter::structure::blocks::next_code_token;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     ContainsAnyByte, has_hash_outside_literals, is_comment_line,
@@ -165,7 +167,109 @@ fn template_rows_continuation_indent_spaces(rows: &[&str], indent_width: usize) 
         })
 }
 
+/// Code tokens a look back for the template head of a row passes at most.
+const MAX_TEMPLATE_HEAD_TOKENS: usize = 4000;
+
 impl FormatEngine<'_> {
+    /// A row of a template head stands at the top of the stack astyle keeps
+    /// over the head: the head's `<`, each `<` of template arguments, paren
+    /// and bracket open before the row registers the column of the code after
+    /// it on its row, or a continuation past the one before it when it ends
+    /// its row or parens indent; a default's `=` registers nothing.
+    pub(crate) fn template_head_row_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        if matches!(&tokens[first], Token::Operator(operator) if operator.starts_with('>'))
+            || matches!(tokens[first], Token::Symbol(')' | ']'))
+        {
+            return None;
+        }
+        // The `template`s before the row, the head nested in no other last.
+        let mut keywords = Vec::new();
+        let mut cursor = first;
+        let mut passed = 0;
+        while let Some(index) = self.tree.previous_code_token(cursor) {
+            passed += 1;
+            if passed > MAX_TEMPLATE_HEAD_TOKENS {
+                return None;
+            }
+            if let Some(group) = groups.closed_at(index) {
+                cursor = groups.get(group).open;
+                continue;
+            }
+            match &tokens[index] {
+                Token::Symbol(';' | '{' | '}') => break,
+                Token::Word(word) if word == "template" => keywords.push(index),
+                _ => {}
+            }
+            cursor = index;
+        }
+        keywords
+            .iter()
+            .rev()
+            .find_map(|&keyword| self.template_head_stack_top(keyword, first))
+            .map(|spaces| spaces + self.case_unindent_spaces())
+    }
+
+    /// The top of the stack the head of the `template` at `keyword` holds
+    /// at the row starting at `first`, when the row stands in that head.
+    /// Right in angles every `<` and `>` is one; in parens none registers.
+    fn template_head_stack_top(&self, keyword: usize, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let open = next_code_token(tokens, keyword + 1).filter(
+            |&open| matches!(&tokens[open], Token::Operator(operator) if operator == "<"),
+        )?;
+        let continuation = self.options.continuation_indent * self.options.indent_width;
+        // Each registered column, and whether an angle registered it.
+        let mut stack: Vec<(usize, bool)> = Vec::new();
+        let mut index = open;
+        while index < first {
+            let token = &tokens[index];
+            let in_angles = stack.last().is_none_or(|&(_, angle)| angle);
+            let angle = match token {
+                Token::Operator(operator) if operator == "<" => Some(true),
+                Token::Operator(operator) if matches!(operator.as_str(), ">" | ">>") => Some(false),
+                _ => None,
+            };
+            let opens_angle = angle == Some(true) && in_angles;
+            if opens_angle || matches!(token, Token::Symbol('(' | '[')) {
+                let line = self.output.line_with_token(index)?;
+                let next = next_code_token(tokens, index + 1).filter(|&next| {
+                    next < first && self.output.line_with_token(next) == Some(line)
+                });
+                let column = match next {
+                    Some(next) if !self.options.indent_after_parens => self.token_column(next)?,
+                    _ => {
+                        stack
+                            .last()
+                            .map(|&(column, _)| column)
+                            .unwrap_or_else(|| self.output.lead_width(line, self.options.tab_width))
+                            + continuation
+                    }
+                };
+                stack.push((column, opens_angle));
+            } else if matches!(token, Token::Symbol(')' | ']')) {
+                while let Some((_, angle)) = stack.pop() {
+                    if !angle {
+                        break;
+                    }
+                }
+            } else if angle == Some(false) && in_angles {
+                for _ in 0..token_text(token).len() {
+                    if stack.last().is_some_and(|&(_, angle)| angle) {
+                        stack.pop();
+                    }
+                }
+            }
+            // Past the head's own `>`, the row is none of the head's.
+            if stack.is_empty() {
+                return None;
+            }
+            index = next_code_token(tokens, index + 1)?;
+        }
+        stack.last().map(|&(column, _)| column)
+    }
+
     /// The rows of the template head the last code rows in scope continue,
     /// from its `template` row on.
     fn open_template_head_rows(&self) -> Option<Vec<&str>> {

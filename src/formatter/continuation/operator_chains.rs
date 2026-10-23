@@ -698,6 +698,17 @@ impl FormatEngine<'_> {
         if !previous_code.ends_with("<<") && !previous_code.ends_with(">>") {
             return None;
         }
+        // A `>>` closing template arguments or a template head shifts
+        // nothing.
+        if self.previous_output_is_complete_template_declaration()
+            || self
+                .output
+                .pending_tokens()
+                .and_then(|span| self.tree.previous_code_token(span.first))
+                .is_some_and(|close| self.closes_template_at(close))
+        {
+            return None;
+        }
         // A brace opening a block is no operand of the shift before it.
         if self
             .output
