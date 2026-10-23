@@ -4557,3 +4557,50 @@ fn a_comment_after_a_list_brace_leading_its_line_opens_the_list_rows() {
     assert_eq!(format_exact(input, &options), expected);
     assert_eq!(format_exact(expected, &options), expected);
 }
+
+#[test]
+fn attached_list_closer_after_a_directive_in_the_list_is_spaced_as_without_one() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=lisp".to_owned()]).expect("valid options");
+    let expected_rows = |middle: &[&str]| {
+        let mut rows = vec![
+            "static const struct Item items[] = {",
+            "    {3, 4 },",
+            "    {",
+            "        5,",
+        ];
+        rows.extend_from_slice(middle);
+        rows.push("        6 } };");
+        rows.join("\n") + "\n"
+    };
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "static const struct Item items[] = {",
+                "    {3, 4},",
+                "    {5,",
+                "#ifdef X",
+                "     7,",
+                "#endif",
+                "     6}",
+                "};",
+            ),
+            &options,
+        ),
+        expected_rows(&["#ifdef X", "        7,", "#endif"])
+    );
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "static const struct Item items[] = {",
+                "    {3, 4},",
+                "    {5,",
+                "     7,",
+                "     6}",
+                "};",
+            ),
+            &options,
+        ),
+        expected_rows(&["        7,"])
+    );
+}
