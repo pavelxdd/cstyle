@@ -170,8 +170,17 @@ impl FormatEngine<'_> {
                     }
                     _ => false,
                 };
+                // A selector colon padded after keeps its gap before a
+                // literal as before any argument.
+                let after_padded_selector = self.layout.objc.message_active
+                    && self.current.trimmed_end().ends_with(':')
+                    && matches!(
+                        self.options.pad_method_colon,
+                        ObjCColonPad::All | ObjCColonPad::After
+                    );
                 if !attached_closing_header {
                     if self.current.trimmed_end().ends_with('}')
+                        || after_padded_selector
                         || (self.options.pad_operators
                             && self.layout.previous == PreviousToken::Operator)
                     {

@@ -24281,3 +24281,17 @@ fn pico_sets_an_else_if_brace_after_a_header_comment_as_an_if_brace() {
     check(input, &["--style=pico"], expected);
     check(expected, &["--style=pico"], expected);
 }
+
+#[test]
+fn pad_method_colon_pads_a_selector_colon_before_an_objc_literal() {
+    // A literal an `@` leads takes the gap a padded selector colon gives
+    // any argument.
+    let input = "- (void)run\n{\n    [x initWithName:@\"x\" value:1];\n    [x performSelector:@selector(go) items:@[ @1 ]];\n}\n";
+    let after = "- (void)run\n{\n    [x initWithName: @\"x\" value: 1];\n    [x performSelector: @selector(go) items: @[ @1 ]];\n}\n";
+    let all = "- (void)run\n{\n    [x initWithName : @\"x\" value : 1];\n    [x performSelector : @selector(go) items : @[ @1 ]];\n}\n";
+    for (mode, expected) in [("after", after), ("all", all)] {
+        let option = format!("--pad-method-colon={mode}");
+        check(input, &[&option], expected);
+        check(expected, &[&option], expected);
+    }
+}
