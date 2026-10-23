@@ -24239,3 +24239,27 @@ fn a_lambda_parameter_declarator_on_a_continued_row_spaces_as_on_the_first() {
     let typed = input.replace("Item &b", "Item& b");
     check(&typed, &["--style=kr", "--align-pointer=name"], input);
 }
+
+#[test]
+fn a_class_in_a_define_body_sets_its_access_labels_as_in_code() {
+    // Labels and members in a macro's class stand as in a class of code:
+    // a label a level out from the members, half in with indented
+    // modifiers, and members a level past the labels where the style
+    // indents class bodies.
+    let input = "#define LABELED(name) \\\n    class name { \\\n    public: \\\n        int value; \\\n    private: \\\n        int other; \\\n    }\n#define PLAIN(name) \\\n    class name { \\\n        int value; \\\n    }\n";
+    let indented = "#define LABELED(name) \\\n    class name { \\\n        public: \\\n            int value; \\\n        private: \\\n            int other; \\\n        }\n#define PLAIN(name) \\\n    class name { \\\n            int value; \\\n        }\n";
+    let half = "#define LABELED(name) \\\n    class name { \\\n      public: \\\n        int value; \\\n      private: \\\n        int other; \\\n    }\n#define PLAIN(name) \\\n    class name { \\\n        int value; \\\n    }\n";
+    let classes = "#define LABELED(name) \\\n    class name { \\\n        public: \\\n            int value; \\\n        private: \\\n            int other; \\\n    }\n#define PLAIN(name) \\\n    class name { \\\n            int value; \\\n    }\n";
+    for (args, expected) in [
+        (&["--style=allman"][..], input),
+        (&["--style=whitesmith"][..], indented),
+        (&["--style=ratliff"][..], indented),
+        (&["--style=google"][..], half),
+        (&["--style=allman", "--indent-classes"][..], classes),
+    ] {
+        let mut args = args.to_vec();
+        args.push("--indent-preproc-define");
+        check(input, &args, expected);
+        check(expected, &args, expected);
+    }
+}

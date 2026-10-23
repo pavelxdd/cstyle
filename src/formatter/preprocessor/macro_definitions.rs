@@ -1,4 +1,5 @@
 use crate::config::{BraceStyle, FormatOptions, MinConditionalIndent};
+use crate::formatter::constructs::labels;
 use crate::formatter::continuation::{min_conditional_indent_spaces, operator_chains};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::syntax::{assignment_declarator_offset, declaration_head_declarator_offset};
@@ -501,6 +502,35 @@ fn define_rows_reading_list_braces_as_parens(
     }
     let read_body = rows.split_off(1);
     (rows.pop().unwrap_or_default(), read_body)
+}
+
+struct DefineClassBody {
+    depth: usize,
+    labeled: bool,
+    opened_by_class: bool,
+}
+
+/// Opens the class body a row's head opens, once its frame is pushed, and
+/// drops the bodies the row closed.
+fn track_define_class_bodies(bodies: &mut Vec<DefineClassBody>, frames: &[DefineFrame], row: &str) {
+    bodies.retain(|body| body.depth <= frames.len());
+    if frames.last() != Some(&DefineFrame::Brace)
+        || bodies.last().is_some_and(|body| body.depth == frames.len())
+    {
+        return;
+    }
+    let head = after_leading_comments(row);
+    let head = head
+        .strip_prefix("typedef")
+        .map_or(head, Trimmed::trimmed_start);
+    let keyword = leading_identifier(head);
+    if matches!(keyword, "class" | "struct" | "union") && row.trimmed_end().ends_with('{') {
+        bodies.push(DefineClassBody {
+            depth: frames.len(),
+            labeled: false,
+            opened_by_class: keyword == "class",
+        });
+    }
 }
 
 fn is_define_header_frame(frame: DefineFrame) -> bool {
@@ -1186,6 +1216,10 @@ impl FormatEngine<'_> {
     ) {
         let base_level = body_level;
         let mut frames: Vec<DefineFrame> = Vec::new();
+        // The class bodies open around the rows: the frame depth of each
+        // body, whether an access label stood in it, and whether `class`
+        // opened it.
+        let mut class_bodies: Vec<DefineClassBody> = Vec::new();
         let first_replacement = define_replacement_text(read_first);
         if !first_replacement.is_empty() {
             let info = scan_define_body_line(first_replacement);
@@ -1197,6 +1231,7 @@ impl FormatEngine<'_> {
                 first_replacement.starts_with('{'),
                 starts_with_assignment,
             );
+            track_define_class_bodies(&mut class_bodies, &frames, first_replacement);
         }
         let first_indent = leading_visual_width(first_line, self.options.tab_width);
         // The column rows continued at before a paren opened, which they
@@ -1386,6 +1421,34 @@ impl FormatEngine<'_> {
             } else {
                 structural_level
             };
+            // A class's access labels and members stand as in code: a label
+            // a level out from the members, or at them where the style
+            // indents class bodies, which sets the members a level past.
+            let class_body = class_bodies
+                .last_mut()
+                .filter(|body| body.depth == frames.len() && !info.leading_close);
+            let indents_class_bodies = self.options.indent_classes
+                || matches!(
+                    self.options.brace_style,
+                    BraceStyle::Whitesmith | BraceStyle::Ratliff
+                );
+            let mut label_half_indent = 0;
+            let structural_level = match class_body {
+                Some(body) if labels::is_access_label(content, &self.options.access_labels) => {
+                    body.labeled = true;
+                    if self.options.indent_modifiers && !indents_class_bodies {
+                        label_half_indent = self.options.indent_width / 2;
+                    }
+                    (structural_level + usize::from(indents_class_bodies)).saturating_sub(1)
+                }
+                Some(body) => {
+                    structural_level
+                        + usize::from(
+                            indents_class_bodies && (body.opened_by_class || body.labeled),
+                        )
+                }
+                None => structural_level,
+            };
 
             let is_structural = info.opens > 0 || info.closes > 0 || info.leading_close;
             let continued_parameter_opens_body = continuation_column.is_some()
@@ -1422,7 +1485,7 @@ impl FormatEngine<'_> {
             let prefix_structural_level = structural_level.saturating_sub(continuation_levels);
             let structural_prefix = self.options.continuation_indent_prefix(
                 prefix_structural_level,
-                structural_level * self.options.indent_width,
+                structural_level * self.options.indent_width + label_half_indent,
             );
             let keep_source_indent = self.options.min_conditional_indent
                 == MinConditionalIndent::Zero
@@ -1481,6 +1544,7 @@ impl FormatEngine<'_> {
                 opens_header_block,
                 starts_with_assignment,
             );
+            track_define_class_bodies(&mut class_bodies, &frames, content);
             // A list a row closes takes its run-in column with it.
             let open_depth = frames.len() + usize::from(!info.leading_close);
             run_in_designators.retain(|&(depth, _)| depth < open_depth);
