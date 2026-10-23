@@ -211,7 +211,8 @@ pub(crate) fn line_ends_compound_literal_cast(line: &str) -> bool {
 }
 
 /// Whether `text` ends with the arguments of a named template, the `<` that
-/// opens them right after the name.
+/// opens them right after the name, or with a lambda's template parameters
+/// after its captures.
 fn ends_with_template_arguments(text: &str) -> bool {
     let bytes = text.as_bytes();
     let mut depth = 0usize;
@@ -221,7 +222,10 @@ fn ends_with_template_arguments(text: &str) -> bool {
             b'<' => {
                 depth -= 1;
                 if depth == 0 {
-                    return text[..index].chars().next_back().is_some_and(is_word_char);
+                    return text[..index]
+                        .chars()
+                        .next_back()
+                        .is_some_and(|ch| is_word_char(ch) || ch == ']');
                 }
             }
             b';' | b'{' | b'}' => return false,

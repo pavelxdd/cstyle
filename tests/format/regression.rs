@@ -24002,3 +24002,16 @@ fn vtk_sets_a_member_function_try_block_at_the_function_body() {
     check(input, &["--style=vtk"], expected);
     check(expected, &["--style=vtk"], expected);
 }
+
+#[test]
+fn a_template_lambda_at_file_scope_breaks_like_a_definition_whatever_its_source() {
+    // Template parameters after the captures head the lambda's body as its
+    // parameters do; they never make the brace a compound literal's.
+    let attached = "auto f = []<typename T>(T value) {\n    return value;\n};\n";
+    let expected = "auto f = []<typename T>(T value)\n{\n    return value;\n};\n";
+    for style in ["kr", "linux", "stroustrup", "allman"] {
+        let style = format!("--style={style}");
+        check(attached, &[&style], expected);
+        check(expected, &[&style], expected);
+    }
+}
