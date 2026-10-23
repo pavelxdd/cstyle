@@ -99,6 +99,10 @@ impl FormatEngine<'_> {
                 Some((width, tab_columns))
             })
             .collect();
+        let runs_body_in = matches!(
+            self.options.brace_style,
+            BraceStyle::Horstmann | BraceStyle::Pico
+        );
         for (index, row) in rows.into_iter().enumerate() {
             let Some((width, tab_columns)) = row else {
                 continue;
@@ -127,8 +131,11 @@ impl FormatEngine<'_> {
                 Some(rest)
                     if rest.starts_with("  ")
                         && !rest.trimmed().is_empty()
-                        && !rest.trimmed_start().starts_with("/*")
-                        && !rest.trimmed_start().starts_with("//")
+                        // A comment keeps the gap it had after a brace but
+                        // where the style runs the block's body in.
+                        && (runs_body_in && self.starts_with_block_brace(index)
+                            || !rest.trimmed_start().starts_with("/*")
+                                && !rest.trimmed_start().starts_with("//"))
                         && (self.starts_with_block_brace(index)
                             || self.output.line_tokens(index).is_none()
                             || rest.trimmed_start().starts_with('{')

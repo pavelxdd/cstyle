@@ -23518,3 +23518,17 @@ fn comparisons_in_a_template_head_leave_the_rows_of_the_body_after_it() {
     let input = "template <long long Num, long long Den, int N = 0,\n          bool Enabled = (N < 19) && (Num <= max_value<long long>() / 10)>\nstruct Item {\n    static constexpr int value =\n        Num % Den == 0 ? N : 1;\n};\n";
     check(input, &["--style=kr", "--indent-classes"], input);
 }
+
+#[test]
+fn pico_keeps_the_tab_before_a_comment_its_brace_runs_in_when_converting_tabs() {
+    for source in [
+        "void f()\n{\n    if (a)\n    { /* note */ first(); }\n}\n",
+        "void f()\n{\tif (a)\n\t{\t/* note */ first(); } }\n",
+    ] {
+        check(
+            source,
+            &["--style=pico", "--indent=force-tab=4", "--convert-tabs"],
+            "void f()\n{\tif (a)\n\t{\t/* note */ first(); } }\n",
+        );
+    }
+}
