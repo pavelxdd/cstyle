@@ -23,10 +23,19 @@ impl FormatEngine<'_> {
             return false;
         };
         self.multiline_literal_parens.get_or_init(|| {
-            groups
+            // Only the parens around a compound literal can hold one.
+            let mut holds = vec![false; groups.len()];
+            for literal in groups
                 .ids()
-                .map(|id| self.group_holds_multiline_compound_literal(id))
-                .collect()
+                .filter(|&id| self.tree.blocks.kind(id) == Some(BlockKind::CompoundLiteral))
+            {
+                if let Some(parent) = groups.get(literal).parent
+                    && !holds[parent.index()]
+                {
+                    holds[parent.index()] = self.group_holds_multiline_compound_literal(parent);
+                }
+            }
+            holds
         })[parens.index()]
     }
 

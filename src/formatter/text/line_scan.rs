@@ -64,13 +64,20 @@ impl ContainsAnyByte for str {
     }
 
     fn find_from_first_byte(&self, needle: &str) -> Option<usize> {
-        match needle.as_bytes().first() {
-            Some(&first) => {
-                let at = find_byte(self.as_bytes(), first)?;
-                self[at..].find(needle).map(|offset| at + offset)
+        let bytes = self.as_bytes();
+        let Some((&first, rest)) = needle.as_bytes().split_first() else {
+            return Some(0);
+        };
+        // A match starts at its first byte: the needles are short.
+        let mut start = 0;
+        while let Some(offset) = find_byte(&bytes[start..], first) {
+            let at = start + offset;
+            if bytes[at + 1..].starts_with(rest) {
+                return Some(at);
             }
-            None => Some(0),
+            start = at + 1;
         }
+        None
     }
 
     fn contains_any_byte(&self, set: &[u8]) -> bool {
@@ -121,7 +128,7 @@ pub(crate) fn is_comment_line(line: &str) -> bool {
 pub(crate) fn after_leading_comments(line: &str) -> &str {
     let mut rest = line.trimmed_start();
     while let Some(after_open) = rest.strip_prefix("/*") {
-        let Some(close) = after_open.find("*/") else {
+        let Some(close) = after_open.find_from_first_byte("*/") else {
             return rest;
         };
         rest = after_open[close + 2..].trimmed_start();

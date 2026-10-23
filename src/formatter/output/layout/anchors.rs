@@ -5762,13 +5762,45 @@ impl FormatEngine<'_> {
     }
 
     fn group_in_braced_chain_of_braceless_body(&self, group: GroupId) -> bool {
-        let chained = self.braced_chain_blocks.get_or_init(|| {
-            let tokens = &self.tree.tokens;
+        self.tree
+            .groups
+            .ancestors(group)
+            .any(|id| self.braced_chain_block(id))
+    }
+
+    /// Whether `id` is a control block in a chain of `else if` headed by an
+    /// `if` with a braceless body: a short chain is walked, a long one read
+    /// from the table of every chain.
+    fn braced_chain_block(&self, id: GroupId) -> bool {
+        const WALKED_LINKS: usize = 16;
+        if self.tree.blocks.kind(id) != Some(BlockKind::Control) {
+            return false;
+        }
+        let Some(mut head) = self.tree.blocks.owner(id) else {
+            return false;
+        };
+        let tokens = &self.tree.tokens;
+        let statements = &self.tree.statements;
+        let is_word =
+            |index: usize, text: &str| matches!(&tokens[index], Token::Word(word) if word == text);
+        for _ in 0..WALKED_LINKS {
+            if is_word(head, "else") {
+                match statements.if_of_else(head) {
+                    Some(keyword) => head = keyword,
+                    None => return false,
+                }
+            } else if let Some(previous) = self
+                .tree
+                .previous_code_token(head)
+                .filter(|&previous| is_word(head, "if") && is_word(previous, "else"))
+            {
+                head = previous;
+            } else {
+                return is_word(head, "if") && statements.braceless_header(head).is_some();
+            }
+        }
+        self.braced_chain_blocks.get_or_init(|| {
             let groups = &self.tree.groups;
-            let statements = &self.tree.statements;
-            let is_word = |index: usize, text: &str| {
-                matches!(&tokens[index], Token::Word(word) if word == text)
-            };
             // The first `if` of the chain each `if` belongs to, read on from
             // the chains of the `if`s before it.
             let mut heads: IndexMap<usize, Option<usize>> = IndexMap::default();
@@ -5804,11 +5836,7 @@ impl FormatEngine<'_> {
                             .is_some_and(|head| statements.braceless_header(head).is_some())
                 })
                 .collect()
-        });
-        self.tree
-            .groups
-            .ancestors(group)
-            .any(|id| chained[id.index()])
+        })[id.index()]
     }
 
     /// A `{` on its own line after a control header stands at the header's
