@@ -3655,6 +3655,15 @@ fn a_ternary_colon_after_a_member_row_of_the_true_arm_keeps_its_line() {
 }
 
 #[test]
+fn pico_sets_a_switch_brace_at_the_switch_when_its_first_label_opens_a_block() {
+    check(
+        "void f()\n{\n    switch (op) {\n    default: {\n        x();\n        break;\n    }\n    }\n}\n",
+        &["--style=pico"],
+        "void f()\n{   switch (op)\n    {   default:\n        {   x();\n            break; } } }\n",
+    );
+}
+
+#[test]
 fn keeping_one_line_blocks_continues_arguments_run_in_after_else_past_a_block_a_level_in() {
     let input = "void f(void)\n{\n    if (ready) { x = 1; } else value = compute(first,\n            second);\n    while (ready) { x = 1; } value = compute(first,\n            second);\n}\n";
     check(
