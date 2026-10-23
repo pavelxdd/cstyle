@@ -7567,8 +7567,11 @@ impl FormatEngine<'_> {
             return None;
         }
         let line = self.output.line_with_token(label)?;
-        // A block kept whole on its label's line is a statement of the case.
+        // A block kept whole on its label's line, or after a label continued
+        // over lines, is a statement of the case.
+        let colon = self.tree.previous_code_token(open)?;
         (self.output.line_tokens(line)?.first == label
+            && self.output.line_with_token(colon) == Some(line)
             && self.output.line_with_token(close) != Some(line))
         .then(|| {
             self.output.lead_width(line, self.options.tab_width)

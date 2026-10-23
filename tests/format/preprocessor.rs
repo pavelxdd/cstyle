@@ -4602,3 +4602,43 @@ fn indent_preproc_define_keeps_rows_after_a_comment_led_value_at_the_body() {
         .expect("valid options");
     assert_eq!(format_exact(input, &options), input);
 }
+
+#[test]
+fn conditional_after_a_block_opened_on_a_continued_case_label_stands_at_its_closer() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=1tbs".to_owned(),
+            "--indent-preproc-cond".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    assert_eq!(
+        format_exact(
+            "void f()\n{\n    switch (flags) {\n    case FIRST |\n        THIRD: {\n        value = 2;\n        break;\n    }\n#ifdef FEATURE\n    }\n#endif\n}\n",
+            &options,
+        ),
+        "void f()\n{\n    switch (flags) {\n    case FIRST |\n            THIRD: {\n            value = 2;\n            break;\n        }\n        #ifdef FEATURE\n    }\n        #endif\n}\n"
+    );
+}
+
+#[test]
+fn closing_conditional_past_a_switch_closer_stands_at_its_opener_in_whitesmith() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=whitesmith".to_owned(),
+            "--indent-preproc-cond".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    assert_eq!(
+        format_exact(
+            "void f()\n{\n    switch (flags) {\n    case THIRD: {\n        value = 2;\n        break;\n    }\n#ifdef FEATURE\n    }\n#endif\n}\n",
+            &options,
+        ),
+        "void f()\n    {\n    switch (flags)\n        {\n        case THIRD:\n            {\n            value = 2;\n            break;\n            }\n        #ifdef FEATURE\n        }\n        #endif\n    }\n"
+    );
+}
