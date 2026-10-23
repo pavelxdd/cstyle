@@ -3760,8 +3760,17 @@ impl FormatEngine<'_> {
         {
             return None;
         }
+        // Operands stand at a value, a level in past each header run in
+        // before it on its line.
+        let value_column = |value: usize| {
+            Some(
+                self.token_column(value)?
+                    + self.run_in_header_levels(value) * self.options.indent_width
+                    + self.case_unindent_spaces(),
+            )
+        };
         if let Some(value) = self.returned_value_past_comments(first) {
-            return Some(self.token_column(value)? + self.case_unindent_spaces());
+            return value_column(value);
         }
         // After a keyword, the first operand's line lays out the second;
         // only operands after it anchor the next.
@@ -3781,7 +3790,7 @@ impl FormatEngine<'_> {
                     if operator.ends_with('=') && !matches!(operator.as_str(), "==" | "!=" | "<=" | ">="))
                 && groups.enclosing(before) == Some(group)
             {
-                return Some(self.token_column(start?)? + self.case_unindent_spaces());
+                return value_column(start?);
             }
             // So do those of a parenthesized returned value one space past
             // the keyword; the engine lays out the others.
@@ -3791,7 +3800,7 @@ impl FormatEngine<'_> {
                 && matches!(tokens[start], Token::Symbol('('))
                 && matches!(&tokens[before + 1], Token::Whitespace(space) if space == " ")
             {
-                return Some(self.token_column(start)? + self.case_unindent_spaces());
+                return value_column(start);
             }
             if groups.enclosing(before) != Some(group)
                 || matches!(
@@ -4307,38 +4316,13 @@ impl FormatEngine<'_> {
         )
     }
 
-    /// How many control headers, as `if (x)`, precede on its line the
-    /// statement holding the token `index`.
+    /// How many levels the headers whose bodies run in before it on its
+    /// line indent the statement holding the token `index`.
     pub(super) fn run_in_header_levels(&self, index: usize) -> usize {
-        let tokens = &self.tree.tokens;
-        let Some(line) = self.output.line_with_token(index) else {
-            return 0;
-        };
-        let Some(mut cursor) = self
-            .output
-            .line_tokens(line)
-            .and_then(|span| next_code_token(tokens, span.first))
-        else {
-            return 0;
-        };
-        let mut levels = 0;
-        while cursor < index
-            && matches!(&tokens[cursor], Token::Word(word) if matches!(word.as_str(), "if" | "while" | "for"))
-            && let Some(open) = next_code_token(tokens, cursor + 1)
-            && matches!(tokens[open], Token::Symbol('('))
-            && let Some(close) = self
-                .tree
-                .groups
-                .opened_at(open)
-                .and_then(|group| self.tree.groups.get(group).close)
-            && close < index
-            && self.output.line_with_token(close) == Some(line)
-            && let Some(next) = next_code_token(tokens, close + 1)
-        {
-            levels += 1;
-            cursor = next;
-        }
-        levels
+        self.output
+            .line_with_token(index)
+            .and_then(|line| self.run_in_headers(line, index))
+            .map_or(0, |(levels, _)| levels)
     }
 
     /// Whether the code token `first` continues a control condition or a

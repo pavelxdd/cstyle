@@ -407,6 +407,69 @@ impl FormatEngine<'_> {
         stop
     }
 
+    /// The headers whose bodies run in on output line `line` before the
+    /// token `until`, past a leading `}`: how many levels they indent the
+    /// statement after them, as astyle indents those bodies, and the first
+    /// token past them. An `else if` is one header.
+    pub(super) fn run_in_headers(&self, line: usize, until: usize) -> Option<(usize, usize)> {
+        let first = self.output.line_tokens(line)?.first;
+        self.run_in_headers_from(first, until, |index| {
+            self.output.line_with_token(index) == Some(line)
+        })
+    }
+
+    /// [`Self::run_in_headers`] for a line starting at the token `first`,
+    /// `on_line` telling the tokens it holds.
+    pub(crate) fn run_in_headers_from(
+        &self,
+        first: usize,
+        until: usize,
+        on_line: impl Fn(usize) -> bool,
+    ) -> Option<(usize, usize)> {
+        let tokens = &self.tree.tokens;
+        let mut cursor = next_code_token(tokens, first)?;
+        if cursor < until && matches!(tokens[cursor], Token::Symbol('}')) {
+            cursor = next_code_token(tokens, cursor + 1)?;
+        }
+        let mut levels = 0;
+        while cursor < until {
+            let Token::Word(word) = &tokens[cursor] else {
+                break;
+            };
+            let body = match word.as_str() {
+                "else" | "do" => next_code_token(tokens, cursor + 1)?,
+                // A label's statements stand in its body.
+                "case" | "default" => {
+                    let level = self.tree.groups.enclosing(cursor);
+                    let Some(colon) = (cursor + 1..until).find(|&index| {
+                        matches!(tokens[index], Token::Symbol(':'))
+                            && self.tree.groups.enclosing(index) == level
+                    }) else {
+                        break;
+                    };
+                    next_code_token(tokens, colon + 1)?
+                }
+                "if" | "while" | "for" => {
+                    let Some(close) = next_code_token(tokens, cursor + 1)
+                        .filter(|&open| matches!(tokens[open], Token::Symbol('(')))
+                        .and_then(|open| self.tree.groups.opened_at(open))
+                        .and_then(|group| self.tree.groups.get(group).close)
+                        .filter(|&close| close < until && on_line(close))
+                    else {
+                        break;
+                    };
+                    next_code_token(tokens, close + 1)?
+                }
+                _ => break,
+            };
+            if !(word == "else" && matches!(&tokens[body], Token::Word(next) if next == "if")) {
+                levels += 1;
+            }
+            cursor = body;
+        }
+        Some((levels, cursor))
+    }
+
     /// The indent astyle's continuation stack gives the line starting at
     /// `first`, replayed from the start of its statement.
     fn astyle_stack_indent(&self, first: usize) -> Option<usize> {
@@ -442,50 +505,7 @@ impl FormatEngine<'_> {
         }
         let start_line = self.output.line_with_token(start)?;
         // The start leads its line, after at most a `}` and headers.
-        let mut line_first = next_code_token(tokens, self.output.line_tokens(start_line)?.first)?;
-        if line_first < start && matches!(tokens[line_first], Token::Symbol('}')) {
-            line_first = next_code_token(tokens, line_first + 1)?;
-        }
-        // A body run in after its header on the line continues a level in,
-        // as astyle indents that body; an `else if` is one header.
-        let mut header_levels = 0;
-        while line_first < start {
-            let Token::Word(word) = &tokens[line_first] else {
-                break;
-            };
-            let body = match word.as_str() {
-                "else" | "do" => next_code_token(tokens, line_first + 1)?,
-                // A label's statements stand in its body.
-                "case" | "default" => {
-                    let level = self.tree.groups.enclosing(line_first);
-                    let Some(colon) = (line_first + 1..start).find(|&index| {
-                        matches!(tokens[index], Token::Symbol(':'))
-                            && self.tree.groups.enclosing(index) == level
-                    }) else {
-                        break;
-                    };
-                    next_code_token(tokens, colon + 1)?
-                }
-                "if" | "while" | "for" => {
-                    let Some(close) = next_code_token(tokens, line_first + 1)
-                        .filter(|&open| matches!(tokens[open], Token::Symbol('(')))
-                        .and_then(|open| self.tree.groups.opened_at(open))
-                        .and_then(|group| self.tree.groups.get(group).close)
-                        .filter(|&close| {
-                            close < start && self.output.line_with_token(close) == Some(start_line)
-                        })
-                    else {
-                        break;
-                    };
-                    next_code_token(tokens, close + 1)?
-                }
-                _ => break,
-            };
-            if !(word == "else" && matches!(&tokens[body], Token::Word(next) if next == "if")) {
-                header_levels += 1;
-            }
-            line_first = body;
-        }
+        let (header_levels, line_first) = self.run_in_headers(start_line, start)?;
         if line_first != start {
             return None;
         }

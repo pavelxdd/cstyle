@@ -3508,6 +3508,36 @@ fn add_braces_leaves_a_statement_run_in_after_else_or_do_over_rows_unbraced() {
 }
 
 #[test]
+fn a_string_continuing_a_value_run_in_after_else_stands_a_level_in_as_after_an_if() {
+    let input = "void f()\n{\n    if (other) value = \"first part\"\n                       \" second part\";\n    else value = \"first part\"\n                 \" second part\";\n    if (ready) {\n        x();\n    } else value = \"first part\"\n                   \" second part\";\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    if (other) value = \"first part\"\n                           \" second part\";\n    else value = \"first part\"\n                     \" second part\";\n    if (ready) {\n        x();\n    } else value = \"first part\"\n                       \" second part\";\n}\n",
+    );
+}
+
+#[test]
+fn a_logical_operand_of_a_value_run_in_after_a_header_stands_a_level_in() {
+    let input = "void f()\n{\n    if (ready) result = first &&\n                        second;\n    else result = first ||\n                  second;\n    while (ready) return first &&\n                         second;\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    if (ready) result = first &&\n                            second;\n    else result = first ||\n                      second;\n    while (ready) return first &&\n                             second;\n}\n",
+    );
+}
+
+#[test]
+fn a_shift_chain_run_in_after_a_header_continues_a_level_in() {
+    let input = "void f()\n{\n    if (ready) stream << first\n                      << second;\n    else stream << first\n                << second;\n    stream << first\n           << second;\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    if (ready) stream << first\n                          << second;\n    else stream << first\n                    << second;\n    stream << first\n           << second;\n}\n",
+    );
+}
+
+#[test]
 fn break_all_blocks_keeps_a_one_line_statement_body_with_its_else() {
     let input = "void f()\n{   for (i = 0; i < n; i++)\n    {   if (type == TCP)\n            a();\n        else\n            b(); }\n\n    x = 1;\n\n    if (c)\n        d();\n    else\n        e(); }\n";
     check(input, &["--style=pico", "--break-blocks=all"], input);

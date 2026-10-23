@@ -1774,7 +1774,16 @@ impl FormatEngine<'_> {
             return;
         }
         let (line_indent_spaces, text_start) = self.current_output_indent();
-        let operator_output_column = text_start + self.current_visual_width();
+        // A chain run in after headers registers a level in past each.
+        let header_spaces = self
+            .current
+            .tokens()
+            .zip(self.current.active_token())
+            .and_then(|(span, operator)| {
+                self.run_in_headers_from(span.first, operator, |index| index >= span.first)
+            })
+            .map_or(0, |(levels, _)| levels * self.options.indent_width);
+        let operator_output_column = text_start + self.current_visual_width() + header_spaces;
         let chain_anchor_column = self
             .layout
             .frame_stack
