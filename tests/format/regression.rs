@@ -24164,3 +24164,11 @@ fn a_function_body_after_a_trailing_reference_return_type_takes_the_style_brace(
     let ratliff = "auto get() -> int {\n    return 1;\n    }\nauto Item::get() const -> const T & {\n    return value_;\n    }\nauto Item::ptr() -> T * {\n    return value_;\n    }\n";
     check(input, &["--style=ratliff"], ratliff);
 }
+
+#[test]
+fn an_enumeration_brace_takes_its_style_whatever_its_underlying_type() {
+    let input = "enum class Kind {\n    First,\n};\nenum class Mode : int {\n    On,\n};\nenum class Size : std::uint8_t {\n    Small,\n};\n";
+    let expected = "enum class Kind\n{\n    First,\n};\nenum class Mode : int\n{\n    On,\n};\nenum class Size : std::uint8_t\n{\n    Small,\n};\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+}
