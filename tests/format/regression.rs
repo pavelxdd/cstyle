@@ -23923,3 +23923,18 @@ fn an_attribute_row_after_an_attribute_row_stands_at_its_level_without_condition
         check(expected, &[style, "--min-conditional-indent=0"], expected);
     }
 }
+
+#[test]
+fn a_lambda_parameter_row_opening_the_body_stands_at_the_statement() {
+    // The body's brace ends what the row continued, as for a row of the
+    // call's arguments that opens a lambda; a broken brace leaves the row
+    // its parameters' column.
+    let input = "void f()\n{\n    std::sort(items.begin(), items.end(), [](const Item &a,\n              const Item &b) {\n        return a.value < b.value;\n    });\n}\n";
+    let attached = "void f()\n{\n    std::sort(items.begin(), items.end(), [](const Item &a,\n    const Item &b) {\n        return a.value < b.value;\n    });\n}\n";
+    for style in ["--style=kr", "--style=stroustrup"] {
+        check(input, &[style], attached);
+        check(attached, &[style], attached);
+    }
+    let broken = "void f()\n{\n    std::sort(items.begin(), items.end(), [](const Item &a,\n              const Item &b)\n    {\n        return a.value < b.value;\n    });\n}\n";
+    check(input, &["--style=allman"], broken);
+}
