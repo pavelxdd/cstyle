@@ -24364,3 +24364,14 @@ fn max_code_length_splits_a_reference_after_template_arguments_as_an_ampersand()
         check(expected, &args, expected);
     }
 }
+
+#[test]
+fn fill_empty_lines_takes_the_indent_of_a_directive_indented_as_code() {
+    // A directive indented with the code leads the empty line after it as
+    // a statement does; one kept at column one leaves the fill to the code
+    // before it.
+    let input = "void f()\n{\n    {\n#pragma omp parallel\n\n        work(i);\n#pragma region A\n\n        work(i);\n#region B\n\n        work(i);\n#pragma pack(1)\n\n        work(i);\n    }\n}\n";
+    let expected = "void f()\n{\n    {\n        #pragma omp parallel\n        \n        work(i);\n        #pragma region A\n        \n        work(i);\n        #region B\n        \n        work(i);\n#pragma pack(1)\n        \n        work(i);\n    }\n}\n";
+    check(input, &["--fill-empty-lines"], expected);
+    check(expected, &["--fill-empty-lines"], expected);
+}

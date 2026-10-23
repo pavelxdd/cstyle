@@ -611,7 +611,7 @@ pub(crate) fn is_known_preprocessor_directive(directive: &str) -> bool {
         )
 }
 
-fn is_always_indented_preprocessor_line(line: &str, directive: &str) -> bool {
+pub(crate) fn is_always_indented_preprocessor_line(line: &str, directive: &str) -> bool {
     matches!(directive, "region" | "endregion")
         || (directive == "pragma"
             && preprocessor_directive_argument(line)

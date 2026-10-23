@@ -7,6 +7,7 @@ use crate::formatter::continuation::operator_chains;
 use crate::formatter::ends_inside_block_comment;
 use crate::formatter::engine::{FormatEngine, SplitLineShift};
 use crate::formatter::lexer::Token;
+use crate::formatter::preprocessor::is_always_indented_preprocessor_line;
 use crate::formatter::state::BraceType;
 use crate::formatter::state::PreviousToken;
 use crate::formatter::structure::blocks::{BlockKind, next_code_token};
@@ -520,7 +521,11 @@ impl FormatEngine<'_> {
                 }
                 continue;
             }
-            if !meta.code_starts_with_hash {
+            // A directive indented as code leads the fill as code does.
+            if !meta.code_starts_with_hash
+                || preprocessor_directive(line.trimmed_start())
+                    .is_some_and(|directive| is_always_indented_preprocessor_line(line, directive))
+            {
                 state.1 = line[..line.len() - line.trimmed_start().len()].to_string();
             }
             let code = line.trimmed_start();
