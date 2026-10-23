@@ -2104,6 +2104,8 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
             let ends_code = *operator == "=" && !holds_code(&line[end..]);
             if (next != b'/' || ends_code) && unbroken_depth == 0 {
                 match *operator {
+                    // A `&&` after template arguments is a reference.
+                    "&&" if previous_non_space == b'>' => {}
                     "||" | "&&" => {
                         if break_after_logical {
                             register((&mut fit, &mut pending), AND_OR, end, end <= width);

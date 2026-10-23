@@ -24336,3 +24336,22 @@ fn rvalue_reference_after_template_arguments_in_a_header_aligns_as_in_a_statemen
         check(expected, args, expected);
     }
 }
+
+#[test]
+fn max_code_length_splits_a_reference_after_template_arguments_as_an_ampersand() {
+    // `&&` after a template's `>` is a reference, so the split takes the
+    // place it takes after a single `&`, not a logical operator's.
+    let input = "void f()\n{\n    bool result = std::is_arithmetic_v<T> && requires_value(a);\n    bool other = std::is_arithmetic_v<T> & requires_value(a);\n    call(std::is_arithmetic_v<Item> && requires_value(a), b);\n    bool result = std::is_arithmetic_v<T> || requires_value(a);\n}\n";
+    let expected = "void f()\n{\n    bool result = std::is_arithmetic_v<T> &&\n                  requires_value(a);\n    bool other = std::is_arithmetic_v<T> &\n                 requires_value(a);\n    call(std::is_arithmetic_v<Item> && requires_value(\n             a), b);\n    bool result = std::is_arithmetic_v<T>\n                  || requires_value(a);\n}\n";
+    for extra in [None, Some("--break-after-logical")] {
+        let mut args = vec!["--max-code-length=50"];
+        args.extend(extra);
+        let expected = if extra.is_some() {
+            &*expected.replace("<T>\n                  || ", "<T> ||\n                  ")
+        } else {
+            expected
+        };
+        check(input, &args, expected);
+        check(expected, &args, expected);
+    }
+}
