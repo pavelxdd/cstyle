@@ -12,6 +12,7 @@ use crate::formatter::constructs::headers::starts_header_word;
 use crate::formatter::constructs::labels;
 use crate::formatter::continuation::min_conditional_indent_spaces;
 use crate::formatter::engine::FormatEngine;
+use crate::formatter::index_hash::IndexMap;
 use crate::formatter::lexer::{CommentKind, Token, token_text};
 use crate::formatter::output::model::LineLayout;
 use crate::formatter::state::BraceType;
@@ -50,6 +51,19 @@ pub(crate) struct TokenColumnWalk {
     start: usize,
     end: usize,
     column: usize,
+}
+
+/// The last head found for a chain of `else if`: the token the walk set
+/// out from, the line holding it, the output version then, what the walk
+/// found, and whether it passed an `else` after a block other than its
+/// `if`'s body.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ElseChainHead {
+    from: usize,
+    from_line: usize,
+    version: u64,
+    head: Option<usize>,
+    dangling: bool,
 }
 
 /// What a block's body takes its column from on the output.
@@ -5347,21 +5361,66 @@ impl FormatEngine<'_> {
             return None;
         }
         // An `if` an `else` runs into stands with the chain's first `if`.
+        let from = if_token;
+        let cached = self.recent_else_chain_head(&self.else_chain_head);
         let if_line = loop {
+            if let Some(cached) = cached.filter(|cached| cached.from == if_token) {
+                break cached.head;
+            }
             if let Some(line) = self.line_led_by(if_token).filter(|&line| {
                 self.output
                     .line_tokens(line)
                     .is_some_and(|span| span.first == if_token)
             }) {
-                break line;
+                break Some(line);
             }
-            let before = self.tree.previous_code_token(if_token)?;
-            if !is_else(before) {
-                return None;
+            let Some(before) = self
+                .tree
+                .previous_code_token(if_token)
+                .filter(|&before| is_else(before))
+            else {
+                break None;
+            };
+            match self.tree.statements.if_of_else(before) {
+                Some(next) => if_token = next,
+                None => break None,
             }
-            if_token = self.tree.statements.if_of_else(before)?;
         };
-        Some(self.output.lead_width(if_line, self.options.tab_width) + self.case_unindent_spaces())
+        self.keep_else_chain_head(&self.else_chain_head, from, if_line, false);
+        Some(self.output.lead_width(if_line?, self.options.tab_width) + self.case_unindent_spaces())
+    }
+
+    /// The head `cache` holds, while no line up to its walk's start has
+    /// changed.
+    fn recent_else_chain_head(
+        &self,
+        cache: &std::cell::Cell<Option<ElseChainHead>>,
+    ) -> Option<ElseChainHead> {
+        cache.get().filter(|cached| {
+            self.output
+                .lowest_change_since(cached.version)
+                .is_some_and(|lowest| lowest > cached.from_line)
+        })
+    }
+
+    /// Keeps what a chain walk from `from` found, when `from` stands on a
+    /// line already put out.
+    fn keep_else_chain_head(
+        &self,
+        cache: &std::cell::Cell<Option<ElseChainHead>>,
+        from: usize,
+        head: Option<usize>,
+        dangling: bool,
+    ) {
+        if let Some(from_line) = self.output.line_with_token(from) {
+            cache.set(Some(ElseChainHead {
+                from,
+                from_line,
+                version: self.output.version(),
+                head,
+                dangling,
+            }));
+        }
     }
 
     /// Whether the `}` right before the `else` at `else_token` closes a
@@ -5390,23 +5449,36 @@ impl FormatEngine<'_> {
     /// block other than its `if`'s body.
     fn dangling_chain_if(&self, else_token: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
+        let from = else_token;
+        let cached = self.recent_else_chain_head(&self.dangling_chain_head);
         let mut else_token = else_token;
         let mut dangling = false;
-        loop {
-            dangling |= self.is_dangling_else(else_token);
-            let if_token = self.tree.statements.if_of_else(else_token)?;
-            let leads_line = self
-                .line_led_by(if_token)
-                .and_then(|line| self.output.line_tokens(line))
-                .is_some_and(|span| span.first == if_token);
-            if leads_line {
-                return dangling.then_some(if_token);
-            }
-            else_token = self
-                .tree
-                .previous_code_token(if_token)
-                .filter(|&before| matches!(&tokens[before], Token::Word(word) if word == "else"))?;
-        }
+        let head =
+            loop {
+                if let Some(cached) = cached.filter(|cached| cached.from == else_token) {
+                    dangling |= cached.dangling;
+                    break cached.head;
+                }
+                dangling |= self.is_dangling_else(else_token);
+                let Some(if_token) = self.tree.statements.if_of_else(else_token) else {
+                    break None;
+                };
+                let leads_line = self
+                    .line_led_by(if_token)
+                    .and_then(|line| self.output.line_tokens(line))
+                    .is_some_and(|span| span.first == if_token);
+                if leads_line {
+                    break Some(if_token);
+                }
+                match self.tree.previous_code_token(if_token).filter(
+                    |&before| matches!(&tokens[before], Token::Word(word) if word == "else"),
+                ) {
+                    Some(before) => else_token = before,
+                    None => break None,
+                }
+            };
+        self.keep_else_chain_head(&self.dangling_chain_head, from, head, dangling);
+        head.filter(|_| dangling)
     }
 
     /// The keyword before the parens opening at `open`, past a `constexpr`
@@ -5674,24 +5746,22 @@ impl FormatEngine<'_> {
     }
 
     fn group_in_braced_chain_of_braceless_body(&self, group: GroupId) -> bool {
-        let tokens = &self.tree.tokens;
-        let groups = &self.tree.groups;
-        let statements = &self.tree.statements;
-        let is_word =
-            |index: usize, text: &str| matches!(&tokens[index], Token::Word(word) if word == text);
-        groups.ancestors(group).any(|id| {
-            if self.tree.blocks.kind(id) != Some(BlockKind::Control) {
-                return false;
-            }
-            let Some(mut head) = self.tree.blocks.owner(id) else {
-                return false;
+        let chained = self.braced_chain_blocks.get_or_init(|| {
+            let tokens = &self.tree.tokens;
+            let groups = &self.tree.groups;
+            let statements = &self.tree.statements;
+            let is_word = |index: usize, text: &str| {
+                matches!(&tokens[index], Token::Word(word) if word == text)
             };
-            loop {
+            // The first `if` of the chain each `if` belongs to, read on from
+            // the chains of the `if`s before it.
+            let mut heads: IndexMap<usize, Option<usize>> = IndexMap::default();
+            let chain_head = |heads: &IndexMap<usize, Option<usize>>, mut head: usize| loop {
+                if let Some(&known) = heads.get(&head) {
+                    return known;
+                }
                 if is_word(head, "else") {
-                    match statements.if_of_else(head) {
-                        Some(keyword) => head = keyword,
-                        None => return false,
-                    }
+                    head = statements.if_of_else(head)?;
                 } else if let Some(previous) = self
                     .tree
                     .previous_code_token(head)
@@ -5699,11 +5769,30 @@ impl FormatEngine<'_> {
                 {
                     head = previous;
                 } else {
-                    break;
+                    return is_word(head, "if").then_some(head);
                 }
+            };
+            for index in (0..tokens.len()).filter(|&index| is_word(index, "if")) {
+                let head = chain_head(&heads, index);
+                heads.insert(index, head);
             }
-            is_word(head, "if") && statements.braceless_header(head).is_some()
-        })
+            groups
+                .ids()
+                .map(|id| {
+                    self.tree.blocks.kind(id) == Some(BlockKind::Control)
+                        && self
+                            .tree
+                            .blocks
+                            .owner(id)
+                            .and_then(|owner| chain_head(&heads, owner))
+                            .is_some_and(|head| statements.braceless_header(head).is_some())
+                })
+                .collect()
+        });
+        self.tree
+            .groups
+            .ancestors(group)
+            .any(|id| chained[id.index()])
     }
 
     /// A `{` on its own line after a control header stands at the header's

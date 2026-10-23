@@ -423,6 +423,8 @@ fn runs_that_each_line_looked_across_stay_bounded() {
     allman.set_style(cstyle::config::StylePreset::Allman);
     let mut capped = FormatOptions::default();
     capped.max_code_length = Some(100);
+    let mut kr = FormatOptions::default();
+    kr.set_style(cstyle::config::StylePreset::Kr);
     let blocks = |block: &dyn Fn(usize) -> String| {
         format!(
             "void f(void)\n{{\n{}}}\n",
@@ -521,6 +523,36 @@ fn runs_that_each_line_looked_across_stay_bounded() {
                     .collect::<String>()
             ),
             capped.clone(),
+        ),
+        (
+            "a braceless else-if chain",
+            format!(
+                "void f() {{\n{}        y();\n}}\n",
+                (0..n / 4)
+                    .map(|i| format!("    if (a{i})\n        x();\n    else\n"))
+                    .collect::<String>()
+            ),
+            kr.clone(),
+        ),
+        (
+            "an else-if chain of blocks",
+            format!(
+                "void f()\n{{\n    if (a) {{\n        x();\n    }}{} else {{\n        y();\n    }}\n}}\n",
+                (0..n / 4)
+                    .map(|i| format!(" else if (a{i}) {{\n        x();\n    }}"))
+                    .collect::<String>()
+            ),
+            allman.clone(),
+        ),
+        (
+            "an else-if chain past nested blocks",
+            format!(
+                "void f() {{\n    if (a)\n        x();\n{}    else\n        y();\n}}\n",
+                (0..n / 4)
+                    .map(|i| format!("    else if (a{i}) {{\n        if (b) {{ z(); }}\n    }}\n"))
+                    .collect::<String>()
+            ),
+            kr.clone(),
         ),
         (
             "a long argument list a row each",

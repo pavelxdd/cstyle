@@ -255,6 +255,16 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) paren_alone_look: crate::formatter::output::buffer::LineLook,
     /// The look back for a line whose code is `else` or ends with `} else`.
     pub(crate) else_code_look: crate::formatter::output::buffer::LineLook,
+    /// Whether each group is a control block in a chain of `else if`
+    /// headed by an `if` with a braceless body.
+    pub(crate) braced_chain_blocks: std::cell::OnceCell<Vec<bool>>,
+    /// The line of the head found last for a chain of `else if`.
+    pub(crate) else_chain_head:
+        std::cell::Cell<Option<crate::formatter::output::layout::anchors::ElseChainHead>>,
+    /// The head found last for a chain of `else if` an `else` after a
+    /// block other than its `if`'s body may part from.
+    pub(crate) dangling_chain_head:
+        std::cell::Cell<Option<crate::formatter::output::layout::anchors::ElseChainHead>>,
     /// The look back for a line no directive holds.
     non_directive_look: crate::formatter::output::buffer::LineLook,
     /// The look back for a line ending the lines of a `new` call.
@@ -461,6 +471,9 @@ impl<'a> FormatEngine<'a> {
             empty_new_call_look: Default::default(),
             paren_alone_look: Default::default(),
             else_code_look: Default::default(),
+            braced_chain_blocks: std::cell::OnceCell::new(),
+            else_chain_head: std::cell::Cell::new(None),
+            dangling_chain_head: std::cell::Cell::new(None),
             non_directive_look: Default::default(),
             constructor_context_look: Default::default(),
             brace_code_look: Default::default(),
