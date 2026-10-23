@@ -1871,6 +1871,7 @@ impl FormatEngine<'_> {
             return None;
         }
         if self.next_line.leads_with_class_base
+            || self.next_line.code_leads_with_open_brace
             || !splits_aggregate_declaration_name(self.current_code_before_trailing_comment())
         {
             return None;
@@ -2489,8 +2490,8 @@ pub(crate) fn min_conditional_indent_spaces(options: &FormatOptions) -> usize {
     }
 }
 
-/// Whether `line` names a struct or union type its declarators continue on
-/// the next line after, as `static const struct Item`.
+/// Whether `line` names a struct, union or class type its declarators or
+/// head continue on the next line after, as `static const struct Item`.
 pub(crate) fn splits_aggregate_declaration_name(line: &str) -> bool {
     // A comment leading the type leaves the declaration it leads.
     let line = after_leading_comments(line);
@@ -2508,8 +2509,13 @@ pub(crate) fn splits_aggregate_declaration_name(line: &str) -> bool {
         .split(|ch: char| !is_identifier_continue(ch))
         .filter(|word| !word.is_empty())
         .collect::<Vec<_>>();
+    // A class key among template parameters names no type of its own.
+    let in_angles = |word: &str| {
+        let before = &line[..word.as_ptr() as usize - line.as_ptr() as usize];
+        before.matches('<').count() > before.matches('>').count()
+    };
     words
         .iter()
-        .position(|word| matches!(*word, "struct" | "union"))
+        .position(|word| matches!(*word, "struct" | "union" | "class") && !in_angles(word))
         .is_some_and(|aggregate| words.len() > aggregate + 1)
 }

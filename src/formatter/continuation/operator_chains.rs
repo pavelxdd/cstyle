@@ -11,7 +11,7 @@ use crate::formatter::state::frame::{
     ColonRole, FrameStack, LogicalOperator, ParenRole, TernaryOwnerRole,
 };
 use crate::formatter::state::indentation::LineKind;
-use crate::formatter::structure::blocks::next_code_token;
+use crate::formatter::structure::blocks::{BlockKind, next_code_token};
 use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::text::columns::column_after;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
@@ -689,6 +689,21 @@ impl FormatEngine<'_> {
         }
         let (_, previous_code) = self.output.last_code_outside_comment()?;
         if !previous_code.ends_with("<<") && !previous_code.ends_with(">>") {
+            return None;
+        }
+        // A brace opening a block is no operand of the shift before it.
+        if self
+            .output
+            .pending_tokens()
+            .and_then(|span| self.tree.groups.opened_at(span.first))
+            .is_some_and(|group| {
+                self.tree.groups.get(group).delimiter == Delimiter::Brace
+                    && !matches!(
+                        self.tree.blocks.kind(group),
+                        Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                    )
+            })
+        {
             return None;
         }
         // A shift inside a subscript continues past its bracket.

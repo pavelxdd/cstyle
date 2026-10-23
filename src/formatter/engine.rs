@@ -1020,6 +1020,8 @@ impl<'a> FormatEngine<'a> {
             } else {
                 (following, after_following)
             };
+        self.next_line.code_leads_with_open_brace =
+            matches!(code_following, Some(Token::Symbol('{')));
         self.next_line.code_leads_with_close_brace =
             matches!(code_following, Some(Token::Symbol('}')));
         self.next_line.word_followed_by_open_paren = matches!(

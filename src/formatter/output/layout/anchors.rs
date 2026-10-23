@@ -5144,14 +5144,6 @@ impl FormatEngine<'_> {
 
     /// Whether the line being laid out starts an initializer element after
     /// a comma.
-    /// Whether the pending line opens with the brace of a function body.
-    pub(crate) fn pending_line_opens_function_body(&self) -> bool {
-        self.output
-            .pending_tokens()
-            .and_then(|span| self.tree.groups.opened_at(span.first))
-            .is_some_and(|group| self.tree.blocks.kind(group) == Some(BlockKind::FunctionBody))
-    }
-
     pub(crate) fn pending_line_starts_initializer_element(&self) -> bool {
         let groups = &self.tree.groups;
         let Some(first) = self.output.pending_tokens().map(|span| span.first) else {

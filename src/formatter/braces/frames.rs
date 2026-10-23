@@ -3,6 +3,7 @@ use crate::formatter::constructs::headers::starts_header_word;
 use crate::formatter::constructs::labels;
 use crate::formatter::constructs::switch_cases::find_case_colon;
 use crate::formatter::engine::FormatEngine;
+use crate::formatter::lexer::Token;
 use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::{BraceFrame, BraceSemanticKind};
 use crate::formatter::state::indentation::LineKind;
@@ -145,6 +146,37 @@ impl FormatEngine<'_> {
         None
     }
 
+    /// The lead of the output line on which the head of the class whose
+    /// body the `{` at `brace` opens starts, once that line is out.
+    pub(crate) fn class_head_line_lead(&self, brace: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let statements = &self.tree.statements;
+        let mut start = brace;
+        // A colon before the class key ends a label, one after it opens the
+        // bases.
+        let mut passed_class_key = false;
+        while !statements.starts_block_statement(start)
+            && statements.braceless_header(start).is_none()
+            && let Some(previous) = self.tree.previous_code_token(start)
+            && !matches!(tokens[previous], Token::Symbol(';' | '{' | '}'))
+            && !(passed_class_key && matches!(tokens[previous], Token::Symbol(':')))
+            // The head stands within the parens around it.
+            && groups.opened_at(previous).is_none()
+        {
+            start = groups
+                .closed_at(previous)
+                .map_or(previous, |group| groups.get(group).open);
+            passed_class_key |= matches!(
+                &tokens[start],
+                Token::Word(word)
+                    if matches!(word.as_str(), "class" | "struct" | "union" | "interface" | "enum")
+            );
+        }
+        let line = self.output.line_with_token(start)?;
+        Some(self.output.lead_width(line, self.options.tab_width))
+    }
+
     pub(super) fn push_brace_frame(
         &mut self,
         brace_header: Option<&String>,
@@ -202,6 +234,16 @@ impl FormatEngine<'_> {
             self.output_objc_method_header_indent_spaces()
                 .or_else(|| self.split_definition_header_indent_spaces())
                 .unwrap_or(current_line_indent)
+        } else if let Some(lead) = matches!(
+            brace_type,
+            BraceType::Class | BraceType::Interface | BraceType::Struct | BraceType::Union
+        )
+        .then(|| self.class_head_line_lead(self.current.active_token()?))
+        .flatten()
+        {
+            // A class's body opens a level past the line its head starts,
+            // whatever rows the head takes.
+            lead + self.case_unindent_spaces()
         } else if class_base && !self.current_is_blank() || follows_closer {
             // A class's body opens a level past its head, whatever row of
             // its bases the brace ends; a statement on a closer's row stands

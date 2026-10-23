@@ -13980,6 +13980,8 @@ fn breaking_return_types_breaks_a_definition_a_conditional_parts_from_its_body()
 fn a_class_brace_a_comment_leads_opens_its_body_as_any() {
     let input = "class Item\n/* note */ {\npublic:\n    Item();\n};\n";
     check(input, &[], input);
+    let input = "struct Item\n/* note */ {\n    int value;\n};\n";
+    check(input, &[], input);
 }
 
 #[test]
@@ -23406,5 +23408,82 @@ fn standalone_comment_in_an_aligned_list_stands_at_its_rows_when_parens_indent()
         "static double values[] = { 1.5, 2.5,\n#ifdef FEATURE\n\t\t3.5\n\t\t/* note */\n#else\n\t\t4.5\n#endif\n\t\t};\n",
         &["--style=kr", "--indent-after-parens"],
         "static double values[] = { 1.5, 2.5,\n#ifdef FEATURE\n        3.5\n        /* note */\n#else\n        4.5\n#endif\n    };\n",
+    );
+}
+
+#[test]
+fn a_struct_brace_after_a_head_split_in_macro_arguments_stands_at_the_head() {
+    let input = "struct ALIGNED(8,\n    4) Item\n{\n  int value;\n};\n";
+    check(
+        input,
+        &["--style=allman"],
+        "struct ALIGNED(8,\n               4) Item\n{\n    int value;\n};\n",
+    );
+    check(
+        "union ALIGNED(\n    8) Item\n{\n  int value;\n};\n",
+        &["--style=allman"],
+        "union ALIGNED(\n    8) Item\n{\n    int value;\n};\n",
+    );
+    check(
+        input,
+        &["--style=whitesmith"],
+        "struct ALIGNED(8,\n               4) Item\n    {\n    int value;\n    };\n",
+    );
+}
+
+#[test]
+fn whitesmith_sets_a_struct_brace_after_a_head_split_in_template_arguments_at_the_head() {
+    check(
+        "template <typename S>\nstruct Item<\n    S, enable_if_t<is_ready<S>::value>> {\n  using type = int;\n};\n",
+        &["--style=whitesmith"],
+        "template <typename S>\nstruct Item<\n    S, enable_if_t<is_ready<S>::value>>\n    {\n    using type = int;\n    };\n",
+    );
+    check(
+        "void f()\n{\n    struct Item<\n        S, int>\n    {\n        int value;\n    } item;\n}\n",
+        &["--style=whitesmith"],
+        "void f()\n    {\n    struct Item<\n        S, int>\n        {\n        int value;\n        } item;\n    }\n",
+    );
+}
+
+#[test]
+fn rows_of_a_split_class_head_continue_the_head_as_a_struct_head_does() {
+    check(
+        "class Item<\n    S, int>;\nclass Item\nfinal {\n  int value;\n};\nclass Item\n  <S, int> {\n  int value;\n};\n",
+        &["--style=kr"],
+        "class Item<\n    S, int>;\nclass Item\n    final\n{\n    int value;\n};\nclass Item\n    <S, int>\n{\n    int value;\n};\n",
+    );
+    check(
+        "class Item<\n    S, int> : public Base\n{\n  int value;\n};\n",
+        &["--style=kr"],
+        "class Item<\n    S, int> : public Base\n{\n    int value;\n};\n",
+    );
+    check(
+        "class Item<\n    S, int>\n    : public Base\n{\n  int value;\n};\n",
+        &["--style=kr"],
+        "class Item<\n    S, int>\n    : public Base\n{\n    int value;\n};\n",
+    );
+}
+
+#[test]
+fn a_class_key_among_template_parameters_splits_no_class_head() {
+    let input = "template <class T>\n// note\nconst T* make();\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_class_brace_after_a_row_ending_in_a_shift_operator_stands_at_the_head() {
+    check(
+        "struct Item<T, enable_if_t<(is_void<T>::value ||\n    is_ready<T>::value) &&\n    is_ready<E>::value>> {\n  int value;\n};\n",
+        &["--style=whitesmith"],
+        "struct Item<T, enable_if_t<(is_void<T>::value ||\n                            is_ready<T>::value) &&\n                            is_ready<E>::value>>\n    {\n    int value;\n    };\n",
+    );
+}
+
+#[test]
+fn whitesmith_sets_a_class_brace_after_an_access_label_a_level_past_its_head() {
+    check(
+        "class Item {\n private:\n  struct Node {\n    int value;\n  };\n};\n",
+        &["--style=whitesmith"],
+        "class Item\n    {\n    private:\n        struct Node\n            {\n            int value;\n            };\n    };\n",
     );
 }

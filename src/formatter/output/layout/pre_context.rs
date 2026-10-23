@@ -292,28 +292,6 @@ impl FormatEngine<'_> {
             && let Some(previous) = self.output.last_line_outside_comment()
         {
             let previous_code = self.output.code_trimmed_of(previous);
-            let mut paren_depth = 0isize;
-            for ch in previous_code.chars() {
-                match ch {
-                    '(' => paren_depth += 1,
-                    ')' => paren_depth -= 1,
-                    _ => {}
-                }
-            }
-            if paren_depth < 0
-                && !self.pending_line_starts_initializer_element()
-                && !self.pending_line_opens_function_body()
-                && !previous_code.ends_with(')')
-                && previous_code.chars().any(is_identifier_start)
-            {
-                layout.exact_indent_spaces =
-                    Some(leading_visual_width(previous, self.options.tab_width));
-            }
-        }
-        if line_trimmed == "{"
-            && let Some(previous) = self.output.last_line_outside_comment()
-        {
-            let previous_code = self.output.code_trimmed_of(previous);
             if trailing_word(previous_code) == "return"
                 && !previous_code.trimmed_start().starts_with("return")
                 && let Some(open) = self

@@ -976,6 +976,46 @@ fn google_indent_classes_composes_with_indent_modifiers() {
 }
 
 #[test]
+fn a_struct_head_calling_a_function_in_its_template_arguments_opens_a_class_body() {
+    let source = fixture!(
+        "template <typename E>",
+        "struct Item<E, enable_if_t<is_ready<E>()>> {",
+        " private:",
+        "  int value;",
+        "};",
+    );
+
+    let mut options = FormatOptions::default();
+    options.indent_classes = true;
+    assert_eq!(
+        format_exact(source, &options),
+        fixture!(
+            "template <typename E>",
+            "struct Item<E, enable_if_t<is_ready<E>()>> {",
+            "    private:",
+            "        int value;",
+            "};",
+        ),
+    );
+
+    // Same class body as with `is_ready<E>::value` or a base clause in the head.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=whitesmith".to_string()])
+        .expect("valid options");
+    assert_eq!(
+        format_exact(source, &options),
+        fixture!(
+            "template <typename E>",
+            "struct Item<E, enable_if_t<is_ready<E>()>>",
+            "    {",
+            "    private:",
+            "        int value;",
+            "    };",
+        ),
+    );
+}
+
+#[test]
 fn indent_classes_applies_to_access_modified_structs_only() {
     let mut options = FormatOptions::default();
     options.indent_classes = true;

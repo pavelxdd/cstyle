@@ -899,6 +899,26 @@ fn no_param_multiline_lambda_empty_invocation_stays_on_the_closer_line() {
 }
 
 #[test]
+fn an_invoked_lambda_keeps_its_call_on_its_closer_row_in_every_style() {
+    // With or without a parameter list, as a call in any other place.
+    let source = "void f() {\n  static int* text = []() {\n    return make();\n  }();\n  int value = [] {\n    return 1;\n  }() + 2;\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void f()\n{\n    static int* text = []() {\n        return make();\n    }();\n    int value = [] {\n        return 1;\n    }() + 2;\n}\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void f()\n    {\n    static int* text = []()\n        {\n        return make();\n        }();\n    int value = []\n        {\n        return 1;\n        }() + 2;\n    }\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_owned()]).expect("valid options");
+        assert_eq!(format_exact(source, &options), expected);
+    }
+}
+
+#[test]
 fn trailing_return_multiline_lambda_empty_invocation_stays_attached() {
     let source = "void f()\n{\n    auto value = []() -> int {\n        return 1;\n    }();\n}\n";
 

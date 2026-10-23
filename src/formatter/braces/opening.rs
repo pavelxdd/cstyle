@@ -738,9 +738,19 @@ impl FormatEngine<'_> {
                 })
             })
             .flatten();
+        // A class body's brace stands a level past its head, whatever rows
+        // its head or base clause takes.
+        if let Some(lead) = self
+            .layout
+            .frame_stack
+            .active_brace()
+            .filter(|frame| frame.semantic_kind == BraceSemanticKind::Aggregate)
+            .and(self.output.pending_tokens())
+            .and_then(|span| self.class_head_line_lead(span.first))
+        {
+            return Some(lead + self.options.indent_width);
+        }
         Some(match self.layout.frame_stack.active_brace() {
-            // A class body's brace stands a level past its head, whatever
-            // rows its base clause takes.
             Some(frame) if frame.class_base => {
                 frame.sibling_indent_column + self.options.indent_width
             }
