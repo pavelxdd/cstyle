@@ -24436,3 +24436,14 @@ fn an_else_after_an_attributed_body_row_starts_at_its_if() {
         check(expected, &args, expected);
     }
 }
+
+#[test]
+fn a_requires_expression_split_off_a_concept_value_continues_under_the_value() {
+    // The split leaves the requires expression a row of the concept's
+    // value, as any operand after the `&&`.
+    let input = "template <typename T>\nconcept Number = std::is_arithmetic_v<T> && requires(T a) {\n    { a + a } -> std::same_as<T>;\n};\n";
+    let expected = "template <typename T>\nconcept Number = std::is_arithmetic_v<T> &&\n                 requires(T a)\n{\n    {\n        a + a\n    }\n    -> std::same_as<T>;\n};\n";
+    let args = ["--style=kr", "--max-code-length=50"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
