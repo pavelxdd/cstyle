@@ -22245,6 +22245,12 @@ fn a_comparison_after_a_paren_opens_no_template_arguments() {
 }
 
 #[test]
+fn rows_of_a_paren_among_a_base_s_template_arguments_stand_in_the_paren() {
+    let input = "template <typename T>\nstruct is_range<T, void>\n    : std::integral_constant<bool, (has_first<T>::value ||\n                                    has_second<T>::value)> {};\nstruct Item\n    : Base<bool, (first &&\n                  second)> {};\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
 fn rows_of_template_arguments_after_an_angle_ending_its_line_stand_a_continuation_in() {
     // Every row of them, as the rows of a paren ending its line do; a
     // closer leading its row stands at the line the angle opened on.

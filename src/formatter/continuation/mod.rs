@@ -1866,9 +1866,10 @@ impl FormatEngine<'_> {
     /// of a paren's arguments do.
     pub(crate) fn open_template_arguments_indent_spaces(&self) -> Option<usize> {
         let angle = *self.layout.line_state.template_angle_continuations.last()?;
+        // So do the parens among them, past the angle's own column.
         (self.layout.line_state.template_angle_depth > 0
             && angle.closer_spaces.is_some()
-            && self.layout.nesting.continuation_count() == angle.continuations + 1)
+            && self.layout.nesting.continuation_count() > angle.continuations)
             .then(|| self.layout.nesting.current_continuation_indent_spaces())
             .flatten()
     }
