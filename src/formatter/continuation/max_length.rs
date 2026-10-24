@@ -1462,15 +1462,15 @@ fn stream_chain_continuation_indent(
 }
 
 /// Whether `split` breaks the statement a braceless header runs in on its
-/// line before a word, with nothing in the statement registering a column:
-/// the rest goes on at the header's body.
+/// line before a word, right after the header or with nothing in the
+/// statement registering a column: the rest goes on at the header's body.
 fn splits_header_body_statement(split: &SplitResult) -> bool {
     split.kind == SplitKind::Whitespace
         && split
             .tail
             .starts_with(|ch: char| is_identifier_continue(ch) || matches!(ch, '"' | '\''))
         && unmatched_open_paren_columns(&split.head).is_empty()
-        && header_body_run_in(&split.head).is_some_and(|body| {
+        && header_body(&split.head).is_some_and(|body| {
             !["<<", ">>", "=", "?"]
                 .iter()
                 .any(|registers| code_contains(body, registers))
@@ -1480,6 +1480,12 @@ fn splits_header_body_statement(split: &SplitResult) -> bool {
 /// The statement a braceless control header leading `text` runs in after
 /// it on the line, as `log() <<` in `if (ready) log() <<`.
 fn header_body_run_in(text: &str) -> Option<&str> {
+    header_body(text).filter(|body| !body.is_empty())
+}
+
+/// The code after a control header leading `text`, empty when the header
+/// ends it.
+fn header_body(text: &str) -> Option<&str> {
     let text = text.trimmed_start();
     let word_end = text
         .find(|ch: char| !is_identifier_continue(ch))
@@ -1496,7 +1502,7 @@ fn header_body_run_in(text: &str) -> Option<&str> {
         }
         _ => return None,
     };
-    (!body.trimmed().is_empty()).then(|| body.trimmed_start())
+    Some(body.trimmed())
 }
 
 fn return_value_indent(line: &str, base_indent_width: usize) -> Option<usize> {

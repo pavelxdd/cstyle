@@ -25261,3 +25261,13 @@ fn a_list_ending_a_continuation_row_lays_out_its_rows_from_that_row() {
     check(input, &["--style=whitesmith"], expected);
     check(expected, &["--style=whitesmith"], expected);
 }
+
+#[test]
+fn a_braceless_body_split_off_its_header_by_the_maximum_length_stands_at_the_body() {
+    // The statement a header runs in after it goes on at the header's body
+    // when the split falls right after the header's condition.
+    let input = "void helper()\n{\n    if (ready) {\n        if (output::write_all(fd, {buffer.data(), buffer.size()})) return;\n        while (output::write_all(fd, {buffer.data(), buffer.size()})) next();\n    }\n}\n";
+    let expected = "void helper()\n{\n    if (ready) {\n        if (output::write_all(fd, {buffer.data(), buffer.size()}))\n            return;\n        while (output::write_all(fd, {buffer.data(), buffer.size()}))\n            next();\n    }\n}\n";
+    check(input, &["--style=kr", "--max-code-length=60"], expected);
+    check(expected, &["--style=kr", "--max-code-length=60"], expected);
+}
