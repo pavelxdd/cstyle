@@ -3549,3 +3549,33 @@ fn max_code_length_keeps_a_reference_declarator_with_its_type() {
         "auto helper(T&& value,\n            Context& context_value_name_longer) -> int;\nauto helper(const T&& value,\n            Context& context_value_name_l) -> int;\nauto helper(T &&value,\n            Context& context_value_name_longer) -> int;\nauto helper(Format<T...> format,\n            T&&... values_name) -> Result;\nstruct Item {\n    ITEM_CONSTEXPR auto format(Range&& range,\n                               Context& ctx) const;\n};\nbool result = first_value_is_long\n              && second_value_is_long_xx;\n",
     );
 }
+
+#[test]
+fn max_code_length_continues_a_specifier_after_a_function_s_parameters() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "class Walker {\npublic:\n    NumCapturesWalker& operator=(const NumCapturesWalker&) = delete;\n    virtual NumCapturesWalker& helper(const NumCapturesWalker&) = 0;\n    virtual NumCapturesWalker& helper(const NumCapturesWalker&) const = 0;\n};\n",
+        &options,
+        "class Walker\n{\npublic:\n    NumCapturesWalker& operator=(const NumCapturesWalker&) =\n        delete;\n    virtual NumCapturesWalker& helper(const NumCapturesWalker&)\n        = 0;\n    virtual NumCapturesWalker& helper(const NumCapturesWalker&)\n    const = 0;\n};\n",
+    );
+}
+
+#[test]
+fn max_code_length_reads_no_assignment_in_an_operator_name() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "NumCapturesWalker& NumCapturesWalker::operator=(const Walker&) = default;\n",
+        &options,
+        "NumCapturesWalker& NumCapturesWalker::operator=\n(const Walker&) = default;\n",
+    );
+}

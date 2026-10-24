@@ -280,9 +280,11 @@ impl FormatEngine<'_> {
         if brace_row_layout.attaches_lisp_closer && !split.head.trimmed_end().ends_with('{') {
             next_indent = ContinuationIndent::Level(self.layout.indentation.indent());
         }
-        // A row split past a function's parameters stands at the head, as
-        // one the source broke there does.
-        if self.split_follows_function_parameters(line, split.tail) {
+        // A row split past a function's parameters, or opening them, stands
+        // at the head, as one the source broke there does.
+        if self.split_follows_function_parameters(line, split.tail)
+            || self.split_opens_function_parameters(line, split.tail)
+        {
             next_indent = ContinuationIndent::Spaces(base_indent_width);
         }
         // So does a declarator split off its type's template arguments,
@@ -521,31 +523,15 @@ impl FormatEngine<'_> {
         let Some(span) = self.output.pending_tokens() else {
             return false;
         };
-        let tokens = &self.tree.tokens;
-        let groups = &self.tree.groups;
-        let tail_start = line.len() - tail.len();
-        let mut cursor = 0;
-        let mut tail_first = None;
-        for index in span.first..=span.last {
-            if !is_code_token(&tokens[index]) {
-                continue;
-            }
-            let text = token_text(&tokens[index]);
-            let Some(offset) = line[cursor..].find(&*text) else {
-                return false;
-            };
-            if cursor + offset >= tail_start {
-                tail_first = Some(index);
-                break;
-            }
-            cursor += offset + text.len();
-        }
-        let Some(tail_first) = tail_first else {
+        let Some(tail_first) = self.split_tail_first_token(line, tail) else {
             return false;
         };
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
         let outer = groups.enclosing(tail_first);
         // Only qualifiers and a trailing return type follow the parameters;
-        // initializers or declarators after them continue the head.
+        // initializers, declarators and a `=` specifier after them continue
+        // the head.
         (span.first..tail_first).rev().any(|index| {
             matches!(tokens[index], Token::Symbol(')'))
                 && groups.closed_at(index).is_some_and(|params| {
@@ -555,7 +541,50 @@ impl FormatEngine<'_> {
                 && !tokens[index..tail_first]
                     .iter()
                     .any(|token| matches!(token, Token::Symbol(':' | ',')))
+                && !tokens[index..=tail_first]
+                    .iter()
+                    .any(|token| matches!(token, Token::Operator(operator) if operator == "="))
         }) && outer.is_none_or(|group| groups.get(group).delimiter == Delimiter::Brace)
+    }
+
+    /// Whether `tail`, the end of `line`, opens the parameters of a function
+    /// head the line holds; a member's initializer opens none.
+    fn split_opens_function_parameters(&self, line: &str, tail: &str) -> bool {
+        self.split_tail_first_token(line, tail)
+            .is_some_and(|first| {
+                self.tree
+                    .groups
+                    .opened_at(first)
+                    .and_then(|params| self.tree.functions.by_params(params))
+                    .is_some_and(|head| {
+                        !self
+                            .tree
+                            .previous_code_token(head.start)
+                            .is_some_and(|before| {
+                                matches!(self.tree.tokens[before], Token::Symbol(':' | ','))
+                            })
+                    })
+            })
+    }
+
+    /// The first source token of `tail`, the end of the pending `line`.
+    fn split_tail_first_token(&self, line: &str, tail: &str) -> Option<usize> {
+        let span = self.output.pending_tokens()?;
+        let tokens = &self.tree.tokens;
+        let tail_start = line.len() - tail.len();
+        let mut cursor = 0;
+        for index in span.first..=span.last {
+            if !is_code_token(&tokens[index]) {
+                continue;
+            }
+            let text = token_text(&tokens[index]);
+            let offset = line[cursor..].find(&*text)?;
+            if cursor + offset >= tail_start {
+                return Some(index);
+            }
+            cursor += offset + text.len();
+        }
+        None
     }
 
     /// The template angles astyle reads the line being built in.
@@ -1533,10 +1562,12 @@ fn top_level_assignment_index(line: &str) -> Option<usize> {
                 && (brace_depth == 0 || !line[index..].contains('}')) =>
             {
                 let next = iter.peek().map(|(_, ch)| *ch).unwrap_or('\0');
+                // An operator function's name assigns nothing.
                 if !matches!(
                     previous,
                     '=' | '!' | '<' | '>' | '+' | '-' | '*' | '/' | '%' | '&' | '|' | '^'
                 ) && next != '='
+                    && trailing_word(line[..index].trimmed_end()) != language::OPERATOR
                 {
                     return Some(index);
                 }
