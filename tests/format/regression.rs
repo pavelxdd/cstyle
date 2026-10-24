@@ -24779,3 +24779,13 @@ fn indent_preproc_block_indents_code_after_a_continued_condition() {
     check(input, &args, expected);
     check(expected, &args, expected);
 }
+
+#[test]
+fn a_split_row_in_the_parameters_of_operator_shift_stands_past_the_paren() {
+    // The `<<` naming the operator is no stream shift to align with.
+    let input = "class Item {\n    friend std::ostream &operator<<(std::ostream &out, const Item &item);\n};\n";
+    let expected = "class Item {\n    friend std::ostream &operator<< (std::ostream\n                                     &out, const Item &item);\n};\n";
+    let args = ["--style=java", "--pad-paren-out", "--max-code-length=50"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}

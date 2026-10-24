@@ -1311,7 +1311,16 @@ fn nested_new_continuation_indent(
 }
 
 fn stream_chain_continuation_indent(line: &str, base_indent_width: usize) -> Option<usize> {
-    let shift = line.find("<<")?;
+    // The `<<` naming an operator shifts nothing.
+    let names_operator = |index: usize| {
+        line[..index]
+            .strip_suffix("operator")
+            .is_some_and(|before| !before.ends_with(is_identifier_continue))
+    };
+    let shift = line
+        .match_indices("<<")
+        .map(|(index, _)| index)
+        .find(|&index| !names_operator(index))?;
     let operand = line[..shift].trimmed_end();
     if operand.is_empty()
         || operand.contains_any_byte(b"(=?")
