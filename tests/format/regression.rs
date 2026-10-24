@@ -25050,3 +25050,13 @@ fn an_initializer_s_arguments_below_its_member_name_continue_the_initializer_lis
         "class Item\n{\n    explicit Item(const Value* cmp) : data_\n        (Less(cmp)) {}\n    Item(int a) : first_(a), second_\n        (a) {}\n};\nItem::Item(const Value* cmp) : data_\n    (Less(cmp))\n{\n}\n",
     );
 }
+
+#[test]
+fn a_subscript_a_shift_leaves_open_aligns_its_next_row_past_the_bracket() {
+    let input = "void f()\n{\n    value << items[index\n    + 1];\n    std::cout << items[index\n    + 1];\n    size_t padding = total >> shifts[static_cast<int>\n    (item.align())];\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "void f()\n{\n    value << items[index\n                   + 1];\n    std::cout << items[index\n                       + 1];\n    size_t padding = total >> shifts[static_cast<int>\n                                     (item.align())];\n}\n",
+    );
+}

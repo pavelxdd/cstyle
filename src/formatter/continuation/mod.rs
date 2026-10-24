@@ -2220,6 +2220,11 @@ impl FormatEngine<'_> {
         {
             return None;
         }
+        // A subscript the line leaves open holds the next row past its
+        // bracket.
+        if self.layout.frame_stack.bracket_depth() > 0 && !self.layout.objc.message_active {
+            return None;
+        }
         let stream = self.layout.frame_stack.active_stream()?;
         (stream.operator_output_line == self.output.len()).then_some(stream.chain_anchor_column)
     }
