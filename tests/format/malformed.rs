@@ -492,7 +492,7 @@ fn whitesmith_brace_after_same_line_closing_brace_keeps_case_body_indent() {
             "            body",
             "            }",
             "",
-            "        case ONE:",
+            "    case ONE:",
             "            {",
             "                {",
             "                    {",

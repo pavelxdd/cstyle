@@ -24564,3 +24564,91 @@ fn break_one_line_headers_keeps_a_function_try_with_its_initializer_colon() {
         }
     }
 }
+
+#[test]
+fn a_case_label_inside_a_block_in_a_case_stands_a_level_before_the_block_statements() {
+    // A label nested in a loop or `if` block of a switch labels the
+    // block's statements, so it stands a level before them in every style.
+    let input = "int f(int state)\n{\n    switch (state) {\n    case 0:\n        do {\n            go();\n        case 1:\n            step();\n        } while (more());\n        if (ready) {\n            go();\n        default:\n            wait();\n        }\n    }\n    return 0;\n}\n";
+    for (args, expected) in [
+        (&["--style=kr"][..], input.to_string()),
+        (
+            &["--style=kr", "--indent-switches"][..],
+            "int f(int state)\n{\n    switch (state) {\n        case 0:\n            do {\n                go();\n            case 1:\n                step();\n            } while (more());\n            if (ready) {\n                go();\n            default:\n                wait();\n            }\n    }\n    return 0;\n}\n".to_string(),
+        ),
+        (
+            &["--style=whitesmith"][..],
+            "int f(int state)\n    {\n    switch (state)\n        {\n        case 0:\n            do\n                {\n                go();\n            case 1:\n                step();\n                }\n            while (more());\n            if (ready)\n                {\n                go();\n            default:\n                wait();\n                }\n        }\n    return 0;\n    }\n".to_string(),
+        ),
+        (
+            &["--style=allman"][..],
+            "int f(int state)\n{\n    switch (state)\n    {\n    case 0:\n        do\n        {\n            go();\n        case 1:\n            step();\n        }\n        while (more());\n        if (ready)\n        {\n            go();\n        default:\n            wait();\n        }\n    }\n    return 0;\n}\n".to_string(),
+        ),
+    ] {
+        check(input, args, &expected);
+        check(&expected, args, &expected);
+    }
+}
+
+#[test]
+fn a_case_block_opened_by_a_nested_label_follows_the_label() {
+    // The block a nested label opens stands past that label as at any
+    // label, and the block holding the label closes at its own opener.
+    let input = "void f()\n{\n    switch (x) {\n    case 0:\n        if (y) {\n            go();\n        case 1: {\n            step();\n            break;\n        }\n        }\n    }\n}\n";
+    for (args, expected) in [
+        (&["--style=kr"][..], input),
+        (
+            &["--style=whitesmith", "--indent-cases"][..],
+            "void f()\n    {\n    switch (x)\n        {\n        case 0:\n            if (y)\n                {\n                go();\n            case 1:\n                    {\n                    step();\n                    break;\n                    }\n                }\n        }\n    }\n",
+        ),
+        (
+            &["--style=kr", "--indent-switches", "--indent-cases"][..],
+            "void f()\n{\n    switch (x) {\n        case 0:\n            if (y) {\n                go();\n            case 1: {\n                    step();\n                    break;\n                }\n            }\n    }\n}\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
+fn a_do_block_kept_on_a_case_label_line_closes_at_the_case_body() {
+    // The brace of a header kept on the label's line opens that header's
+    // block, so `} while` closes it where a lone closer does.
+    let input = "void f(int v)\n{\n    switch (v) {\n    case 0: if (x) {\n            go();\n        }\n        break;\n    case 1: do {\n            go();\n        } while (x);\n        break;\n    }\n}\n";
+    for args in [
+        &["--style=kr", "--keep-one-line-statements"][..],
+        &["--style=linux", "--keep-one-line-statements"][..],
+    ] {
+        check(input, args, input);
+    }
+    let expected = "void f(int v)\n{\n    switch (v) {\n        case 0: if (x) {\n                go();\n            }\n            break;\n        case 1: do {\n                go();\n            } while (x);\n            break;\n    }\n}\n";
+    let args = [
+        "--style=kr",
+        "--keep-one-line-statements",
+        "--indent-switches",
+    ];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
+
+#[test]
+fn labels_of_a_loop_block_in_a_case_line_up_with_statements_kept_on_their_lines() {
+    // The labels of one block stand together, a level before the block's
+    // statements, wherever the loop's header sits.
+    let input = "void copy(char *to, char *from, int count)\n{\n    int n = (count + 3) / 4;\n    switch (count % 4) {\n    case 0: do { *to++ = *from++;\n    case 3:      *to++ = *from++;\n    case 2:      *to++ = *from++;\n    case 1:      *to++ = *from++;\n            } while (--n > 0);\n    }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void copy(char *to, char *from, int count)\n{\n    int n = (count + 3) / 4;\n    switch (count % 4) {\n    case 0: do {\n            *to++ = *from++;\n        case 3:      *to++ = *from++;\n        case 2:      *to++ = *from++;\n        case 1:      *to++ = *from++;\n        } while (--n > 0);\n    }\n}\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void copy(char *to, char *from, int count)\n    {\n    int n = (count + 3) / 4;\n    switch (count % 4)\n        {\n        case 0: do\n                {\n                *to++ = *from++;\n            case 3:      *to++ = *from++;\n            case 2:      *to++ = *from++;\n            case 1:      *to++ = *from++;\n                }\n            while (--n > 0);\n        }\n    }\n",
+        ),
+    ] {
+        let args = [style, "--keep-one-line-statements"];
+        check(input, &args, expected);
+        check(expected, &args, expected);
+    }
+}

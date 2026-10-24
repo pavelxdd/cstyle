@@ -6219,6 +6219,7 @@ impl FormatEngine<'_> {
                     if matches!(word.as_str(), "switch" | "case" | "default"))
             })
             || self.layout.line_adjuster.total_case_unindent_depth() > 0
+            || self.case_label_of_block(first).is_some()
         {
             return None;
         }

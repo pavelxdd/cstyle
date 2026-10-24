@@ -12,6 +12,7 @@ use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::structure::blocks::next_code_token;
+use crate::formatter::structure::groups::GroupId;
 use crate::formatter::text::columns::{leading_visual_width, leading_whitespace_len};
 use crate::formatter::text::line_scan::{
     ContainsAnyByte, advance_quoted_literal, after_leading_comments,
@@ -1912,16 +1913,94 @@ impl FormatEngine<'_> {
         )
     }
 
+    /// Whether the label the pending line starts with stands in a switch's
+    /// body or in a block a label of that body opens. A label nested in
+    /// another block labels that block's statements.
+    fn pending_label_stands_in_switch_body(&self) -> bool {
+        self.pending_nested_label().is_none()
+    }
+
+    /// The label the pending line starts with and the block holding it,
+    /// when that block is neither a switch's body nor a block a label of
+    /// that body opens.
+    fn pending_nested_label(&self) -> Option<(usize, GroupId)> {
+        let label = self.output.pending_tokens().map(|span| span.first).filter(|&first| {
+            matches!(&self.tree.tokens[first], Token::Word(word) if word == "case" || word == "default")
+        })?;
+        let group = self.tree.groups.enclosing(label)?;
+        let opens_switch_body = |group| {
+            let open = self.tree.groups.get(group).open;
+            let Some(close) = self.tree.previous_code_token(open) else {
+                return false;
+            };
+            self.tree
+                .groups
+                .closed_at(close)
+                .map(|condition| self.tree.groups.get(condition).open)
+                .and_then(|condition| self.tree.previous_code_token(condition))
+                .is_some_and(
+                    |word| matches!(&self.tree.tokens[word], Token::Word(word) if word == "switch"),
+                )
+        };
+        if opens_switch_body(group) {
+            return None;
+        }
+        let open = self.tree.groups.get(group).open;
+        let opens_case_block = self
+            .tree
+            .previous_code_token(open)
+            .is_some_and(|colon| matches!(self.tree.tokens[colon], Token::Symbol(':')))
+            && self
+                .tree
+                .groups
+                .get(group)
+                .parent
+                .is_some_and(opens_switch_body);
+        (!opens_case_block).then_some((label, group))
+    }
+
+    /// The column of a nested label: with the labels before it in its
+    /// block, or a level before the block's statements.
+    fn nested_label_indent_spaces(&self, label: usize, group: GroupId) -> usize {
+        let indent_width = self.options.indent_width;
+        for token in self.tree.groups.members_before(Some(group), label) {
+            let Some(line) = self.output.line_with_token(token).filter(|&line| {
+                self.output
+                    .line_tokens(line)
+                    .is_some_and(|span| span.first == token)
+            }) else {
+                continue;
+            };
+            let lead = self.output.lead_width(line, self.options.tab_width);
+            if matches!(&self.tree.tokens[token], Token::Word(word) if word == "case" || word == "default")
+            {
+                return lead;
+            }
+            if self.tree.statements.starts_block_statement(token) {
+                return lead.saturating_sub(indent_width);
+            }
+        }
+        let statement_level = self
+            .layout
+            .indentation
+            .line_indent(LineKind::Normal, self.options)
+            + self.case_body_indent_extra(LineKind::Normal);
+        statement_level.saturating_sub(1) * indent_width
+    }
+
     pub(crate) fn initial_switch_case_indent_spaces(
         &self,
         line: &LineView<'_>,
         line_kind: LineKind,
         mut exact_indent_spaces: Option<usize>,
     ) -> Option<usize> {
-        if line_kind == LineKind::SwitchLabel
-            && let Some(spaces) = self.switch_label_indent_spaces()
-        {
-            exact_indent_spaces = Some(spaces);
+        if line_kind == LineKind::SwitchLabel {
+            if let Some((label, group)) = self.pending_nested_label() {
+                return Some(self.nested_label_indent_spaces(label, group));
+            }
+            if let Some(spaces) = self.switch_label_indent_spaces() {
+                exact_indent_spaces = Some(spaces);
+            }
         }
 
         let trimmed = line.trimmed_start();
@@ -2603,8 +2682,11 @@ impl FormatEngine<'_> {
                 .frame_stack
                 .active_brace()
                 .is_some_and(|frame| frame.case_block && frame.case_header_pending == 0);
+        // A label nested in another block leaves its statements at that
+        // block's level.
         if (line_kind == LineKind::SwitchLabel || statement_in_switch_body)
             && !label_in_indented_case_block
+            && (line_kind != LineKind::SwitchLabel || self.pending_label_stands_in_switch_body())
         {
             let current = self.layout.nesting.brace_header_stack.len();
             if self.layout.switch_case_layout.body_brace_depths.last() != Some(&current) {
@@ -2684,7 +2766,11 @@ impl FormatEngine<'_> {
         if line_kind == LineKind::SwitchLabel || closer_led_label {
             layout.case_block_closed_depth = None;
             let code = self.output.code_trimmed_of(line);
-            if code.ends_with('{') {
+            if code.ends_with('{') && !label_opens_case_block(code) {
+                // The brace of a header kept on the label's line opens
+                // that header's block.
+                self.layout.switch_case_layout.pending_label_brace = false;
+            } else if code.ends_with('{') {
                 // A brace kept on its label's line opens the case block
                 // once that line is laid out.
                 let entered = self
