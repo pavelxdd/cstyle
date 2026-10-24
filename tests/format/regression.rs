@@ -17528,7 +17528,7 @@ fn a_comment_led_argument_after_a_lambda_body_stands_at_the_statement_under_a_le
 }
 
 #[test]
-fn an_argument_after_an_indented_block_closer_stands_at_the_statement_indent() {
+fn an_argument_after_a_list_closer_stands_with_the_arguments_and_after_a_block_at_the_statement() {
     let input = "void f(void)\n{\n    value = call(first, {\n        1, 2 },\n        other,\n        more);\n    call(first, ^{\n        go();\n    },\n    other);\n}\n";
     for (style, expected) in [
         (
@@ -17537,11 +17537,11 @@ fn an_argument_after_an_indented_block_closer_stands_at_the_statement_indent() {
         ),
         (
             "--style=whitesmith",
-            "void f(void)\n    {\n    value = call(first,\n        {\n        1, 2\n        },\n    other,\n    more);\n    call(first, ^\n        {\n        go();\n        },\n    other);\n    }\n",
+            "void f(void)\n    {\n    value = call(first,\n                 {\n                 1, 2\n                 },\n    other,\n    more);\n    call(first, ^\n        {\n        go();\n        },\n    other);\n    }\n",
         ),
         (
             "--style=vtk",
-            "void f(void)\n{\n    value = call(first,\n        {\n        1, 2\n        },\n    other,\n    more);\n    call(first, ^\n        {\n        go();\n        },\n    other);\n}\n",
+            "void f(void)\n{\n    value = call(first,\n                 {\n                 1, 2\n                 },\n    other,\n    more);\n    call(first, ^\n        {\n        go();\n        },\n    other);\n}\n",
         ),
         (
             "--style=kr",
@@ -19046,7 +19046,7 @@ fn attach_styles_attach_a_list_brace_after_a_call_paren_the_line_ends_in() {
 #[test]
 fn whitesmith_brace_rows_of_a_call_argument_list_stand_a_level_past_its_brace() {
     let input = "void f()\n{\n    call(value, {\n        {1, 2},\n        {3, 4}\n    });\n    call(value, {\n        {2, 3},\n        4\n    });\n}\n";
-    let expected = "void f()\n    {\n    call(value,\n        {\n            {1, 2},\n            {3, 4}\n        });\n    call(value,\n        {\n            {2, 3},\n        4\n        });\n    }\n";
+    let expected = "void f()\n    {\n    call(value,\n         {\n             {1, 2},\n             {3, 4}\n         });\n    call(value,\n         {\n             {2, 3},\n         4\n         });\n    }\n";
     check(input, &["--style=whitesmith"], expected);
     check(expected, &["--style=whitesmith"], expected);
 }
@@ -20540,11 +20540,11 @@ fn a_list_among_arguments_leaves_the_rows_after_it_at_the_argument_column() {
     for (style, expected) in [
         (
             "--style=pico",
-            "void helper()\n{   return result(first,\n                  field<Item>\n                  {   value },\n                  more);\n    result(first,\n    {   value },\n           more); }\n",
+            "void helper()\n{   return result(first,\n                  field<Item>\n                  {   value },\n                  more);\n    result(first,\n           {   value },\n           more); }\n",
         ),
         (
             "--style=allman",
-            "void helper()\n{\n    return result(first,\n                  field<Item>\n                  {\n                      value},\n                  more);\n    result(first,\n    {\n        value\n    },\n           more);\n}\n",
+            "void helper()\n{\n    return result(first,\n                  field<Item>\n                  {\n                      value},\n                  more);\n    result(first,\n           {\n               value\n           },\n           more);\n}\n",
         ),
         (
             "--style=kr",
@@ -21387,18 +21387,19 @@ fn converting_tabs_fills_a_list_brace_run_into_its_row_with_spaces() {
     for (indent, expected) in [
         (
             "--indent=tab=4",
-            "void f()\n{\tresult(first,\n\t{   value },\n\t       more);\n\tresult(\n\t{   value },\n\t    more); }\n",
+            "void f()\n{\tresult(first,\n\t       {   value },\n\t       more);\n\tresult(\n\t{   value },\n\t    more); }\n",
         ),
         (
             "--indent=force-tab=4",
-            "void f()\n{\tresult(first,\n\t{   value },\n\t\t   more);\n\tresult(\n\t{   value },\n\t\tmore); }\n",
+            "void f()\n{\tresult(first,\n\t\t   {   value },\n\t\t   more);\n\tresult(\n\t{   value },\n\t\tmore); }\n",
         ),
     ] {
         let args = ["--style=pico", indent, "--convert-tabs"];
         check(input, &args, expected);
         check(expected, &args, expected);
-        // Kept tabs fill the run-in row as the block's.
-        let kept = expected.replace("{   value", "{\tvalue");
+        // Kept tabs fill the run-in row as the block's where it stands at
+        // a tab stop; one standing past the stops fills with spaces.
+        let kept = expected.replace("\n\t{   value", "\n\t{\tvalue");
         check(input, &["--style=pico", indent], &kept);
         check(&kept, &["--style=pico", indent], &kept);
     }
@@ -21842,14 +21843,14 @@ fn a_statement_unbraced_from_a_one_line_block_keeps_its_template_arguments() {
 #[test]
 fn attaching_styles_keep_a_list_brace_among_call_arguments_of_an_outer_list_on_its_row() {
     let input = "Items list = {\n    call(a, b,\n    {\n        b, c\n    }),\n    call(\n    {\n        b, c\n    }),\n};\nvoid f()\n{\n    call(a,\n    {\n        b, c\n    });\n}\n";
-    let expected = "Items list = {\n    call(a, b,\n    {\n        b, c\n    }),\n    call(\n    {\n        b, c\n    }),\n};\nvoid f()\n{\n    call(a, {\n        b, c\n    });\n}\n";
+    let expected = "Items list = {\n    call(a, b,\n         {\n             b, c\n         }),\n    call(\n    {\n        b, c\n    }),\n};\nvoid f()\n{\n    call(a, {\n        b, c\n    });\n}\n";
     for style in ["--style=kr", "--style=1tbs", "--style=stroustrup"] {
         check(input, &[style], expected);
     }
     check(
         input,
         &["--style=ratliff"],
-        "Items list = {\n    call(a, b,\n        {\n        b, c\n        }),\n    call(\n        {\n        b, c\n        }),\n    };\nvoid f() {\n    call(a, {\n        b, c\n        });\n    }\n",
+        "Items list = {\n    call(a, b,\n         {\n         b, c\n         }),\n    call(\n        {\n        b, c\n        }),\n    };\nvoid f() {\n    call(a, {\n        b, c\n        });\n    }\n",
     );
 }
 
@@ -25279,4 +25280,25 @@ fn a_lambda_s_parameter_rows_align_at_its_paren_whatever_row_opens_its_body() {
     let expected = "void helper()\n{\n    auto handler = [](int first,\n                      int second) {\n        go();\n    };\n    auto three = [](int first,\n                    int second,\n                    int third) {\n        go();\n    };\n    call(value, [](int first,\n                   int second) {\n        go();\n    });\n    auto typed = [](int first,\n                    int second) -> bool {\n        return first < second;\n    };\n}\n";
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn a_brace_list_argument_leading_its_row_stands_as_any_argument() {
+    // A list among a call's arguments is one of them: the row it leads
+    // stands at the arguments' column, its elements a level past it and its
+    // closer at it when the style breaks its brace.
+    let input = "void helper()\n{\n    result(first,\n    { value, other },\n    more);\n    result(first,\n    {\n        value\n    },\n    more);\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void helper()\n{\n    result(first,\n           { value, other },\n           more);\n    result(first, {\n        value\n    },\n           more);\n}\n",
+        ),
+        (
+            "--style=allman",
+            "void helper()\n{\n    result(first,\n           { value, other },\n           more);\n    result(first,\n           {\n               value\n           },\n           more);\n}\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
 }

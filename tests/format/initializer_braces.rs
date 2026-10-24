@@ -4460,15 +4460,15 @@ fn argument_brace_after_a_line_ending_in_a_comma_is_an_initializer() {
     for (style, expected) in [
         (
             "--style=vtk",
-            "void f(void)\n{\n    g(a,\n        {\n        free(n);\n        });\n    g(a,\n    { 1, 2 });\n}\n",
+            "void f(void)\n{\n    g(a,\n        {\n        free(n);\n        });\n    g(a,\n      { 1, 2 });\n}\n",
         ),
         (
             "--style=kr",
-            "void f(void)\n{\n    g(a, {\n        free(n);\n    });\n    g(a,\n    { 1, 2 });\n}\n",
+            "void f(void)\n{\n    g(a, {\n        free(n);\n    });\n    g(a,\n      { 1, 2 });\n}\n",
         ),
         (
             "--style=whitesmith",
-            "void f(void)\n    {\n    g(a,\n        {\n        free(n);\n        });\n    g(a,\n        { 1, 2 });\n    }\n",
+            "void f(void)\n    {\n    g(a,\n        {\n        free(n);\n        });\n    g(a,\n      { 1, 2 });\n    }\n",
         ),
     ] {
         let mut options = FormatOptions::default();

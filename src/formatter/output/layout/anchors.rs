@@ -169,6 +169,7 @@ impl FormatEngine<'_> {
             })
         })
         .or_else(|| when(brace, || self.list_brace_in_continuation_row_indent(first)))
+        .or_else(|| when(brace, || self.list_argument_row_indent(first)))
         .or_else(|| when(in_parens, || self.literal_argument_indent(first)))
         .or_else(|| when(in_parens, || self.row_around_kept_lambda_body_indent(first)))
         .or_else(|| {
@@ -7112,6 +7113,73 @@ impl FormatEngine<'_> {
                 return None;
             }
             self.token_column(argument)?
+        };
+        Some(column + self.case_unindent_spaces())
+    }
+
+    /// A list leading its row among a call's arguments is one of them: the
+    /// row stands at the last argument before it that leads a row, else at
+    /// the first argument after the paren; its closer leading a row stands
+    /// at the brace when that leads one.
+    #[inline(never)]
+    fn list_argument_row_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let list = groups.delimited_by(first)?;
+        let brace = groups.get(list).open;
+        if first != brace {
+            let brace_line = self.output.line_with_token(brace)?;
+            return (self.output.line_tokens(brace_line)?.first == brace
+                && self.list_argument_row_indent(brace).is_some())
+            .then(|| {
+                self.output.lead_width(brace_line, self.options.tab_width)
+                    + self.case_unindent_spaces()
+            });
+        }
+        let parens = groups.enclosing(first)?;
+        if groups.get(parens).delimiter != Delimiter::Paren {
+            return None;
+        }
+        let previous = self.tree.previous_code_token(first)?;
+        if self.options.indent_after_parens
+            || !matches!(
+                self.tree.blocks.kind(list),
+                Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+            )
+            || self.brace_holds_statements(list)
+            || !matches!(tokens[previous], Token::Symbol(','))
+            || groups.enclosing(previous) != Some(parens)
+        {
+            return None;
+        }
+        // Back over the arguments before it, each ended by a comma.
+        let open = groups.get(parens).open;
+        let mut index = previous;
+        let start = loop {
+            let before = self.tree.previous_code_token(index)?;
+            if let Some(closed) = groups.closed_at(before) {
+                index = groups.get(closed).open;
+                continue;
+            }
+            let ends_argument = before == open
+                || matches!(tokens[before], Token::Symbol(','))
+                    && groups.enclosing(before) == Some(parens);
+            if !ends_argument {
+                index = before;
+                continue;
+            }
+            let start = next_code_token(tokens, before + 1)?;
+            let line = self.output.line_with_token(start)?;
+            if before == open || self.output.line_tokens(line)?.first == start {
+                break start;
+            }
+            index = before;
+        };
+        let line = self.output.line_with_token(start)?;
+        let column = if self.output.line_tokens(line)?.first == start {
+            self.output.lead_width(line, self.options.tab_width)
+        } else {
+            self.token_column(start)?
         };
         Some(column + self.case_unindent_spaces())
     }
