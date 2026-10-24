@@ -24489,3 +24489,18 @@ fn a_while_condition_continued_after_a_moved_closer_aligns_in_its_paren() {
         check(expected, &args, expected);
     }
 }
+
+#[test]
+fn declarations_in_a_run_in_extern_block_stand_at_one_level_after_parens() {
+    // Each declaration starts a statement of its own, at the block's level,
+    // whatever the indent after parens.
+    let input = "extern \"C\" {\nint helper(int value);\nvoid other(void);\n}\n";
+    let expected = "extern \"C\"\n{   int helper(int value);\n    void other(void);\n}\n";
+    let args = [
+        "--style=horstmann",
+        "--indent-after-parens",
+        "--indent-continuation=3",
+    ];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
