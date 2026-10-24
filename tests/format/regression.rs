@@ -24375,3 +24375,19 @@ fn fill_empty_lines_takes_the_indent_of_a_directive_indented_as_code() {
     check(input, &["--fill-empty-lines"], expected);
     check(expected, &["--fill-empty-lines"], expected);
 }
+
+#[test]
+fn max_code_length_finds_no_split_inside_template_arguments_continued_across_lines() {
+    // Template arguments the line leaves open, or opens on a row before,
+    // hold no split points, as those closed on the line do not.
+    let input = "template <typename T, typename Alloc = std::allocator<T>,\n          typename Unused = std::enable_if_t<true> >\nclass Vector\n{\n    T *data_ = nullptr;\n};\nusing Table = std::map<std::string_view_type, std::vector<int>, Less<int>,\n                       Alloc>;\nvoid f()\n{\n    call<std::string_view_type, std::vector<int>, std::less<std::string_view>,\n         Alloc>(value);\n}\n";
+    let expected = "template <typename T, typename Alloc = std::allocator<T>,\n          typename Unused = std::enable_if_t<true> >\nclass Vector\n{\n    T *data_ = nullptr;\n};\nusing Table =\n    std::map<std::string_view_type, std::vector<int>, Less<int>,\n    Alloc>;\nvoid f()\n{\n    call<std::string_view_type, std::vector<int>, std::less<std::string_view>,\n         Alloc>(value);\n}\n";
+    check(input, &["--max-code-length=50"], expected);
+    check(expected, &["--max-code-length=50"], expected);
+    // A logical operator in the angles makes them no template: the head
+    // splits at its commas, the rows standing with its parameters.
+    let input = "template <typename OutputIt, typename Char, typename... Args,\n          ENABLE_IF(is_output<OutputIt, Char>::value&&\n                    is_exotic<Char>::value)>\nvoid write(OutputIt out);\n";
+    let expected = "template <typename OutputIt, typename Char,\n          typename... Args,\n          ENABLE_IF(is_output<OutputIt, Char>::value&&\n                    is_exotic<Char>::value)>\nvoid write(OutputIt out);\n";
+    check(input, &["--max-code-length=50"], expected);
+    check(expected, &["--max-code-length=50"], expected);
+}

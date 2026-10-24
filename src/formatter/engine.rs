@@ -299,6 +299,8 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) line_comment_cache: std::cell::Cell<Option<LineCommentCache>>,
     /// Which tokens of the tree open a template.
     template_openers: std::cell::OnceCell<Vec<bool>>,
+    /// The tree's template spans as astyle reads them.
+    pub(crate) astyle_template_spans: std::cell::OnceCell<Vec<(usize, usize)>>,
     /// Which groups of the tree are parens holding a compound literal that
     /// spans lines.
     pub(crate) multiline_literal_parens: std::cell::OnceCell<Vec<bool>>,
@@ -545,6 +547,7 @@ impl<'a> FormatEngine<'a> {
             token_column_cache: std::cell::Cell::new(None),
             astyle_replay_cache: std::cell::Cell::new(None),
             template_openers: std::cell::OnceCell::new(),
+            astyle_template_spans: std::cell::OnceCell::new(),
             multiline_literal_parens: std::cell::OnceCell::new(),
             bracket_closes: std::cell::OnceCell::new(),
             designator_chain_cache: std::cell::RefCell::new(None),

@@ -184,6 +184,81 @@ pub(crate) fn template_angle_role(
     })
 }
 
+/// The spans from each `<` astyle reads as opening a template to the `>`
+/// that closes it, outermost only. astyle reads on from the `<` across lines
+/// for its closing angle, through names, scopes, pointers, references,
+/// defaults, brackets and balanced parens, and takes anything else, a
+/// logical operator among them, for no template.
+pub(crate) fn astyle_template_spans(tokens: &[Token]) -> Vec<(usize, usize)> {
+    let mut spans = Vec::new();
+    let mut index = 0;
+    while index < tokens.len() {
+        if matches!(&tokens[index], Token::Operator(operator) if operator == "<")
+            && let Some(close) = astyle_template_close(tokens, index)
+        {
+            spans.push((index, close));
+            index = close;
+        }
+        index += 1;
+    }
+    spans
+}
+
+/// How many tokens astyle's look for a template's close reads at most.
+const MAX_TEMPLATE_SCAN_TOKENS: usize = 4096;
+
+fn astyle_template_close(tokens: &[Token], open: usize) -> Option<usize> {
+    // The `<` opens nothing that ends its line or starts an `<=`.
+    match tokens[open + 1..]
+        .iter()
+        .find(|token| !matches!(token, Token::Whitespace(_)))
+    {
+        None | Some(Token::Newline) => return None,
+        Some(Token::Operator(operator)) if operator.starts_with('=') => return None,
+        _ => {}
+    }
+    let name_char = |ch: char| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '.');
+    let mut depth = 1usize;
+    let mut parens = 0usize;
+    for (index, token) in tokens
+        .iter()
+        .enumerate()
+        .skip(open + 1)
+        .take(MAX_TEMPLATE_SCAN_TOKENS)
+    {
+        match token {
+            Token::Whitespace(_)
+            | Token::Newline
+            | Token::Comment(..)
+            | Token::StringLiteral(_)
+            | Token::CharLiteral(_)
+            | Token::Word(_)
+            | Token::Symbol(',' | ':' | '[' | ']' | '.') => {}
+            Token::Number(number) if number.chars().all(name_char) => {}
+            Token::Symbol('(') => parens += 1,
+            Token::Symbol(')') => parens = parens.checked_sub(1)?,
+            Token::Operator(operator) if !operator.contains("&&") && !operator.contains("||") => {
+                for ch in operator.chars() {
+                    match ch {
+                        '<' => depth += 1,
+                        '>' => {
+                            depth -= 1;
+                            if depth == 0 {
+                                return (parens == 0).then_some(index);
+                            }
+                        }
+                        '&' | '*' | '^' | ':' | '=' => {}
+                        ch if name_char(ch) => {}
+                        _ => return None,
+                    }
+                }
+            }
+            _ => return None,
+        }
+    }
+    None
+}
+
 /// Which tokens are `<`s that open a template, as
 /// `looks_like_template_opener` finds each one reading on to the end, found
 /// in one pass: each `<` still open is resolved by the token that ends its

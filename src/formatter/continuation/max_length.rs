@@ -16,8 +16,8 @@ use crate::formatter::structure::blocks::{is_code_token, next_code_token};
 use crate::formatter::structure::groups::{Delimiter, GroupId};
 use crate::formatter::syntax::language::{self, is_non_type_keyword, is_pointer_type_word};
 use crate::formatter::syntax::{
-    TemplateAngle, function_name_start, known_template_angle_role, scoped_name_is_constructor,
-    template_openers,
+    TemplateAngle, astyle_template_spans, function_name_start, known_template_angle_role,
+    scoped_name_is_constructor, template_openers,
 };
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::ContainsAnyByte;
@@ -181,7 +181,10 @@ impl FormatEngine<'_> {
             usize::from(broken_attached_brace)
         };
         let final_first_width = first_width.saturating_sub(suffix_width).max(1);
-        let first_rules = SplitRules::new(self.options).with_offset(brace_row_layout.prefix_width);
+        let templates = self.line_template_angles();
+        let first_rules = SplitRules::new(self.options)
+            .with_offset(brace_row_layout.prefix_width)
+            .with_templates(templates);
         // A `while` attached after the statement's braces shares its line,
         // so the line splits where the whole of it would, and not before
         // the `while` when it would split there.
@@ -355,6 +358,13 @@ impl FormatEngine<'_> {
         };
         let source_tokens = self.output.pending_tokens();
         let mut part_scan = SplitPartScan::default();
+        self.set_split_part_tokens(
+            source_tokens,
+            line,
+            line,
+            line.len() - split.tail.len(),
+            &mut part_scan,
+        );
         self.push_output_line_with_indent(&split.head, structural_level, indent);
         let mut tail = split.tail;
         loop {
@@ -362,7 +372,9 @@ impl FormatEngine<'_> {
             // Each tail ends the line.
             debug_assert!(line.ends_with(tail));
             let held = last_held.from(line.len() - tail.len());
-            let rules = SplitRules::new(self.options).holding(held);
+            let rules = SplitRules::new(self.options)
+                .holding(held)
+                .with_templates(templates.after(&line[..line.len() - tail.len()]));
             let Some(split) = split_result(tail, tail_width, rules).or_else(|| {
                 (suffix_width > 0).then(|| {
                     split_result(tail, tail_width.saturating_sub(suffix_width).max(1), rules)
@@ -413,7 +425,13 @@ impl FormatEngine<'_> {
             if self.split_ends_statement(&line[..line.len() - split.tail.len()]) {
                 following_indent = ContinuationIndent::Spaces(block_spaces);
             }
-            self.set_split_part_tokens(source_tokens, line, tail, &mut part_scan);
+            self.set_split_part_tokens(
+                source_tokens,
+                line,
+                tail,
+                line.len() - split.tail.len(),
+                &mut part_scan,
+            );
             if !declarator_part && let Some(spaces) = self.split_part_indent(tail) {
                 next_indent = ContinuationIndent::Spaces(spaces);
                 self.max_length_line.anchored_part = true;
@@ -428,7 +446,7 @@ impl FormatEngine<'_> {
             next_indent = following_indent;
         }
         if !tail.trimmed().is_empty() {
-            self.set_split_part_tokens(source_tokens, line, tail, &mut part_scan);
+            self.set_split_part_tokens(source_tokens, line, tail, line.len(), &mut part_scan);
             if !declarator_part && let Some(spaces) = self.split_part_indent(tail) {
                 next_indent = ContinuationIndent::Spaces(spaces);
                 self.max_length_line.anchored_part = true;
@@ -469,7 +487,9 @@ impl FormatEngine<'_> {
                     * self.options.indent_width,
             );
         }
+        // A part within a template head stands with its parameters.
         self.split_part_stack_indent(first)
+            .or_else(|| self.template_head_row_indent(first))
             .or_else(|| self.tree_anchor_indent(first, part))
     }
 
@@ -516,14 +536,65 @@ impl FormatEngine<'_> {
         }) && outer.is_none_or(|group| groups.get(group).delimiter == Delimiter::Brace)
     }
 
-    /// Gives the part of the split `line` that starts with `part` the source
-    /// tokens from its first one on. The parts come in order along the line,
-    /// so `scan` resumes the walk where the last part's first token was found.
+    /// The template angles astyle reads the line being built in.
+    fn line_template_angles(&self) -> TemplateAngles {
+        let Some(span) = self.output.pending_tokens() else {
+            return TemplateAngles::default();
+        };
+        let tokens = &self.tree.tokens;
+        let spans = self
+            .astyle_template_spans
+            .get_or_init(|| astyle_template_spans(tokens));
+        let first = span.first;
+        let depth = spans[..spans.partition_point(|&(open, _)| open < first)]
+            .last()
+            .filter(|&&(_, close)| close >= first)
+            .map_or(0, |&(open, _)| {
+                tokens[open..first]
+                    .iter()
+                    .filter_map(|token| match token {
+                        Token::Operator(operator) => Some(operator),
+                        _ => None,
+                    })
+                    .flat_map(|operator| operator.chars())
+                    .fold(0usize, |depth, ch| match ch {
+                        '<' => depth + 1,
+                        '>' => depth.saturating_sub(1),
+                        _ => depth,
+                    })
+            });
+        let mut count = 0usize;
+        let mut openers = 0u64;
+        for index in first..=span.last.min(tokens.len().saturating_sub(1)) {
+            if matches!(&tokens[index], Token::Operator(operator) if &**operator == "<") {
+                if count == u64::BITS as usize {
+                    return TemplateAngles::default();
+                }
+                if spans
+                    .binary_search_by_key(&index, |&(open, _)| open)
+                    .is_ok()
+                {
+                    openers |= 1 << count;
+                }
+                count += 1;
+            }
+        }
+        TemplateAngles {
+            depth,
+            source: Some((count, openers)),
+        }
+    }
+
+    /// Gives the part of the split `line` that starts with `part` and ends
+    /// before `end` the source tokens it holds. The parts come in order
+    /// along the line, so `scan` resumes the walk where the last part's
+    /// first token was found.
     fn set_split_part_tokens(
         &mut self,
         source: Option<TokenSpan>,
         line: &str,
         part: &str,
+        end: usize,
         scan: &mut SplitPartScan,
     ) {
         let Some(source) = source else {
@@ -558,15 +629,46 @@ impl FormatEngine<'_> {
             if cursor + offset >= from {
                 scan.skipped = index - source.first;
                 scan.cursor = cursor;
-                self.output.set_pending_tokens(Some(TokenSpan {
-                    first: index,
-                    last: source.last,
-                }));
+                let last = self.split_part_last_token(source, line, index, cursor, end);
+                self.output
+                    .set_pending_tokens(Some(TokenSpan { first: index, last }));
                 return;
             }
             cursor += offset + text.len();
         }
         scan.ended = true;
+    }
+
+    /// The last of the source tokens from `first`, found in `line` from
+    /// `cursor` on, that starts before `end`.
+    fn split_part_last_token(
+        &self,
+        source: TokenSpan,
+        line: &str,
+        first: usize,
+        mut cursor: usize,
+        end: usize,
+    ) -> usize {
+        if end >= line.len() {
+            return source.last;
+        }
+        let mut last = first;
+        for index in first..=source.last {
+            let token = &self.tree.tokens[index];
+            if !is_code_token(token) {
+                continue;
+            }
+            let text = token_text(token);
+            let Some(offset) = line[cursor..].find(&*text) else {
+                break;
+            };
+            if cursor + offset >= end {
+                break;
+            }
+            last = index;
+            cursor += offset + text.len();
+        }
+        last
     }
 }
 
@@ -1373,7 +1475,7 @@ struct SplitResult<'a> {
 /// continues nothing, as on a source row of its own.
 fn split_ends_template_type(before: &str) -> bool {
     let before = before.trimmed_end();
-    let Some(&(open, end)) = template_argument_ranges(before).last() else {
+    let Some(&(open, end)) = line_template_argument_ranges(before).last() else {
         return false;
     };
     let words = before[..open].trimmed();
@@ -1389,7 +1491,103 @@ fn split_ends_template_type(before: &str) -> bool {
         })
 }
 
-fn template_argument_ranges(line: &str) -> Vec<(usize, usize)> {
+/// The template angles astyle reads a line in: the depth it starts at
+/// and, for the source's `<`s on it in order, which open a template.
+#[derive(Clone, Copy, Default)]
+struct TemplateAngles {
+    depth: usize,
+    /// The count of the line's `<`s and a bit for each that opens a
+    /// template; none when the source's angles are not known.
+    source: Option<(usize, u64)>,
+}
+
+impl TemplateAngles {
+    /// Walks the tokens of `text` from these angles, telling `visit` each
+    /// token's offset and length with the depths before and after it, and
+    /// gives the angles after the text with the count of `<`s it passed.
+    fn walk(self, text: &str, mut visit: impl FnMut(usize, usize, usize, usize)) -> (Self, usize) {
+        let Some((count, openers)) = self.source else {
+            return (self, 0);
+        };
+        let mut depth = self.depth;
+        let mut seen = 0usize;
+        let mut offset = 0usize;
+        for token in tokenize(text) {
+            let len = token_text(&token).len();
+            let before = depth;
+            if let Token::Operator(operator) = &token {
+                if &**operator == "<" {
+                    if depth > 0 || seen < count && openers >> seen & 1 == 1 {
+                        depth += 1;
+                    }
+                    seen += 1;
+                } else if depth > 0 {
+                    for ch in operator.chars() {
+                        match ch {
+                            '<' => depth += 1,
+                            '>' => depth -= 1,
+                            _ => {}
+                        }
+                        if depth == 0 {
+                            break;
+                        }
+                    }
+                }
+            }
+            visit(offset, len, before, depth);
+            offset += len;
+        }
+        let rest = count.saturating_sub(seen);
+        let openers = openers.checked_shr(seen as u32).unwrap_or(0);
+        (
+            Self {
+                depth,
+                source: Some((rest, openers)),
+            },
+            seen,
+        )
+    }
+
+    /// The angles the text after `head` starts in.
+    fn after(self, head: &str) -> Self {
+        self.walk(head, |_, _, _, _| {}).0
+    }
+}
+
+/// The spans of `line` within template angles: by the angles astyle reads
+/// the source in when they are known, else those the line's own `>`s
+/// close.
+fn template_argument_ranges(line: &str, angles: TemplateAngles) -> Vec<(usize, usize)> {
+    let Some((count, openers)) = angles.source else {
+        return line_template_argument_ranges(line);
+    };
+    if angles.depth == 0 && openers == 0 {
+        return Vec::new();
+    }
+    let mut ranges = Vec::new();
+    let mut outer_start = (angles.depth > 0).then_some(0);
+    let (_, seen) = angles.walk(line, |offset, len, before, depth| {
+        if before == 0 && depth > 0 {
+            outer_start = Some(offset);
+        } else if before > 0
+            && depth == 0
+            && let Some(start) = outer_start.take()
+        {
+            ranges.push((start, offset + len));
+        }
+    });
+    // The source's `<`s must be the line's.
+    if seen != count {
+        return line_template_argument_ranges(line);
+    }
+    if let Some(start) = outer_start {
+        ranges.push((start, line.len()));
+    }
+    ranges
+}
+
+/// The spans of `line` within the template angles its own `>`s close.
+fn line_template_argument_ranges(line: &str) -> Vec<(usize, usize)> {
     // Only a `>` closes a `<` into a template.
     if !line.contains('<') || !line.contains('>') {
         return Vec::new();
@@ -1909,6 +2107,7 @@ struct SplitRules {
     /// sits in, not one-line blocks.
     closers_follow_statement: bool,
     held: HeldBytes,
+    templates: TemplateAngles,
 }
 
 impl SplitRules {
@@ -1922,6 +2121,7 @@ impl SplitRules {
             offset: 0,
             closers_follow_statement: false,
             held: HeldBytes::default(),
+            templates: TemplateAngles::default(),
         }
     }
 
@@ -1931,6 +2131,10 @@ impl SplitRules {
 
     fn with_offset(self, offset: usize) -> Self {
         Self { offset, ..self }
+    }
+
+    fn with_templates(self, templates: TemplateAngles) -> Self {
+        Self { templates, ..self }
     }
 
     fn with_closers_following_statement(self) -> Self {
@@ -1960,8 +2164,8 @@ const ASTYLE_OPERATORS: [&str; 46] = [
 fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usize> {
     let break_after_logical = rules.break_after_logical;
     let bytes = line.as_bytes();
-    let templates = if rules.held.less && rules.held.greater {
-        template_argument_ranges(line)
+    let templates = if rules.templates.source.is_some() || rules.held.less && rules.held.greater {
+        template_argument_ranges(line, rules.templates)
     } else {
         Vec::new()
     };
