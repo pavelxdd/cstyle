@@ -230,7 +230,13 @@ impl FormatEngine<'_> {
         if !matches!(self.tree.tokens[comma], Token::Symbol(','))
             || self.tree.groups.enclosing(comma) != group
             || group.is_some_and(|group| match self.tree.blocks.kind(group) {
-                Some(BlockKind::FunctionBody | BlockKind::Control | BlockKind::Block) => false,
+                Some(
+                    BlockKind::FunctionBody
+                    | BlockKind::Control
+                    | BlockKind::Block
+                    | BlockKind::Namespace
+                    | BlockKind::ExternC,
+                ) => false,
                 // Enumerators are no declarators.
                 Some(BlockKind::Aggregate) => self.tree.blocks.owner(group).is_none_or(|owner| {
                     self.tree.tokens[owner..self.tree.groups.get(group).open]

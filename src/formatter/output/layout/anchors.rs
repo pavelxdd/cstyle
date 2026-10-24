@@ -3399,7 +3399,13 @@ impl FormatEngine<'_> {
         if let Some(group) = group
             && !matches!(
                 self.tree.blocks.kind(group),
-                Some(BlockKind::FunctionBody | BlockKind::Control | BlockKind::Block)
+                Some(
+                    BlockKind::FunctionBody
+                        | BlockKind::Control
+                        | BlockKind::Block
+                        | BlockKind::Namespace
+                        | BlockKind::ExternC
+                )
             )
         {
             return None;

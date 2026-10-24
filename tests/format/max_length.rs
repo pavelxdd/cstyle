@@ -3511,3 +3511,26 @@ fn max_code_length_continues_a_stream_row_after_a_split_from_the_row_it_follows(
         "void helper()\n{\n    if (value != item.value) {\n        LOG_INFO(ERROR) << item.name << \" value:\\n\" << \"got \" <<\n                        value << \"\\n\"\n                        << \"want \" << item.value;\n    }\n}\n",
     );
 }
+
+#[test]
+fn max_code_length_splits_a_declarator_list_in_a_namespace_or_linkage_block_at_its_name() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    let rows = "Handler FirstValue, SecondValue, ThirdValue, FourthValue, FifthValue,\n    SixthValue, SeventhValue, EighthValue, NinthValue, TenthValue,\n    EleventhValue, TwelfthValue, ThirteenthValue, FourteenthValue;\n";
+    let split = "Handler FirstValue, SecondValue, ThirdValue, FourthValue,\n        FifthValue,\n        SixthValue, SeventhValue, EighthValue, NinthValue,\n        TenthValue,\n        EleventhValue, TwelfthValue, ThirteenthValue,\n        FourteenthValue;\n";
+    assert_stable_max_length_format(
+        &format!("namespace demo {{\n\n{rows}\n}}\n"),
+        &options,
+        &format!("namespace demo\n{{\n\n{split}\n}}\n"),
+    );
+    let indented = split.replace('\n', "\n    ").trim_end().to_string();
+    assert_stable_max_length_format(
+        &format!("extern \"C\" {{\n\n{rows}\n}}\n"),
+        &options,
+        &format!("extern \"C\" {{\n\n    {indented}\n\n}}\n"),
+    );
+}
