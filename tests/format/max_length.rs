@@ -3464,3 +3464,35 @@ fn max_code_length_splits_a_braceless_header_s_statement_to_its_body_level() {
         "void f()\n{\n    if (condition) throw\n        std::runtime_error(\"the limit was reached\");\n    if (condition) delete\n        first_item_value_name_and_more_names_here;\n    else delete\n        first_item_value_name_and_more_names_here_too_long;\n}\n",
     );
 }
+
+#[test]
+fn max_code_length_splits_an_assignment_on_a_condition_s_last_row_from_that_row() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_eq!(
+        format_exact(
+            "void f()\n{\n    while (ready) {\n        if (state.load_truncated_value || state.corrupt_tail_max_size_value) valid_end_offset = position(fp);\n    }\n}\n",
+            &options,
+        ),
+        "void f()\n{\n    while (ready) {\n        if (state.load_truncated_value\n                || state.corrupt_tail_max_size_value) valid_end_offset =\n                        position(fp);\n    }\n}\n",
+    );
+}
+
+#[test]
+fn max_code_length_continues_parts_after_an_anchored_part_from_its_column() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "template <typename T>\nstruct has_value<T, enable_if_t<sizeof(std::check(T())) != 0>> : std::true_type {};\n",
+        &options,
+        "template <typename T>\nstruct has_value<T,\n       enable_if_t<sizeof(std::check(T())) != 0>> :\n       std::true_type {};\n",
+    );
+}

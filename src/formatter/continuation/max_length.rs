@@ -386,7 +386,7 @@ impl FormatEngine<'_> {
             }) else {
                 break;
             };
-            let mut following_indent = continuation_indent_for_split(
+            let placed = continuation_indent_for_split(
                 tail,
                 &split,
                 &SplitIndentInputs {
@@ -396,8 +396,8 @@ impl FormatEngine<'_> {
                     held,
                     ..split_indent_inputs
                 },
-            )
-            .unwrap_or(next_indent);
+            );
+            let mut following_indent = placed.unwrap_or(next_indent);
             following_indent = advance_max_length_constructor_replay(
                 self.options,
                 &mut constructor_replay,
@@ -407,13 +407,26 @@ impl FormatEngine<'_> {
                 following_indent,
             );
             // A split past the closer of every paren the line opened
-            // continues the statement itself.
+            // continues the statement itself, at the value of an assignment
+            // the row being split holds as it stands on that row.
             if !constructor_replay.has_constructor_initializer()
                 && line_paren_imbalance(split.head.as_str()).0 > 0
                 && unmatched_open_paren_columns(&line[..line.len() - split.tail.len()]).is_empty()
             {
+                let row = next_indent.columns(self.options.indent_width);
+                let row_assignment_value = top_level_assignment_index(tail)
+                    .filter(|&assignment| assignment < split.head.len())
+                    .and_then(|_| assignment_value_indent(tail, row))
+                    .map(|value| {
+                        if value - row > self.options.max_continuation_indent {
+                            row + 2 * self.options.indent_width
+                        } else {
+                            value
+                        }
+                    });
                 following_indent = ContinuationIndent::Spaces(
                     return_value_indent(line, base_indent_width)
+                        .or(row_assignment_value)
                         .or_else(|| assignment_value_indent(line, base_indent_width))
                         .unwrap_or(base_indent_width),
                 );
@@ -437,6 +450,11 @@ impl FormatEngine<'_> {
                 &mut part_scan,
             );
             if !declarator_part && let Some(spaces) = self.split_part_indent(tail) {
+                // The parts no rule places go on from where the tree
+                // anchors the part before them.
+                if placed.is_none() && following_indent == next_indent {
+                    following_indent = ContinuationIndent::Spaces(spaces);
+                }
                 next_indent = ContinuationIndent::Spaces(spaces);
                 self.max_length_line.anchored_part = true;
             }
@@ -991,12 +1009,17 @@ fn continuation_indent_for_split(
     {
         return Some(ContinuationIndent::Spaces(block_spaces));
     }
+    let head = split.head.as_str();
+    // Only an assignment before the split holds what follows it.
     let line_assignment_value_indent = || {
         held.equals
-            .then(|| assignment_value_indent(line, base_indent_width))
+            .then(|| {
+                top_level_assignment_index(line)
+                    .filter(|&assignment| assignment < head.len())
+                    .and_then(|_| assignment_value_indent(line, base_indent_width))
+            })
             .flatten()
     };
-    let head = split.head.as_str();
     if splits_header_body_statement(split) {
         return Some(ContinuationIndent::Spaces(base_indent_width + indent_width));
     }
