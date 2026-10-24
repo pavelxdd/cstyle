@@ -125,6 +125,7 @@ impl FormatEngine<'_> {
         } else {
             self.push_formatted_line(trimmed, indent);
         }
+        self.preprocessor.last_output_was_preprocessor = false;
         // The call is a statement before what follows it.
         self.layout.command_state.observe_char(')');
         self.previous_was_newline = true;

@@ -24789,3 +24789,19 @@ fn a_split_row_in_the_parameters_of_operator_shift_stands_past_the_paren() {
     check(input, &args, expected);
     check(expected, &args, expected);
 }
+
+#[test]
+fn a_macro_headed_function_after_a_directive_takes_its_style_s_brace() {
+    let input = "#include \"task.h\"\n\nTEST_IMPL(name)\n{\n    int r;\n}\n";
+    check(
+        input,
+        &["--style=java"],
+        "#include \"task.h\"\n\nTEST_IMPL(name) {\n    int r;\n}\n",
+    );
+    check(
+        input,
+        &["--style=lisp"],
+        "#include \"task.h\"\n\nTEST_IMPL(name) {\n    int r; }\n",
+    );
+    check(input, &["--style=kr"], input);
+}
