@@ -3496,3 +3496,18 @@ fn max_code_length_continues_parts_after_an_anchored_part_from_its_column() {
         "template <typename T>\nstruct has_value<T,\n       enable_if_t<sizeof(std::check(T())) != 0>> :\n       std::true_type {};\n",
     );
 }
+
+#[test]
+fn max_code_length_continues_a_stream_row_after_a_split_from_the_row_it_follows() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "void helper()\n{\n    if (value != item.value) {\n        LOG_INFO(ERROR) << item.name << \" value:\\n\" << \"got \" << value << \"\\n\"\n                        << \"want \" << item.value;\n    }\n}\n",
+        &options,
+        "void helper()\n{\n    if (value != item.value) {\n        LOG_INFO(ERROR) << item.name << \" value:\\n\" << \"got \" <<\n                        value << \"\\n\"\n                        << \"want \" << item.value;\n    }\n}\n",
+    );
+}

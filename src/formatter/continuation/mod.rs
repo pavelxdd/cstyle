@@ -2247,6 +2247,12 @@ impl FormatEngine<'_> {
         // The output columns a case unindent moved stand past it again, as
         // the unindent moves this row too.
         let unindent = self.case_unindent_spaces();
+        if stream.operator_output_line == previous_line
+            && stream.line_has_positive_paren_delta
+            && let Some(spaces) = self.stream_row_after_closed_parens_indent(previous_line, base)
+        {
+            return Some(spaces + unindent);
+        }
         // A chain on a row of a header's condition runs in after the
         // condition closes there, at the header's body.
         let runs_in_after_condition = self.output.line_tokens(previous_line).is_some_and(|span| {
@@ -2269,6 +2275,44 @@ impl FormatEngine<'_> {
             return Some(base + self.options.indent_width * 2);
         }
         Some(stream.operator_output_column + unindent)
+    }
+
+    /// The column of a stream row after output line `previous_line`, which
+    /// closed parens opened on rows before it and so ended the continuation
+    /// it stood in: the argument column of a paren or bracket still open
+    /// from an earlier row, or else the chain's first operator outside
+    /// parens, or the value of an assignment before it.
+    fn stream_row_after_closed_parens_indent(
+        &self,
+        previous_line: usize,
+        base: usize,
+    ) -> Option<usize> {
+        let groups = &self.tree.groups;
+        let enclosing = groups.enclosing(self.output.pending_tokens()?.first);
+        if let Some(group) = enclosing.map(|group| groups.get(group))
+            && group.delimiter != Delimiter::Brace
+        {
+            let open_line = self
+                .output
+                .line_with_token(group.open)
+                .filter(|&line| line < previous_line)?;
+            let operand = next_code_token(&self.tree.tokens, group.open + 1)
+                .filter(|&operand| self.output.line_with_token(operand) == Some(open_line))?;
+            return self.token_column(operand).filter(|column| {
+                column.saturating_sub(base) <= self.options.max_continuation_indent
+            });
+        }
+        let head = self
+            .layout
+            .frame_stack
+            .first_stream_with_token(|token| groups.enclosing(token) == enclosing)?;
+        if let Some(spaces) = head.assignment_value_start_column {
+            return Some(spaces);
+        }
+        if head.operator_output_column.saturating_sub(base) > self.options.max_continuation_indent {
+            return Some(base + self.options.indent_width * 2);
+        }
+        Some(head.operator_output_column)
     }
 
     /// The level of a statement line here, with a case body's extra level

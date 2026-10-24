@@ -8,7 +8,7 @@ use crate::formatter::continuation::min_conditional_indent_spaces;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, token_text};
 use crate::formatter::state::frame::{
-    ColonRole, FrameStack, LogicalOperator, ParenRole, TernaryOwnerRole,
+    ColonRole, FrameStack, LogicalOperator, OperatorRow, ParenRole, TernaryOwnerRole,
 };
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::structure::blocks::{BlockKind, next_code_token};
@@ -32,6 +32,30 @@ use crate::source::lex::is_identifier_start;
 pub(crate) fn starts_operator_chain_continuation(line: &str) -> bool {
     let trimmed = line.trimmed_start();
     starts_with_chain_operator(trimmed) || starts_ternary_arm(trimmed)
+}
+
+/// Marks the context of output line `line`, with code `code` and its
+/// paren closes and unmatched open paren column, on its operator frames.
+fn mark_operator_frame_line_context(
+    frame_stack: &mut FrameStack,
+    line: usize,
+    code: &str,
+    (paren_closes, unmatched_open_paren): (usize, Option<usize>),
+) {
+    frame_stack.mark_stream_line_context(
+        line,
+        code.ends_with("<<") || code.ends_with(">>"),
+        code.contains_from_first_byte("{ {"),
+        unmatched_open_paren.is_some(),
+        code.ends_with(')'),
+        paren_closes > 0,
+    );
+    frame_stack.mark_logical_line_context(
+        line,
+        unmatched_open_paren,
+        code.ends_with(')'),
+        paren_closes > 0,
+    );
 }
 
 pub(crate) fn clear_operator_chain_frames(frame_stack: &mut FrameStack) {
@@ -479,20 +503,12 @@ impl FormatEngine<'_> {
         output_line_index: usize,
         code: &str,
     ) {
-        let (paren_closes, unmatched_open_paren) = self.paren_closes_and_open_column_of(code);
-        self.layout.frame_stack.mark_stream_line_context(
+        let paren_context = self.paren_closes_and_open_column_of(code);
+        mark_operator_frame_line_context(
+            &mut self.layout.frame_stack,
             output_line_index,
-            code.ends_with("<<") || code.ends_with(">>"),
-            code.contains_from_first_byte("{ {"),
-            unmatched_open_paren.is_some(),
-            code.ends_with(')'),
-            paren_closes > 0,
-        );
-        self.layout.frame_stack.mark_logical_line_context(
-            output_line_index,
-            unmatched_open_paren,
-            code.ends_with(')'),
-            paren_closes > 0,
+            code,
+            paren_context,
         );
         if self.layout.line_state.ternary_colon || code.trimmed_start().starts_with(':') {
             self.layout
@@ -503,6 +519,48 @@ impl FormatEngine<'_> {
             self.layout
                 .frame_stack
                 .mark_line_ended_open_ternary(output_line_index);
+        }
+    }
+
+    /// Moves the operator frames of output line `line`, published as
+    /// several rows, to the rows their operators stand on, and marks each
+    /// row's context on the frames it holds.
+    pub(crate) fn follow_operator_frames_to_rows(&mut self, line: usize) {
+        if line + 1 >= self.output.len() {
+            return;
+        }
+        let tokens = self.layout.frame_stack.operator_tokens_on(line);
+        if tokens.is_empty() {
+            return;
+        }
+        let rows: Vec<OperatorRow> = tokens
+            .into_iter()
+            .filter_map(|token| {
+                let row = self
+                    .output
+                    .line_with_token(token)
+                    .filter(|&row| row > line)?;
+                Some(OperatorRow {
+                    token,
+                    row,
+                    column: self.token_column(token)?,
+                    indent_spaces: leading_visual_width(&self.output[row], self.options.tab_width),
+                })
+            })
+            .collect();
+        self.layout
+            .frame_stack
+            .move_operator_frames_to_rows(line, &rows);
+        for row in line..self.output.len() {
+            let text = &self.output[row];
+            let code = text[..trailing_comment_split_limit(text)].trimmed_end();
+            let paren_context = self.paren_closes_and_open_column_of(code);
+            mark_operator_frame_line_context(
+                &mut self.layout.frame_stack,
+                row,
+                code,
+                paren_context,
+            );
         }
     }
 

@@ -143,6 +143,7 @@ pub(crate) struct DeclarationFrame {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct LogicalFrame {
     pub(crate) operator: LogicalOperator,
+    pub(crate) operator_token: Option<usize>,
     pub(crate) operator_output_column: usize,
     pub(crate) operator_output_line: usize,
     pub(crate) line_indent_spaces: usize,
@@ -159,8 +160,29 @@ pub(crate) enum LogicalOperator {
     Or,
 }
 
+/// The row a line published as several rows put an operator token on,
+/// with the operator's column and the row's indent.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) struct OperatorRow {
+    pub(crate) token: usize,
+    pub(crate) row: usize,
+    pub(crate) column: usize,
+    pub(crate) indent_spaces: usize,
+}
+
+impl OperatorRow {
+    /// `column`, taken on the unsplit line where the operator stood at
+    /// `operator_column`, on this row, when it falls on the row.
+    fn move_column(self, operator_column: usize, column: usize) -> Option<usize> {
+        (column + self.column)
+            .checked_sub(operator_column)
+            .filter(|&moved| moved >= self.indent_spaces)
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct StreamFrame {
+    pub(crate) operator_token: Option<usize>,
     pub(crate) operator_output_column: usize,
     pub(crate) operator_output_line: usize,
     pub(crate) line_indent_spaces: usize,
@@ -928,6 +950,16 @@ impl FrameStack {
         &self.stream_frames[..end]
     }
 
+    /// The first stream frame whose operator token `holds` accepts.
+    pub(crate) fn first_stream_with_token(
+        &self,
+        holds: impl Fn(usize) -> bool,
+    ) -> Option<&StreamFrame> {
+        self.stream_frames
+            .iter()
+            .find(|frame| frame.operator_token.is_some_and(&holds))
+    }
+
     pub(crate) fn stream_before_output_line(&self, line: usize) -> Option<&StreamFrame> {
         self.stream_frames_before(line)
             .iter()
@@ -970,6 +1002,105 @@ impl FrameStack {
                 ));
             }
             frame.line_indent_spaces = indent_spaces;
+        }
+    }
+
+    /// The operator tokens of the stream and logical frames on output line
+    /// `line`, in order.
+    pub(crate) fn operator_tokens_on(&self, line: usize) -> Vec<usize> {
+        let streams = self
+            .stream_frames_on(line)
+            .unwrap_or(0..self.stream_frames.len());
+        let mut tokens: Vec<usize> = self.stream_frames[streams]
+            .iter()
+            .filter(|frame| frame.operator_output_line == line)
+            .filter_map(|frame| frame.operator_token)
+            .chain(
+                self.logical_frames[self.logical_frames_on(line)]
+                    .iter()
+                    .filter(|frame| frame.operator_output_line == line)
+                    .filter_map(|frame| frame.operator_token),
+            )
+            .collect();
+        tokens.sort_unstable();
+        tokens
+    }
+
+    /// Moves the stream and logical frames on output line `line` whose
+    /// operators `rows` places on later rows to those rows. A column on
+    /// the operator's row moves with it; one on an earlier row is dropped,
+    /// as the row it is on has no operator of the frame. The rows' line
+    /// context is left to be marked again.
+    pub(crate) fn move_operator_frames_to_rows(&mut self, line: usize, rows: &[OperatorRow]) {
+        let place = |token: Option<usize>| {
+            let token = token?;
+            rows.binary_search_by_key(&token, |row| row.token)
+                .ok()
+                .map(|index| rows[index])
+        };
+        let streams = self
+            .stream_frames_on(line)
+            .unwrap_or(0..self.stream_frames.len());
+        let mut last_row = line;
+        let mut unordered = false;
+        let mut moved_anchor = None;
+        for frame in self.stream_frames[streams]
+            .iter_mut()
+            .filter(|frame| frame.operator_output_line == line)
+        {
+            let Some(place) = place(frame.operator_token) else {
+                unordered |= last_row > line;
+                continue;
+            };
+            unordered |= place.row < last_row;
+            last_row = place.row;
+            let old_column = frame.operator_output_column;
+            if frame.chain_anchor_column == old_column {
+                moved_anchor = Some((old_column, place.column));
+            }
+            if let Some((from, to)) = moved_anchor
+                && frame.chain_anchor_column == from
+            {
+                frame.chain_anchor_column = to;
+            }
+            frame.assignment_value_start_column = frame
+                .assignment_value_start_column
+                .and_then(|column| place.move_column(old_column, column));
+            frame.operator_output_line = place.row;
+            frame.operator_output_column = place.column;
+            frame.line_indent_spaces = place.indent_spaces;
+        }
+        self.stream_frames_unordered |= unordered;
+        let mut last_row = line;
+        let mut unordered = false;
+        let mut dropped_return = false;
+        let logicals = self.logical_frames_on(line);
+        for frame in self.logical_frames[logicals]
+            .iter_mut()
+            .filter(|frame| frame.operator_output_line == line)
+        {
+            let Some(place) = place(frame.operator_token) else {
+                unordered |= last_row > line;
+                continue;
+            };
+            unordered |= place.row < last_row;
+            last_row = place.row;
+            let old_column = frame.operator_output_column;
+            if let Some(column) = frame.return_value_column {
+                frame.return_value_column = place.move_column(old_column, column);
+                dropped_return |= frame.return_value_column.is_none();
+            }
+            frame.operator_output_line = place.row;
+            frame.operator_output_column = place.column;
+            frame.line_indent_spaces = place.indent_spaces;
+            frame.operator_starts_output_line = place.column == place.indent_spaces;
+            frame.line_unmatched_open_paren_column = None;
+        }
+        self.logical_frames_unordered |= unordered;
+        if dropped_return {
+            let frames = &self.logical_frames;
+            self.logical_return_frames
+                .retain(|&index| frames[index].return_value_column.is_some());
         }
     }
 
@@ -1564,6 +1695,7 @@ mod tests {
     fn stream_frame_tracks_operator_anchor_and_line_context() {
         let mut stack = FrameStack::default();
         stack.push_stream(StreamFrame {
+            operator_token: None,
             operator_output_column: 8,
             operator_output_line: 3,
             line_indent_spaces: 4,

@@ -248,6 +248,7 @@ impl FormatEngine<'_> {
                 output_line_index + std::mem::take(&mut self.layout.blank_lines_before_pending);
             self.reset_continuation_after_output_line(line, output_line_index);
             self.reset_continuation_after_directive_rows(output_line_index);
+            self.follow_operator_frames_to_rows(output_line_index);
             // A closing brace line that ends its declaration, as `} name;`,
             // used the column it was given.
             if code.trimmed_start().starts_with('}')

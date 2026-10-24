@@ -1770,6 +1770,7 @@ impl FormatEngine<'_> {
         };
         self.layout.frame_stack.push_logical(LogicalFrame {
             operator: logical_operator,
+            operator_token: self.current.active_token(),
             operator_output_column,
             operator_output_line: self.output.len(),
             line_indent_spaces,
@@ -1822,6 +1823,7 @@ impl FormatEngine<'_> {
             });
         let after_multiline_braced_operand = self.stream_line_follows_multiline_braced_operand();
         self.layout.frame_stack.push_stream(StreamFrame {
+            operator_token: self.current.active_token(),
             operator_output_column,
             operator_output_line: self.output.len(),
             line_indent_spaces,

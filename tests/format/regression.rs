@@ -25069,3 +25069,13 @@ fn a_subscript_a_shift_leaves_open_aligns_its_next_row_past_the_bracket() {
         "void f()\n{\n    value << items[index\n                   + 1];\n    std::cout << items[index\n                       + 1];\n    size_t padding = total >> shifts[static_cast<int>\n                                     (item.align())];\n}\n",
     );
 }
+
+#[test]
+fn a_stream_row_after_a_row_closing_earlier_parens_continues_from_what_encloses_it() {
+    // The closed parens end the continuation the row stood in: the next
+    // row takes a paren still open, or the statement's chain.
+    let input = "void helper()\n{\n    LOG_INFO(ERROR) << \"parsing '\" << trunc(\n    *pattern) << \"': \"\n    << status.Text();\n    result = first << trunc(\n    value) << \"x\"\n    << status;\n    stream << \"parsing '\" << call(trunc(first,\n    value)) << \"': \"\n    << status.Text();\n    stream << \"parsing '\" << call(trunc(first,\n    value) << \"': \"\n    << status.Text());\n    helper(first << trunc(\n    value) << \"x\"\n    << status);\n}\n";
+    let expected = "void helper()\n{\n    LOG_INFO(ERROR) << \"parsing '\" << trunc(\n                        *pattern) << \"': \"\n                    << status.Text();\n    result = first << trunc(\n                 value) << \"x\"\n             << status;\n    stream << \"parsing '\" << call(trunc(first,\n                                        value)) << \"': \"\n           << status.Text();\n    stream << \"parsing '\" << call(trunc(first,\n                                        value) << \"': \"\n                                  << status.Text());\n    helper(first << trunc(\n               value) << \"x\"\n           << status);\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
