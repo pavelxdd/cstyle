@@ -1156,11 +1156,9 @@ impl FormatEngine<'_> {
         };
         self.tree
             .previous_code_token(open)
-            .is_some_and(|before| matches!(tokens[before], Token::Symbol(']')))
-            && self
-                .output
-                .line_with_token(open)
-                .is_some_and(|line| self.output.trimmed(line).starts_with("[["))
+            .filter(|&before| matches!(tokens[before], Token::Symbol(']')))
+            .and_then(|attribute| self.output.line_with_token(attribute))
+            .is_some_and(|line| self.output.trimmed(line).starts_with("[["))
     }
 
     /// Whether the closing header `word` joins the `}` before it; without a

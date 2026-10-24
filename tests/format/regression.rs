@@ -24419,4 +24419,20 @@ fn an_else_after_an_attributed_body_row_starts_at_its_if() {
     let args = ["--style=kr", "--break-one-line-headers"];
     check(input, &args, expected);
     check(expected, &args, expected);
+    // A brace broken off the attribute stands with it.
+    let input = "void f(int v)\n{\n    if (v) [[likely]] {\n        go();\n    } else [[unlikely]] {\n        stop();\n    }\n    while (v) [[likely]] {\n        go();\n    }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=allman",
+            "void f(int v)\n{\n    if (v)\n        [[likely]]\n        {\n            go();\n        }\n    else\n        [[unlikely]]\n        {\n            stop();\n        }\n    while (v)\n        [[likely]]\n        {\n            go();\n        }\n}\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void f(int v)\n    {\n    if (v)\n        [[likely]]\n            {\n            go();\n            }\n    else\n        [[unlikely]]\n            {\n            stop();\n            }\n    while (v)\n        [[likely]]\n            {\n            go();\n            }\n    }\n",
+        ),
+    ] {
+        let args = [style, "--break-one-line-headers"];
+        check(input, &args, expected);
+        check(expected, &args, expected);
+    }
 }
