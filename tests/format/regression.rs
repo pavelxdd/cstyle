@@ -24391,3 +24391,20 @@ fn max_code_length_finds_no_split_inside_template_arguments_continued_across_lin
     check(input, &["--max-code-length=50"], expected);
     check(expected, &["--max-code-length=50"], expected);
 }
+
+#[test]
+fn an_explicit_conditional_indent_holds_under_the_linux_style() {
+    // The style only sets a default minimum; an explicit one replaces it,
+    // before or after the style.
+    let input = "void f(void)\n{\n    if(alpha &&\n       beta)\n        go();\n}\n";
+    let linux = "void f(void)\n{\n    if(alpha &&\n       beta)\n        go();\n}\n";
+    let two = "void f(void)\n{\n    if(alpha &&\n            beta)\n        go();\n}\n";
+    check(input, &["--style=linux"], linux);
+    for args in [
+        &["--style=linux", "--min-conditional-indent=2"][..],
+        &["--min-conditional-indent=2", "--style=linux"][..],
+    ] {
+        check(input, args, two);
+        check(two, args, two);
+    }
+}
