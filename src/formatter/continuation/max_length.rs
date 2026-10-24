@@ -795,6 +795,17 @@ impl FormatEngine<'_> {
             })
     }
 
+    /// Whether the row being built starts inside parens an earlier row
+    /// opened.
+    fn pending_row_in_earlier_parens(&self) -> bool {
+        self.output.pending_tokens().is_some_and(|span| {
+            self.tree.groups.enclosing(span.first).is_some_and(|group| {
+                let group = self.tree.groups.get(group);
+                group.delimiter == Delimiter::Paren && group.open < span.first
+            })
+        })
+    }
+
     /// Splits a row led by a block comment with code after it.
     pub(crate) fn split_comment_led_line(&self, line: &str) -> Option<(String, String, usize)> {
         let line_start = line.trimmed_start();
@@ -861,11 +872,12 @@ impl FormatEngine<'_> {
             lead_width + step * (1 + usize::from(stacked_assignment))
         } else {
             // A row in parens opened before it goes on at its own column.
-            let fallback = if line_paren_imbalance(&blanked).0 > 0 {
-                lead_width
-            } else {
-                lead_width + step
-            };
+            let fallback =
+                if line_paren_imbalance(&blanked).0 > 0 || self.pending_row_in_earlier_parens() {
+                    lead_width
+                } else {
+                    lead_width + step
+                };
             blanked_split
                 .and_then(|split| continuation_indent_for_split(&blanked, &split, &inputs))
                 .map_or(fallback, |indent| indent.columns(self.options.indent_width))
