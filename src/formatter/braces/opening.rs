@@ -4106,12 +4106,7 @@ impl FormatEngine<'_> {
         if brace_type == BraceType::Interface
             && !self.preprocessor.last_output_was_preprocessor
             && self.current_is_blank()
-            && self
-                .current
-                .active_token()
-                .and_then(|brace| self.tree.previous_code_token(brace))
-                .and_then(|head| self.output.line_with_token(head))
-                .is_some_and(|line| line + 1 == self.output.len())
+            && self.brace_head_ends_last_output_line()
         {
             return self.style_attaches_opening_brace(brace_type, None);
         }
@@ -4186,6 +4181,9 @@ impl FormatEngine<'_> {
             if comment_start == last.len() {
                 return trimmed.ends_with(')')
                     || is_lambda_body_header(trimmed)
+                    // A closure's head may list no parameters.
+                    || self.pushed_brace_kind() == Some(BlockKind::Lambda)
+                        && self.brace_head_ends_last_output_line()
                     || objc_method_header
                     || after_initializer_list;
             }
@@ -4206,6 +4204,16 @@ impl FormatEngine<'_> {
             }
             is_single_trailing_block_comment(comment) || comment.starts_with("//")
         })
+    }
+
+    /// Whether the code before the brace being pushed ends the last output
+    /// line.
+    fn brace_head_ends_last_output_line(&self) -> bool {
+        self.current
+            .active_token()
+            .and_then(|brace| self.tree.previous_code_token(brace))
+            .and_then(|head| self.output.line_with_token(head))
+            .is_some_and(|line| line + 1 == self.output.len())
     }
 
     fn should_attach_opening_brace(&self, brace_type: BraceType, next: Option<&Token>) -> bool {

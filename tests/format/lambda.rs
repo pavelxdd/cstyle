@@ -1502,3 +1502,23 @@ fn a_lambda_in_a_braceless_body_opens_its_body_from_the_line_its_statement_start
         assert_eq!(format_exact(input, &options), expected, "{style}");
     }
 }
+
+#[test]
+fn a_closure_body_brace_below_a_head_without_parameters_attaches_in_attach_styles() {
+    // A lambda or a block literal takes its style's brace whether or not
+    // its head lists parameters, wherever the source placed the brace.
+    let attached = "void load()\n{\n    auto f = [] {\n        done();\n    };\n    auto g = [&] mutable {\n        done();\n    };\n    call(queue, [] {\n        done();\n    });\n    dispatch_async(queue, ^ {\n        done();\n    });\n    block = ^ {\n        done();\n    };\n}\n";
+    let broken = attached.replace(" {\n        done", "\n    {\n        done");
+    for style in [
+        "--style=kr",
+        "--style=java",
+        "--style=stroustrup",
+        "--style=1tbs",
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_owned()]).expect("valid options");
+        let expected = format_exact(attached, &options);
+        assert_eq!(format_exact(&broken, &options), expected, "{style}");
+        assert!(expected.contains("auto f = [] {\n"), "{style}\n{expected}");
+    }
+}
