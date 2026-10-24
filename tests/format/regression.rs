@@ -25130,3 +25130,11 @@ fn an_argument_row_after_a_run_in_header_in_a_lambda_body_stands_as_in_a_functio
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
+
+#[test]
+fn an_argument_row_past_the_maximum_after_a_file_scope_initializer_row_stands_two_levels_past_it() {
+    let input = "Table::Table(const KeyComparator& comparator)\n    : comparator_(comparator), refs_(0), table_(comparator_,\n        &arena_) {}\nTable::Table(const KeyComparator& comparator)\n    : comparator_(comparator), refs_(0), table_(comparator_,\n        &arena_)\n{\n}\n";
+    let expected = "Table::Table(const KeyComparator& comparator)\n    : comparator_(comparator), refs_(0), table_(comparator_,\n            &arena_) {}\nTable::Table(const KeyComparator& comparator)\n    : comparator_(comparator), refs_(0), table_(comparator_,\n            &arena_)\n{\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}

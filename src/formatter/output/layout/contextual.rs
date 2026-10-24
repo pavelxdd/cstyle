@@ -3045,7 +3045,10 @@ impl FormatEngine<'_> {
             {
                 let open = visual_width_from(&previous_code[..open], 0, self.options.tab_width);
                 if open > self.options.max_continuation_indent {
-                    layout.exact_indent_spaces = Some(self.options.indent_width * 2);
+                    layout.exact_indent_spaces = Some(
+                        leading_visual_width(previous, self.options.tab_width)
+                            + self.options.indent_width * 2,
+                    );
                 }
             }
         }
