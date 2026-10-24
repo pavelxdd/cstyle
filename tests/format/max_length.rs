@@ -3632,3 +3632,16 @@ fn max_code_length_splits_a_comment_led_argument_row_at_its_own_column() {
     let expected = "void helper()\n{\n    {\n        Handle handle = ::OpenItem(\n                            name.c_str(), desired_access, share_mode,\n                            /*attributes=*/nullptr, OPEN_EXISTING,\n                            ITEM_ATTRIBUTE_NORMAL,\n                            /*template_item=*/nullptr);\n    }\n}\n";
     assert_stable_max_length_format(source, &options, expected);
 }
+
+#[test]
+fn max_code_length_continues_a_subscript_past_the_maximum_at_the_paren_around_it() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    let source = "void helper()\n{\n    {\n        uint32_t sum = checksum::Value(&buffer_.items_[header_offset + 6], 1 + len);\n    }\n}\n";
+    let expected = "void helper()\n{\n    {\n        uint32_t sum = checksum::Value(&buffer_.items_[header_offset\n                                       + 6], 1 + len);\n    }\n}\n";
+    assert_stable_max_length_format(source, &options, expected);
+}
