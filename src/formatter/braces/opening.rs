@@ -3382,7 +3382,7 @@ impl FormatEngine<'_> {
         let runs_into_comment_row = matches!(brace_type, BraceType::Array | BraceType::Initializer)
             && matches!(next, Some(Token::Comment(CommentKind::Block, comment)) if !comment.contains('\n'))
             && !runs_list_rows_in(self.options.brace_style)
-            && !(self.comments.next_comment_ends_line && !self.brace_opens_list_element());
+            && (!self.comments.next_comment_ends_line || self.brace_opens_list_element());
         // Blocks opened back to back share their lines as one block.
         let opens_fused_blocks = self
             .tree
