@@ -3606,3 +3606,16 @@ fn max_code_length_keeps_a_new_call_argument_row_in_a_lambda_body_at_its_paren()
     let source = "void helper()\n{\n    if (ready) {\n        call_once(flag, [](Prog* prog) {\n            prog->dfa_longest_ = new DFA(prog, kLongestMatch,\n                                         prog->dfa_mem_ / 2);\n        }, this);\n    }\n}\n";
     assert_stable_max_length_format(source, &options, source);
 }
+
+#[test]
+fn max_code_length_splits_a_stream_call_argument_in_a_lambda_body_as_in_a_function_body() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    let source = "void helper() {\n  call(flag, [](const Item* it) {\n    if (it->value == NULL) {\n      if (it->ready())\n        report(failure) << \"Failed to compile value '\" << brief(*it->pattern_)\n                        << \"'\";\n      next();\n    }\n  }, this);\n}\n";
+    let expected = "void helper()\n{\n    call(flag, [](const Item* it) {\n        if (it->value == NULL) {\n            if (it->ready())\n                report(failure) << \"Failed to compile value '\" << brief(\n                                    *it->pattern_)\n                                << \"'\";\n            next();\n        }\n    }, this);\n}\n";
+    assert_stable_max_length_format(source, &options, expected);
+}

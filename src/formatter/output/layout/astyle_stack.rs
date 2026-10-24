@@ -660,12 +660,12 @@ impl FormatEngine<'_> {
     fn replayed_stack_indent(&self, first: usize, closes_stacked_brace: bool) -> Option<usize> {
         let tokens = &self.tree.tokens;
         let start = self.stack_statement_start(first)?;
-        // Lambda bodies continue their statements past astyle's stack.
+        // Bodies of functions whose heads hold braces continue their
+        // statements past astyle's stack.
         if let Some(group) = self.tree.groups.enclosing(start)
             && self.tree.groups.ancestors(group).any(|id| {
-                self.tree.blocks.kind(id) == Some(BlockKind::Lambda)
-                    || (self.tree.blocks.kind(id) == Some(BlockKind::FunctionBody)
-                        && self.header_holds_braces(self.tree.groups.get(id).open))
+                self.tree.blocks.kind(id) == Some(BlockKind::FunctionBody)
+                    && self.header_holds_braces(self.tree.groups.get(id).open)
             })
         {
             return None;

@@ -25122,3 +25122,11 @@ fn a_stream_row_after_an_operand_row_of_a_trailing_shift_stands_at_the_chain() {
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
+
+#[test]
+fn an_argument_row_after_a_run_in_header_in_a_lambda_body_stands_as_in_a_function_body() {
+    let input = "void helper()\n{\n    auto write = [=](int value) {\n        if (count > 0) value = fill(value, count,\n             Item(0));\n    };\n    call([=](int value) {\n        if (count > 0) value = fill(value, count,\n             Item(0));\n    });\n}\n";
+    let expected = "void helper()\n{\n    auto write = [=](int value) {\n        if (count > 0) value = fill(value, count,\n                                        Item(0));\n    };\n    call([=](int value) {\n        if (count > 0) value = fill(value, count,\n                                        Item(0));\n    });\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
