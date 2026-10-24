@@ -394,10 +394,11 @@ pub(crate) fn code_opens_class_base_clause(before: &str) -> bool {
     if signature_ends_with_parameter_list(before) {
         return false;
     }
+    // An enumeration's base continues its head as a class's bases do.
     let statement = crate::formatter::text::line_scan::statement_tail(before).trimmed_start();
     statement
         .split(|ch: char| !is_identifier_continue(ch))
-        .any(|word| matches!(word, "class" | "struct" | "union" | "interface"))
+        .any(|word| matches!(word, "class" | "struct" | "union" | "interface" | "enum"))
 }
 
 pub(crate) fn template_base_colon_indent_spaces(

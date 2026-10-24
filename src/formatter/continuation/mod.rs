@@ -1936,8 +1936,14 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn enum_member_missing_comma_indent_spaces(&self, previous: &str) -> Option<usize> {
-        // The member before is assigned.
-        if !previous.contains('=') {
+        // The member before is assigned, and the row stands in the body.
+        if !previous.contains('=')
+            || !self.output.pending_tokens().is_some_and(|span| {
+                self.tree.groups.enclosing(span.first).is_some_and(|group| {
+                    self.tree.groups.get(group).delimiter == Delimiter::Brace
+                })
+            })
+        {
             return None;
         }
         let previous_content = previous.trimmed_start();

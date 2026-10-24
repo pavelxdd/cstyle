@@ -1996,6 +1996,42 @@ fn enum_member_after_missing_comma_continues_previous_member() {
 }
 
 #[test]
+fn enum_base_row_after_an_annotated_head_continues_the_head() {
+    // An `=` in the head's attribute assigns no member: the base's row
+    // continues the head, before the body opens.
+    let source = fixture!(
+        "enum class [[=helper::marker]] Item :",
+        "    signed char { value = 1 };",
+    );
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=kr".to_owned()]).expect("valid options");
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn enum_base_row_after_an_enum_head_continues_the_head() {
+    // A base on its own row continues the head as a class's does.
+    let source = fixture!(
+        "enum Mode",
+        "    : unsigned char {",
+        "    first = 1",
+        "};",
+        "void helper()",
+        "{",
+        "    enum Mode",
+        "        : unsigned char {",
+        "        first = 1",
+        "    };",
+        "}",
+    );
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=kr".to_owned()]).expect("valid options");
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
 fn enum_member_after_multiline_call_member_starts_at_body_indent() {
     let actual = format_exact(
         fixture!(
