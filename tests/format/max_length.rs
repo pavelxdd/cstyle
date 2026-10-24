@@ -3374,3 +3374,33 @@ fn an_argument_row_a_comment_leads_splits_at_the_column_of_its_arguments() {
         "void f()\n{\n    handle = open_item(path, ACCESS_READ, SHARE_READ,\n                       /*attributes=*/nullptr, OPEN_EXISTING, NORMAL_ITEM,\n                       nullptr);\n}\n",
     );
 }
+
+#[test]
+fn max_code_length_aligns_a_stream_row_at_the_first_shift_past_a_closed_call() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "void f()\n{\n    CHECK_TRUE(result != NULL) << \" \" << items[i].value << \" \" << status.text();\n    REPORT_ITEM() << \"a message too long to share its row with the call\";\n    helper(first) << second_value << third_value << fourth_value_name;\n    item.call(x).log() << second_value << third_value << fourth_value;\n}\n",
+        &options,
+        "void f()\n{\n    CHECK_TRUE(result != NULL) << \" \" << items[i].value << \" \"\n                               << status.text();\n    REPORT_ITEM() <<\n                  \"a message too long to share its row with the call\";\n    helper(first) << second_value << third_value <<\n                  fourth_value_name;\n    item.call(x).log() << second_value << third_value <<\n                       fourth_value;\n}\n",
+    );
+}
+
+#[test]
+fn max_code_length_aligns_a_stream_row_a_level_past_the_shift_after_a_braceless_header() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "void f()\n{\n    if (ready) REPORT(ERROR) << value.name << \" on \" << value.text << \": want \";\n    if (ready)\n        helper();\n    else stream << first_value << second_value << third_value << fourth_one;\n}\n",
+        &options,
+        "void f()\n{\n    if (ready) REPORT(ERROR) << value.name << \" on \" <<\n                                 value.text << \": want \";\n    if (ready)\n        helper();\n    else stream << first_value << second_value << third_value <<\n                    fourth_one;\n}\n",
+    );
+}

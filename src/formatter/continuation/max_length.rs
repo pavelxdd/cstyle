@@ -22,9 +22,9 @@ use crate::formatter::syntax::{
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
-    advance_quoted_literal, after_leading_comments, last_unmatched_open_delimiter,
-    line_paren_imbalance, trailing_comment_split_limit, unmatched_open_bracket_column,
-    unmatched_open_paren_column, unmatched_open_paren_columns,
+    advance_quoted_literal, after_leading_comments, has_top_level_char,
+    last_unmatched_open_delimiter, line_paren_imbalance, trailing_comment_split_limit,
+    unmatched_open_bracket_column, unmatched_open_paren_column, unmatched_open_paren_columns,
 };
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::operators::{
@@ -1122,9 +1122,12 @@ fn continuation_indent_for_split(
         return Some(configured_indent);
     }
 
-    if split.kind == SplitKind::Whitespace
+    let splits_at_shift = split.head.trimmed_end().ends_with("<<")
+        || split.tail.starts_with("<<") && !split.tail.starts_with("<<=");
+    if (split.kind == SplitKind::Whitespace || splits_at_shift)
         && held.less
-        && let Some(spaces) = stream_chain_continuation_indent(line, base_indent_width)
+        && let Some(spaces) =
+            stream_chain_continuation_indent(line, base_indent_width, indent_width)
     {
         return Some(ContinuationIndent::Spaces(
             if current_indent_width > base_indent_width {
@@ -1310,7 +1313,15 @@ fn nested_new_continuation_indent(
     )
 }
 
-fn stream_chain_continuation_indent(line: &str, base_indent_width: usize) -> Option<usize> {
+/// The column a stream chain's rows align at: its first shift outside
+/// parens, a level past it when the line runs the statement in after a
+/// braceless header. An assignment, a condition or a `return` before the
+/// shift aligns the rows by its own rule.
+fn stream_chain_continuation_indent(
+    line: &str,
+    base_indent_width: usize,
+    indent_width: usize,
+) -> Option<usize> {
     // The `<<` naming an operator shifts nothing.
     let names_operator = |index: usize| {
         line[..index]
@@ -1323,12 +1334,34 @@ fn stream_chain_continuation_indent(line: &str, base_indent_width: usize) -> Opt
         .find(|&index| !names_operator(index))?;
     let operand = line[..shift].trimmed_end();
     if operand.is_empty()
-        || operand.contains_any_byte(b"(=?")
+        || !unmatched_open_paren_columns(operand).is_empty()
+        || has_top_level_char(operand, '=')
+        || has_top_level_char(operand, '?')
         || operand.trimmed_start().starts_with("return")
     {
         return None;
     }
-    Some(base_indent_width + shift)
+    Some(base_indent_width + shift + usize::from(runs_header_body_in(operand)) * indent_width)
+}
+
+/// Whether `text` opens with a braceless control header whose body runs
+/// on after it, as `if (ready) log() <<` or `else stream <<`.
+fn runs_header_body_in(text: &str) -> bool {
+    let text = text.trimmed_start();
+    let word_end = text
+        .find(|ch: char| !is_identifier_continue(ch))
+        .unwrap_or(text.len());
+    let rest = &text[word_end..];
+    match &text[..word_end] {
+        "else" | "do" => !rest.trimmed().is_empty(),
+        "if" | "while" | "for" => {
+            let rest = rest.trimmed_start();
+            rest.starts_with('(')
+                && matching_close_paren(rest, 0)
+                    .is_some_and(|close| !rest[close + 1..].trimmed().is_empty())
+        }
+        _ => false,
+    }
 }
 
 fn return_value_indent(line: &str, base_indent_width: usize) -> Option<usize> {
