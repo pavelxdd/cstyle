@@ -698,6 +698,17 @@ impl FormatEngine<'_> {
                         .map_or("", |(name, _)| name.trimmed()),
                 )
             });
+        // A logical chain inside the parens ends with them.
+        if let Some(close) = self.current.active_token()
+            && let Some(group) = self.tree.groups.closed_at(close)
+            && self
+                .layout
+                .frame_stack
+                .last_logical_token()
+                .is_some_and(|token| token > self.tree.groups.get(group).open)
+        {
+            self.layout.continuation_indent.logical_chain_indent_spaces = None;
+        }
         self.layout.nesting.exit_paren();
         self.layout.frame_stack.pop_delimiter(self.output.len());
         self.layout.indentation.exit_paren();

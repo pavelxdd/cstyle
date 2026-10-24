@@ -1735,7 +1735,15 @@ impl FormatEngine<'_> {
             (operator, frame.operator),
             ("&&", LogicalOperator::And) | ("||", LogicalOperator::Or)
         );
-        (matches_operator && frame.operator_starts_output_line).then_some(frame.line_indent_spaces)
+        // A chain inside parens closed since goes on with none outside them.
+        let same_level = frame
+            .operator_token
+            .zip(self.current.active_token())
+            .is_none_or(|(chained, current)| {
+                self.tree.groups.enclosing(chained) == self.tree.groups.enclosing(current)
+            });
+        (matches_operator && frame.operator_starts_output_line && same_level)
+            .then_some(frame.line_indent_spaces)
     }
 
     fn declaration_continuation_indent_spaces(&self) -> Option<usize> {
@@ -2373,6 +2381,17 @@ impl FormatEngine<'_> {
         if self.current_line_indent_spaces()
             <= self.continuation_base_indent() * self.options.indent_width
         {
+            return false;
+        }
+        // A chain inside parens the line closes ends with them.
+        if self.current.tokens().is_some_and(|span| {
+            let groups = &self.tree.groups;
+            groups.enclosing(span.first).is_some_and(|group| {
+                let group = groups.get(group);
+                group.delimiter != Delimiter::Brace
+                    && group.close.is_some_and(|close| close <= span.last)
+            })
+        }) {
             return false;
         }
         starts_with_chain_operator(trimmed)

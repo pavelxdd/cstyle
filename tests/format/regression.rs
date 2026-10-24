@@ -25138,3 +25138,19 @@ fn an_argument_row_past_the_maximum_after_a_file_scope_initializer_row_stands_tw
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
+
+#[test]
+fn a_shift_row_after_parens_closing_a_logical_chain_continues_the_statement() {
+    let input = "void helper()\n{\n    check(value.size() >= 2\n          || value[1])\n        << describe(value);\n    stream << check(value.size() >= 2\n                    || value[1])\n        << describe(value);\n    VERIFY(value.size() >= 2\n           && value[1] == 0)\n        << describe(value);\n}\n";
+    let expected = "void helper()\n{\n    check(value.size() >= 2\n          || value[1])\n            << describe(value);\n    stream << check(value.size() >= 2\n                    || value[1])\n           << describe(value);\n    VERIFY(value.size() >= 2\n           && value[1] == 0)\n            << describe(value);\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn a_logical_row_after_parens_closing_a_logical_chain_stands_as_after_any_closed_call() {
+    let input = "void helper()\n{\n    check(value.size() >= 2\n          && value[1] == 0)\n    && describe(value);\n    check(value.size() >= 2,\n          value[1] == 0)\n    && describe(value);\n    if (ready)\n        check(value.size() >= 2\n              && value[1] == 0)\n        && describe(value);\n}\n";
+    let expected = "void helper()\n{\n    check(value.size() >= 2\n          && value[1] == 0)\n        && describe(value);\n    check(value.size() >= 2,\n          value[1] == 0)\n        && describe(value);\n    if (ready)\n        check(value.size() >= 2\n              && value[1] == 0)\n            && describe(value);\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}

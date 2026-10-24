@@ -2056,6 +2056,14 @@ impl FormatEngine<'_> {
         if !frame.operator_starts_output_line {
             return None;
         }
+        // A chain inside parens closed since goes on with none outside them.
+        if let Some((chained, current)) = frame
+            .operator_token
+            .zip(self.output.pending_tokens().map(|span| span.first))
+            && self.tree.groups.enclosing(chained) != self.tree.groups.enclosing(current)
+        {
+            return None;
+        }
         let current_operator = if current.starts_with("&&") {
             LogicalOperator::And
         } else {

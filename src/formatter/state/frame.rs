@@ -664,6 +664,11 @@ impl FrameStack {
                     .partition_point(|frame| frame.operator_output_line == line)
     }
 
+    /// The operator token of the logical frame pushed last.
+    pub(crate) fn last_logical_token(&self) -> Option<usize> {
+        self.logical_frames.last()?.operator_token
+    }
+
     pub(crate) fn active_logical_on_output_line(&self, line_index: usize) -> Option<&LogicalFrame> {
         self.logical_frames[self.logical_frames_on(line_index)]
             .iter()
