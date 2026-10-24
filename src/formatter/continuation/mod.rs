@@ -24,6 +24,7 @@ use crate::formatter::structure::groups::{Delimiter, GroupId};
 use crate::formatter::syntax::language::{is_leading_continuation_operator, is_macro_like_word};
 use crate::formatter::syntax::{
     assignment_declarator_offset, function_head_has_assignment, function_name_start, language,
+    signature_ends_with_parameter_list,
 };
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
@@ -938,13 +939,8 @@ impl FormatEngine<'_> {
         if before.is_empty() || before.ends_with(':') || before.contains('?') {
             return false;
         }
-        if before.ends_with(')') {
-            return true;
-        }
-        let statement = crate::formatter::text::line_scan::statement_tail(before).trimmed_start();
-        statement
-            .split(|ch: char| !is_identifier_continue(ch))
-            .any(|word| matches!(word, "class" | "struct" | "union" | "interface"))
+        // Qualifiers after the parameters still end a constructor's head.
+        signature_ends_with_parameter_list(before) || code_opens_class_base_clause(before)
     }
 
     fn class_base_clause_indent_spaces(&self) -> usize {

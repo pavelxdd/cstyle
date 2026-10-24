@@ -25,6 +25,17 @@ fn keeps_class_initializer_braced_values_attached() {
 }
 
 #[test]
+fn members_after_a_qualified_head_ending_in_its_colon_take_one_level() {
+    // Qualifiers between the parameters and the colon leave the members
+    // where they stand after a bare `) :`.
+    let source = "class Item\n{\npublic:\n    Item(int other) :\n        value_(other)\n    {\n    }\n    Item(Item&& other) noexcept :\n        value_(other.value_)\n    {\n    }\n    Item(long other) const :\n        value_(other)\n    {\n    }\n    Item(short other) noexcept(true) :\n        value_(other)\n    {\n    }\n};\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=kr".to_owned()]).expect("valid options");
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
 fn leading_comma_constructor_initializer_keeps_member_indent() {
     let source = fixture!(
         "class C",
