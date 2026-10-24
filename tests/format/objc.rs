@@ -312,6 +312,47 @@ fn pad_method_colon_after_pads_only_after_objc_colons() {
 }
 
 #[test]
+fn pad_method_colon_leaves_dictionary_colons_in_a_message_and_pads_later_selectors() {
+    // A dictionary literal's colons are no selector's, in a message or
+    // out of one, and the selectors after the literal pad as any do.
+    let source = fixture!(
+        "- (void)run",
+        "{",
+        "    NSDictionary *d = @{@\"a\":@1};",
+        "    [self setItems:@{@\"k\":value} forKey:@\"x\"];",
+        "}",
+    );
+    for (pad, expected) in [
+        (
+            ObjCColonPad::After,
+            fixture!(
+                "- (void)run",
+                "{",
+                "    NSDictionary *d = @ {@\"a\":@1};",
+                "    [self setItems: @ {@\"k\":value} forKey: @\"x\"];",
+                "}",
+            ),
+        ),
+        (
+            ObjCColonPad::All,
+            fixture!(
+                "- (void)run",
+                "{",
+                "    NSDictionary *d = @ {@\"a\":@1};",
+                "    [self setItems : @ {@\"k\":value} forKey : @\"x\"];",
+                "}",
+            ),
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        options.pad_method_colon = pad;
+        let actual = format_exact(source, &options);
+        assert_eq!(actual, expected);
+        assert_eq!(format_exact(&actual, &options), expected);
+    }
+}
+
+#[test]
 fn pad_method_colon_before_pads_only_before_objc_colons() {
     let mut options = FormatOptions::default();
     options.pad_method_colon = ObjCColonPad::Before;
