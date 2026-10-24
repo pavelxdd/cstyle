@@ -261,6 +261,14 @@ fn function_head(
                 return macro_head_parameter_list(tokens, groups, blocks, head_ends, id, params);
             };
             (word, Some(groups.get(id).open))
+        } else if is_operator(tokens, before_params, ">")
+            && let Some(name) = template_arguments_start(tokens, before_params)
+                .and_then(|open| previous_code_token(tokens, open))
+                .filter(|&name| is_word(tokens, name))
+        {
+            // An explicit specialization names its template arguments, as
+            // `size<Item>(void)`.
+            (name, None)
         } else {
             (before_params, None)
         };

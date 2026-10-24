@@ -3434,3 +3434,18 @@ fn max_code_length_aligns_a_colon_led_row_s_split_at_its_first_element() {
         "Item::Item(const State& state, Value* f)\n    : state_(state), target_(f), file_opened_flag_(true),\n      env_(env)\n{\n}\nItem::Item(const State& state, Value* f)\n    :state_(state), target_(f), file_opened_flag_(true),\n     env_(env)\n{\n}\nItem::Item(const State& state, Value* f)\n    :   state_(state), target_(f), file_opened_flag_(true),\n        env_(env)\n{\n}\nclass Item\n    : public FirstBaseClass, public SecondBaseClass,\n      public ThirdBase\n{\n};\n",
     );
 }
+
+#[test]
+fn max_code_length_splits_a_specialization_s_qualifiers_off_at_its_head() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "template <> constexpr auto digit_count<native_value>() noexcept -> int\n{\n    return 38;\n}\n",
+        &options,
+        "template <> constexpr auto digit_count<native_value>()\nnoexcept -> int\n{\n    return 38;\n}\n",
+    );
+}
