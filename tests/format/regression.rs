@@ -24941,3 +24941,15 @@ fn a_macro_block_brace_before_a_line_comment_takes_its_style_s_place() {
         "TEST(name)\n{\n    // note\n    int x;\n}\nvoid f()\n{\n    FOREACH(x) {\n        // note\n        go();\n    }\n}\n",
     );
 }
+
+#[test]
+fn a_line_comment_after_a_brace_joining_a_published_head_opens_the_body() {
+    // As below a head the line holds for its brace, the comment the
+    // brace's own line held goes into the body it opens.
+    let input = "TEST(a, b)\n{ // note\n    int x;\n}\ntemplate <> struct formatter<date>\n{ // note\n    int y;\n};\n";
+    check(
+        input,
+        &["--style=java"],
+        "TEST(a, b) {\n    // note\n    int x;\n}\ntemplate <> struct formatter<date> {\n    // note\n    int y;\n};\n",
+    );
+}

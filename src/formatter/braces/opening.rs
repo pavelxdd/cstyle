@@ -2566,10 +2566,14 @@ impl FormatEngine<'_> {
         self.layout.line_adjuster.observe_line(&LineView::new("{"));
         let line_already_has_line_comment =
             line[trailing_comment_split_limit(&line)..].contains("//");
-        // The comment the brace's own line held opens the body.
+        // The comment the brace's own line held opens the body; a list's
+        // stays after its brace.
         let line_comment_starts_body = (brace_attached_before_trailing_comment
             || attached_case_label_output_brace
-            || brace_type == BraceType::Command)
+            || !matches!(
+                brace_type,
+                BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
+            ))
             && self.token_input.token_begins_source_line;
         if let Some(Token::Comment(CommentKind::Line, comment)) = next
             && !line_already_has_line_comment
