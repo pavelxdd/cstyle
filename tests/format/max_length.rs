@@ -3419,3 +3419,18 @@ fn max_code_length_splits_a_templated_declaration_as_its_reformat_lays_it_out() 
         "template <typename Char, typename T> auto\ncheck_every_listed_item() -> bool\n{\n    return true;\n}\ntemplate <typename Char, typename... T> void\ncheck_every_listed_value()\n{\n}\ntemplate <typename T, typename Enable = void> struct\n    numeric_traits_value;\ntemplate <typename Char, typename T> static inline Item\nfirst_listed_value;\n",
     );
 }
+
+#[test]
+fn max_code_length_aligns_a_colon_led_row_s_split_at_its_first_element() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "Item::Item(const State& state, Value* f)\n    : state_(state), target_(f), file_opened_flag_(true), env_(env) {\n}\nItem::Item(const State& state, Value* f)\n    :state_(state), target_(f), file_opened_flag_(true), env_(env) {\n}\nItem::Item(const State& state, Value* f)\n    :   state_(state), target_(f), file_opened_flag_(true), env_(env) {\n}\nclass Item\n    : public FirstBaseClass, public SecondBaseClass, public ThirdBase {\n};\n",
+        &options,
+        "Item::Item(const State& state, Value* f)\n    : state_(state), target_(f), file_opened_flag_(true),\n      env_(env)\n{\n}\nItem::Item(const State& state, Value* f)\n    :state_(state), target_(f), file_opened_flag_(true),\n     env_(env)\n{\n}\nItem::Item(const State& state, Value* f)\n    :   state_(state), target_(f), file_opened_flag_(true),\n        env_(env)\n{\n}\nclass Item\n    : public FirstBaseClass, public SecondBaseClass,\n      public ThirdBase\n{\n};\n",
+    );
+}

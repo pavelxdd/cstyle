@@ -1087,6 +1087,15 @@ fn continuation_indent_for_split(
         ));
     }
     let has_open_paren = !unmatched_open_paren_columns(head).is_empty();
+    // A row led by an initializer list's or a base list's `:` splits
+    // into rows under its first element.
+    if !has_open_paren
+        && let Some(after_colon) = line.trimmed_start().strip_prefix(':')
+        && !after_colon.starts_with(':')
+    {
+        let element = line.len() - after_colon.trimmed_start().len();
+        return Some(ContinuationIndent::Spaces(base_indent_width + element));
+    }
     if let Some(spaces) = lambda_parameter_continuation_indent(
         head,
         base_indent_width,
