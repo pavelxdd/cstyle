@@ -2055,9 +2055,7 @@ impl FormatEngine<'_> {
                     && !matches!(operator.as_str(), "==" | "!=" | "<=" | ">="))
         };
         // A lambda opening its body on the line stands at the statement.
-        if matches!(tokens[first], Token::Symbol('{' | '}'))
-            || self.pending_line_opens_lambda()
-        {
+        if matches!(tokens[first], Token::Symbol('{' | '}')) || self.pending_line_opens_lambda() {
             return None;
         }
         let last = self.tree.previous_code_token(first)?;

@@ -1377,11 +1377,11 @@ impl FormatEngine<'_> {
             // inside a delimiter the line closed ends with it.
             if let Some(spaces) = self.layout.continuation_indent.next_line_indent_spaces
                 && !self.in_enum_declaration_brace()
-                && !self
+                && self
                     .layout
                     .frame_stack
                     .line_closed_delimiter_opener_column()
-                    .is_some_and(|opener| spaces > opener)
+                    .is_none_or(|opener| spaces <= opener)
             {
                 return ContinuationIndent::Spaces(spaces);
             }
@@ -1941,9 +1941,10 @@ impl FormatEngine<'_> {
         // The member before is assigned, and the row stands in the body.
         if !previous.contains('=')
             || !self.output.pending_tokens().is_some_and(|span| {
-                self.tree.groups.enclosing(span.first).is_some_and(|group| {
-                    self.tree.groups.get(group).delimiter == Delimiter::Brace
-                })
+                self.tree
+                    .groups
+                    .enclosing(span.first)
+                    .is_some_and(|group| self.tree.groups.get(group).delimiter == Delimiter::Brace)
             })
         {
             return None;
