@@ -293,7 +293,9 @@ fn classify(tokens: &[Token], groups: &Groups, blocks: &Blocks, id: GroupId) -> 
         }
         // A template type's value, as `std::vector<int>{ 1, 2 };`.
         Token::Operator(operator)
-            if operator == ">" && closing_is_followed_by_terminator(tokens, group.close) =>
+            if operator == ">"
+                && (closing_is_followed_by_terminator(tokens, group.close)
+                    || braces_value_in_expression(tokens, &head, group.close)) =>
         {
             BlockKind::Initializer
         }
@@ -739,12 +741,17 @@ fn braces_value_in_expression(tokens: &[Token], head: &[usize], close: Option<us
             Token::Operator(operator) => is_assignment_operator(operator),
             token => matches!(token, Token::Symbol('?')),
         })
-        || close
-            .and_then(|close| next_code_token(tokens, close + 1))
-            .is_some_and(|next| match &tokens[next] {
+        || close.is_some_and(|close| {
+            next_code_token(tokens, close + 1).is_some_and(|next| match &tokens[next] {
                 Token::Operator(operator) => matches!(operator.as_str(), "." | "->" | "?"),
+                // A call or subscript on the closer's line applies to the
+                // value; a line after a block may open with a cast.
+                Token::Symbol('(' | '[') => !tokens[close + 1..next]
+                    .iter()
+                    .any(|token| matches!(token, Token::Newline)),
                 token => matches!(token, Token::Symbol('.' | '?')),
             })
+        })
 }
 
 fn head_has_code(head: &[usize]) -> bool {
@@ -814,6 +821,24 @@ mod tests {
                 "void run() {\n  struct Item {\n    auto operator=(char) -> Item& {\n      return *this;\n    }\n    Item& operator=(int) {\n      return *this;\n    }\n  };\n}\n"
             ),
             [FunctionBody, Aggregate, FunctionBody, FunctionBody]
+        );
+    }
+
+    #[test]
+    fn classifies_a_type_s_braces_before_a_call_or_member_as_its_value() {
+        assert_eq!(
+            kinds(
+                "void f()\n{\n    Item{}(v);\n    Item{1}.run();\n    Item{}->go();\n    Item{}[0];\n    std::hash<T>{}(v);\n    SEH_TRY {\n    }\n    (void)value;\n}\n"
+            ),
+            [
+                FunctionBody,
+                Initializer,
+                Initializer,
+                Initializer,
+                Initializer,
+                Initializer,
+                Control
+            ]
         );
     }
 

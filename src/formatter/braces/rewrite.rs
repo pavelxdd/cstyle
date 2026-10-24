@@ -2618,9 +2618,10 @@ impl FormatEngine<'_> {
             Some(false) => match self.layout.command_state.previous_command_char {
                 Some('=') => true,
                 Some(')') => self.current_ends_compound_literal_type(),
-                // A type's braces, as `Type{value}`, open no block.
+                // A type's braces, as `Type{value}` or `Type<T>{value}`, open
+                // no block.
                 Some(ch) => {
-                    is_word_char(ch)
+                    (is_word_char(ch) || ch == '>')
                         && self
                             .tree
                             .groups
