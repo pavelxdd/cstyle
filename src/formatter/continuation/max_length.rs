@@ -1171,32 +1171,31 @@ fn continuation_indent_for_split(
     if splits_before_label(split) {
         return Some(ContinuationIndent::Spaces(base_indent_width));
     }
-    // An array bound continues under its trailing operator; past the
-    // maximum at the paren around it or the value an assignment gives,
-    // else two levels in.
-    if let Some((_, bracket)) = last_unmatched_open_delimiter(head)
-        .filter(|&(open, at)| open == '[' && !head[..at].contains(']'))
+    // An array bound or a subscript continues past its bracket, under its
+    // trailing operator. Past the maximum, measured from the block as a
+    // row's continuation is, it continues at the value an assignment gives,
+    // else two levels past the row, and no nearer than the column the paren
+    // around it holds.
+    if let Some((_, bracket)) = last_unmatched_open_delimiter(head).filter(|&(open, _)| open == '[')
         && let Some(column) = array_bound_operator_column(head)
     {
+        let within = |column: usize| column.saturating_sub(block_spaces) <= max_continuation_indent;
+        if within(base_indent_width + column) {
+            return Some(ContinuationIndent::Spaces(base_indent_width + column));
+        }
+        let two_levels = base_indent_width + indent_width * 2;
+        let capped = assignment_value_indent(head, base_indent_width)
+            .filter(|&value| value - base_indent_width <= max_continuation_indent)
+            .unwrap_or(two_levels);
+        let around = unmatched_open_paren_columns(&head[..bracket])
+            .last()
+            .map(|&open| {
+                let after = &head[open + 1..];
+                base_indent_width + open + 1 + after.len() - after.trimmed_start().len()
+            })
+            .map(|column| if within(column) { column } else { two_levels });
         return Some(ContinuationIndent::Spaces(
-            if column > max_continuation_indent {
-                unmatched_open_paren_columns(&head[..bracket])
-                    .iter()
-                    .rev()
-                    .map(|&open| {
-                        let after = &head[open + 1..];
-                        open + 1 + after.len() - after.trimmed_start().len()
-                    })
-                    .find(|&column| column <= max_continuation_indent)
-                    .map(|column| base_indent_width + column)
-                    .or_else(|| {
-                        assignment_value_indent(head, base_indent_width)
-                            .filter(|&value| value - base_indent_width <= max_continuation_indent)
-                    })
-                    .unwrap_or(base_indent_width + indent_width * 2)
-            } else {
-                base_indent_width + column
-            },
+            around.map_or(capped, |around| capped.max(around)),
         ));
     }
     let has_open_paren = !unmatched_open_paren_columns(head).is_empty();

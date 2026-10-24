@@ -22282,6 +22282,17 @@ fn rows_of_a_subscript_within_parens_stand_past_its_bracket() {
 }
 
 #[test]
+fn parts_the_code_length_splits_in_a_subscript_past_the_maximum_stand_as_its_rows() {
+    // Two levels past the row, as the row's own continuation, where the
+    // parens around are past the maximum too.
+    let input = "void f()\n{\n    for (int i = 0; i < count; i++)\n        submatch[i] = absl::string_view(\n            cap_[2 * i], static_cast<size_t>(cap_[2 * i + 1] - cap_[2 * i]));\n}\n";
+    let expected = "void f()\n{\n    for (int i = 0; i < count; i++)\n        submatch[i] = absl::string_view(\n                          cap_[2 * i], static_cast<size_t>(cap_[2 * i + 1] - cap_[2 *\n                                  i]));\n}\n";
+    let options = ["--style=kr", "--max-code-length=60"];
+    check(input, &options, expected);
+    check(expected, &options, expected);
+}
+
+#[test]
 fn parts_the_code_length_splits_among_template_arguments_stand_as_their_rows() {
     // Wherever the template stands, a base's or a class head's among them,
     // and wherever the split falls.
