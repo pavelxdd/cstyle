@@ -1234,7 +1234,10 @@ fn continuation_indent_for_split(
 
     let splits_at_shift = split.head.trimmed_end().ends_with("<<")
         || split.tail.starts_with("<<") && !split.tail.starts_with("<<=");
-    if (split.kind == SplitKind::Whitespace || splits_at_shift)
+    // So does an operand split before its parens outside any the head opened.
+    let splits_operand_parens =
+        split.tail.starts_with('(') && unmatched_open_paren_columns(head).is_empty();
+    if (split.kind == SplitKind::Whitespace || splits_at_shift || splits_operand_parens)
         && held.less
         && let Some(spaces) =
             stream_chain_continuation_indent(line, base_indent_width, indent_width)

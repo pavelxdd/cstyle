@@ -3645,3 +3645,16 @@ fn max_code_length_continues_a_subscript_past_the_maximum_at_the_paren_around_it
     let expected = "void helper()\n{\n    {\n        uint32_t sum = checksum::Value(&buffer_.items_[header_offset\n                                       + 6], 1 + len);\n    }\n}\n";
     assert_stable_max_length_format(source, &options, expected);
 }
+
+#[test]
+fn max_code_length_continues_a_stream_operand_split_before_its_parens_at_the_chain() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    let source = "void helper()\n{\n    LOG_ITEM(INFO) << \"Memory at \" << reinterpret_cast<void*>(v);\n}\n";
+    let expected = "void helper()\n{\n    LOG_ITEM(INFO) << \"Memory at \" << reinterpret_cast<void*>\n                   (v);\n}\n";
+    assert_stable_max_length_format(source, &options, expected);
+}
