@@ -2532,6 +2532,5 @@ pub(crate) fn splits_aggregate_declaration_name(line: &str) -> bool {
     };
     words
         .iter()
-        .position(|word| matches!(*word, "struct" | "union" | "class") && !in_angles(word))
-        .is_some_and(|aggregate| words.len() > aggregate + 1)
+        .any(|word| matches!(*word, "struct" | "union" | "class") && !in_angles(word))
 }

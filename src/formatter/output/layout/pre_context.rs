@@ -441,31 +441,6 @@ impl FormatEngine<'_> {
                     Some(leading_visual_width(previous, self.options.tab_width));
             }
         }
-        if !plain
-            && layout.line_kind == LineKind::Normal
-            && !line_start.starts_with_any(b"#{}")
-            && self
-                .output
-                .has_enum_code_line_from(self.output.len().saturating_sub(4))
-        {
-            for index in (0..self.output.len()).rev().take(4) {
-                let previous = &self.output[index];
-                let previous_code = self.output.code(index);
-                let previous_trimmed = self.output.code_trimmed(index);
-                if previous_code.contains_from_first_byte("#define")
-                    || previous_trimmed.ends_with(';')
-                {
-                    break;
-                }
-                if previous_trimmed == "enum" {
-                    layout.exact_indent_spaces = Some(
-                        leading_visual_width(previous, self.options.tab_width)
-                            + self.options.indent_width,
-                    );
-                    break;
-                }
-            }
-        }
         if layout.line_kind == LineKind::Normal
             && !line_start.starts_with_any(b"#{}")
             && self

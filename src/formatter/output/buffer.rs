@@ -457,7 +457,6 @@ pub(crate) struct OutputBuffer {
     /// The last look back for a line that is `(` alone.
     recent_open_paren_cache: Cell<Option<RecentMatch>>,
     /// The last look back for a line whose code is `enum`.
-    recent_enum_cache: Cell<Option<RecentMatch>>,
     /// The last look back for a line whose code starts with `else,`.
     recent_else_comma_cache: Cell<Option<RecentMatch>>,
     /// The last look back for a line whose code is led by `#`.
@@ -1652,13 +1651,6 @@ impl OutputBuffer {
     pub(crate) fn has_open_paren_line_from(&self, start: usize) -> bool {
         self.has_line_from(&self.recent_open_paren_cache, start, |index| {
             self.trimmed(index) == "("
-        })
-    }
-
-    /// Whether the code of a line from `start` on is `enum`.
-    pub(crate) fn has_enum_code_line_from(&self, start: usize) -> bool {
-        self.has_line_from(&self.recent_enum_cache, start, |index| {
-            self.code_trimmed(index) == "enum"
         })
     }
 

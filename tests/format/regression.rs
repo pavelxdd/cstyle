@@ -24988,6 +24988,22 @@ fn a_declarator_split_off_a_run_in_declaration_stands_where_a_reformat_puts_it()
 }
 
 #[test]
+fn a_declarator_split_off_a_qualified_or_templated_aggregate_key_continues_past_it() {
+    let input = "template <typename T> struct\nItem;\nstatic struct\nItem value;\ntypedef struct\nItem;\nvoid f()\n{\n    const union\n    Item value;\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "template <typename T> struct\n    Item;\nstatic struct\n    Item value;\ntypedef struct\n    Item;\nvoid f()\n{\n    const union\n        Item value;\n}\n",
+    );
+}
+
+#[test]
+fn a_line_after_an_enum_key_stands_at_the_statement_as_after_an_enum_name() {
+    let input = "enum\nItem value;\nenum Item\nvalue;\nstatic enum\nItem value;\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
 fn an_enum_list_whose_brace_leads_its_rows_runs_in_as_a_struct_body_in_the_default_style() {
     check(
         "enum Name\n{ A,\n  B };\ntypedef enum\n{ A, /* note */\n  B\n} Kind;\nvoid f()\n{\n    enum\n    { A, B,\n        C };\n    enum Other\n    { D, E };\n}\n",
