@@ -1814,3 +1814,45 @@ fn objc_statement_headers_lay_out_as_their_counterparts() {
         }
     }
 }
+
+#[test]
+fn max_code_length_splits_a_long_row_in_an_autoreleasepool_as_in_any_block() {
+    let input = "int main(int argc, char *argv[])\n{\n    @autoreleasepool {\n        return UIApplicationMain(argc, argv, nil, NSStringFromClass(Item));\n    }\n}\n";
+    let expected = "int main(int argc, char *argv[])\n{\n    @autoreleasepool {\n        return UIApplicationMain(argc, argv, nil,\n                                 NSStringFromClass(Item));\n    }\n}\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_eq!(format_exact(input, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn run_in_enum_rows_after_a_macro_head_indent_as_after_an_enum_head() {
+    let input = "typedef NS_ENUM(NSInteger, Mode) {\n    ModeA,\n    ModeB = 2,\n};\nenum Mode {\n    ModeA,\n    ModeB = 2,\n};\n";
+    for (style, expected) in [
+        (
+            "--style=pico",
+            "typedef NS_ENUM(NSInteger, Mode)\n{\tModeA,\n\tModeB = 2, };\nenum Mode\n{\tModeA,\n\tModeB = 2, };\n",
+        ),
+        (
+            "--style=horstmann",
+            "typedef NS_ENUM(NSInteger, Mode)\n{\tModeA,\n\tModeB = 2,\n};\nenum Mode\n{\tModeA,\n\tModeB = 2,\n};\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(
+            &mut options,
+            &[
+                style.to_string(),
+                "--convert-tabs".to_string(),
+                "--indent=tab=4".to_string(),
+            ],
+        )
+        .expect("valid options");
+        assert_eq!(format_exact(input, &options), expected, "{style}");
+        assert_eq!(format_exact(expected, &options), expected, "{style}");
+    }
+}
