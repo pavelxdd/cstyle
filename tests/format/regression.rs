@@ -25079,3 +25079,11 @@ fn a_stream_row_after_a_row_closing_earlier_parens_continues_from_what_encloses_
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
+
+#[test]
+fn an_assigned_string_continuation_past_the_maximum_stands_two_levels_in() {
+    let input = "namespace demo {\nstatic const char *const long_usage_text_name = \"\\n\"\n\"  tool <name>\";\n}\nvoid helper()\n{\n    static const char *const long_usage_text_name = \"\\n\"\n    \"  tool <name>\";\n    const char *usage_text = \"\\n\"\n    \"  tool <name>\";\n    if (ready) long_usage_text_name_value_here_and_more = \"first\"\n    \"second\";\n}\nstruct Item {\n    const char *long_usage_text_name_value = \"first\"\n    \"second\";\n};\n";
+    let expected = "namespace demo\n{\nstatic const char *const long_usage_text_name = \"\\n\"\n        \"  tool <name>\";\n}\nvoid helper()\n{\n    static const char *const long_usage_text_name = \"\\n\"\n            \"  tool <name>\";\n    const char *usage_text = \"\\n\"\n                             \"  tool <name>\";\n    if (ready) long_usage_text_name_value_here_and_more = \"first\"\n                \"second\";\n}\nstruct Item {\n    const char *long_usage_text_name_value = \"first\"\n            \"second\";\n};\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}

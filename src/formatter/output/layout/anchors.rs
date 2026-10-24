@@ -4399,10 +4399,21 @@ impl FormatEngine<'_> {
         self.string_assign_walk.set(Some((previous, group, assign)));
         let assign = assign?;
         // The value's line is published: the literal continues it, a level
-        // in when the statement runs in after a header.
+        // in when the statement runs in after a header. Past the maximum,
+        // measured from the line holding the `=`, it stands two levels past
+        // that line.
         let value = next_code_token(tokens, assign + 1)?;
+        let column = self.token_column(value)?;
+        let lead = self
+            .output
+            .lead_width(self.output.line_with_token(assign)?, self.options.tab_width);
+        let column = if column.saturating_sub(lead) > self.options.max_continuation_indent {
+            lead + 2 * self.options.indent_width
+        } else {
+            column
+        };
         Some(
-            self.token_column(value)?
+            column
                 + self.run_in_header_levels(assign) * self.options.indent_width
                 + self.case_unindent_spaces(),
         )
