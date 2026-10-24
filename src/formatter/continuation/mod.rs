@@ -2671,7 +2671,6 @@ pub(crate) fn splits_aggregate_declaration_name(line: &str) -> bool {
     // template head the declaration it introduces.
     let line = after_template_head(after_leading_comments(line));
     if line.ends_with_any(b";{}=")
-        || line.contains_any_byte(b"([)],")
         || line.trimmed_start().starts_with_any(b"/*")
         || line.as_bytes().contains(&b'/')
             && ["//", "/*", "*/"]
@@ -2680,16 +2679,40 @@ pub(crate) fn splits_aggregate_declaration_name(line: &str) -> bool {
     {
         return false;
     }
-    let words = line
-        .split(|ch: char| !is_identifier_continue(ch))
-        .filter(|word| !word.is_empty())
-        .collect::<Vec<_>>();
     // A class key among template parameters names no type of its own.
-    let in_angles = |word: &str| {
-        let before = &line[..word.as_ptr() as usize - line.as_ptr() as usize];
+    let in_angles = |at: usize| {
+        let before = &line[..at];
         before.matches('<').count() > before.matches('>').count()
     };
-    words
-        .iter()
-        .any(|word| matches!(*word, "struct" | "union" | "class") && !in_angles(word))
+    let Some(key) = line
+        .split(|ch: char| !is_identifier_continue(ch))
+        .filter(|word| matches!(*word, "struct" | "union" | "class"))
+        .map(|word| word.as_ptr() as usize - line.as_ptr() as usize)
+        .find(|&at| !in_angles(at))
+    else {
+        return false;
+    };
+    // Specifiers before the key may hold groups of their own; the type
+    // after it holds none.
+    !line[key..].contains_any_byte(b"([)],") && closes_its_groups(&line[..key])
+}
+
+/// Whether `text` closes every paren and bracket it opens, with no comma
+/// outside them.
+fn closes_its_groups(text: &str) -> bool {
+    let mut depth = 0usize;
+    for byte in text.bytes() {
+        match byte {
+            b'(' | b'[' => depth += 1,
+            b')' | b']' => {
+                let Some(outer) = depth.checked_sub(1) else {
+                    return false;
+                };
+                depth = outer;
+            }
+            b',' if depth == 0 => return false,
+            _ => {}
+        }
+    }
+    depth == 0
 }

@@ -998,6 +998,14 @@ fn struct_split_declaration_name_gets_continuation_indent() {
 }
 
 #[test]
+fn struct_split_declaration_name_after_specifier_groups_gets_continuation_indent() {
+    // Specifiers with their own parens or brackets before the class key
+    // leave it a declaration of the type.
+    let source = "static __declspec(thread) struct Entry\n    entry;\nstatic __attribute__((section(\"data\"), used)) struct Entry\n    entry;\n[[maybe_unused]] static struct Entry\n    entry;\n";
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
+}
+
+#[test]
 fn attaches_pointer_declarator_after_anonymous_struct_brace() {
     let mut options = FormatOptions::default();
     options.brace_style = BraceStyle::OneTrueBrace;
