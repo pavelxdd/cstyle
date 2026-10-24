@@ -1120,10 +1120,10 @@ fn struct_and_enum_assignment_continuations_use_same_indent() {
 }
 
 #[test]
-fn keeps_multiline_template_angles_at_statement_indent() {
+fn multiline_template_angles_continue_their_rows_past_the_statement() {
     assert_eq!(
         format_exact(fixture!("List<", "int>", "v;"), &FormatOptions::default()),
-        fixture!("List<", "int>", "v;")
+        fixture!("List<", "    int>", "v;")
     );
 
     assert_eq!(
@@ -1131,7 +1131,7 @@ fn keeps_multiline_template_angles_at_statement_indent() {
             fixture!("void f(void) {", "List<", "int>", "v;", "}"),
             &FormatOptions::default()
         ),
-        fixture!("void f(void) {", "    List<", "    int>", "    v;", "}")
+        fixture!("void f(void) {", "    List<", "        int>", "    v;", "}")
     );
 }
 
@@ -1796,7 +1796,7 @@ fn std_conditional_type_alias_rows_keep_first_argument_indent() {
 }
 
 #[test]
-fn std_conditional_template_argument_rows_keep_first_argument_indent() {
+fn std_conditional_template_argument_rows_stand_a_continuation_past_the_value() {
     assert_eq!(
         format_exact(
             fixture!(
@@ -1812,9 +1812,9 @@ fn std_conditional_template_argument_rows_keep_first_argument_indent() {
         fixture!(
             "template<typename T>",
             "using value_base_type = typename std::conditional <",
-            "                        std::is_same<T, void>::value,",
-            "                        item_default_base,",
-            "                        T",
+            "                            std::is_same<T, void>::value,",
+            "                            item_default_base,",
+            "                            T",
             "                        >::type;",
         )
     );

@@ -1082,6 +1082,7 @@ impl FormatEngine<'_> {
         let line_comment_can_carry_continuation = !standalone_line_comment
             || previous_line_ends_operator
             || self.layout.nesting.paren_depth > 0
+            || self.open_template_arguments_indent_spaces().is_some()
             || matches!(
                 self.layout.previous,
                 PreviousToken::Operator | PreviousToken::Comma
@@ -2092,6 +2093,8 @@ impl FormatEngine<'_> {
         self.previous_was_newline = false;
         if kind == CommentKind::Line {
             let stacked_before_line = self.layout.nesting.current_continuation_indent_spaces();
+            let kept_at_column_one =
+                self.layout.line_state.column1_line_comment && !self.options.indent_col1_comments;
             self.finish_line();
             if let Some(spaces) =
                 line_comment_stream_chain_indent.or(ternary_branch_comment_indent_spaces)
@@ -2099,11 +2102,13 @@ impl FormatEngine<'_> {
                 self.layout.continuation_indent.next_line_indent = None;
                 self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
             } else if standalone_line_comment
+                && !kept_at_column_one
                 && line_comment_continuation_indent.is_some()
                 && let Some(line) = self.output.last()
             {
                 // A comment line within a statement leaves the statement
-                // going on at its own column.
+                // going on at its own column; one kept at column one, where
+                // the statement would have gone on.
                 let spaces = leading_visual_width(line, self.options.tab_width);
                 self.set_next_continuation_indent(ContinuationIndent::Spaces(spaces));
             } else if let Some(indent) = line_comment_continuation_indent {

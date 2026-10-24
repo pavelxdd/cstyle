@@ -430,6 +430,17 @@ impl NestingState {
     }
 }
 
+/// An open template angle: how many continuation columns stood registered
+/// before it, the ones after them ending with it.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) struct OpenTemplateAngle {
+    pub(crate) continuations: usize,
+    /// Where a row its closer leads stands, when it ended its line and its
+    /// rows continue past the column it registered: at the line it opened
+    /// on, as a paren's closer does.
+    pub(crate) closer_spaces: Option<usize>,
+}
+
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
 pub(crate) struct LineState {
     pub(crate) passed_semicolon: bool,
@@ -445,9 +456,7 @@ pub(crate) struct LineState {
     /// Whether the line's last colon gives a bit-field width.
     pub(crate) bit_field_colon: bool,
     pub(crate) template_angle_depth: usize,
-    /// The continuation columns registered before each open template angle;
-    /// the ones inside it end with it.
-    pub(crate) template_angle_continuations: Vec<usize>,
+    pub(crate) template_angle_continuations: Vec<OpenTemplateAngle>,
     /// The `;` of each statement on the line braces were added around.
     pub(crate) added_block_semicolons: Vec<usize>,
 }

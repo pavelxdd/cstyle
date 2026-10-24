@@ -22,6 +22,16 @@ pub(crate) fn template_declaration_line_complete(line: &str) -> bool {
     line.ends_with('>') && angle_depth(line) <= 0
 }
 
+/// Whether the head a `template` line opens closes on it: the angles left
+/// open after it are the declaration's own.
+fn template_head_closes_on_line(line: &str) -> bool {
+    let mut depth = 0isize;
+    angle_chars(line).any(|(_, ch)| {
+        depth += if ch == '<' { 1 } else { -1 };
+        depth <= 0
+    })
+}
+
 fn angle_depth_delta(line: &str) -> isize {
     if !line.contains_any_byte(b"<>") {
         return 0;
@@ -499,6 +509,7 @@ impl FormatEngine<'_> {
             && angle_delta > 0
             && !trimmed.ends_with(';')
             && !template_declaration_line_complete(trimmed)
+            && !template_head_closes_on_line(trimmed)
         {
             self.layout.template_declaration.uses_source_indent = true;
             self.layout.template_declaration.angle_depth = angle_delta;

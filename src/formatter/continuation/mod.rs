@@ -58,6 +58,9 @@ pub(crate) struct ContinuationIndentState {
     /// body.
     pub(crate) next_input_line_follows_lambda_body: bool,
     pub(crate) input_line_follows_lambda_body: bool,
+    /// The input line goes on with the template arguments of an angle that
+    /// ended a line before it, at the column the angle registered.
+    pub(crate) input_line_continues_template_arguments: bool,
 }
 
 impl ContinuationIndentState {
@@ -411,6 +414,10 @@ impl FormatEngine<'_> {
         if self.template_continuation_closes_on_line(trimmed) {
             return false;
         }
+        // Template arguments left open go on as a paren's arguments do.
+        if self.open_template_arguments_indent_spaces().is_some() {
+            return true;
+        }
         let code_before_trailing_comment = self.current_code_before_trailing_comment();
         let line_comment_limit = line_comment_split_limit(trimmed);
         let code_before_line_comment = trimmed[..line_comment_limit].trimmed_end();
@@ -746,11 +753,14 @@ impl FormatEngine<'_> {
         {
             spaces = spaces_for_enum;
         }
+        // Template angles ending the line register as a paren does.
+        let trailing_template_angle = !has_next && self.current.trimmed_end().ends_with('<');
         let over_max =
             spaces.saturating_sub(statement_base_spaces) > self.options.max_continuation_indent;
-        let capped_over_max = (has_next || trailing_open_paren || trailing_assignment)
-            && over_max
-            && inline_brace_call_indent.is_none();
+        let capped_over_max =
+            (has_next || trailing_open_paren || trailing_template_angle || trailing_assignment)
+                && over_max
+                && inline_brace_call_indent.is_none();
         let aligned = spaces;
         if capped_over_max {
             let fallback = line_indent_spaces + self.options.indent_width * 2;
@@ -1174,6 +1184,9 @@ impl FormatEngine<'_> {
             && unmatched_open_paren_column(self.current.trimmed_end()).is_none()
         {
             return ContinuationIndent::Spaces(self.current_line_indent_spaces());
+        }
+        if let Some(spaces) = self.open_template_arguments_indent_spaces() {
+            return ContinuationIndent::Spaces(spaces);
         }
         if let Some(spaces) = self.declaration_continuation_indent_spaces() {
             return ContinuationIndent::Spaces(spaces);
@@ -1839,6 +1852,30 @@ impl FormatEngine<'_> {
                     self.options.tab_width,
                 ),
         )
+    }
+
+    /// The column a line ending among the template arguments of an angle
+    /// that ended its line continues at: every row of them stands there, as
+    /// the rows of a paren ending its line do.
+    pub(crate) fn open_template_arguments_indent_spaces(&self) -> Option<usize> {
+        let angle = *self.layout.line_state.template_angle_continuations.last()?;
+        (self.layout.line_state.template_angle_depth > 0
+            && angle.closer_spaces.is_some()
+            && self.layout.nesting.continuation_count() == angle.continuations + 1)
+            .then(|| self.layout.nesting.current_continuation_indent_spaces())
+            .flatten()
+    }
+
+    /// Whether the statement under way stands among the template arguments
+    /// of an angle that ended its line, whose column its rows count from.
+    pub(crate) fn within_line_ending_template_arguments(&self) -> bool {
+        self.layout.line_state.template_angle_depth > 0
+            && self
+                .layout
+                .line_state
+                .template_angle_continuations
+                .iter()
+                .any(|angle| angle.closer_spaces.is_some())
     }
 
     /// Whether the `,` ending the current line follows, at its own level,

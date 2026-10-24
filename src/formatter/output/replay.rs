@@ -70,6 +70,12 @@ impl FormatEngine<'_> {
                     .continuation_indent
                     .input_line_follows_lambda_body,
             ),
+            continues_template_arguments: std::mem::take(
+                &mut self
+                    .layout
+                    .continuation_indent
+                    .input_line_continues_template_arguments,
+            ),
         }
     }
 }

@@ -9952,7 +9952,7 @@ fn a_macro_word_heads_the_block_its_brace_opens_on_its_line() {
 #[test]
 fn whitesmith_keeps_the_base_of_a_class_head_over_lines_on_its_line() {
     let input = "template <typename It>\nstruct is_inserter<\n    It, enable_if<is_same<\n            typename It::type, int>::value>> : std::true_type {};\n";
-    let expected = "template <typename It>\nstruct is_inserter<\n    It, enable_if<is_same<\ntypename It::type, int>::value>> : std::true_type {};\n";
+    let expected = "template <typename It>\nstruct is_inserter<\n    It, enable_if<is_same<\n        typename It::type, int>::value>> : std::true_type {};\n";
     check(input, &["--style=whitesmith"], expected);
     check(expected, &["--style=whitesmith"], expected);
 }
@@ -22179,6 +22179,47 @@ fn a_template_argument_row_leading_with_a_type_word_continues_the_arguments() {
 }
 
 #[test]
+fn rows_of_template_arguments_after_an_angle_ending_its_line_stand_a_continuation_in() {
+    // Every row of them, as the rows of a paren ending its line do; a
+    // closer leading its row stands at the line the angle opened on.
+    let input = "void f()\n{\n    check<\n    first, second,\n    third, fourth>();\n    Box<\n    Item\n    > value;\n    helper<Pair<\n    first, second>>();\n}\nstruct Holder<\nfirst, Pair<Item<\nsecond, third>>> {};\n";
+    let expected = "void f()\n{\n    check<\n        first, second,\n        third, fourth>();\n    Box<\n        Item\n    > value;\n    helper<Pair<\n        first, second>>();\n}\nstruct Holder<\n    first, Pair<Item<\n        second, third>>> {};\n";
+    for style in ["--style=kr", "--style=allman"] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+    // A paren among them stacks past their column, capped as any paren's.
+    let input = "class Item {\n  template <typename T>\n  using CanReadFrom = typename std::enable_if<\n      std::is_member_function_pointer<\n          decltype(static_cast<bool (T::*)(const char*, size_t)>(\n              &T::ReadFrom))>::value,\n      int>::type;\n};\n";
+    let expected = "class Item\n{\n    template <typename T>\n    using CanReadFrom = typename std::enable_if<\n                            std::is_member_function_pointer<\n                                decltype(static_cast<bool (T::*)(const char*, size_t)>(\n                                        &T::ReadFrom))>::value,\n                            int>::type;\n};\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+    // Comments among them, or after the angle, leave the rows where they are.
+    let input = "void f()\n{\n    check<\n    // note\n    first, // trailing\n    /* block */ second,\n// column one\n    third>();\n    value = Box< // note\n    first>();\n}\n";
+    let expected = "void f()\n{\n    check<\n        // note\n        first, // trailing\n        /* block */ second,\n// column one\n        third>();\n    value = Box< // note\n                first>();\n}\n";
+    for style in ["--style=kr", "--style=allman"] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+    // Past the value an assignment or a return continues, as a paren's.
+    let input = "void f()\n{\n    value = Box<\n    first,\n    second>();\n    return Box<\n    first,\n    second>();\n    const auto other =\n        helper<\n        first,\n        second>();\n}\n";
+    let expected = "void f()\n{\n    value = Box<\n                first,\n                second>();\n    return Box<\n               first,\n               second>();\n    const auto other =\n        helper<\n            first,\n            second>();\n}\n";
+    for style in ["--style=kr", "--style=allman"] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+    let input = "void f()\n{\n    check<\n        wchar_t, bool, wchar_t, signed char, unsigned char, short, unsigned short,\n        int, unsigned, long>();\n}\n";
+    let expected = "void f()\n{\n    check<\n        wchar_t, bool, wchar_t, signed char, unsigned char, short,\n        unsigned short,\n        int, unsigned, long>();\n}\n";
+    let options = ["--style=kr", "--max-code-length=60"];
+    check(input, &options, expected);
+    check(expected, &options, expected);
+    // A row the code length splits stands with them too.
+    let input = "class Item {\n  template <typename T>\n  using Stored = conditional_t<\n      std::is_convertible<T, std::basic_string<char_type>>::value &&\n          !detail::is_wrapper<T>::value,\n      std::basic_string<char_type>, T>;\n};\n";
+    let expected = "class Item\n{\n    template <typename T>\n    using Stored = conditional_t<\n                       std::is_convertible<T, std::basic_string<char_type>>::value\n                       &&\n                       !detail::is_wrapper<T>::value,\n                       std::basic_string<char_type>, T>;\n};\n";
+    check(input, &options, expected);
+    check(expected, &options, expected);
+}
+
+#[test]
 fn a_joined_closer_moves_no_row_of_its_parens_when_parens_indent() {
     // The rows take an indent from the statement, not the paren's column.
     let input = "void f()\n{\n    do {\n        value++;\n    } while (value < count &&\n             ready);\n}\n";
@@ -23019,14 +23060,18 @@ fn a_lambda_head_its_brace_leaves_stands_with_the_arguments_past_the_maximum_con
 }
 
 #[test]
-fn rows_of_template_arguments_after_a_template_head_stand_at_the_assigned_value() {
+fn rows_of_template_arguments_after_an_assigned_angle_stand_a_continuation_past_the_value() {
+    // As the rows of a paren ending the line do, after a template head on a
+    // line of its own or on the alias's line; past the longest continuation
+    // the rows take the capped column a paren's would.
     let input = "class Arg {\n  template <typename T>\n  using CanParse = typename std::enable_if<\n      helper::Parse<T>::value,\n      int>::type;\n};\ntemplate <typename T>\nusing CanParse = typename std::enable_if<\n    helper::Parse<T>::value,\n    int>::type;\n";
-    let expected = "class Arg {\n    template <typename T>\n    using CanParse = typename std::enable_if<\n                     helper::Parse<T>::value,\n                     int>::type;\n};\ntemplate <typename T>\nusing CanParse = typename std::enable_if<\n                 helper::Parse<T>::value,\n                 int>::type;\n";
+    let expected = "class Arg {\n    template <typename T>\n    using CanParse = typename std::enable_if<\n                         helper::Parse<T>::value,\n                         int>::type;\n};\ntemplate <typename T>\nusing CanParse = typename std::enable_if<\n                     helper::Parse<T>::value,\n                     int>::type;\n";
     check(input, &["--style=google"], expected);
     check(expected, &["--style=google"], expected);
-    let input = "template <typename T> using CanParse = typename std::enable_if<\n    helper::value,\n    int>::type;\n";
-    let expected = "template <typename T> using CanParse = typename std::enable_if<\n                                       helper::value,\n                                       int>::type;\n";
+    let input = "template <typename T> using CanParse = typename std::enable_if<\n    helper::value,\n    int>::type;\ntemplate <typename T> using CanCheck = decltype(\n    helper::value,\n    int);\n";
+    let expected = "template <typename T> using CanParse = typename std::enable_if<\n        helper::value,\n        int>::type;\ntemplate <typename T> using CanCheck = decltype(\n        helper::value,\n        int);\n";
     check(input, &["--style=google"], expected);
+    check(expected, &["--style=google"], expected);
 }
 
 #[test]

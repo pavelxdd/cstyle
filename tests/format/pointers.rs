@@ -1673,8 +1673,8 @@ fn pointer_align_middle_keeps_split_declarator_tokens_flush() {
         "*\n",
         "value;\n",
         "Box<\n",
-        "Other\n",
-        "*\n",
+        "    Other\n",
+        "    *\n",
         "> item;\n",
     );
     let mut options = FormatOptions::default();

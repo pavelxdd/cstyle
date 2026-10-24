@@ -1591,6 +1591,10 @@ impl<'a> FormatEngine<'a> {
                     .continuation_indent
                     .next_input_line_follows_lambda_body,
             );
+        self.layout
+            .continuation_indent
+            .input_line_continues_template_arguments =
+            !(directive || empty) && self.within_line_ending_template_arguments();
         self.layout.line_state.passed_semicolon = false;
         self.layout.line_state.passed_colon = false;
         self.layout.line_state.ternary_colon = false;
