@@ -2288,7 +2288,7 @@ impl FormatEngine<'_> {
             _ => {
                 let open = self.output.last_non_empty_scoped().is_some_and(|previous| {
                     let code = self.output.code_trimmed_of(previous);
-                    code.ends_with(',') && !unmatched_open_paren_columns(code).is_empty()
+                    code.ends_with(',') && self.leaves_paren_open(code)
                 });
                 self.open_before_comma_cache.set(Some((key, open)));
                 open

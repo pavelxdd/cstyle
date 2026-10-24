@@ -3166,7 +3166,7 @@ impl FormatEngine<'_> {
             let previous_code = self.output.code_trimmed_of(previous);
             if previous_code.ends_with(',') {
                 let base = leading_visual_width(previous, self.options.tab_width);
-                let opens = unmatched_open_paren_columns(previous_code);
+                let opens = self.paren_imbalance_of(previous_code).1;
                 if previous_code.contains(" new ")
                     && let Some(new_index) = previous_code.rfind(" new ")
                 {
