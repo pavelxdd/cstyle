@@ -318,7 +318,6 @@ pub(super) struct OutputLineHints {
     has_hash: bool,
     has_slash: bool,
     has_question: bool,
-    has_at: bool,
     has_new: bool,
     has_asm: bool,
     starts_star: bool,
@@ -334,7 +333,6 @@ fn output_line_hints(
     const HASH: u8 = 1 << 1;
     const SLASH: u8 = 1 << 2;
     const QUESTION: u8 = 1 << 3;
-    const AT: u8 = 1 << 4;
     const N: u8 = 1 << 5;
     const E: u8 = 1 << 6;
     const A: u8 = 1 << 7;
@@ -344,7 +342,6 @@ fn output_line_hints(
         classes[b'#' as usize] = HASH;
         classes[b'/' as usize] = SLASH;
         classes[b'?' as usize] = QUESTION;
-        classes[b'@' as usize] = AT;
         classes[b'n' as usize] = N;
         classes[b'e' as usize] = E;
         classes[b'a' as usize] = A;
@@ -360,7 +357,6 @@ fn output_line_hints(
         has_hash: found & HASH != 0,
         has_slash: found & SLASH != 0,
         has_question: found & QUESTION != 0,
-        has_at: found & AT != 0,
         has_new: find_new && found & N != 0 && line.contains_from_first_byte("new "),
         has_asm: find_asm && found & A != 0 && line.contains_from_first_byte("asm"),
         starts_star: bytes.iter().find(|&&byte| byte != b' ' && byte != b'\t') == Some(&b'*'),
@@ -422,7 +418,6 @@ pub(crate) struct OutputBuffer {
     may_have_hash: bool,
     may_have_comment: bool,
     may_have_question: bool,
-    may_have_at: bool,
     may_have_new: bool,
     may_have_asm: bool,
     /// The last look back for a line that holds `new `.
@@ -478,8 +473,6 @@ pub(crate) struct OutputBuffer {
     /// The opening line found last for a block comment's rows: the
     /// comment, the line asked from, the answer, and the version then.
     comment_opening_cache: Cell<Option<(usize, usize, usize, u64)>>,
-    /// The last look back for a line that holds `@ {`.
-    recent_at_brace_cache: Cell<Option<RecentMatch>>,
     /// The last look back for a line that is `else` or ends with `} else`.
     recent_scoped_else_cache: Cell<Option<RecentMatch>>,
     /// Largest first token of a line pushed so far.
@@ -848,7 +841,6 @@ impl OutputBuffer {
         self.may_have_hash |= hints.has_hash;
         self.may_have_comment |= hints.has_slash || hints.starts_star;
         self.may_have_question |= hints.has_question;
-        self.may_have_at |= hints.has_at;
         self.may_have_new |= hints.has_new;
         self.may_have_asm |= hints.has_asm;
     }
@@ -875,7 +867,6 @@ impl OutputBuffer {
     pub(super) fn push_raw_literal(&mut self, line: String, structural_start: usize) {
         let suffix = line.get(structural_start..).unwrap_or("");
         self.record_hints(suffix, self.line_hints(suffix));
-        self.may_have_at |= line.contains('@');
         self.may_have_new |= line.contains("new ");
         self.may_have_asm |= line.contains("asm");
         let meta = compute_raw_literal_line_meta(&line, structural_start);
@@ -1012,7 +1003,6 @@ impl OutputBuffer {
             self.may_have_hash = true;
             self.may_have_comment = true;
             self.may_have_question = true;
-            self.may_have_at = true;
             self.may_have_new = true;
             self.may_have_asm = true;
             self.last_non_empty_dirty.set(true);
@@ -1030,7 +1020,6 @@ impl OutputBuffer {
             self.may_have_hash = true;
             self.may_have_comment = true;
             self.may_have_question = true;
-            self.may_have_at = true;
             self.may_have_new = true;
             self.may_have_asm = true;
             self.last_non_empty_dirty.set(true);
@@ -1170,7 +1159,6 @@ impl OutputBuffer {
             self.may_have_hash = true;
             self.may_have_comment = true;
             self.may_have_question = true;
-            self.may_have_at = true;
             self.may_have_new = true;
             self.may_have_asm = true;
             self.last_non_empty_dirty.set(true);
@@ -1775,18 +1763,6 @@ impl OutputBuffer {
         found.filter(|&index| index >= start)
     }
 
-    /// Whether one of the last `count` lines in scope holds `@ {`.
-    pub(crate) fn recent_scoped_at_brace_line(&self, count: usize) -> bool {
-        if !self.may_have_at {
-            return false;
-        }
-        let range = self.scoped_range();
-        let start = range.start.max(range.end.saturating_sub(count));
-        self.has_line_from(&self.recent_at_brace_cache, start, |index| {
-            self.lines[index].contains_from_first_byte("@ {")
-        })
-    }
-
     /// The last line that is `{` alone.
     pub(crate) fn last_open_brace_alone_line(&self) -> Option<usize> {
         self.last_line_from(&self.recent_brace_alone_cache, 0, |index| {
@@ -2374,10 +2350,6 @@ impl OutputBuffer {
 
     pub(crate) fn may_have_new(&self) -> bool {
         self.may_have_new
-    }
-
-    pub(crate) fn may_have_at(&self) -> bool {
-        self.may_have_at
     }
 }
 

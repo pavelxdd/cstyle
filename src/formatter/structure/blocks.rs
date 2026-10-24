@@ -252,6 +252,8 @@ fn classify(tokens: &[Token], groups: &Groups, blocks: &Blocks, id: GroupId) -> 
     }
     match &tokens[previous] {
         Token::Operator(operator) if operator == "=" => return BlockKind::Initializer,
+        // An Objective-C dictionary literal, `@{ key : value }`.
+        Token::Symbol('@') => return BlockKind::Initializer,
         Token::Word(word) if word == "return" => return BlockKind::Initializer,
         Token::Word(word)
             if matches!(
@@ -839,6 +841,14 @@ mod tests {
                 Initializer,
                 Control
             ]
+        );
+    }
+
+    #[test]
+    fn classifies_an_objc_dictionary_literal_as_a_list() {
+        assert_eq!(
+            kinds("void f()\n{\n    id map = @{ @\"a\" : @1 };\n    use(@{});\n}\n"),
+            [FunctionBody, Initializer, Initializer]
         );
     }
 

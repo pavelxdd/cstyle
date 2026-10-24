@@ -1769,8 +1769,6 @@ impl FormatEngine<'_> {
         {
             layout.exact_indent_spaces = Some(spaces);
         }
-        layout.exact_indent_spaces =
-            self.objc_dictionary_indent_spaces(line, layout.exact_indent_spaces);
         layout
     }
 

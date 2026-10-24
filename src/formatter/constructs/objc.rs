@@ -26,21 +26,6 @@ pub(crate) struct ObjCLineState {
     pub(crate) message_align: Option<usize>,
 }
 
-fn line_is_label_style_dictionary_key(line: &str) -> bool {
-    let trimmed = line.trimmed_end();
-    let Some(before) = trimmed.strip_suffix(':') else {
-        return false;
-    };
-    if !before.ends_with(char::is_whitespace) {
-        return false;
-    }
-    let key = before.trimmed_end();
-    !key.is_empty()
-        && key
-            .chars()
-            .all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
-}
-
 /// The span of the message `frame` opens on `line`: the byte offsets of its
 /// bracket and of the closer the line holds, and the column and offset of
 /// its first selector.
@@ -235,114 +220,6 @@ impl FormatEngine<'_> {
                         _ => false,
                     })
         })
-    }
-
-    pub(crate) fn objc_dictionary_indent_spaces(
-        &self,
-        line: &LineView<'_>,
-        mut current: Option<usize>,
-    ) -> Option<usize> {
-        let line_start = line.trimmed_start();
-        // Only a line holding `@` can open a dictionary literal.
-        let may_hold_dictionary = self.output.may_have_at();
-        if may_hold_dictionary
-            && line_start.starts_with("};")
-            && self.output.recent_scoped_at_brace_line(64)
-            && self
-                .output
-                .scoped()
-                .iter()
-                .rev()
-                .take(64)
-                .take_while(|line| !line.contains_from_first_byte("@interface"))
-                .any(|line| line.contains_from_first_byte("@ {"))
-        {
-            let label_style_dictionary = self
-                .output
-                .scoped()
-                .iter()
-                .rev()
-                .take(64)
-                .take_while(|line| !line.contains_from_first_byte("@ {"))
-                .any(|line| line_is_label_style_dictionary_key(line));
-            current = if label_style_dictionary {
-                self.output
-                    .scoped()
-                    .iter()
-                    .rev()
-                    .take(64)
-                    .find(|line| line.contains_from_first_byte("@ {"))
-                    .map(|opener| leading_visual_width(opener, self.options.tab_width))
-            } else {
-                self.layout
-                    .previous_pre_adjust_line
-                    .as_ref()
-                    .map(|previous| {
-                        leading_visual_width(previous, self.options.tab_width).saturating_sub(2)
-                    })
-            };
-        }
-        if may_hold_dictionary
-            && !line_start.starts_with('}')
-            && !line_is_label_style_dictionary_key(line)
-            && self
-                .output
-                .last_line_outside_comment()
-                .is_some_and(|previous| line_is_label_style_dictionary_key(previous))
-            && self.output.recent_scoped_at_brace_line(64)
-            && let Some(opener) = self
-                .output
-                .scoped()
-                .iter()
-                .rev()
-                .take(64)
-                .find(|line| line.contains_from_first_byte("@ {"))
-        {
-            current = Some(
-                leading_visual_width(opener, self.options.tab_width) + self.options.indent_width,
-            );
-        }
-        if may_hold_dictionary
-            && !line_start.starts_with('}')
-            && !line_is_label_style_dictionary_key(line)
-            && self
-                .layout
-                .previous_pre_adjust_line
-                .as_ref()
-                .is_some_and(|previous| previous.trimmed_end().ends_with(','))
-            && self.output.recent_scoped_at_brace_line(64)
-            && self
-                .output
-                .scoped()
-                .iter()
-                .rev()
-                .take(64)
-                .take_while(|line| !line.trimmed_end().ends_with("};"))
-                .any(|line| line.contains_from_first_byte("@ {"))
-        {
-            current = self
-                .layout
-                .previous_pre_adjust_line
-                .as_ref()
-                .map(|previous| leading_visual_width(previous, self.options.tab_width));
-        }
-        if line_start.starts_with("@ {")
-            && self
-                .layout
-                .previous_pre_adjust_line
-                .as_ref()
-                .is_some_and(|previous| previous.trimmed_end().ends_with('='))
-        {
-            current = self
-                .layout
-                .previous_pre_adjust_line
-                .as_ref()
-                .map(|previous| {
-                    leading_visual_width(previous, self.options.tab_width)
-                        + self.options.indent_width
-                });
-        }
-        current
     }
 
     pub(crate) fn record_closed_objc_message_indent(

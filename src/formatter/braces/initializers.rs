@@ -768,7 +768,7 @@ impl FormatEngine<'_> {
                 }
                 Some('(') => self.emit_source_space(),
                 Some('{') if self.current.ends_with_any(b" \t") => {}
-                Some('@') => self.emit_source_space_or_ensure(),
+                Some('@') => self.emit_source_space(),
                 _ if brace_type == BraceType::Initializer
                     && self.current.trimmed_end().ends_with('>') =>
                 {

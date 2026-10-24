@@ -323,6 +323,8 @@ impl FormatEngine<'_> {
         } else if current_namespace_header || previous_namespace_header {
             BraceType::Namespace
         } else if self.layout.command_state.previous_command_char == Some('=')
+            // An Objective-C dictionary literal, `@{ key : value }`.
+            || self.layout.command_state.previous_command_char == Some('@')
             || trailing_word(self.current.trimmed_end()) == language::RETURN
             // A brace below a line its `return` ends lists the value too.
             || self.current_is_blank()

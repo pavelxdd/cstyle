@@ -3727,8 +3727,12 @@ impl FormatEngine<'_> {
                 .previous_command_char
                 .is_some_and(|ch| is_word_char(ch) || ch == ']');
         // A compound literal nested in an aggregate keeps the gap written
-        // before its brace, as any brace there does.
-        if self.is_nested_designated_init_field() || self.opens_compound_literal_in_list(brace_type)
+        // before its brace, as any brace there does, and so does an
+        // Objective-C dictionary literal after its `@`.
+        if self.brace_follows_literal_at() {
+            self.emit_source_space();
+        } else if self.is_nested_designated_init_field()
+            || self.opens_compound_literal_in_list(brace_type)
         {
             if self.options.pad_operators && self.current.trimmed_end().ends_with('=') {
                 self.emit_source_space_or_ensure();
@@ -4221,6 +4225,15 @@ impl FormatEngine<'_> {
             .any(|index| matches!(&tokens[index], Token::Word(word) if word == "case" || word == "default"))
     }
 
+    /// Whether the brace being pushed follows the `@` of an Objective-C
+    /// literal, `@{`.
+    fn brace_follows_literal_at(&self) -> bool {
+        self.current
+            .active_token()
+            .and_then(|brace| self.tree.previous_code_token(brace))
+            .is_some_and(|at| matches!(self.tree.tokens[at], Token::Symbol('@')))
+    }
+
     /// Whether a list's brace after code keeps the comment running over
     /// lines after it on its line, as any code does.
     fn list_brace_keeps_multi_line_comment(
@@ -4352,6 +4365,10 @@ impl FormatEngine<'_> {
         // A compound literal's brace nested in an aggregate keeps its place
         // before a comment too.
         if self.opens_compound_literal_in_list(brace_type) && self.comments.next_comment_ends_line {
+            return true;
+        }
+        // An Objective-C dictionary literal's brace never leaves its `@`.
+        if self.brace_follows_literal_at() {
             return true;
         }
         if matches!(

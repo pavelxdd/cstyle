@@ -179,7 +179,15 @@ impl FormatEngine<'_> {
                         ObjCColonPad::All | ObjCColonPad::After
                     );
                 if !attached_closing_header {
-                    if self.current.trimmed_end().ends_with('}')
+                    if self.layout.previous == PreviousToken::OpenParen
+                        && self.options.pad_parens_inside
+                    {
+                        self.pad_inside_paren_space();
+                    } else if self.layout.previous == PreviousToken::OpenParen
+                        && self.options.unpad_parens
+                    {
+                        self.trim_current_end_horizontal_space();
+                    } else if self.current.trimmed_end().ends_with('}')
                         || after_padded_selector
                         || (self.options.pad_operators
                             && self.layout.previous == PreviousToken::Operator)
@@ -190,9 +198,6 @@ impl FormatEngine<'_> {
                     }
                 }
                 self.current.push('@');
-                if matches!(next, Some(Token::Symbol('{'))) {
-                    self.ensure_space();
-                }
                 self.layout.command_state.observe_char('@');
                 self.layout.previous = PreviousToken::Other;
                 self.previous_was_newline = false;
@@ -1291,24 +1296,6 @@ impl FormatEngine<'_> {
         }
         self.layout.previous = PreviousToken::Comma;
         self.previous_was_newline = false;
-        let in_objc_dictionary_literal = self.output.recent_scoped_at_brace_line(64)
-            && self
-                .output
-                .scoped()
-                .iter()
-                .rev()
-                .take(64)
-                .take_while(|line| !line.trimmed_end().ends_with(';'))
-                .any(|line| line.contains_from_first_byte("@ {"));
-        if in_objc_dictionary_literal {
-            let spaces = self.current_line_indent_spaces();
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
-            if !matches!(next, Some(Token::Newline) | None) {
-                self.finish_line();
-                self.previous_was_newline = true;
-            }
-        }
     }
 
     fn comma_role_for_current_separator(&self, after_compound_literal: bool) -> CommaRole {
@@ -1532,46 +1519,7 @@ impl FormatEngine<'_> {
         }
         self.layout.previous = PreviousToken::Other;
         self.previous_was_newline = false;
-        let in_objc_dictionary_literal = self.current.holds_dictionary_opener()
-            || self.output.recent_scoped_at_brace_line(64)
-                && self
-                    .output
-                    .scoped()
-                    .iter()
-                    .rev()
-                    .take(64)
-                    .take_while(|line| !line.trimmed_end().ends_with(';'))
-                    .any(|line| line.contains_from_first_byte("@ {"));
-        if in_objc_dictionary_literal
-            && !self.one_line_block_mode
-            && !is_objc_colon
-            && !matches!(next, Some(Token::Newline) | None)
-        {
-            let spaces = if self.current.holds_dictionary_opener() {
-                self.layout
-                    .previous_pre_adjust_line
-                    .as_ref()
-                    .filter(|previous| previous.trimmed_end().ends_with('='))
-                    .map(|previous| {
-                        leading_visual_width(previous, self.options.tab_width)
-                            + self.options.indent_width * 2
-                    })
-                    .unwrap_or_else(|| {
-                        self.current_line_indent_spaces() + self.options.indent_width
-                    })
-            } else {
-                self.layout
-                    .previous_pre_adjust_line
-                    .as_ref()
-                    .filter(|previous| previous.trimmed_end().ends_with(','))
-                    .map(|previous| leading_visual_width(previous, self.options.tab_width))
-                    .unwrap_or_else(|| self.current_line_indent_spaces())
-            };
-            self.finish_line();
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
-            self.previous_was_newline = true;
-        } else if function_try_initializer
+        if function_try_initializer
             && self.options.break_one_line_statements
             && !matches!(next, Some(Token::Newline | Token::Comment(_, _)) | None)
         {

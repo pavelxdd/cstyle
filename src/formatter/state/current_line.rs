@@ -493,11 +493,6 @@ impl CurrentLine {
         self.marks().equals
     }
 
-    /// Whether the line holds `@ {`, which opens a dictionary literal.
-    pub(crate) fn holds_dictionary_opener(&self) -> bool {
-        self.marks().dictionary_opener
-    }
-
     /// Whether the line holds `asm(` or `__asm__(`.
     pub(crate) fn holds_asm_call(&self) -> bool {
         self.marks().asm_call
@@ -704,7 +699,6 @@ struct LineMarks {
     minus_after_paren: bool,
     last_arrow: Option<usize>,
     arrow_after_paren: bool,
-    dictionary_opener: bool,
     asm_call: bool,
 }
 
@@ -741,7 +735,6 @@ impl LineMarks {
                 b'{' => {
                     self.open_brace = true;
                     self.tail_start = index + 1;
-                    self.dictionary_opener |= bytes[..=index].ends_with(b"@ {");
                 }
                 b'}' => {
                     self.close_brace = true;

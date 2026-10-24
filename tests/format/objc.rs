@@ -328,8 +328,8 @@ fn pad_method_colon_leaves_dictionary_colons_in_a_message_and_pads_later_selecto
             fixture!(
                 "- (void)run",
                 "{",
-                "    NSDictionary *d = @ {@\"a\":@1};",
-                "    [self setItems: @ {@\"k\":value} forKey: @\"x\"];",
+                "    NSDictionary *d = @{@\"a\":@1};",
+                "    [self setItems: @{@\"k\":value} forKey: @\"x\"];",
                 "}",
             ),
         ),
@@ -338,8 +338,8 @@ fn pad_method_colon_leaves_dictionary_colons_in_a_message_and_pads_later_selecto
             fixture!(
                 "- (void)run",
                 "{",
-                "    NSDictionary *d = @ {@\"a\":@1};",
-                "    [self setItems : @ {@\"k\":value} forKey : @\"x\"];",
+                "    NSDictionary *d = @{@\"a\":@1};",
+                "    [self setItems : @{@\"k\":value} forKey : @\"x\"];",
                 "}",
             ),
         ),
@@ -580,9 +580,9 @@ fn keeps_single_line_objc_collection_literals_inline() {
         ),
         fixture!(
             "void f(void) {",
-            "    d = @ {key: value};",
+            "    d = @{key: value};",
             "    a = @[one, two];",
-            "    b = @ {};",
+            "    b = @{};",
             "    c = @[];",
             "}"
         )
@@ -698,7 +698,7 @@ fn aligns_method_colon_across_multiline_objc_message_send() {
 }
 
 #[test]
-fn flushes_multiline_bare_key_dictionary_keys_as_labels() {
+fn multiline_dictionary_rows_with_bare_keys_stay_list_rows() {
     let options = FormatOptions::default();
 
     assert_eq!(
@@ -715,11 +715,9 @@ fn flushes_multiline_bare_key_dictionary_keys_as_labels() {
         ),
         fixture!(
             "void f(void) {",
-            "    d = @ {",
-            "akey :",
-            "        value,",
-            "bkey :",
-            "        other,",
+            "    d = @{",
+            "        akey : value,",
+            "        bkey : other,",
             "    };",
             "}"
         )
@@ -763,8 +761,8 @@ fn keeps_nested_objc_collection_literals_inline() {
         ),
         fixture!(
             "void f(void) {",
-            "    q = @[@ {a: b}, @ {c: d}];",
-            "    r = @ {k: @[x, y]};",
+            "    q = @[@{a: b}, @{c: d}];",
+            "    r = @{k: @[x, y]};",
             "}"
         )
     );
@@ -897,7 +895,7 @@ fn objc_dictionary_in_one_method_does_not_break_following_method_message() {
     let mut options = FormatOptions::default();
     options.mode = Mode::ObjC;
     let source = "+ (id)alpha {\n    return [Helper makeWithDomain:Domain\n                             code:code\n                         userInfo:@{ Key: [value stringByAppendingString:@\".\"] }];\n}\n+ (id)beta {\n    id result = source ?: [Builder buildWithFormat:@\"%@ %@\",\n                           source.domain, @(source.code)];\n}\n";
-    let expected = "+ (id)alpha {\n    return [Helper makeWithDomain:Domain\n                   code:code\n                   userInfo:@ { Key: [value stringByAppendingString:@\".\"] }];\n}\n+ (id)beta {\n    id result = source ?: [Builder buildWithFormat:@\"%@ %@\",\n                                   source.domain, @(source.code)];\n}\n";
+    let expected = "+ (id)alpha {\n    return [Helper makeWithDomain:Domain\n                   code:code\n                   userInfo:@{ Key: [value stringByAppendingString:@\".\"] }];\n}\n+ (id)beta {\n    id result = source ?: [Builder buildWithFormat:@\"%@ %@\",\n                                   source.domain, @(source.code)];\n}\n";
 
     assert_eq!(format_exact(source, &options), expected);
 }
@@ -935,7 +933,7 @@ fn objc_message_dictionary_value_selector_colon_aligns_under_first_selector() {
             "void f(void) {\n    return [Err errorWithDomain:Domain\n            code:code\n            userInfo:@{ Key: [detail stringByAppendingString:@\".\"] }];\n}\n",
             &options,
         ),
-        "void f(void) {\n    return [Err errorWithDomain:Domain\n                           code:code\n                       userInfo:@ { Key: [detail stringByAppendingString:@\".\"] }];\n}\n",
+        "void f(void) {\n    return [Err errorWithDomain:Domain\n                           code:code\n                       userInfo:@{ Key: [detail stringByAppendingString:@\".\"] }];\n}\n",
     );
 }
 
@@ -955,13 +953,13 @@ fn objc_message_continuation_aligns_under_selector_even_when_column_overflows() 
 }
 
 #[test]
-fn objc_dictionary_literal_breaks_value_rows_after_colons() {
+fn objc_dictionary_literal_keeps_each_key_with_its_value() {
     assert_eq!(
         format_exact(
             "- (void)draw {\n    Dictionary *attributes =\n        @{ Name: [Color whiteColor],\n           Font: [Font systemFontOfSize:[Font systemFontSize]] };\n}\n",
             &FormatOptions::default(),
         ),
-        "- (void)draw {\n    Dictionary *attributes =\n        @ { Name:\n            [Color whiteColor],\n            Font:\n            [Font systemFontOfSize:[Font systemFontSize]]\n          };\n}\n",
+        "- (void)draw {\n    Dictionary *attributes =\n        @{ Name: [Color whiteColor],\n           Font: [Font systemFontOfSize:[Font systemFontSize]] };\n}\n",
     );
 }
 
@@ -972,7 +970,7 @@ fn objc_dictionary_literal_after_assignment_keeps_at_brace_spacing() {
             "void f(void) {\n    Dictionary *attributes =\n    @{ Name:\n       [Color whiteColor],\n       Font:\n       [Font systemFont]\n     };\n}\n",
             &FormatOptions::default(),
         ),
-        "void f(void) {\n    Dictionary *attributes =\n        @ { Name:\n            [Color whiteColor],\n            Font:\n            [Font systemFont]\n          };\n}\n",
+        "void f(void) {\n    Dictionary *attributes =\n        @{ Name:\n           [Color whiteColor],\n           Font:\n           [Font systemFont]\n         };\n}\n",
     );
 }
 
@@ -1594,4 +1592,46 @@ fn a_nested_message_after_a_logical_or_bitwise_operator_keeps_its_space() {
         assert_eq!(format_exact(input, &options), expected);
         assert_eq!(format_exact(&expected, &options), expected);
     }
+}
+
+#[test]
+fn a_multiline_dictionary_literal_is_a_list_after_its_at() {
+    // `@{` stays together in every style, and its rows stand as a list's,
+    // each key with its value.
+    let input = "void f()\n{\n    NSDictionary *map = @{\n        @\"a\" : @1,\n        @\"b\" : @2\n    };\n}\n";
+    for (style, expected) in [
+        ("--style=kr", input.to_string()),
+        (
+            "--style=allman",
+            input.to_string(),
+        ),
+        (
+            "--style=whitesmith",
+            "void f()\n    {\n    NSDictionary *map = @{\n        @\"a\" : @1,\n        @\"b\" : @2\n        };\n    }\n".to_string(),
+        ),
+        (
+            "--style=lisp",
+            "void f() {\n    NSDictionary *map = @{\n        @\"a\" : @1,\n        @\"b\" : @2 }; }\n".to_string(),
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_string()]).expect("valid options");
+        assert_eq!(format_exact(input, &options), expected, "{style}");
+        assert_eq!(format_exact(&expected, &options), expected, "{style}");
+    }
+}
+
+#[test]
+fn pad_paren_pads_inside_before_an_objc_literal() {
+    let input = "void f()\n{\n    NSLog(@\"%d\", value);\n    use(@[ @1 ], @{ @\"a\" : @1 });\n}\n";
+    let expected =
+        "void f()\n{\n    NSLog ( @\"%d\", value );\n    use ( @[ @1 ], @{ @\"a\" : @1 } );\n}\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--pad-paren".to_string()],
+    )
+    .expect("valid options");
+    assert_eq!(format_exact(input, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
 }

@@ -2429,8 +2429,11 @@ impl FormatEngine<'_> {
                 self.current.push_str(source_gap.unwrap_or_default());
             }
             // A compound literal among a list's elements keeps the gap
-            // written before its brace, as any brace there does.
-            None if self.opens_compound_literal_in_list(brace_type) => {
+            // written before its brace, as any brace there does, and so
+            // does an Objective-C dictionary literal after its `@`.
+            None if self.opens_compound_literal_in_list(brace_type)
+                || self.current.trimmed_end().ends_with('@') =>
+            {
                 self.current.push_str(source_gap.unwrap_or_default());
             }
             None if self.should_space_before_one_line_block(brace_type) => match source_gap {
