@@ -58,9 +58,9 @@ pub(crate) struct ContinuationIndentState {
     /// body.
     pub(crate) next_input_line_follows_lambda_body: bool,
     pub(crate) input_line_follows_lambda_body: bool,
-    /// The input line goes on with the template arguments of an angle that
-    /// ended a line before it, at the column the angle registered.
-    pub(crate) input_line_continues_template_arguments: bool,
+    /// The column the engine gives the input line when it goes on with
+    /// template arguments an angle on a line before it opened.
+    pub(crate) input_line_template_arguments_spaces: Option<usize>,
 }
 
 impl ContinuationIndentState {
@@ -949,17 +949,23 @@ impl FormatEngine<'_> {
         if before.is_empty() || before.ends_with(':') || before.contains('?') {
             return false;
         }
-        // Qualifiers after the parameters still end a constructor's head.
-        signature_ends_with_parameter_list(before) || code_opens_class_base_clause(before)
+        // Qualifiers after the parameters still end a constructor's head, and
+        // a class head may end on a row of its own.
+        signature_ends_with_parameter_list(before)
+            || code_opens_class_base_clause(before)
+            || self.split_class_head_ends_with(before)
     }
 
     fn class_base_clause_indent_spaces(&self) -> usize {
         let current_code = &self.current[..self.current_trailing_comment_split_limit()];
         if self.current_opens_class_base_clause()
             || code_opens_class_base_clause(current_code.trimmed_end())
-            || self.current_ends_base_clause_colon()
         {
             return self.current_line_indent_spaces() + self.options.indent_width;
+        }
+        // A head split over rows is continued from the row it starts on.
+        if self.current_ends_base_clause_colon() {
+            return (self.continuation_base_indent() + 1) * self.options.indent_width;
         }
         for scan_index in self.output.scoped_range().rev() {
             let line = &self.output[scan_index];
@@ -1173,6 +1179,10 @@ impl FormatEngine<'_> {
         {
             return ContinuationIndent::Spaces(self.current_line_indent_spaces());
         }
+        // Template arguments hold their rows, a base's among them.
+        if let Some(spaces) = self.open_template_arguments_indent_spaces() {
+            return ContinuationIndent::Spaces(spaces);
+        }
         if self.layout.in_class_base_clause {
             return ContinuationIndent::Spaces(self.class_base_clause_indent_spaces());
         }
@@ -1184,9 +1194,6 @@ impl FormatEngine<'_> {
             && unmatched_open_paren_column(self.current.trimmed_end()).is_none()
         {
             return ContinuationIndent::Spaces(self.current_line_indent_spaces());
-        }
-        if let Some(spaces) = self.open_template_arguments_indent_spaces() {
-            return ContinuationIndent::Spaces(spaces);
         }
         if let Some(spaces) = self.declaration_continuation_indent_spaces() {
             return ContinuationIndent::Spaces(spaces);
@@ -1854,9 +1861,9 @@ impl FormatEngine<'_> {
         )
     }
 
-    /// The column a line ending among the template arguments of an angle
-    /// that ended its line continues at: every row of them stands there, as
-    /// the rows of a paren ending its line do.
+    /// The column a line ending among template arguments continues at: every
+    /// row of them stands at the column their angle registered, as the rows
+    /// of a paren's arguments do.
     pub(crate) fn open_template_arguments_indent_spaces(&self) -> Option<usize> {
         let angle = *self.layout.line_state.template_angle_continuations.last()?;
         (self.layout.line_state.template_angle_depth > 0
@@ -1866,9 +1873,9 @@ impl FormatEngine<'_> {
             .flatten()
     }
 
-    /// Whether the statement under way stands among the template arguments
-    /// of an angle that ended its line, whose column its rows count from.
-    pub(crate) fn within_line_ending_template_arguments(&self) -> bool {
+    /// Whether the statement under way stands among template arguments
+    /// whose angle registered the column its rows count from.
+    pub(crate) fn within_template_arguments(&self) -> bool {
         self.layout.line_state.template_angle_depth > 0
             && self
                 .layout

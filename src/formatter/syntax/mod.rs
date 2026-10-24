@@ -284,6 +284,8 @@ pub(crate) fn template_openers(tokens: &[Token]) -> Vec<bool> {
             | Token::Preprocessor(_) => {}
             Token::Word(_) | Token::Number(_) | Token::CharLiteral(_) | Token::StringLiteral(_) => {
             }
+            // A comparison among the arguments leaves them open.
+            Token::Operator(operator) if operator == "<" && !can_name_template(tokens, cursor) => {}
             Token::Operator(operator) if operator == "<" => {
                 let first_after_open =
                     next_non_whitespace(tokens, cursor + 1, end).and_then(|next| tokens.get(next));
@@ -359,6 +361,27 @@ fn is_literal(token: &Token) -> bool {
     )
 }
 
+/// Whether what stands before the `<` at `index` can name a template: a
+/// literal names none, nor does a closing paren but a call operator's.
+fn can_name_template(tokens: &[Token], index: usize) -> bool {
+    let previous_code = |end: usize| {
+        (0..end).rev().find(|&at| {
+            !matches!(
+                tokens[at],
+                Token::Whitespace(_) | Token::Newline | Token::Comment(..)
+            )
+        })
+    };
+    match previous_code(index).map(|at| (at, &tokens[at])) {
+        Some((close, Token::Symbol(')'))) => previous_code(close)
+            .filter(|&open| matches!(tokens[open], Token::Symbol('(')))
+            .and_then(previous_code)
+            .is_some_and(|name| matches!(&tokens[name], Token::Word(word) if word == "operator")),
+        Some((_, token)) => !is_literal(token),
+        None => true,
+    }
+}
+
 fn looks_like_template_opener(tokens: &[Token], index: usize, end: usize) -> bool {
     if !matches!(tokens.get(index), Some(Token::Operator(operator)) if operator == "<") {
         return false;
@@ -367,6 +390,7 @@ fn looks_like_template_opener(tokens: &[Token], index: usize, end: usize) -> boo
         next_non_whitespace(tokens, index + 1, end).and_then(|next| tokens.get(next));
     if first_after_open.is_none()
         || matches!(first_after_open, Some(Token::Operator(operator)) if operator == "=")
+        || !can_name_template(tokens, index)
     {
         return false;
     }
@@ -377,7 +401,11 @@ fn looks_like_template_opener(tokens: &[Token], index: usize, end: usize) -> boo
             Token::Whitespace(_) | Token::Newline | Token::Comment(_, _) => {}
             Token::Word(_) | Token::Number(_) | Token::CharLiteral(_) | Token::StringLiteral(_) => {
             }
-            Token::Operator(operator) if operator == "<" => depth += 1,
+            Token::Operator(operator) if operator == "<" => {
+                if can_name_template(tokens, cursor) {
+                    depth += 1;
+                }
+            }
             Token::Operator(operator) if operator == ">" => {
                 depth = depth.saturating_sub(1);
                 if depth == 0 {

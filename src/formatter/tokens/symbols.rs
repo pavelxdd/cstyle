@@ -1291,6 +1291,14 @@ impl FormatEngine<'_> {
                 == Some(self.layout.nesting.paren_depth)
         {
             self.layout.nesting.trim_to_brace_element_continuation();
+        } else if self.layout.line_state.template_angle_depth > 0
+            && let Some(angle) = self.layout.line_state.template_angle_continuations.last()
+            && angle.closer_spaces.is_some()
+            && self
+                .layout
+                .nesting
+                .trim_to_template_argument_continuation(angle.continuations)
+        {
         } else if self.layout.indentation.statement_depth() > 0
             || self.layout.nesting.paren_depth > 0
         {

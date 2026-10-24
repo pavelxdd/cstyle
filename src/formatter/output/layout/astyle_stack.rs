@@ -94,9 +94,9 @@ struct Replay {
     sizes: Vec<usize>,
     parens: Vec<usize>,
     paren_statements: Vec<bool>,
-    /// Each open template angle, and whether it ended its line: such an
-    /// angle registers and drops its rows' column as a paren does.
-    angles: Vec<bool>,
+    /// How many template angles stand open, each registering and dropping
+    /// its rows' column as a paren does.
+    angles: usize,
     continuation: bool,
     depth: usize,
     line_space: usize,
@@ -661,6 +661,12 @@ impl FormatEngine<'_> {
         Err(index)
     }
 
+    /// A row among template arguments stands at the column the stack of its
+    /// statement holds for it, wherever splits moved the rows before.
+    pub(crate) fn template_argument_row_indent(&self, first: usize) -> Option<usize> {
+        self.replayed_stack_indent(first, false)
+    }
+
     /// The indent astyle's continuation stack gives the line starting at
     /// `first`, replayed from the start of its statement.
     fn astyle_stack_indent(&self, first: usize) -> Option<usize> {
@@ -850,23 +856,19 @@ impl FormatEngine<'_> {
                     self.open_replay_paren(&mut replay, index, next_on_line, &relative)?;
                 }
                 Token::Symbol(')' | ']') => replay.close_paren(starts_line)?,
-                // Template arguments after an angle ending its line stand as
-                // a paren's.
+                // Template arguments stand as a paren's.
                 Token::Operator(operator) if operator == "<" && self.template_opener_at(index) => {
-                    replay.angles.push(next_on_line.is_none());
-                    if next_on_line.is_none() {
-                        self.open_replay_paren(&mut replay, index, next_on_line, &relative)?;
-                    }
+                    replay.angles += 1;
+                    self.open_replay_paren(&mut replay, index, next_on_line, &relative)?;
                 }
                 Token::Operator(operator)
                     if matches!(operator.as_str(), ">" | ">>")
-                        && !replay.angles.is_empty()
+                        && replay.angles > 0
                         && self.closes_template_arguments(index) =>
                 {
-                    for _ in 0..operator.len() {
-                        if replay.angles.pop() == Some(true) {
-                            replay.close_paren(starts_line)?;
-                        }
+                    for _ in 0..operator.len().min(replay.angles) {
+                        replay.angles -= 1;
+                        replay.close_paren(starts_line)?;
                     }
                 }
                 Token::Symbol(',') => {
@@ -1038,12 +1040,12 @@ impl FormatEngine<'_> {
             index += 1;
         }
         // A `)` starting its line takes the indent its paren saved, as does
-        // the `>` of an angle that ended its line.
-        let closes_registered_angle = matches!(&tokens[first], Token::Operator(operator) if operator.starts_with('>'))
-            && replay.angles.last() == Some(&true);
+        // the `>` of template arguments.
+        let closes_angle = matches!(&tokens[first], Token::Operator(operator) if operator.starts_with('>'))
+            && replay.angles > 0;
         let top = if matches!(tokens[first], Token::Symbol(')'))
             || closes_stacked_brace
-            || closes_registered_angle
+            || closes_angle
         {
             replay.parens.last().copied()
         } else {

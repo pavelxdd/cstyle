@@ -1593,8 +1593,9 @@ impl<'a> FormatEngine<'a> {
             );
         self.layout
             .continuation_indent
-            .input_line_continues_template_arguments =
-            !(directive || empty) && self.within_line_ending_template_arguments();
+            .input_line_template_arguments_spaces = (!(directive || empty)
+            && self.within_template_arguments())
+        .then(|| self.current_line_indent_spaces());
         self.layout.line_state.passed_semicolon = false;
         self.layout.line_state.passed_colon = false;
         self.layout.line_state.ternary_colon = false;
@@ -2293,27 +2294,14 @@ impl<'a> FormatEngine<'a> {
                 .set_next_line_level(header_indent + usize::from(!follows_function_try));
             self.previous_was_newline = true;
         } else if self.next_line.leads_with_class_base {
+            // The clause stands a level past the head, however its rows
+            // split.
             let header_indent = self.layout.indentation.indent();
-            let split_head = !self.current_opens_class_base_clause();
             self.finish_line();
             self.layout.nesting.clear_continuation_indents();
-            // The clause after a head split across rows stands with them.
-            match split_head
-                .then(|| {
-                    self.split_class_head_row_lead().or_else(|| {
-                        self.output
-                            .last()
-                            .map(|row| columns::leading_visual_width(row, self.options.tab_width))
-                    })
-                })
-                .flatten()
-            {
-                Some(spaces) => self.layout.continuation_indent.set_next_line_spaces(spaces),
-                None => self
-                    .layout
-                    .continuation_indent
-                    .set_next_line_level(header_indent + 1),
-            }
+            self.layout
+                .continuation_indent
+                .set_next_line_level(header_indent + 1);
             self.layout.in_class_base_clause = true;
             self.previous_was_newline = true;
         } else if self.current.trimmed_end().ends_with(',') && self.is_top_level_table_macro_row() {

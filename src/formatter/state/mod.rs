@@ -280,6 +280,22 @@ impl NestingState {
         self.continuation_indent_spaces_stack.truncate(target_size);
     }
 
+    /// Drops the continuations an argument of the template arguments whose
+    /// angle registered column `angle` holds, as the comma ending it does,
+    /// when no paren opened since; whether it did.
+    pub(crate) fn trim_to_template_argument_continuation(&mut self, angle: usize) -> bool {
+        if self
+            .continuation_indent_checkpoint_stack
+            .last()
+            .is_some_and(|&checkpoint| angle < checkpoint)
+            || angle >= self.continuation_indent_spaces_stack.len()
+        {
+            return false;
+        }
+        self.continuation_indent_spaces_stack.truncate(angle + 1);
+        true
+    }
+
     /// Drops the continuations an element of the innermost brace list
     /// registered, as the comma ending it at the list's own depth does.
     pub(crate) fn trim_to_brace_element_continuation(&mut self) {
@@ -435,10 +451,12 @@ impl NestingState {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) struct OpenTemplateAngle {
     pub(crate) continuations: usize,
-    /// Where a row its closer leads stands, when it ended its line and its
-    /// rows continue past the column it registered: at the line it opened
-    /// on, as a paren's closer does.
+    /// Where a row its closer leads stands, when its rows continue past the
+    /// column it registered: at the line it opened on, as a paren's closer
+    /// does.
     pub(crate) closer_spaces: Option<usize>,
+    /// Whether it stands in a template head, whose rows are its own.
+    pub(crate) in_head: bool,
 }
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]

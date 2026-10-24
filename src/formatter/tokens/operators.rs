@@ -873,39 +873,50 @@ impl FormatEngine<'_> {
         }
         match template_angle {
             TemplateAngle::Open => {
-                // A template head's parameters keep the head's own rows.
-                let opens_head = trailing_word(self.current.trimmed_end()) == "template";
-                self.emit_source_space();
-                self.current.push('<');
                 if self.layout.line_state.template_angle_depth == 0 {
                     self.layout.line_state.template_angle_continuations.clear();
                 }
+                // A template head's parameters keep the head's own rows.
+                let in_head = trailing_word(self.current.trimmed_end()) == "template"
+                    || self
+                        .layout
+                        .line_state
+                        .template_angle_continuations
+                        .last()
+                        .is_some_and(|angle| angle.in_head);
+                self.emit_source_space();
+                self.current.push('<');
                 self.layout.line_state.template_angle_depth += 1;
-                let continuations = self.layout.nesting.continuation_count();
-                // Its arguments below continue past the line, as a paren's.
-                let ends_line = !opens_head
-                    && !self.template_continuation_active()
-                    && matches!(
-                        next,
-                        None | Some(Token::Newline | Token::Comment(CommentKind::Line, _))
-                    );
-                let closer_spaces = ends_line.then(|| {
+                // Its arguments on rows below continue past it, as a paren's.
+                let registers = !in_head && !self.template_continuation_active();
+                let ends_line = matches!(
+                    next,
+                    None | Some(Token::Newline | Token::Comment(CommentKind::Line, _))
+                );
+                let closer_spaces = registers.then(|| {
                     self.layout
                         .nesting
                         .current_continuation_indent_spaces()
                         .unwrap_or_else(|| self.current_line_indent_spaces())
                 });
+                self.emit_trailing_source_space();
+                if registers {
+                    self.register_current_continuation_indent(if ends_line { None } else { next });
+                }
+                // The column it registered ends with it.
+                let continuations = self
+                    .layout
+                    .nesting
+                    .continuation_count()
+                    .saturating_sub(usize::from(registers));
                 self.layout
                     .line_state
                     .template_angle_continuations
                     .push(OpenTemplateAngle {
                         continuations,
                         closer_spaces,
+                        in_head,
                     });
-                self.emit_trailing_source_space();
-                if ends_line {
-                    self.register_current_continuation_indent(None);
-                }
                 self.layout.command_state.observe_text(operator);
                 self.layout.previous = PreviousToken::Operator;
                 self.previous_was_newline = false;

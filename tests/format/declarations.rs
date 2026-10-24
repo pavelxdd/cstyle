@@ -556,24 +556,14 @@ fn template_base_after_wrapped_struct_header_aligns_to_header() {
 }
 
 #[test]
-fn typedef_template_argument_rows_keep_two_level_indent() {
-    assert_eq!(
-        format_exact(
-            fixture!(
-                "typedef PixelEncoding<unsigned char, 32,",
-                "                      NativePixelEncoding::RED,",
-                "                      NativePixelEncoding::GREEN,",
-                "                      PIXEL_ENCODING_ALPHA> AlphaPixelEncoding;",
-            ),
-            &FormatOptions::default(),
-        ),
-        fixture!(
-            "typedef PixelEncoding<unsigned char, 32,",
-            "        NativePixelEncoding::RED,",
-            "        NativePixelEncoding::GREEN,",
-            "        PIXEL_ENCODING_ALPHA> AlphaPixelEncoding;",
-        )
+fn typedef_template_argument_rows_stand_at_the_first_argument() {
+    let source = fixture!(
+        "typedef PixelEncoding<unsigned char, 32,",
+        "                      NativePixelEncoding::RED,",
+        "                      NativePixelEncoding::GREEN,",
+        "                      PIXEL_ENCODING_ALPHA> AlphaPixelEncoding;",
     );
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
 
 #[test]
@@ -589,34 +579,21 @@ fn typedef_function_pointer_parameter_rows_indent_one_level() {
 }
 
 #[test]
-fn typedef_inline_template_arguments_and_value_keep_two_level_indent() {
-    assert_eq!(
-        format_exact(
-            fixture!(
-                "struct X",
-                "{",
-                "    typedef typename T<A,",
-                "                      B,",
-                "                      C>::value",
-                "            V;",
-                "};",
-            ),
-            &FormatOptions::default(),
-        ),
-        fixture!(
-            "struct X",
-            "{",
-            "    typedef typename T<A,",
-            "            B,",
-            "            C>::value",
-            "            V;",
-            "};",
-        )
+fn typedef_inline_template_arguments_align_and_its_name_keeps_two_level_indent() {
+    let source = fixture!(
+        "struct X",
+        "{",
+        "    typedef typename T<A,",
+        "                       B,",
+        "                       C>::value",
+        "            V;",
+        "};",
     );
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
 
 #[test]
-fn typedef_template_argument_rows_return_to_typedef_indent() {
+fn typedef_template_arguments_after_an_angle_on_its_own_row_continue_past_it() {
     assert_eq!(
         format_exact(
             fixture!(
@@ -637,8 +614,8 @@ fn typedef_template_argument_rows_return_to_typedef_indent() {
             "{",
             "    typedef typename T",
             "    <",
-            "    A,",
-            "    B",
+            "        A,",
+            "        B",
             "    >::value",
             "    value;",
             "};",
@@ -836,7 +813,7 @@ fn split_partial_specialization_body_uses_normal_class_indent() {
         fixture!(
             "template<typename ContainerType>",
             "struct container_value_adapter_factory< ContainerType,",
-            "       void_t<decltype(begin(std::declval<ContainerType>()), end(std::declval<ContainerType>()))>>",
+            "                                        void_t<decltype(begin(std::declval<ContainerType>()), end(std::declval<ContainerType>()))>>",
             "{",
             "    using adapter_type = int;",
             "",
@@ -1576,7 +1553,7 @@ fn whitesmith_class_base_brace_uses_class_body_column() {
         fixture!(
             "class Item:",
             "    public Base<Alpha,",
-            "    Beta>,",
+            "                Beta>,",
             "    private Other",
             "    {",
             "    };",
@@ -1771,7 +1748,7 @@ fn using_alias_std_function_parameter_row_aligns_under_first_parameter() {
 }
 
 #[test]
-fn std_conditional_type_alias_rows_keep_first_argument_indent() {
+fn std_conditional_type_alias_rows_stand_at_the_first_argument() {
     assert_eq!(
         format_exact(
             fixture!(
@@ -1788,8 +1765,8 @@ fn std_conditional_type_alias_rows_keep_first_argument_indent() {
             "struct Item {",
             "    using reference =",
             "        typename std::conditional<std::is_const<ValueType>::value,",
-            "        typename ValueType::const_reference,",
-            "        typename ValueType::reference>::type;",
+            "                                  typename ValueType::const_reference,",
+            "                                  typename ValueType::reference>::type;",
             "};",
         )
     );

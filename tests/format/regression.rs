@@ -9952,7 +9952,7 @@ fn a_macro_word_heads_the_block_its_brace_opens_on_its_line() {
 #[test]
 fn whitesmith_keeps_the_base_of_a_class_head_over_lines_on_its_line() {
     let input = "template <typename It>\nstruct is_inserter<\n    It, enable_if<is_same<\n            typename It::type, int>::value>> : std::true_type {};\n";
-    let expected = "template <typename It>\nstruct is_inserter<\n    It, enable_if<is_same<\n        typename It::type, int>::value>> : std::true_type {};\n";
+    let expected = "template <typename It>\nstruct is_inserter<\n    It, enable_if<is_same<\n                      typename It::type, int>::value>> : std::true_type {};\n";
     check(input, &["--style=whitesmith"], expected);
     check(expected, &["--style=whitesmith"], expected);
 }
@@ -19965,7 +19965,7 @@ fn break_return_type_reads_a_head_with_a_trailing_return_type_as_any_head() {
 fn a_head_on_its_own_line_after_its_return_type_starts_what_its_rows_continue() {
     // astyle stacks from the line the name starts, with the return type
     // split off or written above it.
-    let expected = "auto\nget(int x) -> pair<int,\n    int>\n{\n    return x;\n}\n";
+    let expected = "auto\nget(int x) -> pair<int,\n                   int>\n{\n    return x;\n}\n";
     for input in [
         "auto get(int x) -> pair<int,\n                         int> {\n  return x;\n}\n",
         "auto\nget(int x) -> pair<int,\n  int> {\n  return x;\n}\n",
@@ -19973,7 +19973,7 @@ fn a_head_on_its_own_line_after_its_return_type_starts_what_its_rows_continue() 
         check(input, &["--style=kr", "--break-return-type"], expected);
     }
     check(expected, &["--style=kr", "--break-return-type"], expected);
-    let expected = "template <typename T>\nauto\nfind_end(T&& range) -> select_t<check<T&&>::value,\n         decltype(end(range))>\n{\n    return end(range);\n}\n";
+    let expected = "template <typename T>\nauto\nfind_end(T&& range) -> select_t<check<T&&>::value,\n                                decltype(end(range))>\n{\n    return end(range);\n}\n";
     let input = "template <typename T>\nauto find_end(T&& range) -> select_t<check<T&&>::value,\n                                     decltype(end(range))> {\n  return end(range);\n}\n";
     check(input, &["--style=kr", "--break-return-type"], expected);
     check(expected, &["--style=kr", "--break-return-type"], expected);
@@ -20129,7 +20129,7 @@ fn a_member_initializer_row_with_a_run_in_body_continues_the_list() {
 #[test]
 fn an_empty_type_body_after_a_base_clause_over_lines_stays_empty() {
     let input = "struct Item\n    : public First,\n      public Second {};\nstruct Other\n    : Base<T,\n           U> {};\ntemplate <typename T>\nstruct Third<T> : public First,\n                  public Second {};\n";
-    let expected = "struct Item\n    : public First,\n      public Second {};\nstruct Other\n    : Base<T,\n      U> {};\ntemplate <typename T>\nstruct Third<T> : public First,\n    public Second {};\n";
+    let expected = "struct Item\n    : public First,\n      public Second {};\nstruct Other\n    : Base<T,\n           U> {};\ntemplate <typename T>\nstruct Third<T> : public First,\n    public Second {};\n";
     for style in ["--style=lisp", "--style=pico", "--style=kr"] {
         check(input, &[style], expected);
         check(expected, &[style], expected);
@@ -22009,9 +22009,9 @@ fn a_lambda_argument_after_a_string_argument_stands_at_the_statement() {
 }
 
 #[test]
-fn a_base_clause_after_a_split_class_head_stands_with_the_head_rows() {
+fn a_base_clause_after_a_split_class_head_stands_a_level_past_the_head() {
     let input = "template <typename T>\nstruct Holder<T, Pair<decltype(first<T>()),\n                      decltype(second<T>())>>\n    : std::true_type {};\ntemplate <typename T>\nstruct Holder<T, decltype(first<T>()),\n              decltype(second<T>())>\n    : std::true_type {};\ntemplate <typename T>\nstruct Holder<T, decltype(first<T>()),\n              decltype(second<T>())> >\n    : std::true_type {};\n";
-    let expected = "template <typename T>\nstruct Holder<T, Pair<decltype(first<T>()),\n       decltype(second<T>())>>\n       : std::true_type {};\ntemplate <typename T>\nstruct Holder<T, decltype(first<T>()),\n       decltype(second<T>())>\n       : std::true_type {};\ntemplate <typename T>\nstruct Holder<T, decltype(first<T>()),\n       decltype(second<T>())> >\n       : std::true_type {};\n";
+    let expected = "template <typename T>\nstruct Holder<T, Pair<decltype(first<T>()),\n                      decltype(second<T>())>>\n    : std::true_type {};\ntemplate <typename T>\nstruct Holder<T, decltype(first<T>()),\n              decltype(second<T>())>\n    : std::true_type {};\ntemplate <typename T>\nstruct Holder<T, decltype(first<T>()),\n              decltype(second<T>())> >\n    : std::true_type {};\n";
     for style in [
         "--style=kr",
         "--style=allman",
@@ -22024,11 +22024,11 @@ fn a_base_clause_after_a_split_class_head_stands_with_the_head_rows() {
 }
 
 #[test]
-fn every_split_class_head_continues_at_its_name() {
+fn every_split_class_head_continues_at_its_template_arguments() {
     // Whatever the class key and whether the head holds parens, as a
     // struct head holding parens does.
     let input = "struct Holder<T,\n              int>\n    : Base {};\nclass Holder<T, decltype(first<T>()),\n             int>\n    : public Base {};\nunion Holder<T,\n             int> {};\n";
-    let expected = "struct Holder<T,\n       int>\n       : Base {};\nclass Holder<T, decltype(first<T>()),\n      int>\n      : public Base {};\nunion Holder<T,\n      int> {};\n";
+    let expected = "struct Holder<T,\n              int>\n    : Base {};\nclass Holder<T, decltype(first<T>()),\n             int>\n    : public Base {};\nunion Holder<T,\n             int> {};\n";
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
     let input = "struct Holder<\n    T, decltype(first(value<T>()))>\n    : Base {};\n";
@@ -22038,8 +22038,7 @@ fn every_split_class_head_continues_at_its_name() {
 #[test]
 fn a_base_clause_ended_with_its_statement_leads_no_initializer_list_after_it() {
     let input = "struct Item\n    : Base {};\nstruct Holder<T, decltype(first<T>()),\n              int> {};\n";
-    let expected =
-        "struct Item\n    : Base {};\nstruct Holder<T, decltype(first<T>()),\n       int> {};\n";
+    let expected = "struct Item\n    : Base {};\nstruct Holder<T, decltype(first<T>()),\n              int> {};\n";
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
@@ -22048,7 +22047,7 @@ fn a_base_clause_ended_with_its_statement_leads_no_initializer_list_after_it() {
 fn a_member_call_in_a_split_template_argument_row_leaves_the_next_row_continued() {
     // The row's comma stands within the template angles it leaves open.
     let input = "template <typename T>\nstruct Holder<T, Pair<decltype(*first<T>().begin()),\n                      decltype(second<T>().end())>>\n    : std::true_type {};\n";
-    let expected = "template <typename T>\nstruct Holder<T, Pair<decltype(*first<T>().begin()),\n       decltype(second<T>().end())>>\n       : std::true_type {};\n";
+    let expected = "template <typename T>\nstruct Holder<T, Pair<decltype(*first<T>().begin()),\n                      decltype(second<T>().end())>>\n    : std::true_type {};\n";
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
@@ -22179,11 +22178,45 @@ fn a_template_argument_row_leading_with_a_type_word_continues_the_arguments() {
 }
 
 #[test]
+fn rows_of_template_arguments_after_one_on_the_angle_row_stand_at_it() {
+    // As the rows of a paren's arguments do, whatever names the template
+    // and wherever it stands; the bases after a class head split in its
+    // arguments stand a level past the head, as after a one-row head.
+    let input = "void f()\n{\n    std::map<std::string,\n    int> table;\n    helper<Type<int,\n    bool>>(value);\n    call(first, Type<int,\n    bool>(value));\n    value = make<int,\n    bool>();\n}\nstruct Holder<T,\nint>\n: Base {};\nstruct Other<T,\nint> :\nBase {};\n";
+    let expected = "void f()\n{\n    std::map<std::string,\n             int> table;\n    helper<Type<int,\n                bool>>(value);\n    call(first, Type<int,\n                     bool>(value));\n    value = make<int,\n                 bool>();\n}\nstruct Holder<T,\n              int>\n    : Base {};\nstruct Other<T,\n             int> :\n    Base {};\n";
+    for style in ["--style=kr", "--style=allman"] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+    // So does a part the code length splits off after the head's colon.
+    let input = "class Item {\n  template <typename T>\n  struct has_value<T, enable_if_t<sizeof(std::check(T())) != 0>> : std::true_type {};\n};\n";
+    let expected = "class Item\n{\n    template <typename T>\n    struct has_value<T,\n                     enable_if_t<sizeof(std::check(T())) != 0>> :\n        std::true_type {};\n};\n";
+    let options = ["--style=kr", "--max-code-length=60"];
+    check(input, &options, expected);
+    check(expected, &options, expected);
+}
+
+#[test]
+fn a_comparison_after_a_paren_opens_no_template_arguments() {
+    // No template is named by a closing paren or a literal, so the rows
+    // after such a `<` keep the condition's continuation.
+    let input = "void f()\n{\n    if (ready\n            && (offset = end - start) < limit\n            && start > (char *)base\n            && value) {\n        run();\n    }\n    if (ready\n            && 2 < limit\n            && start > (char *)base) {\n        run();\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+    check(input, &["--style=kr", "-p"], input);
+    // Nor among template arguments, which it leaves open.
+    let input = "using Value =\n    conditional_t<std::is_integral<T>::value && sizeof(T) < sizeof(int),\n                  unsigned, typename make_wide<T>::type>;\n";
+    check(input, &["--style=kr"], input);
+    // A call operator's name ends in its parens.
+    let input = "void f()\n{\n    return operator()<bool>(value);\n    return this->operator()<int, bool>(value);\n}\n";
+    check(input, &["--style=kr", "-p"], input);
+}
+
+#[test]
 fn rows_of_template_arguments_after_an_angle_ending_its_line_stand_a_continuation_in() {
     // Every row of them, as the rows of a paren ending its line do; a
     // closer leading its row stands at the line the angle opened on.
     let input = "void f()\n{\n    check<\n    first, second,\n    third, fourth>();\n    Box<\n    Item\n    > value;\n    helper<Pair<\n    first, second>>();\n}\nstruct Holder<\nfirst, Pair<Item<\nsecond, third>>> {};\n";
-    let expected = "void f()\n{\n    check<\n        first, second,\n        third, fourth>();\n    Box<\n        Item\n    > value;\n    helper<Pair<\n        first, second>>();\n}\nstruct Holder<\n    first, Pair<Item<\n        second, third>>> {};\n";
+    let expected = "void f()\n{\n    check<\n        first, second,\n        third, fourth>();\n    Box<\n        Item\n    > value;\n    helper<Pair<\n               first, second>>();\n}\nstruct Holder<\n    first, Pair<Item<\n                    second, third>>> {};\n";
     for style in ["--style=kr", "--style=allman"] {
         check(input, &[style], expected);
         check(expected, &[style], expected);
@@ -23075,11 +23108,11 @@ fn rows_of_template_arguments_after_an_assigned_angle_stand_a_continuation_past_
 }
 
 #[test]
-fn rows_of_a_class_head_template_argument_list_stand_at_its_name_whatever_they_hold() {
+fn rows_of_a_class_head_template_argument_list_stand_at_its_first_argument_whatever_they_hold() {
     // Rows with parens and rows without stand alike, and the closer of the
     // body stays at the head.
     let input = "struct Factory< Container,\n    Other,\n    More> {\n};\nstruct Factory< Container,\n    Second(x),\n    Third> {\n};\n";
-    let expected = "struct Factory< Container,\n       Other,\n       More> {\n};\nstruct Factory< Container,\n       Second(x),\n       Third> {\n};\n";
+    let expected = "struct Factory< Container,\n                Other,\n                More> {\n};\nstruct Factory< Container,\n                Second(x),\n                Third> {\n};\n";
     check(input, &["--style=google"], expected);
 }
 
@@ -23569,7 +23602,7 @@ fn rows_continuing_a_split_trailing_return_stand_as_in_a_namespace_at_file_scope
     check(
         input,
         &["--style=kr"],
-        "auto get(T&& rng)\n-> Item<int,\nlong>;\nauto make(T&& rng)\n-> decltype(call(a,\n                 b));\nnamespace n\n{\nauto get(T&& rng)\n-> Item<int,\nlong>;\n}\n",
+        "auto get(T&& rng)\n-> Item<int,\n        long>;\nauto make(T&& rng)\n-> decltype(call(a,\n                 b));\nnamespace n\n{\nauto get(T&& rng)\n-> Item<int,\n        long>;\n}\n",
     );
 }
 
@@ -23603,19 +23636,19 @@ fn pico_keeps_the_tab_before_a_comment_its_brace_runs_in_when_converting_tabs() 
 }
 
 #[test]
-fn a_base_clause_after_a_split_class_head_stands_at_its_first_continued_row_when_parens_indent() {
+fn a_base_clause_after_a_split_class_head_stands_a_level_past_the_head_when_parens_indent() {
     let input = "template <typename T, typename Char>\nstruct formatter<T, Char,\n                 enable_if_t<type_constant<T, Char>::value !=\n                             type::custom_type>>\n    : native_formatter<T, Char> {\n};\n";
     let args = [
         "--style=allman",
         "--indent-after-parens",
         "--indent-continuation=2",
     ];
-    let expected = "template <typename T, typename Char>\nstruct formatter<T, Char,\n       enable_if_t<type_constant<T, Char>::value !=\n        type::custom_type>>\n       : native_formatter<T, Char>\n{\n};\n";
+    let expected = "template <typename T, typename Char>\nstruct formatter<T, Char,\n        enable_if_t<type_constant<T, Char>::value !=\n                type::custom_type>>\n    : native_formatter<T, Char>\n{\n};\n";
     check(input, &args, expected);
     check(expected, &args, expected);
     // Nor do a comment row and an operator-led row of the head move them.
     let input = "struct formatter<T, Char,\n                 // note\n                 enable_if_t<is_ready<T>::value &&\n                             !has_value<T>::value>>\n    : formatter<T, Char> {\n};\n";
-    let expected = "struct formatter<T, Char,\n       // note\n       enable_if_t<is_ready<T>::value &&\n        !has_value<T>::value>>\n       : formatter<T, Char>\n{\n};\n";
+    let expected = "struct formatter<T, Char,\n        // note\n        enable_if_t<is_ready<T>::value &&\n                !has_value<T>::value>>\n    : formatter<T, Char>\n{\n};\n";
     check(input, &args, expected);
     check(expected, &args, expected);
 }
@@ -23661,11 +23694,11 @@ fn an_alias_value_after_its_assignment_takes_the_continuation_indent() {
 fn template_argument_rows_of_an_assigned_value_in_a_namespace_stand_as_at_file_scope() {
     let input = "namespace detail\n{\nint value = select<Item,\n    long>;\nusing result_type =\n    select<Item,\n    long>;\n}\nextern \"C\"\n{\nint value = select<Item,\n    long>;\n}\n";
     let args = ["--style=allman"];
-    let expected = "namespace detail\n{\nint value = select<Item,\n    long>;\nusing result_type =\n    select<Item,\n    long>;\n}\nextern \"C\"\n{\n    int value = select<Item,\n        long>;\n}\n";
+    let expected = "namespace detail\n{\nint value = select<Item,\n                   long>;\nusing result_type =\n    select<Item,\n           long>;\n}\nextern \"C\"\n{\n    int value = select<Item,\n                       long>;\n}\n";
     check(input, &args, expected);
     check(expected, &args, expected);
     let args = ["--style=allman", "--indent-namespaces"];
-    let expected = "namespace detail\n{\n    int value = select<Item,\n        long>;\n    using result_type =\n        select<Item,\n        long>;\n}\nextern \"C\"\n{\n    int value = select<Item,\n        long>;\n}\n";
+    let expected = "namespace detail\n{\n    int value = select<Item,\n                       long>;\n    using result_type =\n        select<Item,\n               long>;\n}\nextern \"C\"\n{\n    int value = select<Item,\n                       long>;\n}\n";
     check(input, &args, expected);
     check(expected, &args, expected);
 }
@@ -24439,7 +24472,7 @@ fn max_code_length_finds_no_split_inside_template_arguments_continued_across_lin
     // Template arguments the line leaves open, or opens on a row before,
     // hold no split points, as those closed on the line do not.
     let input = "template <typename T, typename Alloc = std::allocator<T>,\n          typename Unused = std::enable_if_t<true> >\nclass Vector\n{\n    T *data_ = nullptr;\n};\nusing Table = std::map<std::string_view_type, std::vector<int>, Less<int>,\n                       Alloc>;\nvoid f()\n{\n    call<std::string_view_type, std::vector<int>, std::less<std::string_view>,\n         Alloc>(value);\n}\n";
-    let expected = "template <typename T, typename Alloc = std::allocator<T>,\n          typename Unused = std::enable_if_t<true> >\nclass Vector\n{\n    T *data_ = nullptr;\n};\nusing Table =\n    std::map<std::string_view_type, std::vector<int>, Less<int>,\n    Alloc>;\nvoid f()\n{\n    call<std::string_view_type, std::vector<int>, std::less<std::string_view>,\n         Alloc>(value);\n}\n";
+    let expected = "template <typename T, typename Alloc = std::allocator<T>,\n          typename Unused = std::enable_if_t<true> >\nclass Vector\n{\n    T *data_ = nullptr;\n};\nusing Table =\n    std::map<std::string_view_type, std::vector<int>, Less<int>,\n             Alloc>;\nvoid f()\n{\n    call<std::string_view_type, std::vector<int>, std::less<std::string_view>,\n         Alloc>(value);\n}\n";
     check(input, &["--max-code-length=50"], expected);
     check(expected, &["--max-code-length=50"], expected);
     // A logical operator in the angles makes them no template: the head

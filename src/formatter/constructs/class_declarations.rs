@@ -134,15 +134,6 @@ impl FormatEngine<'_> {
         code_opens_class_base_clause(code.trimmed_end())
     }
 
-    /// The lead of the first row a class head ending on the last output
-    /// line continues on, when its class key stands on an earlier line.
-    pub(crate) fn split_class_head_row_lead(&self) -> Option<usize> {
-        let last = self.output.len().checked_sub(1)?;
-        let key = self.class_head_key_before(self.output.line_tokens(last)?.last + 1)?;
-        let row = self.output.line_with_token(key)? + 1;
-        (row <= last).then(|| self.output.lead_width(row, self.options.tab_width))
-    }
-
     /// The class key of the class head that ends right before the token
     /// `end`, outside the template angles the head holds.
     pub(crate) fn class_head_key_before(&self, end: usize) -> Option<usize> {
@@ -186,7 +177,13 @@ impl FormatEngine<'_> {
     /// Whether the current line ends a class head that the rows before it
     /// open, as template arguments split across rows leave one.
     pub(crate) fn current_ends_split_class_head(&self) -> bool {
-        let mut head = vec![self.current_code_before_trailing_comment().trimmed()];
+        self.split_class_head_ends_with(self.current_code_before_trailing_comment().trimmed())
+    }
+
+    /// Whether `code`, the current row's code up to where the head would
+    /// end, ends a class head that the rows before it open.
+    pub(crate) fn split_class_head_ends_with(&self, code: &str) -> bool {
+        let mut head = vec![code];
         let range = self.output.scoped_range();
         for index in range.clone().rev().take(16) {
             let trimmed = self.output.trimmed(index);

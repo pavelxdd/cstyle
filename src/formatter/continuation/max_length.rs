@@ -516,6 +516,14 @@ impl FormatEngine<'_> {
                     * self.options.indent_width,
             );
         }
+        // A part after the colon opening a class's bases stands a level past
+        // the head, as a row that colon ends continues.
+        if self.tree.previous_code_token(first).is_some_and(|colon| {
+            matches!(self.tree.tokens[colon], Token::Symbol(':'))
+                && self.class_head_key_before(colon).is_some()
+        }) {
+            return Some((self.continuation_base_indent() + 1) * self.options.indent_width);
+        }
         // A part within a template head stands with its parameters.
         self.split_part_stack_indent(first)
             .or_else(|| self.template_head_row_indent(first))

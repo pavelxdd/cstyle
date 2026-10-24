@@ -488,6 +488,27 @@ impl FormatEngine<'_> {
         })
     }
 
+    /// A code row among template arguments stands at the column their
+    /// statement's stack holds, which rows split before it moved with them,
+    /// or else at `spaces`, the column the engine gave it.
+    pub(crate) fn apply_template_argument_row_layout(
+        &self,
+        line: &LineView<'_>,
+        mut layout: LineLayout,
+        spaces: usize,
+    ) -> LineLayout {
+        if layout.line_kind == LineKind::Normal
+            && let Some(first) = self.output.pending_tokens().map(|span| span.first)
+            && line
+                .trimmed_start()
+                .starts_with(&*token_text(&self.tree.tokens[first]))
+        {
+            layout.exact_indent_spaces =
+                Some(self.template_argument_row_indent(first).unwrap_or(spaces));
+        }
+        layout
+    }
+
     pub(crate) fn apply_tree_anchor_layout(
         &self,
         line: &LineView<'_>,

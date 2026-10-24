@@ -3558,7 +3558,7 @@ fn max_code_length_continues_parts_after_an_anchored_part_from_its_column() {
     assert_stable_max_length_format(
         "template <typename T>\nstruct has_value<T, enable_if_t<sizeof(std::check(T())) != 0>> : std::true_type {};\n",
         &options,
-        "template <typename T>\nstruct has_value<T,\n       enable_if_t<sizeof(std::check(T())) != 0>> :\n       std::true_type {};\n",
+        "template <typename T>\nstruct has_value<T,\n                 enable_if_t<sizeof(std::check(T())) != 0>> :\n    std::true_type {};\n",
     );
 }
 

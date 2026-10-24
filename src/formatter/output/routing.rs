@@ -192,8 +192,8 @@ impl FormatEngine<'_> {
         let layout = self.apply_label_switch_case_and_opening_brace_correction_layout(line, layout);
         let layout = self.apply_final_recovery_floor_and_replay_layout(line, &replay, layout);
         // Template arguments hold their rows as a paren does, past the angle.
-        let mut layout = if replay.continues_template_arguments {
-            layout
+        let mut layout = if let Some(spaces) = replay.template_arguments_spaces {
+            self.apply_template_argument_row_layout(line, layout, spaces)
         } else {
             self.apply_tree_anchor_layout(line, layout)
         };
