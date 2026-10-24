@@ -20729,10 +20729,10 @@ fn a_using_alias_value_in_a_trailing_return_function_continues_a_level_in() {
 
 #[test]
 fn lisp_reads_a_spaced_empty_brace_default_as_the_unspaced_one() {
-    // The style's `{ }` is the `{}` default whose head astyle lays out its
-    // own way, as it does without the space.
+    // The style's `{ }` is a `{}` default like any other value, as it is
+    // without the space.
     let input = "template <typename Char>\nCONSTEXPR auto write(Char value, const specs& s,\n                     locale_ref loc = {}) -> Out {\n  using unsigned_type =\n      conditional_t<is_same<Char, char>::value, unsigned char, unsigned>;\n  return out;\n}\n";
-    let expected = "template <typename Char>\nCONSTEXPR auto write(Char value, const specs& s,\nlocale_ref loc = { }) -> Out {\n    using unsigned_type =\n    conditional_t<is_same<Char, char>::value, unsigned char, unsigned>;\n    return out; }\n";
+    let expected = "template <typename Char>\nCONSTEXPR auto write(Char value, const specs& s,\n                     locale_ref loc = { }) -> Out {\n    using unsigned_type =\n        conditional_t<is_same<Char, char>::value, unsigned char, unsigned>;\n    return out; }\n";
     check(input, &["--style=lisp"], expected);
     check(expected, &["--style=lisp"], expected);
 }
@@ -25216,4 +25216,19 @@ fn a_statement_continued_on_rows_no_column_anchors_takes_one_continuation_indent
     let expected = "void helper()\n{\n    value\n        + other;\n    value.ready\n        && other;\n    value\n        << other;\n    ready() ? f(a)\n        : g(b);\n    ready()\n        ? f(a)\n        : g(b);\n    value\n        .first()\n        .second();\n    value\n        ->member();\n    call(a)\n        + other;\n    call(a)\n        && other;\n    call(a,\n         b)\n        + other;\n    call(a,\n         b)\n        && other;\n    call(a,\n         b)\n        << other;\n    value +\n        other;\n    value.ready &&\n        other;\n    ready() ? f(a) :\n        g(b);\n    value\n        + other\n        + more;\n    if (ready)\n        value\n            + other;\n    result = value\n             + other;\n    stream << first\n           << second;\n    Item &&\n    item = make();\n}\n";
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn a_parameter_defaulted_to_braces_leaves_the_head_and_body_rows_as_any_default_does() {
+    // An empty brace default is a value like `0`: the parameter rows align
+    // at the paren and the body's continued rows at their anchors.
+    let input = "template <typename T>\nEXPORT auto apply(Item item, const Config& config = {},\n                  int flags = {}) -> Result {\n  using value_type =\n      select_t<is_ready<T>::value, int, long>;\n  return item.ready() &&\n         config.valid()\n      ? helper(item, config)\n      : fallback(item);\n}\ntemplate <typename T,\n          typename U>\nauto pick(Item item,\n          const Config& config = {}) -> Result {\n  return item.ready() &&\n         config.valid()\n      ? helper(item, config)\n      : fallback(item);\n}\n";
+    let expected = "template <typename T>\nEXPORT auto apply(Item item, const Config& config = {},\n                  int flags = {}) -> Result {\n    using value_type =\n        select_t<is_ready<T>::value, int, long>;\n    return item.ready() &&\n           config.valid()\n           ? helper(item, config)\n           : fallback(item);\n}\ntemplate <typename T,\n          typename U>\nauto pick(Item item,\n          const Config& config = {}) -> Result {\n    return item.ready() &&\n           config.valid()\n           ? helper(item, config)\n           : fallback(item);\n}\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+    check(
+        &input.replace("= {}", "= 0"),
+        &[],
+        &expected.replace("= {}", "= 0"),
+    );
 }

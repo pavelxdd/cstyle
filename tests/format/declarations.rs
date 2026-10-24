@@ -1821,13 +1821,13 @@ fn std_conditional_template_argument_rows_keep_first_argument_indent() {
 }
 
 #[test]
-fn using_alias_rhs_after_split_template_function_parameter_stays_at_body_indent() {
+fn using_alias_rhs_after_split_template_function_parameter_takes_a_continuation_indent() {
     assert_eq!(
         format_exact(
             "template <typename T>\nFIXED auto apply(Result dst, T value, const rules& r,\n                 context_id ctx = {}) -> Result {\n  using resolved_type =\n      selector_type<check<T>::value, unsigned char, unsigned>;\n}\n",
             &FormatOptions::default(),
         ),
-        "template <typename T>\nFIXED auto apply(Result dst, T value, const rules& r,\ncontext_id ctx = {}) -> Result {\n    using resolved_type =\n    selector_type<check<T>::value, unsigned char, unsigned>;\n}\n",
+        "template <typename T>\nFIXED auto apply(Result dst, T value, const rules& r,\n                 context_id ctx = {}) -> Result {\n    using resolved_type =\n        selector_type<check<T>::value, unsigned char, unsigned>;\n}\n",
     );
 }
 

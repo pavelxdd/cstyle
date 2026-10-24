@@ -660,16 +660,6 @@ impl FormatEngine<'_> {
     fn replayed_stack_indent(&self, first: usize, closes_stacked_brace: bool) -> Option<usize> {
         let tokens = &self.tree.tokens;
         let start = self.stack_statement_start(first)?;
-        // Bodies of functions whose heads hold braces continue their
-        // statements past astyle's stack.
-        if let Some(group) = self.tree.groups.enclosing(start)
-            && self.tree.groups.ancestors(group).any(|id| {
-                self.tree.blocks.kind(id) == Some(BlockKind::FunctionBody)
-                    && self.header_holds_braces(self.tree.groups.get(id).open)
-            })
-        {
-            return None;
-        }
         if first - start > MAX_REPLAYED_TOKENS {
             return None;
         }
@@ -1130,42 +1120,6 @@ impl FormatEngine<'_> {
                     .and_then(|line| self.output.line_tokens(line))
                     .is_some_and(|span| span.last == open)
             })
-    }
-
-    /// Whether the declaration before the body opening at `open` holds
-    /// braces, such as `= {}` default arguments, which leave astyle in an
-    /// array state for the body.
-    fn header_holds_braces(&self, open: usize) -> bool {
-        let tokens = &self.tree.tokens;
-        let key = (tokens.as_ptr() as usize, open);
-        if let Some((address, cached_open, holds)) = self.header_braces_cache.get()
-            && (address, cached_open) == key
-        {
-            return holds;
-        }
-        // The header ends at its scope's statement before it; the brace of
-        // that scope, as an `extern "C"` block's, is none of its own.
-        let scope = self.tree.groups.enclosing(open);
-        let mut index = open;
-        let holds = loop {
-            let Some(before) = self.tree.previous_code_token(index) else {
-                break false;
-            };
-            if self.tree.groups.enclosing(before) == scope
-                && matches!(tokens[before], Token::Symbol(';' | '}'))
-            {
-                break false;
-            }
-            if scope.is_some_and(|scope| self.tree.groups.get(scope).open == before) {
-                break false;
-            }
-            if matches!(tokens[before], Token::Symbol('{')) {
-                break true;
-            }
-            index = before;
-        };
-        self.header_braces_cache.set(Some((key.0, key.1, holds)));
-        holds
     }
 
     /// Pushes the indent astyle registers at `index`: the column of the

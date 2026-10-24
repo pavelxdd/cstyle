@@ -68,12 +68,7 @@ impl FormatEngine<'_> {
             || labels::LabelContext {
                 in_initializer: self.in_initializer_brace()
                     || self.current_inline_array_column().is_some(),
-                in_ternary: self.layout.line_state.ternary_colon
-                    || self
-                        .return_ternary_colon_after_multiline_template_declaration_indent_spaces(
-                            line,
-                        )
-                        .is_some(),
+                in_ternary: self.layout.line_state.ternary_colon,
                 previous_line: self.previous_code_line_past_comments_and_directives(),
             },
         );

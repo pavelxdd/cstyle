@@ -2016,11 +2016,7 @@ impl FormatEngine<'_> {
                 if !rest.starts_with(char::is_whitespace) {
                     return None;
                 }
-                if self.recent_base_trailing_return_function_header() {
-                    lead
-                } else {
-                    lead + "return".len() + (rest.len() - rest.trimmed_start().len())
-                }
+                lead + "return".len() + (rest.len() - rest.trimmed_start().len())
             }
             TernaryOwnerRole::Assignment => {
                 let (operator_index, operator) = find_assignment_operator(code)?;

@@ -1360,12 +1360,6 @@ impl FormatEngine<'_> {
         let tab_width = self.options.tab_width;
         let width = self.options.indent_width;
         if current.starts_with('?')
-            && previous_trimmed.starts_with("return ")
-            && self.recent_base_trailing_return_function_header()
-        {
-            return Some(leading_visual_width(previous, tab_width));
-        }
-        if current.starts_with('?')
             && (previous_trimmed.starts_with('(') || previous_trimmed.starts_with("return ("))
             && let Some(open) = self.open_paren_column_of(previous_code)
         {
@@ -1408,11 +1402,6 @@ impl FormatEngine<'_> {
                     + self.layout.line_adjuster.total_case_unindent_depth()
                         * self.options.indent_width,
             );
-        }
-        if let Some(spaces) =
-            self.return_ternary_colon_after_multiline_template_declaration_indent_spaces(line)
-        {
-            return Some(spaces);
         }
         if (current.starts_with(": ") || current == ":")
             && previous_code.contains('?')
@@ -1864,9 +1853,6 @@ impl FormatEngine<'_> {
                     }
                     return Some(self.token_input.token_source_line_indent);
                 }
-                if self.recent_base_trailing_return_function_header() {
-                    return Some(return_indent);
-                }
                 return Some(return_indent + "return ".len());
             }
         }
@@ -1887,33 +1873,6 @@ impl FormatEngine<'_> {
                 None
             }
         })
-    }
-
-    pub(crate) fn return_ternary_colon_after_multiline_template_declaration_indent_spaces(
-        &self,
-        line: &str,
-    ) -> Option<usize> {
-        let current = line.trimmed_start();
-        if !(current.starts_with(": ") || current == ":") {
-            return None;
-        }
-        let previous = self.output.last_non_empty_scoped()?;
-        if !self
-            .output
-            .code_of(previous)
-            .trimmed_start()
-            .starts_with('?')
-        {
-            return None;
-        }
-        if !self.recent_trailing_return_function_after_multiline_template_declaration() {
-            return None;
-        }
-        Some(
-            leading_visual_width(previous, self.options.tab_width)
-                + self.options.indent_width
-                + self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width,
-        )
     }
 
     fn capped_parenthesized_stream_indent(&self, spaces: usize, line_indent: usize) -> usize {
@@ -2138,26 +2097,21 @@ impl FormatEngine<'_> {
             }
             let case_unindent =
                 self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
-            if frame.owner_role == TernaryOwnerRole::Return {
-                if self.recent_base_trailing_return_function_header() {
-                    return Some(frame.question_indent_spaces + case_unindent);
-                }
-                if frame.parent_delimiter.is_some()
-                    && let Some(return_line) =
-                        self.output.scoped().iter().rev().take(8).find(|line| {
-                            let code = self.output.code_trimmed_of(line);
-                            let trimmed = code.trimmed_start();
-                            trimmed.starts_with("return ")
-                                && !trimmed.contains('?')
-                                && self.open_paren_column_of(code).is_none()
-                        })
-                {
-                    return Some(
-                        leading_visual_width(return_line, self.options.tab_width)
-                            + "return ".len()
-                            + case_unindent,
-                    );
-                }
+            if frame.owner_role == TernaryOwnerRole::Return
+                && frame.parent_delimiter.is_some()
+                && let Some(return_line) = self.output.scoped().iter().rev().take(8).find(|line| {
+                    let code = self.output.code_trimmed_of(line);
+                    let trimmed = code.trimmed_start();
+                    trimmed.starts_with("return ")
+                        && !trimmed.contains('?')
+                        && self.open_paren_column_of(code).is_none()
+                })
+            {
+                return Some(
+                    leading_visual_width(return_line, self.options.tab_width)
+                        + "return ".len()
+                        + case_unindent,
+                );
             }
             // Indenting after parens sets the arm a continuation past its
             // paren's line.
@@ -2186,30 +2140,19 @@ impl FormatEngine<'_> {
             }
             let case_unindent =
                 self.layout.line_adjuster.total_case_unindent_depth() * self.options.indent_width;
-            if frame.owner_role == TernaryOwnerRole::Return {
-                if self.recent_base_trailing_return_function_header() {
-                    if self.recent_trailing_return_function_after_multiline_template_declaration() {
-                        return Some(
-                            frame.question_indent_spaces
-                                + self.options.indent_width
-                                + case_unindent,
-                        );
-                    }
-                    return Some(frame.question_indent_spaces + case_unindent);
-                }
-                if frame.parent_delimiter.is_some()
-                    && let Some(question_line) = self
-                        .output
-                        .scoped()
-                        .iter()
-                        .rev()
-                        .take(8)
-                        .find(|line| self.output.code_of(line).trimmed_start().starts_with('?'))
-                {
-                    return Some(
-                        leading_visual_width(question_line, self.options.tab_width) + case_unindent,
-                    );
-                }
+            if frame.owner_role == TernaryOwnerRole::Return
+                && frame.parent_delimiter.is_some()
+                && let Some(question_line) = self
+                    .output
+                    .scoped()
+                    .iter()
+                    .rev()
+                    .take(8)
+                    .find(|line| self.output.code_of(line).trimmed_start().starts_with('?'))
+            {
+                return Some(
+                    leading_visual_width(question_line, self.options.tab_width) + case_unindent,
+                );
             }
             let spaces = frame
                 .parent_delimiter

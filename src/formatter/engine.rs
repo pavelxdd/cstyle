@@ -379,9 +379,6 @@ pub(crate) struct FormatEngine<'a> {
     /// The last look back from a member declarator's `,`.
     pub(crate) member_declarator_cache:
         std::cell::Cell<Option<crate::formatter::output::layout::anchors::MemberDeclaratorLook>>,
-    /// The last function body asked whether its declaration holds braces:
-    /// the tokens' address, the body's `{`, and the answer.
-    pub(crate) header_braces_cache: std::cell::Cell<Option<(usize, usize, bool)>>,
     /// The output lines the bodies of the blocks asked about lately take
     /// their columns from, most recent first.
     pub(crate) block_body_anchor_cache:
@@ -542,7 +539,6 @@ impl<'a> FormatEngine<'a> {
             stacked_assignment_cache: std::cell::Cell::new(None),
             declarator_start_cache: std::cell::Cell::new(None),
             member_declarator_cache: std::cell::Cell::new(None),
-            header_braces_cache: std::cell::Cell::new(None),
             block_body_anchor_cache: std::cell::RefCell::new([None; 4]),
             token_column_cache: std::cell::Cell::new(None),
             astyle_replay_cache: std::cell::Cell::new(None),

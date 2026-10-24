@@ -112,9 +112,6 @@ impl FormatEngine<'_> {
             return;
         }
         let spaces = self
-            .return_ternary_colon_after_multiline_template_declaration_indent_spaces(line)
-            .map_or(spaces, |target| spaces.max(target));
-        let spaces = self
             .ternary_operator_tail_indent_spaces(line)
             .unwrap_or(spaces);
         let spaces = self
@@ -319,7 +316,6 @@ impl FormatEngine<'_> {
         } else {
             self.ternary_operator_tail_indent_spaces(&view)
                 .or_else(|| self.assignment_rhs_indent_spaces(&view))
-                .or_else(|| self.trailing_return_function_parameter_tail_indent_spaces(&view))
         };
         let tail = spaces
             .filter(|&spaces| leading_visual_width(&view, self.options.tab_width) != spaces)

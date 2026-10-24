@@ -10,8 +10,8 @@ use crate::formatter::syntax::function_name_start;
 use crate::formatter::syntax::language::{self, is_non_type_keyword, is_type_like_pointer_word};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, find_outside_quotes, line_comment_split_limit,
-    reverse_scan_skips_block_comment, trailing_comment_split_limit,
+    find_outside_quotes, line_comment_split_limit, reverse_scan_skips_block_comment,
+    trailing_comment_split_limit,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -81,125 +81,6 @@ impl FormatEngine<'_> {
             if close_pending == 0
                 && (code.ends_with(';') || code.ends_with('{') || code.ends_with('}'))
             {
-                return None;
-            }
-        }
-        None
-    }
-
-    fn recent_base_trailing_return_function_header_index(&self) -> Option<usize> {
-        if self.layout.indentation.indent() == 0 {
-            return None;
-        }
-        let mut closed_blocks = 0usize;
-        for index in (0..self.output.len()).rev().take(24) {
-            let code = self.output.code_before_comment(index).trimmed_end();
-            let trimmed = self.output.code_body(index);
-            if trimmed.is_empty() || trimmed.starts_with('#') {
-                continue;
-            }
-            if trimmed.starts_with('}') {
-                closed_blocks += 1;
-            }
-            if code.ends_with('{') {
-                if closed_blocks > 0 {
-                    closed_blocks -= 1;
-                    continue;
-                }
-                if code.contains(") ->") && !trimmed.starts_with("template ") {
-                    return Some(index);
-                }
-                return None;
-            }
-        }
-        None
-    }
-
-    /// Whether the trailing-return head whose body the line is in has a
-    /// parameter defaulted to `{}` on its brace's line.
-    pub(crate) fn recent_trailing_return_header_holds_empty_default(&self) -> bool {
-        self.recent_base_trailing_return_function_header_index()
-            .is_some_and(|index| holds_empty_brace_default(self.output.code_before_comment(index)))
-    }
-
-    pub(crate) fn recent_base_trailing_return_function_header(&self) -> bool {
-        self.recent_base_trailing_return_function_header_index()
-            .is_some()
-    }
-
-    pub(crate) fn recent_trailing_return_function_after_multiline_template_declaration(
-        &self,
-    ) -> bool {
-        let Some(brace_index) = self.recent_base_trailing_return_function_header_index() else {
-            return false;
-        };
-        let mut signature_start = brace_index;
-        let mut index = brace_index;
-        while index > 0 {
-            index -= 1;
-            let code = self.output.code_before_comment(index).trimmed_end();
-            let trimmed = self.output.code_body(index);
-            if trimmed.is_empty() || trimmed.starts_with('#') {
-                continue;
-            }
-            if trimmed.starts_with("template ")
-                || code.ends_with(';')
-                || code.ends_with('{')
-                || code.ends_with('}')
-            {
-                break;
-            }
-            signature_start = index;
-            if code.contains('(') {
-                break;
-            }
-        }
-        self.output_closes_multiline_template_declaration_before(signature_start)
-    }
-
-    pub(crate) fn trailing_return_function_parameter_tail_indent_spaces(
-        &self,
-        line: &LineView<'_>,
-    ) -> Option<usize> {
-        let current = line.trimmed_start();
-        if !current.ends_with('{')
-            || !holds_empty_brace_default(current)
-            || !current.contains(") ->")
-        {
-            return None;
-        }
-        for (previous_index, previous) in self
-            .output
-            .iter()
-            .enumerate()
-            .rev()
-            .filter(|(_, line)| !line.trimmed().is_empty())
-            .take(8)
-        {
-            let previous_code = self
-                .output
-                .code_before_comment(previous_index)
-                .trimmed_end();
-            if let Some(open) = self.open_paren_column_of(previous_code) {
-                let before = previous_code[..open].trimmed_end();
-                let name_start = function_name_start(before)?;
-                let return_type = before[..name_start].trimmed_end();
-                let name = before[name_start..].trimmed_start();
-                let prefixed_return_type = return_type
-                    .split_whitespace()
-                    .any(language::is_macro_like_word)
-                    && is_parameter_return_type_prefix(return_type);
-                if leading_visual_width(previous, self.options.tab_width) == 0
-                    && (prefixed_return_type
-                        || self.output_closes_multiline_template_declaration_before(previous_index))
-                    && !name.is_empty()
-                    && !is_header(self.options, name)
-                {
-                    return Some(0);
-                }
-                return None;
-            }
-            if previous_code.ends_with_any(b";{}") {
                 return None;
             }
         }
@@ -778,14 +659,4 @@ fn is_pointer_prefixed_function_part(line: &str) -> bool {
     !before.is_empty()
         && !language::is_header(before)
         && function_name_start(before).is_some_and(|start| start == 0)
-}
-
-/// Whether `code` defaults a parameter to an empty brace, `= {}` or `= { }`.
-fn holds_empty_brace_default(code: &str) -> bool {
-    code.match_indices('=').any(|(at, _)| {
-        code[at + 1..]
-            .trim_start()
-            .strip_prefix('{')
-            .is_some_and(|rest| rest.trim_start().starts_with('}'))
-    })
 }

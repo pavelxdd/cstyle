@@ -504,18 +504,7 @@ impl FormatEngine<'_> {
         let previous_indent = || leading_visual_width(previous, self.options.tab_width);
         let continuation_spaces = self.options.continuation_indent * self.options.indent_width;
         if previous_code.trimmed_start().starts_with("using ") {
-            return Some(
-                if self.options.max_code_length.is_none()
-                    && self.recent_trailing_return_header_holds_empty_default()
-                {
-                    // astyle loses the value's level after a parameter
-                    // defaulted to `{}`, which moved the parameter rows back
-                    // too.
-                    previous_indent()
-                } else {
-                    previous_indent() + continuation_spaces
-                },
-            );
+            return Some(previous_indent() + continuation_spaces);
         }
         if is_comment_text_line(previous) {
             return None;
@@ -537,8 +526,7 @@ impl FormatEngine<'_> {
             && (before.contains("* ")
                 || before.contains("& ")
                 || before.ends_with('*')
-                || before.ends_with('&')
-                || self.recent_base_trailing_return_function_header()))
+                || before.ends_with('&')))
         .then(|| previous_indent() + continuation_spaces)
     }
 
@@ -827,12 +815,6 @@ impl FormatEngine<'_> {
                 && let Some(base) = self.constructor_initializer_base_indent_spaces()
             {
                 return Some(base);
-            }
-            if previous_code.ends_with("&&")
-                && previous_trimmed.starts_with("return ")
-                && self.recent_base_trailing_return_function_header()
-            {
-                return Some(leading_visual_width(previous, tab_width));
             }
             if let Some(spaces) = template_base_colon_indent_spaces(self.options, current, previous)
             {

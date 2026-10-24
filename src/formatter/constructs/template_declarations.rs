@@ -357,42 +357,6 @@ impl FormatEngine<'_> {
         false
     }
 
-    pub(super) fn output_closes_multiline_template_declaration_before(&self, end: usize) -> bool {
-        let lines: Vec<&str> = self.output[..end]
-            .iter()
-            .rev()
-            .filter(|line| !line.trimmed().is_empty())
-            .take(16)
-            .map(String::as_str)
-            .collect();
-        let Some(previous) = lines.first() else {
-            return false;
-        };
-        let previous_code = self.output.code_trimmed_of(previous);
-        if !previous_code.ends_with('>') {
-            return false;
-        }
-        for (index, line) in lines.iter().enumerate().skip(1) {
-            let code = self.output.code_trimmed_of(line);
-            let trimmed = code.trimmed_start();
-            if is_template_declaration_head_line(trimmed) {
-                let depth: isize = lines[..=index]
-                    .iter()
-                    .rev()
-                    .map(|line| {
-                        let code = self.output.code_trimmed_of(line);
-                        angle_depth_delta(code)
-                    })
-                    .sum();
-                return depth <= 0 && !template_declaration_line_complete(trimmed);
-            }
-            if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
-                return false;
-            }
-        }
-        false
-    }
-
     pub(crate) fn prepare_template_continuation_token_indent(&mut self, source_column: usize) {
         // A row in parens the head opened continues them where parens
         // align their rows.

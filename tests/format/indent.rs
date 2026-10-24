@@ -2026,35 +2026,35 @@ fn return_parenthesized_ternary_colon_branch_keeps_value_indent() {
 }
 
 #[test]
-fn return_ternary_after_split_template_function_parameter_stays_at_body_indent() {
+fn return_ternary_after_split_template_function_parameter_aligns_to_the_value() {
     assert_eq!(
         format_exact(
             "template <typename T>\nFIXED auto apply(Result dst, T value, const rules& r,\n                 context_id ctx = {}) -> Result {\n  return check(value)\n      ? apply_value(dst, value, r)\n      : apply_other(dst, value, r, ctx);\n}\n",
             &FormatOptions::default(),
         ),
-        "template <typename T>\nFIXED auto apply(Result dst, T value, const rules& r,\ncontext_id ctx = {}) -> Result {\n    return check(value)\n    ? apply_value(dst, value, r)\n    : apply_other(dst, value, r, ctx);\n}\n",
+        "template <typename T>\nFIXED auto apply(Result dst, T value, const rules& r,\n                 context_id ctx = {}) -> Result {\n    return check(value)\n           ? apply_value(dst, value, r)\n           : apply_other(dst, value, r, ctx);\n}\n",
     );
 }
 
 #[test]
-fn return_logical_after_split_template_function_parameter_stays_at_body_indent() {
+fn return_logical_after_split_template_function_parameter_aligns_to_the_value() {
     assert_eq!(
         format_exact(
             "template <typename T>\nFIXED auto apply(Result dst, T value, const rules& r = {},\n                 context_id = {}) -> Result {\n  return r.type() != none &&\n         r.type() != string\n      ? apply_value(dst, value, r)\n      : apply_bytes(dst, value ? \"true\" : \"false\", r);\n}\n",
             &FormatOptions::default(),
         ),
-        "template <typename T>\nFIXED auto apply(Result dst, T value, const rules& r = {},\ncontext_id = {}) -> Result {\n    return r.type() != none &&\n    r.type() != string\n        ? apply_value(dst, value, r)\n        : apply_bytes(dst, value ? \"true\" : \"false\", r);\n}\n",
+        "template <typename T>\nFIXED auto apply(Result dst, T value, const rules& r = {},\n                 context_id = {}) -> Result {\n    return r.type() != none &&\n           r.type() != string\n           ? apply_value(dst, value, r)\n           : apply_bytes(dst, value ? \"true\" : \"false\", r);\n}\n",
     );
 }
 
 #[test]
-fn return_ternary_colon_after_split_template_declaration_logical_condition_aligns_to_arm() {
+fn return_ternary_colon_after_split_template_declaration_logical_condition_aligns_to_the_value() {
     assert_eq!(
         format_exact(
             "template <typename T,\n          SELECT_IF(check<T>::value)>\nFIXED auto apply(Result dst, T value, const rules& r = {},\n                 context_id = {}) -> Result {\n  return r.type() != none &&\n                 r.type() != string\n             ? apply_value(dst, value, r)\n             : apply_bytes(dst, value ? \"true\" : \"false\", r);\n}\n",
             &FormatOptions::default(),
         ),
-        "template <typename T,\n          SELECT_IF(check<T>::value)>\nFIXED auto apply(Result dst, T value, const rules& r = {},\ncontext_id = {}) -> Result {\n    return r.type() != none &&\n    r.type() != string\n        ? apply_value(dst, value, r)\n            : apply_bytes(dst, value ? \"true\" : \"false\", r);\n}\n",
+        "template <typename T,\n          SELECT_IF(check<T>::value)>\nFIXED auto apply(Result dst, T value, const rules& r = {},\n                 context_id = {}) -> Result {\n    return r.type() != none &&\n           r.type() != string\n           ? apply_value(dst, value, r)\n           : apply_bytes(dst, value ? \"true\" : \"false\", r);\n}\n",
     );
 }
 
