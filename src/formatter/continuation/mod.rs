@@ -2247,8 +2247,17 @@ impl FormatEngine<'_> {
         // The output columns a case unindent moved stand past it again, as
         // the unindent moves this row too.
         let unindent = self.case_unindent_spaces();
+        // A chain on a row of a header's condition runs in after the
+        // condition closes there, at the header's body.
+        let runs_in_after_condition = self.output.line_tokens(previous_line).is_some_and(|span| {
+            self.condition_closing_on_row(span.first, span.last + 1, &|index| {
+                self.output.line_with_token(index) == Some(previous_line)
+            })
+            .is_some()
+        });
         if stream.line_indent_spaces > base
             && stream.operator_output_column != stream.line_indent_spaces
+            && !runs_in_after_condition
         {
             return Some(stream.line_indent_spaces + unindent);
         }

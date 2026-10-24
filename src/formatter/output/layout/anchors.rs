@@ -2083,7 +2083,13 @@ impl FormatEngine<'_> {
         }
         let line = self.output.line_with_token(last)?;
         let mut start = next_code_token(tokens, self.output.line_tokens(line)?.first)?;
-        // The statement may run in after its headers.
+        // The statement may run in after its headers, or after a header's
+        // condition the line goes on with.
+        if let Some(close) = self.condition_closing_on_row(start, last, &|index| {
+            self.output.line_with_token(index) == Some(line)
+        }) {
+            start = next_code_token(tokens, close + 1)?;
+        }
         while matches!(&tokens[start], Token::Word(word) if matches!(word.as_str(), "if" | "while" | "for"))
             && let Some(open) = next_code_token(tokens, start + 1)
             && matches!(tokens[open], Token::Symbol('('))

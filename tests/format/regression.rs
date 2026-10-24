@@ -25052,6 +25052,15 @@ fn an_initializer_s_arguments_below_its_member_name_continue_the_initializer_lis
 }
 
 #[test]
+fn a_statement_run_in_after_a_condition_spanning_rows_continues_a_level_in() {
+    check(
+        "void f()\n{\n    if (a\n            || b) value = first +\n        second;\n    if (a\n            || b) helper(value,\n        compute(fp));\n    if (a\n            || b) value =\n        compute(fp);\n    while (a &&\n            b) out << first <<\n        second;\n    if (a) {\n    } else if (b\n            || c) helper(value,\n        compute(fp));\n    for (i = 0;\n            i < n; i++) helper(value,\n        compute(fp));\n}\n",
+        &["--style=kr"],
+        "void f()\n{\n    if (a\n            || b) value = first +\n                              second;\n    if (a\n            || b) helper(value,\n                             compute(fp));\n    if (a\n            || b) value =\n                    compute(fp);\n    while (a &&\n            b) out << first <<\n                       second;\n    if (a) {\n    } else if (b\n               || c) helper(value,\n                                compute(fp));\n    for (i = 0;\n            i < n; i++) helper(value,\n                                   compute(fp));\n}\n",
+    );
+}
+
+#[test]
 fn a_subscript_a_shift_leaves_open_aligns_its_next_row_past_the_bracket() {
     let input = "void f()\n{\n    value << items[index\n    + 1];\n    std::cout << items[index\n    + 1];\n    size_t padding = total >> shifts[static_cast<int>\n    (item.align())];\n}\n";
     check(

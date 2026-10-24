@@ -486,7 +486,15 @@ impl FormatEngine<'_> {
         });
         let (mut cursor, mut levels, mut labels) = match cached {
             Some(walk) => (walk.statement, walk.levels, walk.labels),
-            None => (next_code_token(tokens, first)?, 0, 0),
+            None => {
+                let first = next_code_token(tokens, first)?;
+                // A row going on with a header's condition runs the header's
+                // body in after the condition closes on it.
+                match self.condition_closing_on_row(first, until, &on_line) {
+                    Some(close) => (next_code_token(tokens, close + 1)?, 1, 0),
+                    None => (first, 0, 0),
+                }
+            }
         };
         loop {
             let at_statement = (cursor, levels, labels);
@@ -558,6 +566,34 @@ impl FormatEngine<'_> {
             }
         }
         Some((levels, cursor))
+    }
+
+    /// The `)` closing, before `until` on the row `on_line` tells, the
+    /// condition of an `if`, `while` or `for` that the token `first` stands
+    /// in.
+    pub(crate) fn condition_closing_on_row(
+        &self,
+        first: usize,
+        until: usize,
+        on_line: &impl Fn(usize) -> bool,
+    ) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let mut group = groups.enclosing(first)?;
+        loop {
+            let paren = groups.get(group);
+            if paren.delimiter != Delimiter::Paren {
+                return None;
+            }
+            if self
+                .tree
+                .previous_code_token(paren.open)
+                .is_some_and(|keyword| matches!(&tokens[keyword], Token::Word(word) if matches!(word.as_str(), "if" | "while" | "for")))
+            {
+                return paren.close.filter(|&close| close < until && on_line(close));
+            }
+            group = paren.parent?;
+        }
     }
 
     /// The last token of the statement starting at `start` when it ends
