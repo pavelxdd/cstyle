@@ -56,6 +56,29 @@ impl FormatEngine<'_> {
         })
     }
 
+    /// Whether the pending line starts inside a lambda's parameter list, a
+    /// row continuing the parameters after its capture.
+    pub(crate) fn pending_line_continues_lambda_parameters(&self) -> bool {
+        self.output
+            .pending_tokens()
+            .is_some_and(|span| self.continues_lambda_parameters(span.first))
+    }
+
+    /// Whether the row led by the token at `first` continues a lambda's
+    /// parameter list.
+    pub(crate) fn continues_lambda_parameters(&self, first: usize) -> bool {
+        let groups = &self.tree.groups;
+        groups.enclosing(first).is_some_and(|params| {
+            let open = groups.get(params).open;
+            groups.get(params).delimiter == Delimiter::Paren
+                && open < first
+                && self
+                    .tree
+                    .previous_code_token(open)
+                    .is_some_and(|before| matches!(self.tree.tokens[before], Token::Symbol(']')))
+        })
+    }
+
     pub(crate) fn begin_contextual_line_layout(
         &mut self,
         line: &LineView<'_>,

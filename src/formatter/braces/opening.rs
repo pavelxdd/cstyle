@@ -2507,7 +2507,8 @@ impl FormatEngine<'_> {
         let line_index = self.output.len();
         // A row continuing its statement that the brace makes open a
         // lambda's body, or a block among a call's arguments, stands at the
-        // statement, as one the body opened on in the source does.
+        // statement, as one the body opened on in the source does; one
+        // continuing a lambda's parameters stands with them.
         let lambda_row_level = self
             .current
             .active_token()
@@ -2521,7 +2522,10 @@ impl FormatEngine<'_> {
             .and(self.last_laid_out_statement_level)
             .filter(|&(index, _)| index == line_index)
             .filter(|_| {
-                tokens.is_some_and(|span| !self.tree.statements.starts_block_statement(span.first))
+                tokens.is_some_and(|span| {
+                    !self.tree.statements.starts_block_statement(span.first)
+                        && !self.continues_lambda_parameters(span.first)
+                })
             })
             .map(|(_, level)| level);
         // Parens that indent after them align no argument to the brace.

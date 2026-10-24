@@ -557,7 +557,7 @@ fn lambda_split_call_after_closed_ternary_argument_aligns_to_call() {
 }
 
 #[test]
-fn lambda_parameter_continuation_keeps_lambda_line_indent() {
+fn lambda_parameter_continuation_aligns_at_the_parameters_paren() {
     assert_eq!(
         format_exact(
             fixture!(
@@ -575,7 +575,7 @@ fn lambda_parameter_continuation_keeps_lambda_line_indent() {
             "void f()",
             "{",
             "    const auto call = [](const char* name,",
-            "    const Value& value) {",
+            "                         const Value& value) {",
             "        return value;",
             "    };",
             "}",

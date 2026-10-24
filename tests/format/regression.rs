@@ -22145,11 +22145,11 @@ fn add_braces_braces_a_header_in_a_lambda_body_among_call_arguments() {
 }
 
 #[test]
-fn the_parameter_row_opening_a_lambda_body_stands_at_the_statement() {
-    // As a row the lambda's head opens the body on does; the rows before
-    // it stand past the parameters' paren.
+fn the_parameter_row_opening_a_lambda_body_stands_with_the_parameters() {
+    // As every row before it, past the parameters' paren, whether the
+    // body's brace stood on it or below it.
     let input = "void f() {\n  auto check =\n      [](int a,\n         int b,\n         int c) {\n        go(a);\n      };\n  call(x, [](int a,\n             int b,\n             int c) {\n    return a;\n  });\n  auto other = [](int a,\n                  int b,\n                  int c) -> int {\n    return a;\n  };\n  call(x, [](int a,\n             int b)\n  {\n    return a;\n  });\n}\n";
-    let expected = "void f()\n{\n    auto check =\n        [](int a,\n           int b,\n    int c) {\n        go(a);\n    };\n    call(x, [](int a,\n               int b,\n    int c) {\n        return a;\n    });\n    auto other = [](int a,\n                    int b,\n    int c) -> int {\n        return a;\n    };\n    call(x, [](int a,\n    int b) {\n        return a;\n    });\n}\n";
+    let expected = "void f()\n{\n    auto check =\n        [](int a,\n           int b,\n           int c) {\n        go(a);\n    };\n    call(x, [](int a,\n               int b,\n               int c) {\n        return a;\n    });\n    auto other = [](int a,\n                    int b,\n                    int c) -> int {\n        return a;\n    };\n    call(x, [](int a,\n               int b) {\n        return a;\n    });\n}\n";
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
@@ -22157,15 +22157,15 @@ fn the_parameter_row_opening_a_lambda_body_stands_at_the_statement() {
 #[test]
 fn a_split_lambda_head_with_a_trailing_return_type_keeps_its_body_brace() {
     let input = "void f() {\n  auto other = [](int a,\n                  int b) -> int {\n    return a;\n  };\n}\n";
-    let expected = "void f()\n{\n    auto other = [](int a,\n    int b) -> int {\n        return a;\n    };\n}\n";
+    let expected = "void f()\n{\n    auto other = [](int a,\n                    int b) -> int {\n        return a;\n    };\n}\n";
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
 
 #[test]
-fn the_second_parameter_row_of_an_assigned_lambda_opening_its_body_stands_at_the_statement() {
+fn the_second_parameter_row_of_an_assigned_lambda_opening_its_body_stands_with_the_first() {
     let input = "void f() {\n  auto check =\n      [](const char* str,\n         Buffer& buffer) {\n        go(str);\n      };\n}\n";
-    let expected = "void f()\n{\n    auto check =\n        [](const char* str,\n    Buffer& buffer) {\n        go(str);\n    };\n}\n";
+    let expected = "void f()\n{\n    auto check =\n        [](const char* str,\n           Buffer& buffer) {\n        go(str);\n    };\n}\n";
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
@@ -22234,10 +22234,10 @@ fn add_braces_braces_a_header_in_a_lambda_argument_whatever_its_parameters() {
 }
 
 #[test]
-fn a_parameter_row_aligned_at_its_paren_opening_a_lambda_body_stands_at_the_statement() {
+fn a_parameter_row_aligned_at_its_paren_opening_a_lambda_body_keeps_its_column() {
     // Wherever the source holds the row, as a row at any other column does.
     let input = "void f()\n{\n    auto handler = [this](int value,\n                          int other) {\n        return value + other;\n    };\n    result = [&](int first,\n                 int second) mutable {\n        return first;\n    };\n}\n";
-    let expected = "void f()\n{\n    auto handler = [this](int value,\n    int other) {\n        return value + other;\n    };\n    result = [&](int first,\n    int second) mutable {\n        return first;\n    };\n}\n";
+    let expected = "void f()\n{\n    auto handler = [this](int value,\n                          int other) {\n        return value + other;\n    };\n    result = [&](int first,\n                 int second) mutable {\n        return first;\n    };\n}\n";
     for style in ["--style=kr", "--style=linux"] {
         check(input, &[style], expected);
     }
@@ -23948,15 +23948,13 @@ fn an_attribute_row_after_an_attribute_row_stands_at_its_level_without_condition
 }
 
 #[test]
-fn a_lambda_parameter_row_opening_the_body_stands_at_the_statement() {
-    // The body's brace ends what the row continued, as for a row of the
-    // call's arguments that opens a lambda; a broken brace leaves the row
-    // its parameters' column.
+fn a_lambda_parameter_row_opening_the_body_stands_with_the_parameters() {
+    // The row keeps its parameters' column, the body's brace on it or
+    // broken off it; the parameters' paren past the maximum continuation
+    // indent leaves the row at the call's.
     let input = "void f()\n{\n    std::sort(items.begin(), items.end(), [](const Item &a,\n              const Item &b) {\n        return a.value < b.value;\n    });\n}\n";
-    let attached = "void f()\n{\n    std::sort(items.begin(), items.end(), [](const Item &a,\n    const Item &b) {\n        return a.value < b.value;\n    });\n}\n";
     for style in ["--style=kr", "--style=stroustrup"] {
-        check(input, &[style], attached);
-        check(attached, &[style], attached);
+        check(input, &[style], input);
     }
     let broken = "void f()\n{\n    std::sort(items.begin(), items.end(), [](const Item &a,\n              const Item &b)\n    {\n        return a.value < b.value;\n    });\n}\n";
     check(input, &["--style=allman"], broken);
@@ -23987,21 +23985,21 @@ fn directives_between_constructor_initializers_keep_the_member_column() {
 }
 
 #[test]
-fn a_split_lambda_parameter_row_opening_the_body_stands_at_the_statement() {
+fn a_split_lambda_parameter_row_opening_the_body_stands_with_the_parameters() {
     // The code length splits the parameters as the source would, and the
     // row opening the body stands where it would then.
     let input = "void f()\n{\n    std::sort(items.begin(), items.end(), [](const Item &a, const Item &b) {\n        return a.value < b.value;\n    });\n}\n";
-    let expected = "void f()\n{\n    std::sort(items.begin(), items.end(), [](const Item &a,\n    const Item &b) {\n        return a.value < b.value;\n    });\n}\n";
+    let expected = "void f()\n{\n    std::sort(items.begin(), items.end(), [](const Item &a,\n              const Item &b) {\n        return a.value < b.value;\n    });\n}\n";
     check(input, &["--style=kr", "--max-code-length=60"], expected);
     check(expected, &["--style=kr", "--max-code-length=60"], expected);
 }
 
 #[test]
-fn a_lambda_parameter_row_opening_the_body_drops_the_stack_at_any_scope() {
-    // Declarations at file, namespace, or class scope stand the row at the
-    // statement as statements in a body do.
+fn a_lambda_parameter_row_opening_the_body_stands_with_the_parameters_at_any_scope() {
+    // Declarations at file, namespace, or class scope keep the row with
+    // the parameters as statements in a body do.
     let input = "class Item {\n    Callback run = make(alpha, [](int first,\n                                  int value) {\n        return value;\n    });\n};\nnamespace space {\nCallback run = make(alpha, [](int first,\n                              int value) {\n    return value;\n});\n}\n";
-    let expected = "class Item {\n    Callback run = make(alpha, [](int first,\n    int value) {\n        return value;\n    });\n};\nnamespace space {\nCallback run = make(alpha, [](int first,\nint value) {\n    return value;\n});\n}\n";
+    let expected = "class Item {\n    Callback run = make(alpha, [](int first,\n                                  int value) {\n        return value;\n    });\n};\nnamespace space {\nCallback run = make(alpha, [](int first,\n                              int value) {\n    return value;\n});\n}\n";
     check(input, &["--style=java"], expected);
     check(expected, &["--style=java"], expected);
 }
@@ -24257,7 +24255,7 @@ fn a_declarator_split_off_its_template_type_stands_with_the_statement() {
 fn a_lambda_parameter_declarator_on_a_continued_row_spaces_as_on_the_first() {
     // Every row of a lambda's parameters declares them, the one the list
     // opens on or a later one.
-    let input = "void f()\n{\n    call([](const Item &a,\n    const Item &b) {\n        return a.value < b.value;\n    });\n}\n";
+    let input = "void f()\n{\n    call([](const Item &a,\n            const Item &b) {\n        return a.value < b.value;\n    });\n}\n";
     check(input, &["--style=kr", "--pad-oper"], input);
     let typed = input.replace("Item &b", "Item& b");
     check(&typed, &["--style=kr", "--align-pointer=name"], input);
@@ -25270,4 +25268,15 @@ fn a_braceless_body_split_off_its_header_by_the_maximum_length_stands_at_the_bod
     let expected = "void helper()\n{\n    if (ready) {\n        if (output::write_all(fd, {buffer.data(), buffer.size()}))\n            return;\n        while (output::write_all(fd, {buffer.data(), buffer.size()}))\n            next();\n    }\n}\n";
     check(input, &["--style=kr", "--max-code-length=60"], expected);
     check(expected, &["--style=kr", "--max-code-length=60"], expected);
+}
+
+#[test]
+fn a_lambda_s_parameter_rows_align_at_its_paren_whatever_row_opens_its_body() {
+    // A row continuing a lambda's parameters stands at their paren as a
+    // function's does, the body's brace on it or not; the body stands a
+    // level past the statement.
+    let input = "void helper()\n{\n    auto handler = [](int first,\n    int second) {\n        go();\n    };\n    auto three = [](int first,\n    int second,\n    int third) {\n        go();\n    };\n    call(value, [](int first,\n    int second) {\n        go();\n    });\n    auto typed = [](int first,\n    int second) -> bool {\n        return first < second;\n    };\n}\n";
+    let expected = "void helper()\n{\n    auto handler = [](int first,\n                      int second) {\n        go();\n    };\n    auto three = [](int first,\n                    int second,\n                    int third) {\n        go();\n    };\n    call(value, [](int first,\n                   int second) {\n        go();\n    });\n    auto typed = [](int first,\n                    int second) -> bool {\n        return first < second;\n    };\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
 }

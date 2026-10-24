@@ -301,8 +301,11 @@ impl FormatEngine<'_> {
                 spaces = None;
             }
         }
-        // So does a row of its parameters that opens the lambda's body.
-        let opens_lambda_block = line.opens_lambda_block() || self.pending_line_opens_lambda_body();
+        // So does a row that opens a lambda's body, but for one continuing
+        // the lambda's parameters, which stands with them.
+        let opens_lambda_block = (line.opens_lambda_block()
+            || self.pending_line_opens_lambda_body())
+            && !self.pending_line_continues_lambda_parameters();
         if spaces.is_some() && opens_lambda_block {
             spaces = None;
         }

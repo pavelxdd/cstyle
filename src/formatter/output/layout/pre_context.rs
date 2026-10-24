@@ -113,7 +113,10 @@ impl FormatEngine<'_> {
         mut layout: LineLayout,
     ) -> LineLayout {
         let line_start = line.trimmed_start();
+        // A row continuing a lambda's parameters stands with them.
+        let continues_lambda_parameters = self.pending_line_continues_lambda_parameters();
         if !replay.closed_split_lambda_parameter_list
+            && !continues_lambda_parameters
             && layout.line_kind != LineKind::SwitchLabel
             && let Some(spaces) = self.contextual_line_indent_spaces(
                 line,
@@ -191,7 +194,7 @@ impl FormatEngine<'_> {
             );
         }
         // A message's keyword row stands at its keywords whatever it passes.
-        if self.line_opens_statement_level_lambda(line) {
+        if !continues_lambda_parameters && self.line_opens_statement_level_lambda(line) {
             if let Some(spaces) = self.lambda_call_argument_after_split_indent_spaces(line) {
                 layout.exact_indent_spaces = Some(spaces);
             } else if !line_start.starts_with("/*") {

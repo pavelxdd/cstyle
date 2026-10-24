@@ -500,8 +500,12 @@ impl FormatEngine<'_> {
         if !part.trimmed_start().starts_with(&*token_text(token)) {
             return None;
         }
-        // A part opening a lambda's body ends what the statement continued.
-        if part.trimmed_end().ends_with('{') && self.pending_line_opens_statement_lambda_body() {
+        // A part opening a lambda's body ends what the statement continued,
+        // unless it continues the lambda's parameters.
+        if part.trimmed_end().ends_with('{')
+            && self.pending_line_opens_statement_lambda_body()
+            && !self.pending_line_continues_lambda_parameters()
+        {
             return Some(
                 (self
                     .layout
