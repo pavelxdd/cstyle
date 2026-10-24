@@ -3579,3 +3579,18 @@ fn max_code_length_reads_no_assignment_in_an_operator_name() {
         "NumCapturesWalker& NumCapturesWalker::operator=\n(const Walker&) = default;\n",
     );
 }
+
+#[test]
+fn max_code_length_splits_a_declaration_before_its_name_past_template_arguments() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "static inline std::map<std::string, int>* empty_named_groups() {\n    return value;\n}\n",
+        &options,
+        "static inline std::map<std::string, int>*\nempty_named_groups()\n{\n    return value;\n}\n",
+    );
+}

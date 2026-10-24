@@ -723,6 +723,20 @@ impl FormatEngine<'_> {
     }
 }
 
+/// Whether every `,` of `head` parts template arguments.
+fn commas_within_angles(head: &str) -> bool {
+    let mut depth = 0usize;
+    head.chars().all(|ch| {
+        match ch {
+            '<' => depth += 1,
+            '>' => depth = depth.saturating_sub(1),
+            ',' => return depth > 0,
+            _ => {}
+        }
+        true
+    })
+}
+
 /// A split right after a block comment that follows a finished statement
 /// starts the next statement.
 fn ends_statement_before_comment(head: &str) -> bool {
@@ -1081,12 +1095,14 @@ fn continuation_indent_for_split(
         });
     // Member access registers nothing.
     let unaccessed_head = declaration.replace("->", ".");
+    let commas_in_angles = commas_within_angles(&unaccessed_head);
     if !following_split
         && unaccessed_head.chars().all(|ch| {
             is_identifier_continue(ch)
                 || ch.is_whitespace()
                 || matches!(ch, '*' | '&' | ':' | '<' | '>' | '.')
                 || macro_groups && matches!(ch, '(' | ')' | ',')
+                || commas_in_angles && ch == ','
         })
         && declaration.ends_with(|ch: char| {
             is_identifier_continue(ch) || matches!(ch, '*' | '&' | '>') || macro_groups && ch == ')'
