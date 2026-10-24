@@ -1346,6 +1346,15 @@ impl FormatEngine<'_> {
         {
             return false;
         }
+        // A type's braced value is a list wherever it stands.
+        if self
+            .tree
+            .groups
+            .opened_at(brace_index)
+            .is_some_and(|list| self.tree.blocks.kind(list) == Some(BlockKind::Initializer))
+        {
+            return false;
+        }
         previous_code_token(tokens, brace_index, 0).is_some_and(|previous| {
             !matches!(tokens.get(previous), Some(Token::Operator(operator)) if operator == "=")
         })

@@ -2983,6 +2983,17 @@ fn template_braced_initializer_keeps_the_gap_before_its_brace() {
 }
 
 #[test]
+fn braced_initializer_at_declaration_scope_keeps_the_gap_before_its_brace() {
+    // As in a function's body, no option sets a gap before a list's brace.
+    for source in [
+        "auto value = Item{};\nauto other = make(Item{1});\nauto check() -> decltype(make(Item{}));\nstruct Holder {\n    auto get() -> decltype(make(Item{}));\n};\n",
+        "auto value = Item {};\nauto other = make(Item {1});\nauto check() -> decltype(make(Item {}));\n",
+    ] {
+        assert_eq!(format_exact(source, &FormatOptions::default()), source);
+    }
+}
+
+#[test]
 fn return_template_direct_list_initializer_keeps_the_gap_before_its_brace() {
     let source = fixture!(
         "void f()",
@@ -3295,19 +3306,15 @@ fn macro_initializer_keeps_designated_initializer_indent() {
 }
 
 #[test]
-fn default_breaks_nonempty_named_direct_list_in_auto_declaration() {
-    assert_eq!(
-        format_exact("auto value = Type{1};\n", &FormatOptions::default()),
-        fixture!("auto value = Type {", "    1", "};")
-    );
+fn default_keeps_nonempty_named_direct_list_in_auto_declaration() {
+    let source = "auto value = Type{1};\n";
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
 
 #[test]
-fn default_spaces_empty_named_direct_list_in_auto_declaration() {
-    assert_eq!(
-        format_exact("auto value = Type{};\n", &FormatOptions::default()),
-        "auto value = Type {};\n"
-    );
+fn default_keeps_empty_named_direct_list_in_auto_declaration() {
+    let source = "auto value = Type{};\n";
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
 
 #[test]

@@ -20025,7 +20025,7 @@ fn an_access_label_after_a_base_clause_row_opening_the_body_stands_as_any_label(
 #[test]
 fn pad_oper_reads_a_pack_expansion_among_template_arguments_as_template_arguments() {
     let input = "static auto check(index_sequence<Is...>);\nauto value = check(sequence<Is...>{});\nbool first = point.x < other.x && other.y > point.y;\n";
-    let expected = "static auto check(index_sequence<Is...>);\nauto value = check(sequence<Is...> {});\nbool first = point.x < other.x && other.y > point.y;\n";
+    let expected = "static auto check(index_sequence<Is...>);\nauto value = check(sequence<Is...>{});\nbool first = point.x < other.x && other.y > point.y;\n";
     check(input, &["--style=kr", "--pad-oper"], expected);
     check(expected, &["--style=kr", "--pad-oper"], expected);
 }
@@ -20036,7 +20036,7 @@ fn arguments_after_a_paren_ending_a_split_head_continue_from_the_stack_below_it(
     // which the split moves. A braced argument stands with the others, at
     // file scope as in a body.
     let input = "static auto check(int value) -> decltype(all_true(\n    first,\n    second));\nstatic auto check(sequence<Is...>) -> decltype(all_true(\n    sequence<Is...>{},\n    second));\n";
-    let expected = "static auto\ncheck(int value) -> decltype(all_true(\n                                 first,\n                                 second));\nstatic auto\ncheck(sequence<Is...>) -> decltype(all_true(\n                                       sequence<Is...> {},\n                                       second));\n";
+    let expected = "static auto\ncheck(int value) -> decltype(all_true(\n                                 first,\n                                 second));\nstatic auto\ncheck(sequence<Is...>) -> decltype(all_true(\n                                       sequence<Is...>{},\n                                       second));\n";
     check(input, &["--style=kr", "--break-return-type-decl"], expected);
     check(
         expected,
@@ -20050,7 +20050,7 @@ fn arguments_after_a_paren_ending_a_split_head_keep_a_capped_column_below_it() {
     // The column below stays capped after the split, and the arguments
     // continue a level past it.
     let input = "class Check {\n  template <size_t... Is>\n  static auto check(index_sequence<Is...>) -> decltype(all_true(\n      index_sequence<Is...>{},\n      second));\n};\n";
-    let expected = "class Check\n{\n    template <size_t... Is>\n    static auto\n    check(index_sequence<Is...>) -> decltype(all_true(\n                index_sequence<Is...> {},\n                second));\n};\n";
+    let expected = "class Check\n{\n    template <size_t... Is>\n    static auto\n    check(index_sequence<Is...>) -> decltype(all_true(\n                index_sequence<Is...>{},\n                second));\n};\n";
     check(input, &["--style=kr", "--break-return-type-decl"], expected);
     check(
         expected,
