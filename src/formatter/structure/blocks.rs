@@ -774,6 +774,13 @@ fn classify_head(tokens: &[Token], head: &[usize]) -> Option<BlockKind> {
             Some("struct" | "union" | "enum" | "class" | "interface") => {
                 return Some(BlockKind::Aggregate);
             }
+            Some("implementation")
+                if position
+                    .checked_sub(1)
+                    .is_some_and(|before| matches!(tokens[head[before]], Token::Symbol('@'))) =>
+            {
+                return Some(BlockKind::Aggregate);
+            }
             _ => {}
         }
     }

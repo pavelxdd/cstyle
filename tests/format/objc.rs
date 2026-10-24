@@ -1635,3 +1635,37 @@ fn pad_paren_pads_inside_before_an_objc_literal() {
     assert_eq!(format_exact(input, &options), expected);
     assert_eq!(format_exact(expected, &options), expected);
 }
+
+#[test]
+fn instance_variable_braces_of_an_interface_and_an_implementation_follow_the_class_rule() {
+    // Each block holds a class's instance variables: its brace breaks and
+    // attaches as a class's does, wherever the source placed it.
+    let attached = "@interface Item : NSObject {\n    int _value;\n}\n@end\n@interface Item () {\n    int _extra;\n}\n@end\n@implementation Item {\n    int _count;\n}\n@end\n";
+    let broken = "@interface Item : NSObject\n{\n    int _value;\n}\n@end\n@interface Item ()\n{\n    int _extra;\n}\n@end\n@implementation Item\n{\n    int _count;\n}\n@end\n";
+    let lisp = "@interface Item : NSObject {\n    int _value; }\n@end\n@interface Item () {\n    int _extra; }\n@end\n@implementation Item {\n    int _count; }\n@end\n";
+    let ratliff = "@interface Item : NSObject {\n    int _value;\n    }\n@end\n@interface Item () {\n    int _extra;\n    }\n@end\n@implementation Item {\n    int _count;\n    }\n@end\n";
+    for (args, expected) in [
+        (&["--style=kr"][..], broken),
+        (&["--style=linux"], broken),
+        (&["--style=mozilla"], broken),
+        (&["--style=allman"], broken),
+        (&["--style=java"], attached),
+        (&["--style=google"], attached),
+        (&["--style=stroustrup"], attached),
+        (&["--style=webkit"], attached),
+        (&["--style=kr", "--attach-classes"], attached),
+        (&["--style=lisp"], lisp),
+        (&["--style=ratliff"], ratliff),
+    ] {
+        let mut options = FormatOptions::default();
+        let args: Vec<String> = args.iter().map(|arg| (*arg).to_string()).collect();
+        apply_command_line_args(&mut options, &args).expect("valid options");
+        for source in [attached, broken] {
+            assert_eq!(
+                format_exact(source, &options),
+                expected,
+                "{args:?}\n{source}"
+            );
+        }
+    }
+}

@@ -355,7 +355,10 @@ impl FormatEngine<'_> {
             BraceType::Namespace
         } else if block_word.as_deref() == Some("class") {
             BraceType::Class
-        } else if block_word.as_deref() == Some("interface") {
+        } else if matches!(
+            block_word.as_deref(),
+            Some("interface" | "@interface" | "@implementation")
+        ) {
             BraceType::Interface
         } else if block_word.as_deref() == Some("struct") {
             BraceType::Struct

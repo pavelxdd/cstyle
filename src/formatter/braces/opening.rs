@@ -4102,6 +4102,20 @@ impl FormatEngine<'_> {
         {
             return self.style_attaches_opening_brace(brace_type, None);
         }
+        // An interface's head, published before its brace, takes the
+        // brace its style attaches as a class's held head does.
+        if brace_type == BraceType::Interface
+            && !self.preprocessor.last_output_was_preprocessor
+            && self.current_is_blank()
+            && self
+                .current
+                .active_token()
+                .and_then(|brace| self.tree.previous_code_token(brace))
+                .and_then(|head| self.output.line_with_token(head))
+                .is_some_and(|line| line + 1 == self.output.len())
+        {
+            return self.style_attaches_opening_brace(brace_type, None);
+        }
         if !matches!(
             brace_type,
             BraceType::Command | BraceType::Definition | BraceType::NonStatement
@@ -4342,7 +4356,9 @@ impl FormatEngine<'_> {
         {
             return true;
         }
-        if self.options.attach_class && brace_type == BraceType::Class {
+        if self.options.attach_class
+            && matches!(brace_type, BraceType::Class | BraceType::Interface)
+        {
             return true;
         }
         if brace_type == BraceType::Enum

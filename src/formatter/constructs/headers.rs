@@ -1443,9 +1443,17 @@ impl FormatEngine<'_> {
         if let Some(header) = header {
             self.observe_block_spacing_header(header);
         }
-        // A `class` among template parameters opens no block.
-        if (language::BLOCK_WORDS.contains(&word) || language::PRE_BLOCK_WORDS.contains(&word))
+        // An Objective-C class's instance variables stand in a block of the
+        // class after its interface, extension or implementation head alike.
+        if matches!(word, "interface" | "implementation")
+            && self.layout.command_state.previous_non_ws_char == Some('@')
             && self.layout.nesting.paren_depth == 0
+        {
+            self.layout.command_state.pending_block_word = Some(format!("@{word}"));
+        } else if (language::BLOCK_WORDS.contains(&word)
+            || language::PRE_BLOCK_WORDS.contains(&word))
+            && self.layout.nesting.paren_depth == 0
+            // A `class` among template parameters opens no block.
             && self.layout.line_state.template_angle_depth == 0
             && self.block_word_is_recognized(word, next)
             && !(matches!(word, "class" | "struct")
