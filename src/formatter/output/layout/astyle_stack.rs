@@ -242,6 +242,11 @@ impl FormatEngine<'_> {
         {
             return None;
         }
+        // A statement run in after a block brace registers what the tree
+        // reads for its rows.
+        if self.runs_in_after_block_brace(self.declaration_start(comma)) {
+            return None;
+        }
         self.astyle_stack_indent(first)
     }
 

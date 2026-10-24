@@ -3289,7 +3289,7 @@ impl FormatEngine<'_> {
     /// The first token of the declaration holding the token `from`: past
     /// parens, a struct body it defines and the initializers of declarators
     /// before, and after a label before the statement.
-    fn declaration_start(&self, from: usize) -> usize {
+    pub(super) fn declaration_start(&self, from: usize) -> usize {
         let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
         let mut start = from;
@@ -3348,7 +3348,7 @@ impl FormatEngine<'_> {
     #[inline(never)]
     /// Whether the statement at `start` runs in after the lone block brace
     /// on the line before, as Horstmann and Pico join them.
-    fn runs_in_after_block_brace(&self, start: usize) -> bool {
+    pub(super) fn runs_in_after_block_brace(&self, start: usize) -> bool {
         if !matches!(
             self.options.brace_style,
             BraceStyle::Pico | BraceStyle::Horstmann

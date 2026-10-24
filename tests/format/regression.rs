@@ -24964,3 +24964,25 @@ fn a_block_comment_alone_after_a_broken_list_brace_starts_the_rows() {
         check(input, &[style], expected);
     }
 }
+
+#[test]
+fn a_declarator_split_off_a_run_in_declaration_stands_where_a_reformat_puts_it() {
+    let input = "void f(void)\n{\n    ssize_t dirty_decay_ms, orig_dirty_decay_ms, prev_dirty_decay_ms;\n    size_t sz = sizeof(ssize_t);\n}\n";
+    for style in ["--style=pico", "--style=horstmann"] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(
+            &mut options,
+            &[style.to_string(), "--max-code-length=60".to_string()],
+        )
+        .expect("valid options");
+        let once = String::from_utf8(format_bytes(input.as_bytes(), &options).expect("format"))
+            .expect("utf8");
+        let twice = String::from_utf8(format_bytes(once.as_bytes(), &options).expect("format"))
+            .expect("utf8");
+        assert_eq!(twice, once, "{style}");
+        assert!(
+            once.contains("\n    prev_dirty_decay_ms;\n"),
+            "{style}\n{once}"
+        );
+    }
+}
