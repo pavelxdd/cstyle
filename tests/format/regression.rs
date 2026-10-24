@@ -24447,3 +24447,23 @@ fn a_requires_expression_split_off_a_concept_value_continues_under_the_value() {
     check(input, &args, expected);
     check(expected, &args, expected);
 }
+
+#[test]
+fn braces_on_a_raw_string_row_leave_the_closer_of_the_block_in_place() {
+    // A row of a raw string is text: a brace leading it opens nothing, so
+    // the block's closer stands where the style sets any closer.
+    let input = "void f()\n{\n    auto more = R\"x(\n{ not a brace }\n)x\";\n    go(more);\n}\n";
+    for (style, expected) in [
+        (
+            "--style=whitesmith",
+            "void f()\n    {\n    auto more = R\"x(\n{ not a brace }\n)x\";\n    go(more);\n    }\n",
+        ),
+        (
+            "--style=pico",
+            "void f()\n{   auto more = R\"x(\n{ not a brace }\n)x\";\n    go(more); }\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
