@@ -545,15 +545,10 @@ impl FormatEngine<'_> {
                 self.options.brace_style,
                 BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Ratliff
             );
-        let opening_indent = control_paren_indent
+        let mut opening_indent = control_paren_indent
             .or(enclosing_body_column)
             .unwrap_or_else(|| self.current_line_indent_spaces())
             + usize::from(indented_initializer_brace) * self.options.indent_width;
-        let body_indent = if indented_initializer_brace {
-            opening_indent
-        } else {
-            opening_indent + self.options.indent_width
-        };
 
         self.emit_opening_brace_space(brace_type);
         self.current.push('{');
@@ -567,6 +562,20 @@ impl FormatEngine<'_> {
                 .set_next_line_spaces(opening_indent);
         }
         self.finish_line();
+        // The list's rows follow the row its brace ends, where the layout
+        // put it.
+        if control_paren_indent.is_none()
+            && enclosing_body_column.is_none()
+            && !brace_begins_line
+            && let Some(row) = self.output.last()
+        {
+            opening_indent = leading_visual_width(row, self.options.tab_width);
+        }
+        let body_indent = if indented_initializer_brace {
+            opening_indent
+        } else {
+            opening_indent + self.options.indent_width
+        };
         self.update_current_brace_indent_from_last_output_line();
         self.layout
             .nesting

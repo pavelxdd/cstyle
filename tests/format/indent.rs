@@ -5229,13 +5229,13 @@ fn stream_chain_started_in_call_argument_keeps_argument_indent() {
 }
 
 #[test]
-fn stream_chain_line_with_nested_braced_value_keeps_source_indent() {
+fn stream_chain_line_with_nested_braced_value_continues_the_chain() {
     let source = fixture!(
         "void f()",
         "{",
         "    append(\"row\")",
-        "    << Value { { 1 } }",
-        "            << expected;",
+        "        << Value { { 1 } }",
+        "        << expected;",
         "}",
     );
 
@@ -5243,12 +5243,12 @@ fn stream_chain_line_with_nested_braced_value_keeps_source_indent() {
 }
 
 #[test]
-fn stream_chain_after_nested_braced_value_uses_two_indent_levels() {
+fn stream_chain_after_nested_braced_value_aligns_to_the_chain() {
     let source = fixture!(
         "void f()",
         "{",
         "    append(\"row\") << Value { { 1 } }",
-        "            << expected;",
+        "                  << expected;",
         "}",
     );
 
@@ -5256,15 +5256,15 @@ fn stream_chain_after_nested_braced_value_uses_two_indent_levels() {
 }
 
 #[test]
-fn braced_value_stream_continuation_after_stream_head_keeps_base_indent() {
+fn braced_value_stream_continuation_after_stream_head_aligns_to_the_chain() {
     let source = fixture!(
         "void f()",
         "{",
         "    append(\"row\") << name",
-        "    << List{",
-        "        A,",
-        "        B,",
-        "    };",
+        "                  << List{",
+        "                      A,",
+        "                      B,",
+        "                  };",
         "}",
     );
 
@@ -5272,16 +5272,16 @@ fn braced_value_stream_continuation_after_stream_head_keeps_base_indent() {
 }
 
 #[test]
-fn braced_value_stream_continuation_after_indented_stream_head_keeps_base_indent() {
+fn braced_value_stream_continuation_after_indented_stream_head_continues_the_chain() {
     let source = fixture!(
         "void f()",
         "{",
         "    append(\"row\")",
         "        << name",
-        "    << List{",
-        "        A,",
-        "        B,",
-        "    };",
+        "        << List{",
+        "            A,",
+        "            B,",
+        "        };",
         "}",
     );
 
@@ -5337,13 +5337,13 @@ fn member_chain_after_prior_return_statement_takes_a_continuation_indent() {
 }
 
 #[test]
-fn nested_braced_value_inside_stream_call_keeps_base_indent() {
+fn nested_braced_value_inside_stream_call_stands_as_any_argument() {
     let source = fixture!(
         "void f()",
         "{",
         "    append(\"row\")",
         "        << wrap(",
-        "    Value { 1, \"foo\", { { \"bar\", 2 } } })",
+        "            Value { 1, \"foo\", { { \"bar\", 2 } } })",
         "        << expected;",
         "}",
     );

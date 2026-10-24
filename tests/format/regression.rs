@@ -4613,7 +4613,7 @@ fn vtk_statement_after_nested_added_one_line_block() {
 #[test]
 fn indent_after_parens_continues_a_header_condition_alike_with_a_maximum_length() {
     let input = "void f()\n{\n    if (check(first,\n              field<Item>{\n                  value},\n              more)) {\n        go();\n    }\n}\n";
-    let expected = "void f()\n{\n    if (check(first,\n            field<Item>\n    {\n        value},\n            more))\n        {\n            go();\n        }\n}\n";
+    let expected = "void f()\n{\n    if (check(first,\n            field<Item>\n            {\n                value},\n            more))\n        {\n            go();\n        }\n}\n";
     for args in [
         &["--style=gnu", "--indent-after-parens"][..],
         &[
@@ -19204,11 +19204,11 @@ fn allman_and_horstmann_break_a_range_for_list_brace_at_the_header_continuation(
 #[test]
 fn attach_styles_attach_a_constructor_body_after_an_initializer_list_closer() {
     let input = "Holder::Holder()\n    : value_(1),\n      items_{\n          1,\n          2\n      }\n{\n}\n";
-    let expected = "Holder::Holder()\n    : value_(1),\n      items_{\n    1,\n    2\n} {\n}\n";
+    let expected = "Holder::Holder()\n    : value_(1),\n      items_{\n          1,\n          2\n      } {\n}\n";
     check(input, &["--style=java"], expected);
     check(expected, &["--style=java"], expected);
     // Styles breaking a function's brace keep it apart.
-    let expected = "Holder::Holder()\n    : value_(1),\n      items_{\n    1,\n    2\n}\n{\n}\n";
+    let expected = "Holder::Holder()\n    : value_(1),\n      items_{\n          1,\n          2\n      }\n{\n}\n";
     check(input, &["--style=kr"], expected);
 }
 
@@ -20540,15 +20540,15 @@ fn a_list_among_arguments_leaves_the_rows_after_it_at_the_argument_column() {
     for (style, expected) in [
         (
             "--style=pico",
-            "void helper()\n{   return result(first,\n                  field<Item>\n    {   value },\n                  more);\n    result(first,\n    {   value },\n           more); }\n",
+            "void helper()\n{   return result(first,\n                  field<Item>\n                  {   value },\n                  more);\n    result(first,\n    {   value },\n           more); }\n",
         ),
         (
             "--style=allman",
-            "void helper()\n{\n    return result(first,\n                  field<Item>\n    {\n        value},\n                  more);\n    result(first,\n    {\n        value\n    },\n           more);\n}\n",
+            "void helper()\n{\n    return result(first,\n                  field<Item>\n                  {\n                      value},\n                  more);\n    result(first,\n    {\n        value\n    },\n           more);\n}\n",
         ),
         (
             "--style=kr",
-            "void helper()\n{\n    return result(first,\n                  field<Item>{\n        value},\n                  more);\n    result(first, {\n        value\n    },\n           more);\n}\n",
+            "void helper()\n{\n    return result(first,\n                  field<Item>{\n                      value},\n                  more);\n    result(first, {\n        value\n    },\n           more);\n}\n",
         ),
     ] {
         check(input, &[style], expected);
@@ -20872,11 +20872,11 @@ fn arguments_after_a_list_in_a_call_in_a_header_continue_the_call() {
     for (style, expected) in [
         (
             "--style=kr",
-            "void run()\n{\n    if (check(first,\n              field<Item>{\n        value},\n              more)) {\n        go();\n    }\n}\n",
+            "void run()\n{\n    if (check(first,\n              field<Item>{\n                  value},\n              more)) {\n        go();\n    }\n}\n",
         ),
         (
             "--style=allman",
-            "void run()\n{\n    if (check(first,\n              field<Item>\n    {\n        value},\n              more))\n    {\n        go();\n    }\n}\n",
+            "void run()\n{\n    if (check(first,\n              field<Item>\n              {\n                  value},\n              more))\n    {\n        go();\n    }\n}\n",
         ),
     ] {
         check(input, &[style], expected);
@@ -21458,7 +21458,7 @@ fn a_call_ending_a_braceless_body_after_a_split_else_leaves_its_level() {
     // The call ends the body of the header before it: the statement after
     // it, and that statement's argument rows, stand at the header's level.
     let input = "void f()\n{\n    if (ready) {\n        first();\n#if FEATURE\n    } else {\n        second();\n#endif\n    }\n    if (!ready)\n        throw Error(\"not ready\",\n                    value);\n    if (check(first,\n              field<Item>{\n                  value},\n              more)) {\n        go();\n    }\n}\n";
-    let expected = "void f()\n{   if (ready)\n    {   first();\n#if FEATURE\n    }\n    else\n    {   second();\n#endif\n    }\n    if (!ready)\n        throw Error(\"not ready\",\n                    value);\n    if (check(first,\n              field<Item>\n    {   value },\n              more))\n    {   go(); } }\n";
+    let expected = "void f()\n{   if (ready)\n    {   first();\n#if FEATURE\n    }\n    else\n    {   second();\n#endif\n    }\n    if (!ready)\n        throw Error(\"not ready\",\n                    value);\n    if (check(first,\n              field<Item>\n              {   value },\n              more))\n    {   go(); } }\n";
     check(input, &["--style=pico"], expected);
     check(expected, &["--style=pico"], expected);
 }
@@ -25231,4 +25231,33 @@ fn a_parameter_defaulted_to_braces_leaves_the_head_and_body_rows_as_any_default_
         &[],
         &expected.replace("= {}", "= 0"),
     );
+}
+
+#[test]
+fn a_list_ending_a_continuation_row_lays_out_its_rows_from_that_row() {
+    // Whatever opens it, a type's name or a cast, and whatever continues
+    // the statement there, an argument, an operator or a shift, a list's
+    // elements stand a level past the row its brace ends and its closer at
+    // the row; a brace a style breaks stands at the row. The rows after the
+    // list go on with the statement as after any argument.
+    let input = "void helper()\n{\n    check(first,\n          make(Config{\n        .size = 5,\n    }),\n          second);\n    check(first,\n          Config{\n        .size = 5,\n    },\n          second);\n    check(first,\n          (Config) {\n              .size = 5,\n          },\n          second);\n    value\n        + Item{\n        1,\n    };\n    stream << first\n           << Item{\n        1,\n    };\n    append(row)\n        << name\n    << List{\n        first,\n        second,\n    };\n    append(row)\n        << wrap(\n    Value { 1, { 2 } })\n        << result;\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void helper()\n{\n    check(first,\n          make(Config{\n              .size = 5,\n          }),\n          second);\n    check(first,\n          Config{\n              .size = 5,\n          },\n          second);\n    check(first,\n          (Config) {\n              .size = 5,\n          },\n          second);\n    value\n        + Item{\n            1,\n        };\n    stream << first\n           << Item{\n               1,\n           };\n    append(row)\n        << name\n        << List{\n            first,\n            second,\n        };\n    append(row)\n        << wrap(\n            Value { 1, { 2 } })\n        << result;\n}\n",
+        ),
+        (
+            "--style=allman",
+            "void helper()\n{\n    check(first,\n          make(Config\n          {\n              .size = 5,\n          }),\n          second);\n    check(first,\n          Config\n          {\n              .size = 5,\n          },\n          second);\n    check(first,\n          (Config)\n          {\n              .size = 5,\n          },\n          second);\n    value\n        + Item\n        {\n            1,\n        };\n    stream << first\n           << Item\n           {\n               1,\n           };\n    append(row)\n        << name\n        << List\n        {\n            first,\n            second,\n        };\n    append(row)\n        << wrap(\n            Value { 1, { 2 } })\n        << result;\n}\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+    // A list among a list's elements is an element after any row.
+    let input =
+        "static const struct Item items[] = {\n\tLEADING_ITEMS\n\t{NAME(\"last\"), 2}\n};\n";
+    let expected = "static const struct Item items[] =\n    {\n    LEADING_ITEMS\n        {NAME(\"last\"), 2}\n    };\n";
+    check(input, &["--style=whitesmith"], expected);
+    check(expected, &["--style=whitesmith"], expected);
 }

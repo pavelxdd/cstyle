@@ -1946,7 +1946,6 @@ impl FormatEngine<'_> {
             operator_output_line: self.output.len(),
             line_indent_spaces,
             operator_ends_output_line: false,
-            line_contains_nested_brace: false,
             line_has_unmatched_open_paren: false,
             line_ends_with_close_paren: false,
             line_has_positive_paren_delta: false,

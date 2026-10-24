@@ -2263,9 +2263,6 @@ impl FormatEngine<'_> {
                     .or(Some(last))
             })?;
         let base = self.continuation_base_indent() * self.options.indent_width;
-        if stream.line_contains_nested_brace {
-            return Some(base + self.options.indent_width * 2);
-        }
         // The output columns a case unindent moved stand past it again, as
         // the unindent moves this row too.
         let unindent = self.case_unindent_spaces();

@@ -21,7 +21,7 @@ use crate::formatter::structure::blocks::{
     BlockKind, closes_before_paren, is_code_token, next_code_token,
 };
 use crate::formatter::structure::groups::{Delimiter, GroupId};
-use crate::formatter::syntax::language::{is_header, is_macro_like_word};
+use crate::formatter::syntax::language::{is_header, is_macro_like_word, is_non_type_keyword};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     ContainsAnyByte, after_leading_comments, has_unmatched_open_brace, preprocessor_directive,
@@ -168,11 +168,7 @@ impl FormatEngine<'_> {
                 self.else_matching_if_indent(first)
             })
         })
-        .or_else(|| {
-            when(in_parens && brace, || {
-                self.literal_brace_in_argument_row_indent(first)
-            })
-        })
+        .or_else(|| when(brace, || self.list_brace_in_continuation_row_indent(first)))
         .or_else(|| when(in_parens, || self.literal_argument_indent(first)))
         .or_else(|| when(in_parens, || self.row_around_kept_lambda_body_indent(first)))
         .or_else(|| {
@@ -7120,21 +7116,42 @@ impl FormatEngine<'_> {
         Some(column + self.case_unindent_spaces())
     }
 
-    /// A compound literal's brace leading its line follows the argument row
-    /// that holds the literal's cast: a `{` stands at the row, a `}` at
-    /// the `{` that leads its line, else where the style closes a block the
-    /// row opens.
+    /// A list's brace leading its line follows the row continuing a
+    /// statement, an argument or an operand, that holds the list's head, a
+    /// compound literal's cast or a type's name: a `{` stands at the row, a
+    /// `}` at the `{` that leads its line, else where the style closes a
+    /// block the row opens.
     #[inline(never)]
-    fn literal_brace_in_argument_row_indent(&self, first: usize) -> Option<usize> {
-        let open = self
-            .tree
-            .groups
-            .get(self.tree.groups.delimited_by(first)?)
-            .open;
-        let row = self
-            .output
-            .line_with_token(self.compound_literal_cast(open)?)?;
-        if !self.token_in_parens(self.output.line_tokens(row)?.first) {
+    fn list_brace_in_continuation_row_indent(&self, first: usize) -> Option<usize> {
+        let list = self.tree.groups.delimited_by(first)?;
+        let open = self.tree.groups.get(list).open;
+        let head = self.compound_literal_cast(open).or_else(|| {
+            let before = self.tree.previous_code_token(open)?;
+            let named = matches!(
+                self.tree.blocks.kind(list),
+                Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+            ) && match &self.tree.tokens[before] {
+                Token::Word(word) => !is_non_type_keyword(word),
+                Token::Operator(operator) => operator == ">",
+                _ => false,
+            } && !self.brace_holds_statements(list);
+            named.then_some(before)
+        })?;
+        let row = self.output.line_with_token(head)?;
+        // The row continues a statement, as an argument or an operand, not
+        // a list's element or a subscript.
+        let row_first = self.output.line_tokens(row)?.first;
+        let in_element = self.tree.groups.enclosing(row_first).is_some_and(|group| {
+            self.tree.groups.get(group).delimiter == Delimiter::Bracket
+                || matches!(
+                    self.tree.blocks.kind(group),
+                    Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                )
+        });
+        if in_element
+            || !self.token_in_parens(row_first)
+                && self.tree.statements.starts_block_statement(row_first)
+        {
             return None;
         }
         let lead = self.output.lead_width(row, self.options.tab_width);

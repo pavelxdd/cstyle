@@ -1966,12 +1966,7 @@ impl FormatEngine<'_> {
                 .last_non_empty_scoped()
                 .is_some_and(|line| self.output.code_trimmed_of(line).ends_with(','))
         {
-            let level = self
-                .layout
-                .indentation
-                .line_indent(LineKind::Normal, self.options)
-                + self.case_body_indent_extra(LineKind::Normal);
-            let spaces = ContinuationIndent::Level(level).columns(self.options.indent_width);
+            let spaces = self.statement_level_spaces();
             if self.current_line_indent_spaces() > spaces {
                 self.layout.continuation_indent.set_next_line_spaces(spaces);
                 self.layout.continuation_indent.logical_chain_indent_spaces = None;
@@ -3741,6 +3736,44 @@ impl FormatEngine<'_> {
         }
     }
 
+    /// Whether the brace being pushed opens a list: the tree reads it as
+    /// one and no statement ends inside it.
+    fn active_brace_opens_list(&self) -> bool {
+        matches!(
+            self.pushed_brace_kind(),
+            Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+        ) && self
+            .current
+            .active_token()
+            .and_then(|brace| self.tree.groups.opened_at(brace))
+            .is_some_and(|group| !self.brace_holds_statements(group))
+    }
+
+    /// Whether the brace being pushed follows an assignment's `=` right
+    /// before it.
+    fn active_brace_follows_assignment(&self) -> bool {
+        self.current
+            .active_token()
+            .and_then(|brace| self.tree.previous_code_token(brace))
+            .is_some_and(|before| {
+                matches!(&self.tree.tokens[before], Token::Operator(operator)
+                    if operator.ends_with('=')
+                        && !matches!(operator.as_str(), "==" | "!=" | "<=" | ">="))
+            })
+    }
+
+    /// The column of the statement the line belongs to, at its block's
+    /// level.
+    fn statement_level_spaces(&self) -> usize {
+        ContinuationIndent::Level(
+            self.layout
+                .indentation
+                .line_indent(LineKind::Normal, self.options)
+                + self.case_body_indent_extra(LineKind::Normal),
+        )
+        .columns(self.options.indent_width)
+    }
+
     fn should_open_multiline_attached_initializer_brace(
         &self,
         brace_type: BraceType,
@@ -3750,9 +3783,15 @@ impl FormatEngine<'_> {
             return true;
         }
         !self.current_is_blank()
-            && brace_type == BraceType::CompoundLiteral
+            && (brace_type == BraceType::CompoundLiteral
+                && line_ends_compound_literal_cast(self.current.trimmed_end())
+                || matches!(
+                    brace_type,
+                    BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral
+                ) && self.active_brace_opens_list()
+                    && !self.active_brace_follows_assignment()
+                    && self.current_line_indent_spaces() > self.statement_level_spaces())
             && (matches!(next, None | Some(Token::Newline)) || self.comments.next_comment_ends_line)
-            && line_ends_compound_literal_cast(self.current.trimmed_end())
             && !line_ends_lambda_parameter_list(self.current.trimmed_end())
             && self.should_attach_opening_brace(brace_type, next)
     }

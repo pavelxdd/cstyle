@@ -187,7 +187,6 @@ pub(crate) struct StreamFrame {
     pub(crate) operator_output_line: usize,
     pub(crate) line_indent_spaces: usize,
     pub(crate) operator_ends_output_line: bool,
-    pub(crate) line_contains_nested_brace: bool,
     pub(crate) line_has_unmatched_open_paren: bool,
     pub(crate) line_ends_with_close_paren: bool,
     pub(crate) line_has_positive_paren_delta: bool,
@@ -926,7 +925,6 @@ impl FrameStack {
         &mut self,
         line: usize,
         ends_with_stream_operator: bool,
-        contains_nested_brace: bool,
         has_unmatched_open_paren: bool,
         ends_with_close_paren: bool,
         has_positive_paren_delta: bool,
@@ -939,7 +937,6 @@ impl FrameStack {
             .filter(|frame| frame.operator_output_line == line)
         {
             frame.operator_ends_output_line = ends_with_stream_operator;
-            frame.line_contains_nested_brace = contains_nested_brace;
             frame.line_has_unmatched_open_paren = has_unmatched_open_paren;
             frame.line_ends_with_close_paren = ends_with_close_paren;
             frame.line_has_positive_paren_delta = has_positive_paren_delta;
@@ -1705,7 +1702,6 @@ mod tests {
             operator_output_line: 3,
             line_indent_spaces: 4,
             operator_ends_output_line: false,
-            line_contains_nested_brace: false,
             line_has_unmatched_open_paren: false,
             line_ends_with_close_paren: false,
             line_has_positive_paren_delta: false,
@@ -1717,10 +1713,9 @@ mod tests {
         let frame = stack.active_stream().expect("stream");
         assert_eq!(frame.operator_output_column, 8);
         assert_eq!(stack.active_stream_on_output_line(3), Some(frame));
-        stack.mark_stream_line_context(3, true, true, true, false, true);
+        stack.mark_stream_line_context(3, true, true, false, true);
         let frame = stack.active_stream().expect("stream");
         assert!(frame.operator_ends_output_line);
-        assert!(frame.line_contains_nested_brace);
         assert!(frame.line_has_unmatched_open_paren);
         assert!(frame.line_has_positive_paren_delta);
     }

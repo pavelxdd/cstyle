@@ -393,6 +393,9 @@ impl NestingState {
                 .truncate(depth.parens);
             self.continuation_indent_spaces_stack.truncate(target_cont);
         }
+        // What the brace's rows registered ends with them.
+        self.continuation_indent_spaces_stack
+            .truncate(depth.continuations);
         if self.question_depth > depth.questions {
             recovery.questions = self.question_depth - depth.questions;
             self.question_depth = depth.questions;

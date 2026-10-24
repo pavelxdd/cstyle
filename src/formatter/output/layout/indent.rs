@@ -1230,12 +1230,6 @@ impl FormatEngine<'_> {
             || previous_trimmed.starts_with_any(b"r/")
             || current.starts_with_any(b"&|,")
         {
-            if previous_opens_paren
-                && let Some(spaces) =
-                    self.nested_brace_after_stream_opener_indent_spaces(current, previous_code)
-            {
-                return Some(spaces);
-            }
             if previous_trimmed.starts_with("return")
                 && let Some(spaces) = self.return_chain_indent_spaces(current, previous, natural)
             {
@@ -1357,9 +1351,6 @@ impl FormatEngine<'_> {
                     return Some(spaces);
                 }
                 if let Some(spaces) = self.stream_after_closed_brace_frame_indent_spaces(current) {
-                    return Some(spaces);
-                }
-                if let Some(spaces) = self.contextual_stream_brace_indent_spaces(current) {
                     return Some(spaces);
                 }
                 if let Some(spaces) = self.previous_leading_stream_frame_indent_spaces(current) {

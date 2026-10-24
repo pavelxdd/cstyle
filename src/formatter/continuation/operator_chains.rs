@@ -45,7 +45,6 @@ fn mark_operator_frame_line_context(
     frame_stack.mark_stream_line_context(
         line,
         code.ends_with("<<") || code.ends_with(">>"),
-        code.contains_from_first_byte("{ {"),
         unmatched_open_paren.is_some(),
         code.ends_with(')'),
         paren_closes > 0,
@@ -1537,36 +1536,6 @@ impl FormatEngine<'_> {
         )
     }
 
-    pub(crate) fn contextual_stream_brace_indent_spaces(&self, current: &str) -> Option<usize> {
-        let width = self.options.indent_width;
-        if (current.starts_with("<<") || current.starts_with(">>"))
-            && current.trimmed_end().ends_with('{')
-            && !current.contains('}')
-        {
-            return Some(self.continuation_base_indent() * width);
-        }
-        if (current.starts_with("<<") || current.starts_with(">>"))
-            && current.contains_from_first_byte("{ {")
-        {
-            return Some(self.continuation_base_indent() * width);
-        }
-        if (current.starts_with("<<") || current.starts_with(">>"))
-            && self
-                .output
-                .len()
-                .checked_sub(1)
-                .is_some_and(|previous_line| {
-                    self.layout
-                        .frame_stack
-                        .active_stream_on_output_line(previous_line)
-                        .is_some_and(|stream| stream.line_contains_nested_brace)
-                })
-        {
-            return Some(self.continuation_base_indent() * width + width * 2);
-        }
-        None
-    }
-
     pub(crate) fn line_follows_logical_operator(&self) -> bool {
         self.output.last_non_empty_scoped().is_some_and(|previous| {
             let code = self.output.code_trimmed_of(previous);
@@ -1896,22 +1865,6 @@ impl FormatEngine<'_> {
             return None;
         }
         self.parenthesized_stream_indent_for_line(delimiter.opener_output_line)
-    }
-
-    pub(crate) fn nested_brace_after_stream_opener_indent_spaces(
-        &self,
-        current: &str,
-        previous_code: &str,
-    ) -> Option<usize> {
-        if !previous_code.ends_with('(')
-            || current.starts_with_any(b"#(){}")
-            || !current.contains_from_first_byte("{ {")
-        {
-            return None;
-        }
-        let previous_trimmed = previous_code.trimmed_start();
-        (previous_trimmed.starts_with("<<") || previous_trimmed.starts_with(">>"))
-            .then(|| self.continuation_base_indent() * self.options.indent_width)
     }
 
     pub(crate) fn previous_line_parenthesized_stream_indent_spaces(
