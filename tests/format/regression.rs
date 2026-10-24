@@ -24884,3 +24884,30 @@ fn a_function_head_ending_in_a_pointer_run_takes_its_style_s_brace() {
         );
     }
 }
+
+#[test]
+fn a_block_argument_before_more_arguments_is_no_statement_expression() {
+    // Only `({ ... })` is a statement expression; a block passed before
+    // other arguments takes its style's braces wherever the source put them.
+    let attached = "void f()\n{\n    EXPECT_THROW({\n        go();\n    }, error);\n}\n";
+    let broken = "void f()\n{\n    EXPECT_THROW(\n    {\n        go();\n    }, error);\n}\n";
+    for style in [
+        "--style=allman",
+        "--style=whitesmith",
+        "--style=pico",
+        "--style=kr",
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_string()]).expect("valid options");
+        let from_broken = format_bytes(broken.as_bytes(), &options).expect("format bytes");
+        let from_attached = format_bytes(attached.as_bytes(), &options).expect("format bytes");
+        if style != "--style=kr" {
+            assert_eq!(
+                String::from_utf8(from_attached),
+                String::from_utf8(from_broken),
+                "{style}"
+            );
+        }
+    }
+    check(attached, &["--style=allman"], broken);
+}

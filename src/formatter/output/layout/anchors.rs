@@ -17,7 +17,9 @@ use crate::formatter::lexer::{CommentKind, Token, token_text};
 use crate::formatter::output::model::LineLayout;
 use crate::formatter::state::BraceType;
 use crate::formatter::state::indentation::LineKind;
-use crate::formatter::structure::blocks::{BlockKind, is_code_token, next_code_token};
+use crate::formatter::structure::blocks::{
+    BlockKind, closes_before_paren, is_code_token, next_code_token,
+};
 use crate::formatter::structure::groups::{Delimiter, GroupId};
 use crate::formatter::syntax::language::{is_header, is_macro_like_word};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
@@ -6631,8 +6633,16 @@ impl FormatEngine<'_> {
             return None;
         }
         // The `(` line: styles that break or indent braces put the `{` back.
-        let paren = self.tree.previous_code_token(groups.get(group).open)?;
+        // A block more arguments follow is a macro's block argument: broken
+        // off its `(`, it lays out as any block.
+        let open = groups.get(group).open;
+        let paren = self.tree.previous_code_token(open)?;
         let line = self.output.line_with_token(paren)?;
+        if !closes_before_paren(tokens, groups, group)
+            && self.output.line_with_token(open) != Some(line)
+        {
+            return None;
+        }
         Some(
             self.output.lead_width(line, self.options.tab_width)
                 + extra

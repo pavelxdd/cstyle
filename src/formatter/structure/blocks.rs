@@ -162,6 +162,15 @@ pub(crate) fn previous_code_token(tokens: &[Token], before: usize) -> Option<usi
         .find(|&index| is_code_token(&tokens[index]))
 }
 
+/// Whether the brace group `group` closes right before a `)`, as a
+/// statement expression's `({ ... })` does.
+pub(crate) fn closes_before_paren(tokens: &[Token], groups: &Groups, group: GroupId) -> bool {
+    groups.get(group).close.is_some_and(|close| {
+        next_code_token(tokens, close + 1)
+            .is_some_and(|after| matches!(tokens[after], Token::Symbol(')')))
+    })
+}
+
 /// The first token of the header that `owner` names: an Objective-C
 /// keyword's `@`.
 pub(crate) fn header_start(tokens: &[Token], owner: usize) -> usize {

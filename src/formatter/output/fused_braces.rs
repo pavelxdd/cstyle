@@ -1,6 +1,6 @@
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
-use crate::formatter::structure::blocks::{BlockKind, next_code_token};
+use crate::formatter::structure::blocks::{BlockKind, closes_before_paren, next_code_token};
 use crate::formatter::structure::groups::GroupId;
 use crate::formatter::text::line_scan::trailing_comment_split_limit;
 use crate::formatter::text::trim::Trimmed;
@@ -38,12 +38,15 @@ impl FormatEngine<'_> {
     }
 
     /// A statement expression's `{` that a brace style broke off its `(`
-    /// rejoins it: `({` is one opener of the expression.
+    /// rejoins it: `({` is one opener of the expression, closed by `})`. A
+    /// block more arguments follow is a macro's block argument.
     pub(crate) fn attach_statement_expression_braces(&mut self) {
+        let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
         let opens: Vec<usize> = groups
             .ids()
             .filter(|&id| self.tree.blocks.kind(id) == Some(BlockKind::StatementExpression))
+            .filter(|&id| closes_before_paren(tokens, groups, id))
             .map(|id| groups.get(id).open)
             .collect();
         for &open in opens.iter().rev() {
