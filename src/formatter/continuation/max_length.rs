@@ -1085,8 +1085,8 @@ fn continuation_indent_for_split(
     // A declaration split at the whitespace before its name continues
     // nothing astyle registered, unless an aggregate keyword leads it.
     // Macro calls the head closes register nothing either, nor does a
-    // template head before the declaration.
-    let declaration = after_template_head(head);
+    // linkage specification or a template head before the declaration.
+    let declaration = after_template_head(after_linkage_specification(head));
     let macro_groups = declaration.contains('(')
         && unmatched_open_paren_columns(declaration).is_empty()
         && (split.tail.starts_with(is_identifier_continue)
@@ -1356,6 +1356,15 @@ fn continuation_indent_for_split(
             .then(|| assignment_continuation_indent(line, head, base_indent_width))
             .flatten()
     })
+}
+
+/// What follows a linkage specification, as `extern "C"`, leading `line`.
+fn after_linkage_specification(line: &str) -> &str {
+    line.trimmed_start()
+        .strip_prefix("extern")
+        .and_then(|rest| rest.trimmed_start().strip_prefix('"'))
+        .and_then(|literal| literal.find('"').map(|end| &literal[end + 1..]))
+        .unwrap_or(line)
 }
 
 fn split_function_declaration_head(head: &str) -> bool {

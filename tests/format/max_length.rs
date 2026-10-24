@@ -3134,6 +3134,20 @@ fn declarations_split_before_the_name_or_parameters_continue_nothing() {
 }
 
 #[test]
+fn declaration_after_a_linkage_specification_split_before_its_name_continues_nothing() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_owned(), "--max-code-length=60".to_owned()],
+    )
+    .expect("valid options");
+    let source = "extern \"C\" __declspec(dllimport) int __stdcall write_all_values(void*, const void*);\nnamespace outer {\nextern \"C++\" unsigned long int __stdcall read_every_value_now(void*, int);\n}\n";
+    let expected = "extern \"C\" __declspec(dllimport) int __stdcall\nwrite_all_values(void*, const void*);\nnamespace outer\n{\nextern \"C++\" unsigned long int __stdcall\nread_every_value_now(void*, int);\n}\n";
+
+    assert_stable_max_length_format(source, &options, expected);
+}
+
+#[test]
 fn aggregate_brace_split_from_its_assignment_stands_at_the_statement() {
     let mut options = FormatOptions::default();
     apply_command_line_args(
