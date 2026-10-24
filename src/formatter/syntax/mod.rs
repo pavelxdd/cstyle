@@ -266,14 +266,10 @@ fn astyle_template_close(tokens: &[Token], open: usize) -> Option<usize> {
 pub(crate) fn template_openers(tokens: &[Token]) -> Vec<bool> {
     let end = tokens.len();
     let mut opens = vec![false; end];
-    let closing_follows = |cursor: usize| {
-        next_non_whitespace(tokens, cursor + 1, end)
-            .and_then(|next| tokens.get(next))
-            .is_none_or(|token| !is_literal(token))
-    };
     // The `<`s still open, innermost last, with the paren depth each stands
-    // at and whether what follows it lets it open at all.
-    let mut open: Vec<(usize, isize, bool)> = Vec::new();
+    // at, whether what follows it lets it open at all and whether a logical
+    // operator joins its own arguments.
+    let mut open: Vec<(usize, isize, bool, bool)> = Vec::new();
     let mut paren_depth = 0isize;
     for (cursor, token) in tokens.iter().enumerate() {
         match token {
@@ -292,27 +288,36 @@ pub(crate) fn template_openers(tokens: &[Token]) -> Vec<bool> {
                 let viable = first_after_open.is_some_and(
                     |token| !matches!(token, Token::Operator(operator) if operator == "="),
                 );
-                open.push((cursor, paren_depth, viable));
+                open.push((cursor, paren_depth, viable, false));
             }
             Token::Operator(operator) if operator == ">" || operator == ">>" => {
                 for _ in 0..operator.len() {
-                    let Some((opener, opener_depth, viable)) = open.pop() else {
+                    let Some((opener, opener_depth, viable, logical)) = open.pop() else {
                         break;
                     };
-                    opens[opener] =
-                        viable && opener_depth == paren_depth && closing_follows(cursor);
+                    opens[opener] = viable
+                        && opener_depth == paren_depth
+                        && closing_follows(tokens, cursor, end, logical);
+                }
+            }
+            Token::Operator(operator) if operator == "&&" || operator == "||" => {
+                if let Some(innermost) = open.last_mut()
+                    && innermost.1 == paren_depth
+                    && is_logical_operator(tokens, cursor)
+                {
+                    innermost.3 = true;
                 }
             }
             Token::Operator(operator)
                 if matches!(
                     operator.as_str(),
-                    "::" | "*" | "&" | "&&" | "^" | "=" | "==" | "!" | "!="
+                    "::" | "*" | "&" | "^" | "=" | "==" | "!" | "!="
                 ) => {}
             Token::Symbol('(') => paren_depth += 1,
             Token::Symbol(')') => {
                 while open
                     .last()
-                    .is_some_and(|&(_, opener_depth, _)| opener_depth == paren_depth)
+                    .is_some_and(|&(_, opener_depth, _, _)| opener_depth == paren_depth)
                 {
                     open.pop();
                 }
@@ -351,6 +356,37 @@ pub(crate) fn known_template_angle_role(
         }
         _ => TemplateAngle::None,
     }
+}
+
+/// Whether the `>` at `close` can end a template's arguments: a literal
+/// after it makes it a comparison, and so does a name or a paren after
+/// arguments a logical operator joins.
+fn closing_follows(tokens: &[Token], close: usize, end: usize, logical: bool) -> bool {
+    next_non_whitespace(tokens, close + 1, end)
+        .and_then(|next| tokens.get(next))
+        .is_none_or(|token| {
+            !(is_literal(token) || logical && matches!(token, Token::Word(_) | Token::Symbol('(')))
+        })
+}
+
+/// Whether the `&&` or `||` at `index` joins operands: an `&&` ending a
+/// type, before a `,`, a closing angle or paren, or a pack's `...`, names
+/// a reference.
+fn is_logical_operator(tokens: &[Token], index: usize) -> bool {
+    matches!(&tokens[index], Token::Operator(operator) if operator == "||")
+        || !tokens[index + 1..]
+            .iter()
+            .find(|token| {
+                !matches!(
+                    token,
+                    Token::Whitespace(_) | Token::Newline | Token::Comment(..)
+                )
+            })
+            .is_some_and(|token| match token {
+                Token::Symbol(',' | ')' | '.') => true,
+                Token::Operator(operator) => operator == ">" || operator == ">>",
+                _ => false,
+            })
 }
 
 /// A literal right after a `>` makes it a comparison, never a template's end.
@@ -396,6 +432,7 @@ fn looks_like_template_opener(tokens: &[Token], index: usize, end: usize) -> boo
     }
     let mut depth = 0usize;
     let mut paren_depth = 0usize;
+    let mut logical = false;
     for (cursor, token) in tokens.iter().enumerate().take(end).skip(index) {
         match token {
             Token::Whitespace(_) | Token::Newline | Token::Comment(_, _) => {}
@@ -406,28 +443,19 @@ fn looks_like_template_opener(tokens: &[Token], index: usize, end: usize) -> boo
                     depth += 1;
                 }
             }
-            Token::Operator(operator) if operator == ">" => {
-                depth = depth.saturating_sub(1);
+            Token::Operator(operator) if operator == ">" || operator == ">>" => {
+                depth = depth.saturating_sub(operator.len());
                 if depth == 0 {
-                    return paren_depth == 0
-                        && next_non_whitespace(tokens, cursor + 1, end)
-                            .and_then(|next| tokens.get(next))
-                            .is_none_or(|token| !is_literal(token));
+                    return paren_depth == 0 && closing_follows(tokens, cursor, end, logical);
                 }
             }
-            Token::Operator(operator) if operator == ">>" => {
-                depth = depth.saturating_sub(2);
-                if depth == 0 {
-                    return paren_depth == 0
-                        && next_non_whitespace(tokens, cursor + 1, end)
-                            .and_then(|next| tokens.get(next))
-                            .is_none_or(|token| !is_literal(token));
-                }
+            Token::Operator(operator) if operator == "&&" || operator == "||" => {
+                logical |= depth == 1 && paren_depth == 0 && is_logical_operator(tokens, cursor);
             }
             Token::Operator(operator)
                 if matches!(
                     operator.as_str(),
-                    "::" | "*" | "&" | "&&" | "^" | "=" | "==" | "!" | "!="
+                    "::" | "*" | "&" | "^" | "=" | "==" | "!" | "!="
                 ) => {}
             Token::Symbol('(') => paren_depth += 1,
             Token::Symbol(')') => {
@@ -1740,9 +1768,9 @@ mod tests {
 
     #[test]
     fn template_openers_match_the_scan_from_each_angle() {
-        const PIECES: [&str; 18] = [
+        const PIECES: [&str; 21] = [
             "<", ">", ">>", "(", ")", "a", "1", " ", ",", ";", "=", "::", "*", "[", "]", "+", "\n",
-            "<<",
+            "<<", "&&", "||", ".",
         ];
         let mut state = 0x2545_f491_4f6c_dd1du64;
         for _ in 0..4000 {

@@ -503,7 +503,7 @@ fn struct_base_logical_continuation_stays_at_struct_indent() {
 }
 
 #[test]
-fn struct_template_argument_logical_continuation_uses_one_indent() {
+fn struct_template_argument_logical_continuation_aligns_at_the_first_argument() {
     assert_eq!(
         format_exact(
             fixture!(
@@ -518,8 +518,8 @@ fn struct_template_argument_logical_continuation_uses_one_indent() {
         fixture!(
             "template <typename T>",
             "struct Info<T, enable_if_t<trait<T>::first ||",
-            "    trait<T>::second ||",
-            "    trait<T>::third>> {",
+            "                           trait<T>::second ||",
+            "                           trait<T>::third>> {",
             "};",
         )
     );

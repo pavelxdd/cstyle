@@ -21539,6 +21539,39 @@ fn a_logical_and_between_template_arguments_keeps_the_angles_a_template() {
 }
 
 #[test]
+fn a_logical_or_between_template_arguments_keeps_the_angles_a_template() {
+    let input = "using Pick = std::conditional_t<Big || Fast, Item, Other>;\nstatic_assert(Check<A || B>::value);\nusing Both = Pick<(A || B) && C, Item>;\ntemplate <typename T, enable_if_t<A<T>::value || B<T>::value, int> = 0>\nvoid run(T value);\n";
+    check(input, &["-p"], input);
+}
+
+#[test]
+fn comparisons_joined_by_a_logical_operator_before_an_operand_stay_comparisons() {
+    // A name or a paren after the `>` of arguments a logical operator joins
+    // reads as the right operand of a comparison, not as what a template
+    // names.
+    let input = "void f()\n{\n    if (a<b && c>d) return;\n    if (a<b || c>d) return;\n    bool m = a<b && c>d;\n    if (count<limit && start>(char *)base) return;\n    std::function<void(Item&& value)> callback;\n    Box<Item&&, Other&&> pair;\n}\n";
+    let expected = "void f()\n{\n    if (a < b && c > d) return;\n    if (a < b || c > d) return;\n    bool m = a < b && c > d;\n    if (count < limit && start > (char *)base) return;\n    std::function<void(Item&& value)> callback;\n    Box<Item&&, Other&&> pair;\n}\n";
+    check(input, &["-p"], expected);
+    check(expected, &["-p"], expected);
+    // Its rows keep the condition's continuation.
+    let input = "void f()\n{\n    if (ready\n            && count < limit\n            && start > (char *)base) {\n        run();\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn rows_of_template_arguments_led_by_a_logical_operator_stand_as_a_paren_s() {
+    let input = "struct Item {\n    static auto map(T) -> conditional_t<\n        std::is_same<T, char>::value\n        || std::is_same<T, Char>::value, Char, void>;\n    static auto map(T) -> conditional_t<std::is_same<T, char>::value\n                                        || std::is_same<T, Char>::value, Char, void>;\n};\n";
+    check(input, &["--style=kr"], input);
+    let split = "struct Item {\n    static auto map(T) -> conditional_t<\n        std::is_same<T, char>::value\n        || std::is_same<T, Char>::value, Char, void>;\n};\n";
+    check(
+        "struct Item {\n    static auto map(T) -> conditional_t<\n        std::is_same<T, char>::value || std::is_same<T, Char>::value, Char, void>;\n};\n",
+        &["--style=kr", "--max-code-length=60"],
+        split,
+    );
+    check(split, &["--style=kr", "--max-code-length=60"], split);
+}
+
+#[test]
 fn a_star_in_an_allocated_type_declares_a_pointer() {
     let input = "void f()\n{\n    items = new Item*[count];\n    more = new Item *[count];\n    names = new char*[size + 1];\n    one = new char*;\n    made = new (buffer) Item*[count];\n    total = new Item[count] * scale;\n}\n";
     check(input, &["-p"], input);
@@ -23581,7 +23614,7 @@ fn a_class_brace_after_a_row_ending_in_a_shift_operator_stands_at_the_head() {
     check(
         "struct Item<T, enable_if_t<(is_void<T>::value ||\n    is_ready<T>::value) &&\n    is_ready<E>::value>> {\n  int value;\n};\n",
         &["--style=whitesmith"],
-        "struct Item<T, enable_if_t<(is_void<T>::value ||\n                            is_ready<T>::value) &&\n                            is_ready<E>::value>>\n    {\n    int value;\n    };\n",
+        "struct Item<T, enable_if_t<(is_void<T>::value ||\n                            is_ready<T>::value) &&\n                           is_ready<E>::value>>\n    {\n    int value;\n    };\n",
     );
 }
 
