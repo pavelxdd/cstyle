@@ -1413,13 +1413,7 @@ impl FormatEngine<'_> {
             .current
             .trimmed_end()
             .ends_with('@')
-            .then_some(match word {
-                "autoreleasepool" => Some("autoreleasepool"),
-                "try" => Some("@try"),
-                "catch" => Some("@catch"),
-                "finally" => Some("@finally"),
-                _ => None,
-            })
+            .then(|| language::objc_statement_header(word))
             .flatten();
         let header = if let Some(header) = objc_header {
             Some(header)

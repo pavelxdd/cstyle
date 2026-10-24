@@ -14,6 +14,7 @@ use crate::formatter::lexer::{
     CommentKind, Token, matching_close_paren_index, next_non_layout_token_index,
     next_non_whitespace, previous_non_layout_token_index, token_char_len, token_text,
 };
+use crate::formatter::output::block_spacing::header_word_at;
 use crate::formatter::preprocessor::{
     is_conditional_preprocessor, is_known_preprocessor_directive,
 };
@@ -1403,7 +1404,7 @@ impl FormatEngine<'_> {
                 .current_header
                 .as_deref()
                 .is_some_and(|header| {
-                    matches!(header, "autoreleasepool" | "@try" | "@catch" | "@finally")
+                    matches!(header, "@autoreleasepool" | "@try" | "@catch" | "@finally")
                 })
             || self.inferred_definition_brace(tokens, start)
             || tokens.len() == self.tree.tokens.len() && self.opens_body_after_base_clause(start)
@@ -2100,8 +2101,8 @@ impl FormatEngine<'_> {
         }
         self.layout.command_state.current_header = None;
         self.layout.command_state.preprocessor_after_header = false;
-        let next = next_non_whitespace(tokens, close_index + 1, line_end)
-            .and_then(|next_index| tokens.get(next_index));
+        let next_index = next_non_whitespace(tokens, close_index + 1, line_end);
+        let next = next_index.and_then(|next_index| tokens.get(next_index));
         let next_on_source_line =
             next.is_some_and(|token| !matches!(token, Token::Newline | Token::Symbol('}')));
         let init_block_continues_expression =
@@ -2124,11 +2125,14 @@ impl FormatEngine<'_> {
         let aggregate_trailing_declarator = (is_class_like_brace_type(brace_type)
             || brace_type == BraceType::Enum)
             && (matches!(next, Some(Token::Word(_))) || next_is_pointer_declarator);
-        let next_is_closing_header = matches!(
-            next,
-            Some(Token::Word(word))
-                if matches!(word.as_str(), "else" | "catch" | "@catch" | "__finally" | "__except" | "while")
-        );
+        let next_is_closing_header = next_index
+            .and_then(|next_index| header_word_at(tokens, next_index))
+            .is_some_and(|word| {
+                matches!(
+                    word,
+                    "else" | "catch" | "@catch" | "@finally" | "__finally" | "__except" | "while"
+                )
+            });
         // The run-in styles attach a closing `while` even to a block kept on
         // one line.
         let run_in_attached_closing_while = matches!(

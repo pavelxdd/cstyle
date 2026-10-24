@@ -164,9 +164,21 @@ impl FormatEngine<'_> {
                 self.previous_was_newline = false;
             }
             '@' => {
-                let attached_closing_header = match next {
-                    Some(Token::Word(word)) if matches!(word.as_str(), "catch" | "finally") => {
-                        self.try_attach_leading_closing_header(&format!("@{word}"))
+                let objc_header = match next {
+                    Some(Token::Word(word)) => language::objc_statement_header(word),
+                    _ => None,
+                };
+                if objc_header.is_some_and(|header| {
+                    self.closing_header_leaves_one_line_block(
+                        header,
+                        self.layout.command_state.previous_non_ws_char,
+                    )
+                }) {
+                    self.finish_line();
+                }
+                let attached_closing_header = match objc_header {
+                    Some(header @ ("@catch" | "@finally")) => {
+                        self.try_attach_leading_closing_header(header)
                     }
                     _ => false,
                 };
@@ -375,6 +387,9 @@ impl FormatEngine<'_> {
                             "try" | "__try" | "__finally" | "do" | "else" | "default"
                         )
                         || matches!(word, "return" | "new" | "delete")
+                        || word == "synchronized"
+                            && self.layout.command_state.current_header.as_deref()
+                                == Some("@synchronized")
                         || word == "throw" && !self.throw_is_exception_specification()))
                 || outside_pad;
             if force_space {

@@ -8,6 +8,7 @@ use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::{BraceFrame, BraceSemanticKind};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::structure::blocks::BlockKind;
+use crate::formatter::syntax::language::leading_header;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan;
 use crate::formatter::text::line_scan::{
@@ -15,7 +16,7 @@ use crate::formatter::text::line_scan::{
     is_comment_only_line, trailing_comment_split_limit,
 };
 use crate::formatter::text::trim::Trimmed;
-use crate::source::lex::{is_word_char, leading_identifier};
+use crate::source::lex::is_word_char;
 
 fn case_label_token_offset(line: &str, header: &str) -> Option<usize> {
     // Comments leading the line are no part of its code.
@@ -260,7 +261,7 @@ impl FormatEngine<'_> {
         };
         let split_header = !header_candidate.is_empty()
             && brace_header.is_some_and(|header| {
-                leading_identifier(header_candidate) != header
+                leading_header(header_candidate) != header
                     && !(header == "if" && header_candidate.starts_with("else if"))
             });
         let semantic_kind = self.brace_semantic_kind(brace_type, opens_lambda_body);

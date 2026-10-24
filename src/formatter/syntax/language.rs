@@ -68,6 +68,34 @@ pub fn is_header(word: &str) -> bool {
     )
 }
 
+/// The header an Objective-C keyword after its `@` names.
+pub fn objc_statement_header(word: &str) -> Option<&'static str> {
+    match word {
+        "autoreleasepool" => Some("@autoreleasepool"),
+        "try" => Some("@try"),
+        "catch" => Some("@catch"),
+        "finally" => Some("@finally"),
+        "synchronized" => Some("@synchronized"),
+        _ => None,
+    }
+}
+
+/// The header word a line of code opens with, an Objective-C header with
+/// its `@`.
+pub fn leading_header(line: &str) -> &str {
+    match line.strip_prefix('@') {
+        Some(rest) => {
+            let word = lex::leading_identifier(rest);
+            if objc_statement_header(word).is_some() {
+                &line[..=word.len()]
+            } else {
+                ""
+            }
+        }
+        None => lex::leading_identifier(line),
+    }
+}
+
 pub fn is_non_paren_header(word: &str) -> bool {
     matches!(
         word,

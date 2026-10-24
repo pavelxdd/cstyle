@@ -7,6 +7,7 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::output::model::{LineDelimiters, LineLayout, LineReplayLayout};
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
+use crate::formatter::syntax::language::leading_header;
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{ContainsAnyByte, code_holds_word, preprocessor_directive};
 use crate::formatter::text::line_view::LineView;
@@ -243,7 +244,7 @@ impl FormatEngine<'_> {
             line,
             line_kind,
             || self.line_delimiters(line, &delimiters),
-            is_attachable_closing_header(leading_identifier(line)),
+            is_attachable_closing_header(leading_header(line)),
         ) {
             exact_indent_spaces = Some(spaces);
         }

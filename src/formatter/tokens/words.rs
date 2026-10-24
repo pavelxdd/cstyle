@@ -397,37 +397,7 @@ impl FormatEngine<'_> {
         next: Option<&Token>,
         previous_non_ws_char: Option<char>,
     ) {
-        // A comment between the block and its closing header holds them
-        // on one line.
-        if previous_non_ws_char == Some('}')
-            && !self.one_line_block_mode
-            && self.current.active_token().is_some_and(|index| {
-                self.tree.tokens[..index]
-                    .iter()
-                    .rev()
-                    .find(|token| !matches!(token, Token::Whitespace(_)))
-                    .is_some_and(|token| matches!(token, Token::Symbol('}')))
-            })
-            && (self.options.break_one_line_statements
-                || self.options.brace_style == BraceStyle::Pico)
-            // The run-in styles attach a closing `while` even to a block kept
-            // on one line.
-            && !(matches!(
-                self.options.brace_style,
-                BraceStyle::Pico | BraceStyle::Lisp
-            ) && word == "while"
-                && self.options.attach_closing_while)
-            && contains_one_line_block(self.current.trimmed())
-            && (matches!(word, "else" | "catch" | "@catch" | "__finally" | "__except")
-                // An empty block keeps the closing header its style attaches.
-                && !(self.closes_empty_block_before_word()
-                    && self.options.brace_style != BraceStyle::Lisp
-                    && self.attaches_closing_header(word, true))
-                || (word == "while"
-                    && self.layout.nesting.last_closed_brace_header.as_deref() == Some("do")
-                    && !(self.closes_empty_block_before_word()
-                        && self.attaches_closing_while(true))))
-        {
+        if self.closing_header_leaves_one_line_block(word, previous_non_ws_char) {
             self.finish_line();
         }
         let attached_closing_header = self.try_attach_leading_closing_header(word);
@@ -556,6 +526,43 @@ impl FormatEngine<'_> {
 
     /// Whether the `}` before the word being pushed closes a block holding
     /// no code.
+    /// Whether a closing header after a block kept on one line starts a
+    /// line of its own; a comment between them holds them on one line.
+    pub(crate) fn closing_header_leaves_one_line_block(
+        &self,
+        word: &str,
+        previous_non_ws_char: Option<char>,
+    ) -> bool {
+        previous_non_ws_char == Some('}')
+            && !self.one_line_block_mode
+            && self.current.active_token().is_some_and(|index| {
+                self.tree.tokens[..index]
+                    .iter()
+                    .rev()
+                    .find(|token| !matches!(token, Token::Whitespace(_)))
+                    .is_some_and(|token| matches!(token, Token::Symbol('}')))
+            })
+            && (self.options.break_one_line_statements
+                || self.options.brace_style == BraceStyle::Pico)
+            // The run-in styles attach a closing `while` even to a block kept
+            // on one line.
+            && !(matches!(
+                self.options.brace_style,
+                BraceStyle::Pico | BraceStyle::Lisp
+            ) && word == "while"
+                && self.options.attach_closing_while)
+            && contains_one_line_block(self.current.trimmed())
+            && (matches!(word, "else" | "catch" | "@catch" | "@finally" | "__finally" | "__except")
+                // An empty block keeps the closing header its style attaches.
+                && !(self.closes_empty_block_before_word()
+                    && self.options.brace_style != BraceStyle::Lisp
+                    && self.attaches_closing_header(word, true))
+                || (word == "while"
+                    && self.layout.nesting.last_closed_brace_header.as_deref() == Some("do")
+                    && !(self.closes_empty_block_before_word()
+                        && self.attaches_closing_while(true))))
+    }
+
     fn closes_empty_block_before_word(&self) -> bool {
         let tokens = &self.tree.tokens;
         self.current

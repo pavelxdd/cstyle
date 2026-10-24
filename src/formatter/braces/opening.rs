@@ -24,6 +24,7 @@ use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::structure::TokenSpan;
 use crate::formatter::structure::blocks::{BlockKind, is_code_token};
 use crate::formatter::structure::groups::Delimiter;
+use crate::formatter::syntax::language::leading_header;
 use crate::formatter::syntax::{function_name_start, language, scoped_name_is_constructor};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan;
@@ -1232,7 +1233,7 @@ impl FormatEngine<'_> {
                     // A line that lost a `}` broken off before it keeps its
                     // comment at the source column.
                     let gap = if self.closing_brace_broken_off_source_line()
-                        && is_break_blocks_closing_header(leading_identifier(
+                        && is_break_blocks_closing_header(leading_header(
                             self.current.trimmed_start(),
                         )) {
                         target
@@ -1267,9 +1268,7 @@ impl FormatEngine<'_> {
             // source column on a line that lost a `}` broken off before it.
             _ => {
                 if self.closing_brace_broken_off_source_line()
-                    && is_break_blocks_closing_header(leading_identifier(
-                        self.current.trimmed_start(),
-                    ))
+                    && is_break_blocks_closing_header(leading_header(self.current.trimmed_start()))
                     && let Some(&target) = self.layout.line_state.trailing_comment_columns.front()
                 {
                     self.trim_current_end();
@@ -3558,7 +3557,7 @@ impl FormatEngine<'_> {
         // A closing header keeps the columns of the closer broken off before
         // it.
         let closing_header =
-            is_break_blocks_closing_header(leading_identifier(self.current.trimmed_start()));
+            is_break_blocks_closing_header(leading_header(self.current.trimmed_start()));
         let end = tokens[code_start..first]
             .iter()
             .rposition(|token| closing_header && matches!(token, Token::Symbol('}')))

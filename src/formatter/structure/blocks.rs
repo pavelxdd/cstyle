@@ -3,7 +3,9 @@
 
 use crate::formatter::lexer::Token;
 use crate::formatter::structure::groups::{Delimiter, GroupId, Groups};
-use crate::formatter::syntax::language::{is_assignment_operator, is_non_type_keyword};
+use crate::formatter::syntax::language::{
+    is_assignment_operator, is_non_type_keyword, objc_statement_header,
+};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum BlockKind {
@@ -158,6 +160,15 @@ pub(crate) fn previous_code_token(tokens: &[Token], before: usize) -> Option<usi
     (0..before)
         .rev()
         .find(|&index| is_code_token(&tokens[index]))
+}
+
+/// The first token of the header that `owner` names: an Objective-C
+/// keyword's `@`.
+pub(crate) fn header_start(tokens: &[Token], owner: usize) -> usize {
+    let objc = owner > 0
+        && matches!(tokens[owner - 1], Token::Symbol('@'))
+        && matches!(&tokens[owner], Token::Word(word) if objc_statement_header(word).is_some());
+    if objc { owner - 1 } else { owner }
 }
 
 pub(crate) fn next_code_token(tokens: &[Token], start: usize) -> Option<usize> {

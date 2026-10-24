@@ -1669,3 +1669,148 @@ fn instance_variable_braces_of_an_interface_and_an_implementation_follow_the_cla
         }
     }
 }
+
+#[test]
+fn objc_exception_headers_break_from_closers_as_catch_does() {
+    // `@catch` and `@finally` follow the block before them as `catch` does:
+    // styles that break closing headers break them off its closer too.
+    let input = "void run()\n{\n    @try {\n        call();\n    } @catch (id error) {\n        handle(error);\n    } @finally {\n        finish();\n    }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=allman",
+            "void run()\n{\n    @try\n    {\n        call();\n    }\n    @catch (id error)\n    {\n        handle(error);\n    }\n    @finally\n    {\n        finish();\n    }\n}\n",
+        ),
+        (
+            "--style=stroustrup",
+            "void run()\n{\n    @try {\n        call();\n    }\n    @catch (id error) {\n        handle(error);\n    }\n    @finally {\n        finish();\n    }\n}\n",
+        ),
+        (
+            "--style=gnu",
+            "void run()\n{\n    @try\n        {\n            call();\n        }\n    @catch (id error)\n        {\n            handle(error);\n        }\n    @finally\n        {\n            finish();\n        }\n}\n",
+        ),
+        (
+            "--style=pico",
+            "void run()\n{   @try\n    {   call(); }\n    @catch (id error)\n    {   handle(error); }\n    @finally\n    {   finish(); } }\n",
+        ),
+        ("--style=kr", input),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_string()]).expect("valid options");
+        assert_eq!(format_exact(input, &options), expected, "{style}");
+        assert_eq!(format_exact(expected, &options), expected, "{style}");
+    }
+}
+
+#[test]
+fn break_blocks_pads_objc_exception_and_lock_blocks_as_headers() {
+    let input = "- (void)safe\n{\n    @try {\n        [self risky];\n    } @catch (NSException *e) {\n        NSLog(@\"%@\", e);\n    }\n    @synchronized(self) {\n        _count++;\n    }\n}\n";
+    let expected = "- (void)safe\n{\n    @try {\n        [self risky];\n    } @catch (NSException *e) {\n        NSLog(@\"%@\", e);\n    }\n\n    @synchronized(self) {\n        _count++;\n    }\n}\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--break-blocks".to_string()],
+    )
+    .expect("valid options");
+    assert_eq!(format_exact(input, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn objc_statement_blocks_are_header_blocks_for_break_blocks() {
+    // `@autoreleasepool`, `@try` and `@synchronized` head their blocks as
+    // `try` and `while` do.
+    let input = "- (void)run\n{\n    go();\n    @autoreleasepool {\n        go();\n    }\n    go();\n    @try {\n        go();\n    } @finally {\n        stop();\n    }\n    go();\n    @synchronized(self) {\n        go();\n    }\n    go();\n}\n";
+    let expected = "- (void)run\n{\n    go();\n\n    @autoreleasepool {\n        go();\n    }\n\n    go();\n\n    @try {\n        go();\n    } @finally {\n        stop();\n    }\n\n    go();\n\n    @synchronized(self) {\n        go();\n    }\n\n    go();\n}\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--break-blocks".to_string()],
+    )
+    .expect("valid options");
+    assert_eq!(format_exact(input, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn objc_statement_blocks_indent_their_braces_as_headers_in_gnu() {
+    let input = "- (void)run\n{\n    @autoreleasepool {\n        go();\n    }\n    @synchronized(self) {\n        go();\n    }\n}\n";
+    let expected = "- (void)run\n{\n    @autoreleasepool\n        {\n            go();\n        }\n    @synchronized(self)\n        {\n            go();\n        }\n}\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=gnu".to_string()]).expect("valid options");
+    assert_eq!(format_exact(input, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn pad_header_pads_objc_headers_before_their_parens() {
+    let input = "- (void)run\n{\n    @try {\n        go();\n    } @catch(id error) {\n        stop();\n    }\n    @synchronized(self) {\n        go();\n    }\n}\n";
+    let expected = "- (void)run\n{\n    @try {\n        go();\n    } @catch (id error) {\n        stop();\n    }\n    @synchronized (self) {\n        go();\n    }\n}\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--pad-header".to_string()],
+    )
+    .expect("valid options");
+    assert_eq!(format_exact(input, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn objc_statement_headers_lay_out_as_their_counterparts() {
+    // `@try`, `@catch`, `@finally`, `@synchronized` and `@autoreleasepool`
+    // head their blocks as `try`, `catch`, `__finally`, `while` and `__try`
+    // do, whatever the style and block options.
+    let counterparts = [
+        ("@autoreleasepool", "__try"),
+        ("@synchronized", "while"),
+        ("@try", "try"),
+        ("@catch", "catch"),
+        ("@finally", "__finally"),
+    ];
+    let as_counterparts = |source: &str| {
+        counterparts
+            .iter()
+            .fold(source.to_string(), |text, (objc, other)| {
+                text.replace(objc, other)
+            })
+    };
+    let sources = [
+        "void run()\n{\n    go();\n    @try {\n        call();\n    } @catch (id error) {\n        handle(error);\n    } @finally {\n        finish();\n    }\n    go();\n}\n",
+        "void run()\n{\n    @try { call(); } @catch (id e) { handle(e); }\n    @synchronized(self) { go(); }\n    @autoreleasepool { go(); }\n}\n",
+        "void run()\n{\n    go();\n    @try {\n        call();\n    } /* c */ @catch (id e) {\n        handle(e);\n    }\n    @synchronized(self) {\n        go();\n    }\n}\n",
+        "void run()\n{\n    if (a) {\n        @try {\n            call();\n        }\n        @finally {\n            finish();\n        }\n    }\n    @autoreleasepool {\n        @synchronized(self) {\n            go();\n        }\n    }\n}\n",
+    ];
+    for style in [
+        "kr",
+        "allman",
+        "java",
+        "gnu",
+        "whitesmith",
+        "pico",
+        "lisp",
+        "horstmann",
+        "ratliff",
+        "stroustrup",
+        "banner",
+    ] {
+        for extra in [
+            &[][..],
+            &["--break-blocks"],
+            &["--break-blocks=all"],
+            &["--pad-header"],
+            &["--keep-one-line-blocks"],
+        ] {
+            let mut options = FormatOptions::default();
+            let mut args = vec![format!("--style={style}")];
+            args.extend(extra.iter().map(|arg| (*arg).to_string()));
+            apply_command_line_args(&mut options, &args).expect("valid options");
+            for source in sources {
+                assert_eq!(
+                    as_counterparts(&format_exact(source, &options)),
+                    format_exact(&as_counterparts(source), &options),
+                    "{args:?}\n{source}"
+                );
+            }
+        }
+    }
+}

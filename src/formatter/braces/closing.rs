@@ -12,7 +12,7 @@ use crate::formatter::output::buffer::OpenBraceShape;
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
-use crate::formatter::structure::blocks::{BlockKind, next_code_token};
+use crate::formatter::structure::blocks::{BlockKind, header_start, next_code_token};
 use crate::formatter::structure::groups::{Delimiter, GroupId};
 use crate::formatter::syntax::language;
 use crate::formatter::text::columns::leading_visual_width;
@@ -1439,13 +1439,14 @@ impl FormatEngine<'_> {
                 let line = self.output.line_with_token(owner)?;
                 let first = self.output.line_tokens(line)?.first;
                 let lead = self.output.lead_width(line, self.options.tab_width);
-                if first == owner {
+                let start = header_start(&self.tree.tokens, owner);
+                if first == start {
                     return Some(lead);
                 }
                 // A closer stands a level in from the header it shares its
                 // line with.
                 (matches!(self.tree.tokens[first], Token::Symbol('}'))
-                    && next_code_token(&self.tree.tokens, first + 1) == Some(owner))
+                    && next_code_token(&self.tree.tokens, first + 1) == Some(start))
                 .then(|| lead.saturating_sub(self.options.indent_width))
             });
         let (open_spaces, open) = match tree_open_line {
@@ -1521,7 +1522,10 @@ impl FormatEngine<'_> {
                 .tree
                 .previous_code_token(self.tree.groups.get(paren).open)?;
         }
-        matches!(&tokens[before], Token::Word(word) if language::is_header(word)).then_some(before)
+        let start = header_start(tokens, before);
+        (start != before
+            || matches!(&tokens[before], Token::Word(word) if language::is_header(word)))
+        .then_some(start)
     }
 
     pub(crate) fn same_line_nested_header_closing_brace_indent_floor(

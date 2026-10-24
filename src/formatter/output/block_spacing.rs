@@ -2,10 +2,11 @@ use crate::config::{BraceStyle, FormatOptions};
 use crate::formatter::braces::rewrite::token_begins_line;
 use crate::formatter::constructs::assembly::is_asm_block_header;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::lexer::{CommentKind, Token};
+use crate::formatter::lexer::{CommentKind, Token, token_text};
 use crate::formatter::state::BraceType;
 use crate::formatter::structure::blocks::{is_code_token, next_code_token};
 use crate::formatter::structure::groups::Delimiter;
+use crate::formatter::syntax::language::{leading_header, objc_statement_header};
 use crate::formatter::text::line_scan::{
     after_leading_comments, holds_code_after_leading_comments, is_bare_comment_line,
 };
@@ -54,6 +55,7 @@ impl FormatEngine<'_> {
         if self.previous_block_spacing_line_is_comment_only() {
             return;
         }
+        let (leads_line, previous_command_char) = self.header_lead(word);
         if word == "while" && self.while_closes_braced_do() {
             // A `do` the line starts keeps the blank due before it, as an
             // `if` whose `else` joins its line does.
@@ -69,7 +71,7 @@ impl FormatEngine<'_> {
             if self.layout.command_state.previous_command_char == Some('}')
                 && is_break_blocks_opening_header(
                     self.options,
-                    leading_identifier(self.current.trimmed_start()),
+                    leading_header(self.current.trimmed_start()),
                 )
             {
                 self.block_spacing.pending_one_line_block = false;
@@ -90,8 +92,8 @@ impl FormatEngine<'_> {
                 self.block_spacing.append_blank = false;
             }
             if self.options.break_closing_header_blocks
-                && self.current_is_blank()
-                && self.layout.command_state.previous_command_char == Some('}')
+                && leads_line
+                && previous_command_char == Some('}')
                 && !self.block_spacing.closed_empty_block
             {
                 self.block_spacing.prepend_blank = true;
@@ -101,8 +103,8 @@ impl FormatEngine<'_> {
         // A label after the closer of the case before it parts from nothing.
         let leads_after_closer =
             !matches!(word, "case" | "default") && self.current_holds_closer_and_comments();
-        if !(self.current_is_blank() || leads_after_closer)
-            || (self.layout.command_state.previous_command_char == Some('{')
+        if !(leads_line || leads_after_closer)
+            || (previous_command_char == Some('{')
                 && (!self.preprocessor.last_output_was_preprocessor
                     || self.comment_precedes_directives()))
             || (self.options.brace_style == BraceStyle::Pico
@@ -240,12 +242,11 @@ impl FormatEngine<'_> {
                                 | BraceStyle::Pico
                                 | BraceStyle::Lisp
                         )
-                        && matches!(
-                            tokens[index + 1..]
-                                .iter()
-                                .find(|token| !matches!(token, Token::Whitespace(_))),
-                            Some(Token::Word(word)) if is_break_blocks_closing_header(word)
-                        )
+                        && tokens[index + 1..]
+                            .iter()
+                            .position(|token| !matches!(token, Token::Whitespace(_)))
+                            .and_then(|offset| header_word_at(tokens, index + 1 + offset))
+                            .is_some_and(is_break_blocks_closing_header)
                 }
                 _ => false,
             })
@@ -569,14 +570,14 @@ impl FormatEngine<'_> {
         // a header there pads as its own.
         // A closing header a block comment keeps on the brace's line still
         // takes the padding before it.
-        let comment_keeps_closing_header = matches!(next, Some(Token::Comment(CommentKind::Block, _)))
-            && self
-                .current
-                .active_token()
-                .and_then(|brace| next_code_token(&self.tree.tokens, brace + 1))
-                .is_some_and(|index| {
-                    matches!(&self.tree.tokens[index], Token::Word(word) if is_break_blocks_closing_header(word))
-                });
+        let comment_keeps_closing_header =
+            matches!(next, Some(Token::Comment(CommentKind::Block, _)))
+                && self
+                    .current
+                    .active_token()
+                    .and_then(|brace| next_code_token(&self.tree.tokens, brace + 1))
+                    .and_then(|index| header_word_at(&self.tree.tokens, index))
+                    .is_some_and(is_break_blocks_closing_header);
         let word_goes_on = |word: &str| {
             !(is_break_blocks_closing_header(word)
                 || word == "while"
@@ -596,13 +597,16 @@ impl FormatEngine<'_> {
                             .iter()
                             .any(|token| matches!(token, Token::Newline))
                     })
-                    .and_then(|index| match &tokens[index] {
-                        Token::Word(word) => Some(word.as_str()),
-                        _ => None,
-                    })
+                    .and_then(|index| header_word_at(tokens, index))
             });
         let line_goes_on = match next {
             Some(Token::Word(word)) => word_goes_on(word),
+            Some(Token::Symbol('@')) => self
+                .current
+                .active_token()
+                .and_then(|brace| next_code_token(&self.tree.tokens, brace + 1))
+                .and_then(|index| header_word_at(&self.tree.tokens, index))
+                .is_none_or(word_goes_on),
             Some(Token::Comment(..)) => word_after_comment
                 .is_none_or(|word| !is_break_blocks_opening_header(self.options, word)),
             Some(Token::Symbol(';' | ',' | ')' | '}') | Token::Newline) | None => false,
@@ -659,6 +663,26 @@ impl FormatEngine<'_> {
             }
         }
         self.clear_block_spacing_header();
+    }
+
+    /// Whether the line holds nothing before the header being pushed, and
+    /// the last code character before it: an Objective-C header's `@`
+    /// already stands on its line, after the code before it.
+    fn header_lead(&self, word: &str) -> (bool, Option<char>) {
+        if word.starts_with('@') && self.current.trimmed() == "@" {
+            let before = self
+                .current
+                .active_token()
+                .and_then(|word| self.tree.previous_code_token(word))
+                .and_then(|at| self.tree.previous_code_token(at))
+                .and_then(|index| token_text(&self.tree.tokens[index]).chars().next_back());
+            (true, before)
+        } else {
+            (
+                self.current_is_blank(),
+                self.layout.command_state.previous_command_char,
+            )
+        }
     }
 
     /// Whether the line being built holds only a closer and comments after
@@ -884,16 +908,13 @@ impl FormatEngine<'_> {
                 .and_then(|span| {
                     next_code_token(tokens, span.first + 1).filter(|&next| next <= span.last)
                 })
-                .and_then(|next| match &tokens[next] {
-                    Token::Word(word) => Some(word.as_str()),
-                    _ => None,
-                })
-                .unwrap_or_else(|| leading_identifier(after.trimmed_start()));
+                .and_then(|next| header_word_at(tokens, next))
+                .unwrap_or_else(|| leading_header(after.trimmed_start()));
             return self.options.break_closing_header_blocks
                 && !self.block_spacing.closed_empty_block
                 && is_break_blocks_closing_header(next);
         }
-        let first = leading_identifier(trimmed);
+        let first = leading_header(trimmed);
         // A body kept on one line with its header ends no block before its
         // closing header.
         !is_break_blocks_closing_header(first)
@@ -913,7 +934,7 @@ impl FormatEngine<'_> {
             && self.layout.line_adjuster.switch_depth() == 0
             && !self.follows_header_block_close(start);
         let mut newline_run = 0usize;
-        for token in &tokens[start.min(tokens.len())..] {
+        for (index, token) in tokens.iter().enumerate().skip(start) {
             match token {
                 Token::Whitespace(_) => {}
                 Token::Newline => {
@@ -923,8 +944,7 @@ impl FormatEngine<'_> {
                     }
                 }
                 Token::Comment(_, _) => newline_run = 0,
-                Token::Word(word) => return Some(word.to_string()),
-                _ => return None,
+                _ => return header_word_at(tokens, index).map(str::to_string),
             }
         }
         None
@@ -1015,6 +1035,19 @@ impl FormatEngine<'_> {
     }
 }
 
+/// The header the code token at `index` names: a word, or an
+/// Objective-C keyword with the `@` before it.
+pub(crate) fn header_word_at(tokens: &[Token], index: usize) -> Option<&str> {
+    match tokens.get(index)? {
+        Token::Word(word) => Some(word),
+        Token::Symbol('@') => match tokens.get(index + 1)? {
+            Token::Word(word) => objc_statement_header(word),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 pub(crate) fn is_break_blocks_closing_header(word: &str) -> bool {
     matches!(
         word,
@@ -1025,7 +1058,17 @@ pub(crate) fn is_break_blocks_closing_header(word: &str) -> bool {
 fn is_standard_break_blocks_opening_header(word: &str) -> bool {
     matches!(
         word,
-        "if" | "for" | "while" | "switch" | "do" | "try" | "__try" | "case" | "default"
+        "if" | "for"
+            | "while"
+            | "switch"
+            | "do"
+            | "try"
+            | "__try"
+            | "case"
+            | "default"
+            | "@try"
+            | "@synchronized"
+            | "@autoreleasepool"
     )
 }
 

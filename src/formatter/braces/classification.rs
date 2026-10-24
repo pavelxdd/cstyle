@@ -259,7 +259,7 @@ impl FormatEngine<'_> {
             .map(|(id, _)| id);
         let header_condition_closed = header.is_some_and(|header| {
             (language::is_non_paren_header(header)
-                || matches!(header, "autoreleasepool" | "@try" | "@finally")
+                || matches!(header, "@autoreleasepool" | "@try" | "@finally")
                 || self.layout.command_state.previous_command_char == Some(')'))
                 && self
                     .layout
