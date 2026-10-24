@@ -1373,9 +1373,15 @@ impl FormatEngine<'_> {
                 return ContinuationIndent::Spaces(spaces);
             }
             // An enumerator's pending column, set by a comment before it, is
-            // the line's own: its value continues past its `=`.
+            // the line's own: its value continues past its `=`. A column
+            // inside a delimiter the line closed ends with it.
             if let Some(spaces) = self.layout.continuation_indent.next_line_indent_spaces
                 && !self.in_enum_declaration_brace()
+                && !self
+                    .layout
+                    .frame_stack
+                    .line_closed_delimiter_opener_column()
+                    .is_some_and(|opener| spaces > opener)
             {
                 return ContinuationIndent::Spaces(spaces);
             }

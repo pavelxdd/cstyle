@@ -1441,9 +1441,12 @@ impl FormatEngine<'_> {
         {
             return Some(indent);
         }
+        // A row closing parens it did not open holds their column, not the
+        // arm's.
         if !current.starts_with_any(b")}?:")
             && previous_code.ends_with(':')
             && !previous_code.contains('?')
+            && self.paren_imbalance_of(previous_code).0 == 0
             && self
                 .output
                 .scoped()

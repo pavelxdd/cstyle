@@ -2082,6 +2082,28 @@ fn statement_level_ternary_colon_takes_a_continuation_indent() {
 }
 
 #[test]
+fn statement_level_ternary_colon_after_an_argument_row_takes_a_continuation_indent() {
+    // The arguments' column ends with the paren closing on their row; a
+    // bracket around the paren goes on.
+    let source = fixture!(
+        "static int checks[(VALUE % 2147483629 == 721 &&",
+        "                   VALUE % 2147483647 == 1)",
+        "                  ? 1 : -1];",
+        "void helper()",
+        "{",
+        "    ready ? first(value,",
+        "                  other)",
+        "        : second(value);",
+        "    ready ? first(value,",
+        "                  other) :",
+        "        second(value);",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
+}
+
+#[test]
 fn statement_level_ternary_continuation_takes_a_continuation_indent() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=linux".to_owned()]).expect("valid options");
