@@ -24504,3 +24504,14 @@ fn declarations_in_a_run_in_extern_block_stand_at_one_level_after_parens() {
     check(input, &args, expected);
     check(expected, &args, expected);
 }
+
+#[test]
+fn break_blocks_all_pads_a_function_try_block_as_any_try_block() {
+    // The catch after a function's try block parts from it as after any
+    // try block, and no blank line opens the class before the function.
+    let input = "class Item {\n    void run() try {\n        go();\n    } catch (...) {\n        stop();\n    }\n};\n";
+    let expected = "class Item\n{\n    void run() try\n    {\n        go();\n\n    } catch (...)\n    {\n        stop();\n    }\n};\n";
+    let args = ["--style=kr", "--break-blocks=all"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
