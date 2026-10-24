@@ -106,7 +106,6 @@ impl FormatEngine<'_> {
             if next_line.trimmed().is_empty() || self.output[index].trimmed() != "{" {
                 continue;
             }
-            let next_line = self.output.remove(index + 1);
             // The tab pass leaves the fill before a comment alone, so it is
             // written as the finished output indents, in spaces when tabs
             // are converted.
@@ -124,17 +123,13 @@ impl FormatEngine<'_> {
                 } else if (next_text.starts_with("//") || next_text.starts_with("/*"))
                     && !self.options.convert_tabs
                 {
-                    horstmann_run_in_fill(&self.output[index], &next_line, &self.output_options())
+                    horstmann_run_in_fill(&self.output[index], next_line, &self.output_options())
                 } else {
-                    horstmann_run_in_fill(&self.output[index], &next_line, self.options)
+                    horstmann_run_in_fill(&self.output[index], next_line, self.options)
                 };
-            let merged = format!(
-                "{}{}{}",
-                self.output[index],
-                fill,
-                next_line.trimmed_start()
-            );
-            self.output.set(index, merged);
+            // The merged line holds the row's tokens, so later passes find
+            // the statement the row starts there.
+            self.output.join_into(index, index + 1, &fill);
         }
     }
 

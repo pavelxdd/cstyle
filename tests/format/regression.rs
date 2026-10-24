@@ -25011,3 +25011,12 @@ fn an_enum_list_whose_brace_leads_its_rows_runs_in_as_a_struct_body_in_the_defau
         "enum Name\n{   A,\n    B\n};\ntypedef enum\n{   A, /* note */\n    B\n} Kind;\nvoid f()\n{\n    enum\n    {   A, B,\n        C\n    };\n    enum Other\n    { D, E };\n}\n",
     );
 }
+
+#[test]
+fn indent_tab_aligns_a_row_continued_after_a_default_style_run_in_brace_in_spaces() {
+    check(
+        "struct Item\n{ int a = (1 +\n           2);\n  int b;\n};\n",
+        &["--indent=tab"],
+        "struct Item\n{\tint a = (1 +\n\t         2);\n\tint b;\n};\n",
+    );
+}

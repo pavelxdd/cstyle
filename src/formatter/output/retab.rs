@@ -656,7 +656,17 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let lead = self.output.lead_width(line, self.options.tab_width);
+        let mut lead = self.output.lead_width(line, self.options.tab_width);
+        // A statement run in after its block's brace stands at the block's
+        // level.
+        if self.output.line_tokens(line).is_some_and(|span| {
+            span.first != start
+                && matches!(self.tree.tokens[span.first], Token::Symbol('{'))
+                && groups.opened_at(span.first).is_some()
+                && groups.opened_at(span.first) == groups.enclosing(start)
+        }) {
+            lead += self.options.indent_width;
+        }
         // An initializer list that starts on its constructor's line still
         // stands one level in.
         let tokens = &self.tree.tokens;
