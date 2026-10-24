@@ -524,7 +524,20 @@ impl FormatEngine<'_> {
     ) {
         let control_paren_indent = self.control_paren_init_brace_indent_spaces();
         let brace_begins_line = self.current_is_blank();
-        let enclosing_body_column = self.current_inline_array_column();
+        // A list opening at a row's end inside a compound literal counts its
+        // rows from the literal's level, as one inside a list does.
+        let enclosing_body_column = self
+            .inline_array
+            .frames
+            .last()
+            .filter(|frame| frame.depth == self.layout.nesting.brace_header_stack.len())
+            .map(|frame| {
+                if frame.leveled_literal {
+                    frame.brace_column + self.options.indent_width
+                } else {
+                    frame.body_column
+                }
+            });
         let indented_initializer_brace = brace_begins_line
             && control_paren_indent.is_none()
             && enclosing_body_column.is_some()
@@ -846,21 +859,17 @@ impl FormatEngine<'_> {
                     self.options.tab_width,
                 )
         };
-        // A compound literal stands the rows after its brace's line a level
-        // past its statement, where its `}` closes. One among a call's
-        // arguments keeps its rows with them.
+        // A compound literal outside parens closes at its statement, its
+        // rows after the brace's line standing at its elements as any
+        // list's do.
         let leveled_literal = brace_type == BraceType::CompoundLiteral
             && !nested
             && !break_first
             && self.layout.nesting.paren_depth == 0;
-        if leveled_literal {
-            column = base_indent + self.options.indent_width;
-        }
         // Elements after a brace past the maximum continuation indent stand
         // two levels past their line, or at the parens or list around them;
         // an assigned value's list keeps them at its brace.
         if !nested
-            && !leveled_literal
             && column.saturating_sub(statement_base) > self.options.max_continuation_indent
             && next_non_whitespace(&self.tree.tokens, token_index + 1, self.tree.tokens.len())
                 .is_some_and(|next| !matches!(self.tree.tokens[next], Token::Newline))

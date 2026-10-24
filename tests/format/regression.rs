@@ -6698,9 +6698,9 @@ fn compound_literal_closing_brace_leaves_the_last_row() {
 }
 
 #[test]
-fn statement_compound_literal_rows_after_a_run_in_first_element_stand_a_level_in() {
+fn statement_compound_literal_rows_after_a_run_in_first_element_stand_at_it() {
     let input = "void f(void)\n{\n    q = (int[]){ 1, 2,\n        3 };\n    return (struct p){ .a = 1,\n        .b = 2 };\n    g((int[]){ 1,\n        2 }, 3);\n}\n";
-    let expected = "void f(void)\n{\n    q = (int[]) { 1, 2,\n        3\n    };\n    return (struct p) { .a = 1,\n        .b = 2\n    };\n    g((int[]) { 1,\n                2 }, 3);\n}\n";
+    let expected = "void f(void)\n{\n    q = (int[]) { 1, 2,\n                  3\n    };\n    return (struct p) { .a = 1,\n                        .b = 2\n    };\n    g((int[]) { 1,\n                2 }, 3);\n}\n";
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
@@ -8082,8 +8082,9 @@ fn a_struct_declaration_split_before_its_declarator_closes_its_run_in_list_at_th
 #[test]
 fn aggregate_with_run_in_first_fields_closes_at_its_statement() {
     let input = "void f(void)\n{\n    struct s sa = { .a = 1, .b = 2,\n        .c = 3\n    };\n    *p = (struct s) { .a = 1,\n        .c = 3\n    };\n    T y = (T) { .a = 1,\n        .b = 2 };\n}\n";
-    // Fields after those run in stand at the first, as in any list.
-    let expected = "void f(void)\n{\n    struct s sa = { .a = 1, .b = 2,\n                    .c = 3\n    };\n    *p = (struct s) { .a = 1,\n        .c = 3\n    };\n    T y = (T) { .a = 1,\n        .b = 2\n    };\n}\n";
+    // Fields after those run in stand at the first, as in any list, an
+    // assigned compound literal's too.
+    let expected = "void f(void)\n{\n    struct s sa = { .a = 1, .b = 2,\n                    .c = 3\n    };\n    *p = (struct s) { .a = 1,\n                      .c = 3\n    };\n    T y = (T) { .a = 1,\n                .b = 2\n    };\n}\n";
     let args = [
         "--style=1tbs",
         "--pad-oper",
@@ -23074,8 +23075,10 @@ fn a_list_running_in_with_a_designator_keeps_its_brace_line_and_levels_the_neste
 #[test]
 fn a_compound_literal_among_the_elements_of_a_split_list_keeps_its_brace_gap() {
     let input = "void f()\n{\n    y = (U){ .a = (V){ 1, 2 },\n        .b = 3 };\n}\n";
-    let expected = "void f()\n{\n    y = (U) { .a = (V){ 1, 2 },\n        .b = 3\n    };\n}\n";
+    let expected =
+        "void f()\n{\n    y = (U) { .a = (V){ 1, 2 },\n              .b = 3\n    };\n}\n";
     check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
 }
 
 #[test]
@@ -25189,4 +25192,14 @@ fn a_list_brace_after_template_arguments_lays_out_as_after_a_plain_type_name() {
         );
     }
     check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn rows_of_an_assigned_compound_literal_after_a_run_in_element_stand_at_the_first() {
+    // A compound literal's elements run in after its brace line up as a
+    // list's do, assigned or among a call's arguments.
+    let input = "void f(void)\n{\n    *p = (struct s) { 1, 2,\n        3\n    };\n    value = (struct s) { .first = 1,\n        .second = 2 };\n    go((struct s) { .first = 1,\n        .second = 2 });\n}\n";
+    let expected = "void f(void)\n{\n    *p = (struct s) { 1, 2,\n                      3\n    };\n    value = (struct s) { .first = 1,\n                         .second = 2\n    };\n    go((struct s) { .first = 1,\n                    .second = 2 });\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
 }

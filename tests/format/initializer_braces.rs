@@ -2101,7 +2101,7 @@ fn multiline_compound_literal_keeps_run_in_designated_fields() {
             "void f(void)\n{\n  value = (struct Item) { .first = alpha,\n                          .second = beta\n                        };\n}\n",
             &FormatOptions::default(),
         ),
-        "void f(void)\n{\n    value = (struct Item) { .first = alpha,\n        .second = beta\n    };\n}\n",
+        "void f(void)\n{\n    value = (struct Item) { .first = alpha,\n                            .second = beta\n    };\n}\n",
     );
 }
 
