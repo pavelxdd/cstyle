@@ -913,10 +913,12 @@ impl FormatEngine<'_> {
         if self.current.trimmed_end().ends_with("return") {
             return true;
         }
+        // A name, a literal or a closed bracket or paren before it takes a
+        // subscript.
         match self.layout.command_state.previous_non_ws_char {
             None => true,
             Some(')') if self.options.mode == Mode::ObjC => true,
-            Some(ch) => !is_word_char(ch) && ch != ']' && ch != ')',
+            Some(ch) => !is_word_char(ch) && !matches!(ch, ']' | ')' | '"' | '\''),
         }
     }
 
