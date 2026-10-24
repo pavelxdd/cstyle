@@ -3449,3 +3449,18 @@ fn max_code_length_splits_a_specialization_s_qualifiers_off_at_its_head() {
         "template <> constexpr auto digit_count<native_value>()\nnoexcept -> int\n{\n    return 38;\n}\n",
     );
 }
+
+#[test]
+fn max_code_length_splits_a_braceless_header_s_statement_to_its_body_level() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "void f()\n{\n    if (condition) throw std::runtime_error(\"the limit was reached\");\n    if (condition) delete first_item_value_name_and_more_names_here;\n    else delete first_item_value_name_and_more_names_here_too_long;\n}\n",
+        &options,
+        "void f()\n{\n    if (condition) throw\n        std::runtime_error(\"the limit was reached\");\n    if (condition) delete\n        first_item_value_name_and_more_names_here;\n    else delete\n        first_item_value_name_and_more_names_here_too_long;\n}\n",
+    );
+}

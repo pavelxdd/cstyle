@@ -23,7 +23,7 @@ use crate::formatter::syntax::{
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
-    advance_quoted_literal, after_leading_comments, has_top_level_char,
+    advance_quoted_literal, after_leading_comments, code_contains, has_top_level_char,
     last_unmatched_open_delimiter, line_paren_imbalance, trailing_comment_split_limit,
     unmatched_open_bracket_column, unmatched_open_paren_column, unmatched_open_paren_columns,
 };
@@ -307,7 +307,10 @@ impl FormatEngine<'_> {
         if let Some(spaces) = objc_message_rows {
             next_indent = ContinuationIndent::Spaces(spaces);
         }
+        // The floor holds the condition's rows; the statement the header
+        // runs in after it goes on at the header's body.
         if let Some(floor) = conditional_floor
+            && !splits_header_body_statement(&split)
             && next_indent.columns(self.options.indent_width) < floor
         {
             next_indent = ContinuationIndent::Spaces(floor);
@@ -994,6 +997,9 @@ fn continuation_indent_for_split(
             .flatten()
     };
     let head = split.head.as_str();
+    if splits_header_body_statement(split) {
+        return Some(ContinuationIndent::Spaces(base_indent_width + indent_width));
+    }
     // A declaration split at the whitespace before its name continues
     // nothing astyle registered, unless an aggregate keyword leads it.
     // Macro calls the head closes register nothing either, nor does a
@@ -1353,27 +1359,49 @@ fn stream_chain_continuation_indent(
     {
         return None;
     }
-    Some(base_indent_width + shift + usize::from(runs_header_body_in(operand)) * indent_width)
+    Some(
+        base_indent_width
+            + shift
+            + usize::from(header_body_run_in(operand).is_some()) * indent_width,
+    )
 }
 
-/// Whether `text` opens with a braceless control header whose body runs
-/// on after it, as `if (ready) log() <<` or `else stream <<`.
-fn runs_header_body_in(text: &str) -> bool {
+/// Whether `split` breaks the statement a braceless header runs in on its
+/// line before a word, with nothing in the statement registering a column:
+/// the rest goes on at the header's body.
+fn splits_header_body_statement(split: &SplitResult) -> bool {
+    split.kind == SplitKind::Whitespace
+        && split
+            .tail
+            .starts_with(|ch: char| is_identifier_continue(ch) || matches!(ch, '"' | '\''))
+        && unmatched_open_paren_columns(&split.head).is_empty()
+        && header_body_run_in(&split.head).is_some_and(|body| {
+            !["<<", ">>", "=", "?"]
+                .iter()
+                .any(|registers| code_contains(body, registers))
+        })
+}
+
+/// The statement a braceless control header leading `text` runs in after
+/// it on the line, as `log() <<` in `if (ready) log() <<`.
+fn header_body_run_in(text: &str) -> Option<&str> {
     let text = text.trimmed_start();
     let word_end = text
         .find(|ch: char| !is_identifier_continue(ch))
         .unwrap_or(text.len());
     let rest = &text[word_end..];
-    match &text[..word_end] {
-        "else" | "do" => !rest.trimmed().is_empty(),
+    let body = match &text[..word_end] {
+        "else" | "do" => rest,
         "if" | "while" | "for" => {
             let rest = rest.trimmed_start();
-            rest.starts_with('(')
-                && matching_close_paren(rest, 0)
-                    .is_some_and(|close| !rest[close + 1..].trimmed().is_empty())
+            if !rest.starts_with('(') {
+                return None;
+            }
+            &rest[matching_close_paren(rest, 0)? + 1..]
         }
-        _ => false,
-    }
+        _ => return None,
+    };
+    (!body.trimmed().is_empty()).then(|| body.trimmed_start())
 }
 
 fn return_value_indent(line: &str, base_indent_width: usize) -> Option<usize> {
