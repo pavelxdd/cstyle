@@ -845,16 +845,7 @@ impl FormatEngine<'_> {
                     && (header != Some("else") || word != "if")
                     && !split_else_after_preprocessor =>
             {
-                let header_indent = self
-                    .layout
-                    .continuation_indent
-                    .next_line_indent
-                    .unwrap_or_else(|| self.layout.indentation.indent())
-                    .max(
-                        self.layout.indentation.indent()
-                            + self.case_body_indent_extra(LineKind::Normal),
-                    )
-                    .max(self.layout.pending_braceless_block_bias.unwrap_or(0));
+                let header_indent = self.one_line_header_level();
                 // Comments leading the body's own line already stand at its
                 // level; the header ended the line before.
                 let body_indent = if !self.current_is_blank()
@@ -916,11 +907,7 @@ impl FormatEngine<'_> {
             None => return false,
         }
 
-        let header_indent = self
-            .layout
-            .indentation
-            .indent()
-            .max(self.layout.pending_braceless_block_bias.unwrap_or(0));
+        let header_indent = self.one_line_header_level();
         self.finish_line();
         let split_else_keeps_body_level = split_else_after_preprocessor
             && (self.preprocessor.split_else.extra_levels > 0
@@ -942,6 +929,17 @@ impl FormatEngine<'_> {
         self.layout.command_state.current_header = None;
         self.layout.command_state.preprocessor_after_header = false;
         true
+    }
+
+    /// The level of the header line a one-line body breaks off, as the
+    /// braceless bodies it stands in and its case body set it.
+    fn one_line_header_level(&self) -> usize {
+        self.layout
+            .continuation_indent
+            .next_line_indent
+            .unwrap_or_else(|| self.layout.indentation.indent())
+            .max(self.layout.indentation.indent() + self.case_body_indent_extra(LineKind::Normal))
+            .max(self.layout.pending_braceless_block_bias.unwrap_or(0))
     }
 
     pub(crate) fn try_break_braceless_header_body(

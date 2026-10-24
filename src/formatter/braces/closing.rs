@@ -1006,6 +1006,14 @@ impl FormatEngine<'_> {
     }
 
     fn braceless_body_continues(&self, next: Option<&Token>) -> bool {
+        // An attributed block that is its header's body ends that body.
+        if self
+            .current
+            .active_token()
+            .is_some_and(|close| self.closes_attributed_body_row(close))
+        {
+            return false;
+        }
         // An `else` on a later line continues the body when it belongs to
         // the `if` whose block just closed.
         if matches!(next, Some(Token::Newline | Token::Whitespace(_))) {
@@ -1128,7 +1136,31 @@ impl FormatEngine<'_> {
         if self.attaches_closing_header(
             word,
             self.closing_header_stays_on_brace_line(),
-        ))
+        )) && !self
+            .current
+            .active_token()
+            .is_some_and(|close| self.closes_attributed_body_row(close))
+    }
+
+    /// Whether the `}` at `close` ends an attributed statement leading a row
+    /// of its own as its header's body, whose closer stands at the body's
+    /// level, not the header's.
+    fn closes_attributed_body_row(&self, close: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        let Some(open) = Some(close)
+            .filter(|&index| matches!(tokens[index], Token::Symbol('}')))
+            .and_then(|close| self.tree.groups.closed_at(close))
+            .map(|group| self.tree.groups.get(group).open)
+        else {
+            return false;
+        };
+        self.tree
+            .previous_code_token(open)
+            .is_some_and(|before| matches!(tokens[before], Token::Symbol(']')))
+            && self
+                .output
+                .line_with_token(open)
+                .is_some_and(|line| self.output.trimmed(line).starts_with("[["))
     }
 
     /// Whether the closing header `word` joins the `}` before it; without a
@@ -1187,6 +1219,12 @@ impl FormatEngine<'_> {
             .output
             .last()
             .is_none_or(|previous| previous.trimmed() != "}")
+            || self
+                .output
+                .len()
+                .checked_sub(1)
+                .and_then(|line| self.output.line_tokens(line))
+                .is_some_and(|span| self.closes_attributed_body_row(span.first))
         {
             return false;
         }

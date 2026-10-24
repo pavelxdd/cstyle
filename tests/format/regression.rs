@@ -24408,3 +24408,15 @@ fn an_explicit_conditional_indent_holds_under_the_linux_style() {
         check(two, args, two);
     }
 }
+
+#[test]
+fn an_else_after_an_attributed_body_row_starts_at_its_if() {
+    // An attributed block broken off its header is the header's body: its
+    // closer stands at the body's level, so the `else` after it starts its
+    // own line at the `if`, and each body ends with its block.
+    let input = "void f(int v)\n{\n    if (v) [[likely]] {\n        go();\n    } else [[unlikely]] {\n        stop();\n    }\n    if (v) [[likely]] {\n        go();\n    } else {\n        stop();\n    }\n    for (;;)\n        if (v)\n            go();\n        else [[unlikely]] {\n            stop();\n        }\n    while (v) [[likely]] {\n        go();\n    }\n}\n";
+    let expected = "void f(int v)\n{\n    if (v)\n        [[likely]] {\n            go();\n        }\n    else\n        [[unlikely]] {\n            stop();\n        }\n    if (v)\n        [[likely]] {\n            go();\n        }\n    else {\n        stop();\n    }\n    for (;;)\n        if (v)\n            go();\n        else\n            [[unlikely]] {\n                stop();\n            }\n    while (v)\n        [[likely]] {\n            go();\n        }\n}\n";
+    let args = ["--style=kr", "--break-one-line-headers"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
