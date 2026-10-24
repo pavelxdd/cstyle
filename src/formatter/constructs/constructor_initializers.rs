@@ -489,6 +489,26 @@ impl FormatEngine<'_> {
         None
     }
 
+    /// Whether output line `index` holds the colon after a function's
+    /// parameters, and their qualifiers, that opens its initializers.
+    fn line_holds_initializer_colon(&self, index: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        self.output.line_tokens(index).is_some_and(|span| {
+            (span.first..=span.last).any(|colon| {
+                matches!(tokens[colon], Token::Symbol(':'))
+                    && std::iter::successors(self.tree.previous_code_token(colon), |&before| {
+                        matches!(tokens[before], Token::Word(_))
+                            .then(|| self.tree.previous_code_token(before))
+                            .flatten()
+                    })
+                    .find(|&before| !matches!(tokens[before], Token::Word(_)))
+                    .and_then(|close| groups.closed_at(close))
+                    .is_some_and(|params| self.tree.functions.is_parameter_list(params))
+            })
+        })
+    }
+
     /// Whether the colon leading output line `index` stands inside parens,
     /// as an asm statement's operands do, where no initializer list starts.
     fn colon_line_stands_in_parens(&self, index: usize) -> bool {
@@ -604,7 +624,10 @@ impl FormatEngine<'_> {
         )?;
         let previous = &self.output[previous_index];
         let previous_code = self.output.code_trimmed_of(previous);
-        if !previous_code.ends_with(',') && previous_code.trimmed() != ":" {
+        // So do the arguments of a member whose name ends the row before.
+        let member_arguments =
+            trimmed.starts_with('(') && previous_code.ends_with(is_identifier_continue);
+        if !previous_code.ends_with(',') && previous_code.trimmed() != ":" && !member_arguments {
             return None;
         }
         // The constructor's body may open on the last member's row.
@@ -616,7 +639,15 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let base_indent = self.constructor_initializer_base_indent_spaces()?;
+        // A head whose initializers run on after its colon stands a level
+        // out of them.
+        let base_indent = match self.constructor_initializer_base_indent_spaces() {
+            Some(base) => base,
+            None if member_arguments && self.line_holds_initializer_colon(previous_index) => {
+                leading_visual_width(previous, self.options.tab_width) + self.options.indent_width
+            }
+            None => return None,
+        };
         // A row that closes the parens it starts in is still an argument.
         let starts_in_parens = match self.output.pending_tokens() {
             Some(span) => self

@@ -25041,3 +25041,12 @@ fn a_function_body_after_parameters_on_their_own_line_takes_its_style_s_brace() 
         check(input, &["--style=kr"], expected);
     }
 }
+
+#[test]
+fn an_initializer_s_arguments_below_its_member_name_continue_the_initializer_list() {
+    check(
+        "class Item {\n    explicit Item(const Value* cmp) : data_\n    (Less(cmp)) {}\n    Item(int a) : first_(a), second_\n    (a) {}\n};\nItem::Item(const Value* cmp) : data_\n(Less(cmp))\n{\n}\n",
+        &["--style=kr"],
+        "class Item\n{\n    explicit Item(const Value* cmp) : data_\n        (Less(cmp)) {}\n    Item(int a) : first_(a), second_\n        (a) {}\n};\nItem::Item(const Value* cmp) : data_\n    (Less(cmp))\n{\n}\n",
+    );
+}
