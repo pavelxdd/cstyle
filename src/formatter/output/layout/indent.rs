@@ -80,9 +80,11 @@ impl FormatEngine<'_> {
                     .is_some_and(|line| line.trimmed_end().ends_with(')'));
             return usize::from(previous_constructor);
         }
+        // A directive is no constructor head.
         if previous.ends_with(':')
             && previous.contains(')')
             && !previous.starts_with("//")
+            && !previous.starts_with('#')
             && switch_cases::find_case_colon(previous).is_none()
             && !previous.starts_with("default")
             && !trimmed.starts_with('{')
