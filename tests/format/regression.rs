@@ -24652,3 +24652,81 @@ fn labels_of_a_loop_block_in_a_case_line_up_with_statements_kept_on_their_lines(
         check(expected, &args, expected);
     }
 }
+
+#[test]
+fn pico_body_row_before_a_commented_else_stands_at_its_header() {
+    // A comment between the closer and `else` leaves the body row where
+    // it stands before a bare `else`.
+    let input = "void f(void)\n{\n    if (x) {\n        go();\n    } /* done */ else {\n        stop();\n    }\n}\n";
+    let expected =
+        "void f(void)\n{   if (x)\n    {   go(); } /* done */ else\n    {   stop(); } }\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+}
+
+#[test]
+fn a_type_s_braces_called_in_a_kept_one_line_block_keep_their_spacing() {
+    // Braces a call or member access follows hold a value, not a block,
+    // so no space comes before them.
+    let input =
+        "void f()\n{\n    { Item{}(v); }\n    if (x) { Item{}(v); }\n    { Item{1}.run(); }\n}\n";
+    check(input, &["--style=kr", "--keep-one-line-blocks"], input);
+    let expected = "void f()\n{\n    {   Item{ }(v); }\n    if (x) { Item{ }(v); }\n    {   Item{1 }.run(); } }\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+    // A template type's braces in a requirement row are a value too.
+    let input = "template <typename T>\nconcept Hashable = requires(T value) {\n    { std::hash<T>{}(value) } -> std::convertible_to<size_t>;\n};\n";
+    let expected = "template <typename T>\nconcept Hashable = requires(T value)\n{\n    {   std::hash<T> { }(value) } -> std::convertible_to<size_t>; };\n";
+    check(input, &["--style=pico"], expected);
+    check(expected, &["--style=pico"], expected);
+}
+
+#[test]
+fn break_return_type_keeps_explicit_with_a_conversion_operator() {
+    // A conversion operator has no return type; `explicit` specifies it.
+    let input = "class Item\n{\npublic:\n    explicit operator bool() const\n    {\n        return ok_;\n    }\n    operator int() const;\n};\n";
+    check(input, &["--style=kr", "--break-return-type"], input);
+}
+
+#[test]
+fn break_return_type_leaves_a_declaration_with_a_lambda_default_argument() {
+    // The lambda's body is an argument's value, not the function's body.
+    let input =
+        "void run(std::function<void()> done = [] {}, int retries = 3);\nint wait(int ms = 100);\n";
+    check(input, &["--style=kr", "--break-return-type"], input);
+}
+
+#[test]
+fn align_pointer_type_keeps_a_logical_and_after_a_noexcept_condition() {
+    // `&&` after the closing paren of a condition joins two conditions.
+    let input = "template <typename T>\nvoid swap(T& a, T& b) noexcept(noexcept(T(std::move(a))) &&\n                               noexcept(a = std::move(b)))\n{\n    T tmp(std::move(a));\n}\n";
+    check(input, &["--style=kr", "--align-pointer=type"], input);
+}
+
+#[test]
+fn align_pointer_name_keeps_a_lambda_reference_capture() {
+    // A capture default is no declarator to align.
+    let input = "auto f = [&, value](auto &&item) mutable\n{\n    return item;\n};\nauto g = [&](int *p)\n{\n    return p;\n};\n";
+    check(input, &["--style=kr", "--align-pointer=name"], input);
+}
+
+#[test]
+fn indent_classes_indents_the_members_of_an_attributed_class() {
+    // An attribute in the head leaves the class a class, whether its first
+    // member runs in after the brace or not.
+    let input = "class [[nodiscard]] Result {\n    [[no_unique_address]] Empty empty_;\n    int value_;\n};\n";
+    for (style, expected) in [
+        (
+            "--style=horstmann",
+            "class [[nodiscard]] Result\n{       [[no_unique_address]] Empty empty_;\n        int value_;\n};\n",
+        ),
+        (
+            "--style=kr",
+            "class [[nodiscard]] Result\n{\n        [[no_unique_address]] Empty empty_;\n        int value_;\n};\n",
+        ),
+    ] {
+        let args = [style, "--indent-classes"];
+        check(input, &args, expected);
+        check(expected, &args, expected);
+    }
+}
