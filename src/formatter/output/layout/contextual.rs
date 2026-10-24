@@ -1,5 +1,4 @@
 use crate::config::BraceStyle;
-use crate::formatter::braces::classification::ExternCGuard;
 use crate::formatter::braces::closing::{
     starts_post_closing_declaration, top_level_closing_brace_indent_spaces,
 };
@@ -959,7 +958,7 @@ impl FormatEngine<'_> {
     fn in_unindented_scope_body(&self) -> bool {
         match self.layout.nesting.brace_type_stack.last() {
             Some(BraceType::Namespace) => !self.options.indent_namespaces,
-            Some(BraceType::Extern) => self.extern_c_guard == ExternCGuard::InsideBlock,
+            Some(BraceType::Extern) => self.extern_c_guard.inside_block(),
             _ => false,
         }
     }

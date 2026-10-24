@@ -3638,7 +3638,8 @@ impl FormatEngine<'_> {
         let cpp_extern_c_block =
             brace_type == BraceType::Extern && self.extern_c_guard == ExternCGuard::ExternC;
         if cpp_extern_c_block {
-            self.extern_c_guard = ExternCGuard::InsideBlock;
+            self.extern_c_guard =
+                ExternCGuard::InsideBlock(self.layout.indentation.brace_block_depth());
         }
         if let Some(opening_indent) = headerless_inline_command_column {
             self.layout.indentation.enter_block_without_indent(false);

@@ -416,8 +416,10 @@ impl FormatEngine<'_> {
             && unmatched_open_paren_column(self.current.trimmed_end()).is_some()
         {
             BraceType::NonStatement
-        } else if self.layout.nesting.brace_type_stack.is_empty()
-            && !self.current.trimmed().is_empty()
+        } else if matches!(
+            self.layout.nesting.brace_type_stack.last(),
+            None | Some(BraceType::Namespace | BraceType::Extern)
+        ) && !self.current.trimmed().is_empty()
             && self.current.trimmed().chars().all(is_word_char)
             && self
                 .output
@@ -425,7 +427,7 @@ impl FormatEngine<'_> {
                 .is_none_or(|previous| {
                     let code = self.output.code_trimmed_of(previous);
                     code.is_empty()
-                        || code.ends_with_any(b";}")
+                        || code.ends_with_any(b";{}")
                         || code.trimmed_start().starts_with('#')
                 })
             && (self.token_input.token_begins_source_line
@@ -435,7 +437,7 @@ impl FormatEngine<'_> {
                     .as_deref()
                     .is_some_and(|whitespace| !whitespace.is_empty()))
         {
-            // A macro standing for a function head at file scope.
+            // A macro standing for a function head at declaration scope.
             BraceType::Definition
         } else if (self.token_input.token_begins_source_line
             || is_macro_like_word(self.current.trimmed()))
@@ -698,7 +700,14 @@ pub(crate) enum ExternCGuard {
     CplusplusConditional,
     Extern,
     ExternC,
-    InsideBlock,
+    /// Inside the guarded block, opened at the block depth it holds.
+    InsideBlock(usize),
+}
+
+impl ExternCGuard {
+    pub(crate) fn inside_block(self) -> bool {
+        matches!(self, Self::InsideBlock(_))
+    }
 }
 
 pub(super) fn brace_indent_applies(brace_type: BraceType) -> bool {

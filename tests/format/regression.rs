@@ -25087,3 +25087,11 @@ fn an_assigned_string_continuation_past_the_maximum_stands_two_levels_in() {
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
+
+#[test]
+fn each_guarded_extern_c_block_in_a_namespace_leaves_its_body_unindented() {
+    let input = "namespace demo {\n#ifdef __cplusplus\nextern \"C\" {\n#endif\nint first_value;\n#ifdef __cplusplus\n}\n#endif\n#ifdef __cplusplus\nextern \"C\" {\n#endif\nint second_value;\n#ifdef __cplusplus\n}\n#endif\n}\n";
+    let expected = "namespace demo\n{\n#ifdef __cplusplus\nextern \"C\" {\n#endif\nint first_value;\n#ifdef __cplusplus\n}\n#endif\n#ifdef __cplusplus\nextern \"C\" {\n#endif\nint second_value;\n#ifdef __cplusplus\n}\n#endif\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}

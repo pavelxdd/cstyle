@@ -2603,3 +2603,21 @@ fn a_one_line_bare_block_after_a_directive_breaks_as_anywhere() {
         "void f()\n{\n#ifdef FEATURE\n    {\n        value=0;\n    }\n#endif\n    run();\n}\n",
     );
 }
+
+#[test]
+fn kr_macro_function_head_in_a_namespace_or_linkage_block_breaks_its_brace_like_a_function() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=kr".to_owned()]).expect("valid options");
+    let namespace = fixture!("namespace demo", "{", "FOO", "{", "    int a;", "}", "}",);
+    let linkage = fixture!(
+        "extern \"C\" {",
+        "    FOO",
+        "    {",
+        "        int a;",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(namespace, &options), namespace);
+    assert_eq!(format_exact(linkage, &options), linkage);
+}
