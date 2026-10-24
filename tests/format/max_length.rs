@@ -3534,3 +3534,18 @@ fn max_code_length_splits_a_declarator_list_in_a_namespace_or_linkage_block_at_i
         &format!("extern \"C\" {{\n\n    {indented}\n\n}}\n"),
     );
 }
+
+#[test]
+fn max_code_length_keeps_a_reference_declarator_with_its_type() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "auto helper(T&& value, Context& context_value_name_longer) -> int;\nauto helper(const T&& value, Context& context_value_name_l) -> int;\nauto helper(T &&value, Context& context_value_name_longer) -> int;\nauto helper(Format<T...> format, T&&... values_name) -> Result;\nstruct Item {\n    ITEM_CONSTEXPR auto format(Range&& range, Context& ctx) const;\n};\nbool result = first_value_is_long && second_value_is_long_xx;\n",
+        &options,
+        "auto helper(T&& value,\n            Context& context_value_name_longer) -> int;\nauto helper(const T&& value,\n            Context& context_value_name_l) -> int;\nauto helper(T &&value,\n            Context& context_value_name_longer) -> int;\nauto helper(Format<T...> format,\n            T&&... values_name) -> Result;\nstruct Item {\n    ITEM_CONSTEXPR auto format(Range&& range,\n                               Context& ctx) const;\n};\nbool result = first_value_is_long\n              && second_value_is_long_xx;\n",
+    );
+}

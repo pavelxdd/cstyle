@@ -1850,6 +1850,7 @@ fn split_point_at(
             return None;
         }
         if is_pointer_split_operator(line, start, end, operator)
+            || operator == "&&" && is_reference_declarator(line, start, end)
             || line[end..].trimmed_start().starts_with("/*")
         {
             return None;
@@ -1992,11 +1993,22 @@ fn is_function_call_split(line: &str, open_paren: usize) -> bool {
 }
 
 fn is_pointer_split_operator(line: &str, start: usize, end: usize, operator: &str) -> bool {
-    if !matches!(operator, "*" | "&" | "^") {
-        return false;
-    }
+    matches!(operator, "*" | "&" | "^") && declares_pointer_at(line, start, end)
+}
+
+/// Whether the `&&` at `start..end` of `line` declares a reference rather
+/// than joining conditions.
+fn is_reference_declarator(line: &str, start: usize, end: usize) -> bool {
+    line[..start].trimmed_end().ends_with('>') || declares_pointer_at(line, start, end)
+}
+
+/// Whether the operator at `start..end` of `line` declares a pointer or a
+/// reference: a name or a pack follows it, and a type or a declaration
+/// before it.
+fn declares_pointer_at(line: &str, start: usize, end: usize) -> bool {
     let before = line[..start].trimmed_end();
     let after = line[end..].trimmed_start();
+    let after = after.strip_prefix("...").map_or(after, str::trim_start);
     if after
         .chars()
         .next()
@@ -2413,8 +2425,7 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
             let ends_code = *operator == "=" && !holds_code(&line[end..]);
             if (next != b'/' || ends_code) && unbroken_depth == 0 {
                 match *operator {
-                    // A `&&` after template arguments is a reference.
-                    "&&" if previous_non_space == b'>' => {}
+                    "&&" if is_reference_declarator(line, index, end) => {}
                     "||" | "&&" => {
                         if break_after_logical {
                             register((&mut fit, &mut pending), AND_OR, end, end <= width);
