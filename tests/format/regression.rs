@@ -24472,7 +24472,8 @@ fn braces_on_a_raw_string_row_leave_the_closer_of_the_block_in_place() {
 fn a_while_condition_continued_after_a_moved_closer_aligns_in_its_paren() {
     // The closer moves to its style's column and the `while` with it; the
     // condition's next row follows the paren where it now stands.
-    let input = "void f()\n{\n    do {\n        go();\n    } while (ready() &&\n             more());\n}\n";
+    let input =
+        "void f()\n{\n    do {\n        go();\n    } while (ready() &&\n             more());\n}\n";
     for (style, expected) in [
         (
             "--style=gnu",
