@@ -2557,12 +2557,11 @@ impl FormatEngine<'_> {
             return false;
         }
         !matches!(brace_type, BraceType::Initializer)
-            || self.current.trimmed_end().ends_with('>')
             || !self
                 .layout
                 .command_state
                 .previous_command_char
-                .is_some_and(is_identifier_continue)
+                .is_some_and(|ch| is_identifier_continue(ch) || ch == '>')
     }
 
     pub(super) fn push_inline_open_brace(&mut self, token_index: usize) {

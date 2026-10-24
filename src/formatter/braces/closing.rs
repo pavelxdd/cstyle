@@ -478,13 +478,18 @@ impl FormatEngine<'_> {
                 .active_token()
                 .and_then(|brace| self.tree.groups.closed_at(brace))
                 .is_some_and(|group| {
-                    // The list a name opens, as `Item value{`.
+                    // The list a name or a template's arguments open, as
+                    // `Item value{` or `Items<int>{`.
                     self.tree.blocks.kind(group) == Some(BlockKind::Initializer)
                         && self
                             .tree
                             .previous_code_token(self.tree.groups.get(group).open)
-                            .is_some_and(|before| {
-                                matches!(&self.tree.tokens[before], Token::Word(word) if word != language::RETURN)
+                            .is_some_and(|before| match &self.tree.tokens[before] {
+                                Token::Word(word) => word != language::RETURN,
+                                Token::Operator(operator) => {
+                                    matches!(operator.as_str(), ">" | ">>")
+                                }
+                                _ => false,
                             })
                 });
         if attached_statement_expression {

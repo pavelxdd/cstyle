@@ -4613,7 +4613,7 @@ fn vtk_statement_after_nested_added_one_line_block() {
 #[test]
 fn indent_after_parens_continues_a_header_condition_alike_with_a_maximum_length() {
     let input = "void f()\n{\n    if (check(first,\n              field<Item>{\n                  value},\n              more)) {\n        go();\n    }\n}\n";
-    let expected = "void f()\n{\n    if (check(first,\n            field<Item>\n    {\n        value\n    },\n            more))\n        {\n            go();\n        }\n}\n";
+    let expected = "void f()\n{\n    if (check(first,\n            field<Item>\n    {\n        value},\n            more))\n        {\n            go();\n        }\n}\n";
     for args in [
         &["--style=gnu", "--indent-after-parens"][..],
         &[
@@ -19695,9 +19695,10 @@ fn a_lambda_row_of_a_brace_list_keeps_its_column_with_a_comment_after_its_brace(
 #[test]
 fn a_template_typed_list_holding_a_lambda_lays_it_out_as_a_typed_list() {
     let input = "void f()\n{\n    auto v = std::vector<Fn>{ [x] {\n        go();\n        run();\n    } };\n}\n";
-    let expected = "void f()\n{\n    auto v = std::vector<Fn> { [x] {\n            go();\n            run();\n        }\n    };\n}\n";
+    let expected = "void f()\n{\n    auto v = std::vector<Fn>{ [x] {\n            go();\n            run();\n        } };\n}\n";
     check(input, &["--style=kr"], expected);
     check(input, &["--style=allman"], expected);
+    check(expected, &["--style=kr"], expected);
 }
 
 #[test]
@@ -20542,11 +20543,11 @@ fn a_list_among_arguments_leaves_the_rows_after_it_at_the_argument_column() {
         ),
         (
             "--style=allman",
-            "void helper()\n{\n    return result(first,\n                  field<Item>\n    {\n        value\n    },\n                  more);\n    result(first,\n    {\n        value\n    },\n           more);\n}\n",
+            "void helper()\n{\n    return result(first,\n                  field<Item>\n    {\n        value},\n                  more);\n    result(first,\n    {\n        value\n    },\n           more);\n}\n",
         ),
         (
             "--style=kr",
-            "void helper()\n{\n    return result(first,\n                  field<Item> {\n        value\n    },\n                  more);\n    result(first, {\n        value\n    },\n           more);\n}\n",
+            "void helper()\n{\n    return result(first,\n                  field<Item>{\n        value},\n                  more);\n    result(first, {\n        value\n    },\n           more);\n}\n",
         ),
     ] {
         check(input, &[style], expected);
@@ -20870,11 +20871,11 @@ fn arguments_after_a_list_in_a_call_in_a_header_continue_the_call() {
     for (style, expected) in [
         (
             "--style=kr",
-            "void run()\n{\n    if (check(first,\n              field<Item> {\n        value\n    },\n              more)) {\n        go();\n    }\n}\n",
+            "void run()\n{\n    if (check(first,\n              field<Item>{\n        value},\n              more)) {\n        go();\n    }\n}\n",
         ),
         (
             "--style=allman",
-            "void run()\n{\n    if (check(first,\n              field<Item>\n    {\n        value\n    },\n              more))\n    {\n        go();\n    }\n}\n",
+            "void run()\n{\n    if (check(first,\n              field<Item>\n    {\n        value},\n              more))\n    {\n        go();\n    }\n}\n",
         ),
     ] {
         check(input, &[style], expected);
@@ -20883,11 +20884,11 @@ fn arguments_after_a_list_in_a_call_in_a_header_continue_the_call() {
 }
 
 #[test]
-fn a_template_type_s_list_brace_ending_its_line_takes_a_space_as_on_one_line() {
-    // A list's brace after a template's `>` stands apart from it wherever
-    // its rows go; after a plain name it keeps the gap the source left.
+fn a_template_type_s_list_brace_ending_its_line_keeps_its_gap_as_on_one_line() {
+    // A list's brace after a template's `>` keeps the gap the source left,
+    // as after a plain name, and its closer stays after its last element.
     let input = "void run() {\n  go(vec<int>{1, 2});\n  go(vec<int>{\n      1});\n  auto w = vec<int>{\n      1};\n  go(Item{\n      1});\n}\n";
-    let expected = "void run() {\n    go(vec<int> {1, 2});\n    go(vec<int> {\n        1\n    });\n    auto w = vec<int> {\n        1\n    };\n    go(Item{\n        1});\n}\n";
+    let expected = "void run() {\n    go(vec<int>{1, 2});\n    go(vec<int>{\n        1});\n    auto w = vec<int>{\n        1};\n    go(Item{\n        1});\n}\n";
     check(input, &[], expected);
     check(expected, &[], expected);
 }
@@ -23205,13 +23206,10 @@ fn an_argument_after_a_paren_led_row_past_a_block_argument_stands_at_the_stateme
 
 #[test]
 fn an_element_brace_after_template_arguments_keeps_its_gap_in_any_list() {
-    // A list's element keeps the gap written before its brace, after
-    // template arguments too, whichever way the list around it is laid out;
-    // a statement's own list after them takes the space.
+    // A list's brace keeps the gap written before it, after template
+    // arguments too, whichever way the list around it is laid out.
     let input = "void f()\n{\n    Item a[] = {Item<int>{42}, Item<int> {7}};\n    auto b = Outer{Item<int>{42}};\n    auto c = Outer<int>{Item<int>{42}};\n    auto d = Outer<Inner<int>>{Item<int>{42}};\n    auto e = Outer<Inner<int>>{Item{42}, Thing<int>{1}};\n    call(Outer<Inner<int>>{Item<int>{42}});\n    Item g[] = {\n        Item<int>{42},\n        Item<int> {7},\n    };\n}\n";
-    let expected = "void f()\n{\n    Item a[] = {Item<int>{42}, Item<int> {7}};\n    auto b = Outer{Item<int>{42}};\n    auto c = Outer<int> {Item<int>{42}};\n    auto d = Outer<Inner<int>> {Item<int>{42}};\n    auto e = Outer<Inner<int>> {Item{42}, Thing<int>{1}};\n    call(Outer<Inner<int>> {Item<int>{42}});\n    Item g[] = {\n        Item<int>{42},\n        Item<int> {7},\n    };\n}\n";
-    check(input, &[], expected);
-    check(expected, &[], expected);
+    check(input, &[], input);
 }
 
 #[test]
@@ -25153,4 +25151,42 @@ fn a_logical_row_after_parens_closing_a_logical_chain_stands_as_after_any_closed
     let expected = "void helper()\n{\n    check(value.size() >= 2\n          && value[1] == 0)\n        && describe(value);\n    check(value.size() >= 2,\n          value[1] == 0)\n        && describe(value);\n    if (ready)\n        check(value.size() >= 2\n              && value[1] == 0)\n            && describe(value);\n}\n";
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn a_list_brace_after_template_arguments_lays_out_as_after_a_plain_type_name() {
+    // `Items<int>{` is a typed list as `ItemsOfInt{` is: the gap before its
+    // brace stays as written and its closer stands where any list's does.
+    let input = "void helper()\n{\n    index(Items<int>{0, 0}, 0);\n    auto v = Items<int>{1, 2};\n    auto e = Items<int> {1, 2};\n    go(Items<int>{1,\n                  2});\n    out = write(out,\n                Items<int>{items, items + 1,\n                           value});\n    go(Items<int>{\n        1});\n    go(Items<int>{\n        1\n    });\n    auto w = Items<int>{\n        1,\n    };\n    const auto hash = Items<int>{}(value);\n    return Items<int>{first, last};\n}\n";
+    let plain = input.replace("Items<int>", "ItemsOfInt");
+    for style in [
+        None,
+        Some("kr"),
+        Some("allman"),
+        Some("gnu"),
+        Some("google"),
+        Some("java"),
+        Some("whitesmith"),
+        Some("pico"),
+        Some("lisp"),
+        Some("horstmann"),
+        Some("ratliff"),
+        Some("vtk"),
+    ] {
+        let mut options = FormatOptions::default();
+        if let Some(style) = style {
+            apply_command_line_args(&mut options, &[format!("--style={style}")])
+                .expect("valid options");
+        }
+        let format = |source: &str| {
+            String::from_utf8(format_bytes(source.as_bytes(), &options).expect("format bytes"))
+                .expect("utf8")
+        };
+        assert_eq!(
+            format(input),
+            format(&plain).replace("ItemsOfInt", "Items<int>"),
+            "style {style:?}"
+        );
+    }
+    check(input, &["--style=kr"], input);
 }

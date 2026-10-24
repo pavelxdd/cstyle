@@ -3704,16 +3704,14 @@ impl FormatEngine<'_> {
             }
             return;
         }
-        // A brace the style brings up from a line of its own takes a space,
-        // as one after a template's `>` does.
+        // A brace the style brings up from a line of its own takes a space.
         let init_after_declarator = brace_type == BraceType::Initializer
             && !self.token_input.token_begins_source_line
-            && !self.current.trimmed_end().ends_with('>')
             && self
                 .layout
                 .command_state
                 .previous_command_char
-                .is_some_and(|ch| is_word_char(ch) || ch == ']');
+                .is_some_and(|ch| is_word_char(ch) || matches!(ch, ']' | '>'));
         // A compound literal nested in an aggregate keeps the gap written
         // before its brace, as any brace there does, and so does an
         // Objective-C dictionary literal after its `@`.

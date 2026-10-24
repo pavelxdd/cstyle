@@ -28,15 +28,6 @@ pub(crate) struct CompoundLiteralOpeningLayout {
     pub(crate) brace_indent_spaces: usize,
 }
 
-fn line_opens_typed_initializer(line: &str) -> bool {
-    let code = line[..trailing_comment_split_limit(line)].trimmed_end();
-    let Some(open) = code.rfind('{') else {
-        return false;
-    };
-    let before = code[..open].trimmed_end();
-    before.contains('<') && before.ends_with('>')
-}
-
 /// Whether the last mark before `brace` that is no part of a name, a
 /// separator or a comment is an operator ending in `=`.
 fn brace_follows_assignment(tokens: &[Token], brace: usize) -> bool {
@@ -769,11 +760,6 @@ impl FormatEngine<'_> {
                 Some('(') => self.emit_source_space(),
                 Some('{') if self.current.ends_with_any(b" \t") => {}
                 Some('@') => self.emit_source_space(),
-                _ if brace_type == BraceType::Initializer
-                    && self.current.trimmed_end().ends_with('>') =>
-                {
-                    self.emit_source_space_or_ensure();
-                }
                 // A compound literal among a list's elements keeps the gap
                 // written before its brace, as any brace there does.
                 _ if self.opens_compound_literal_in_list(brace_type) => {
@@ -1110,20 +1096,6 @@ impl FormatEngine<'_> {
                 })
             });
         let call_argument_array = call_argument_array_column.is_some();
-        // The list's own brace decides, whatever braces its line opens later.
-        let follows_template_type = self
-            .current
-            .active_token()
-            .filter(|&close| matches!(self.tree.tokens[close], Token::Symbol('}')))
-            .and_then(|close| self.tree.groups.closed_at(close))
-            .and_then(|list| self.tree.previous_code_token(self.tree.groups.get(list).open))
-            .map(|before| matches!(&self.tree.tokens[before], Token::Operator(operator) if operator == ">"));
-        let typed_initializer = matches!(closing_brace_type, Some(BraceType::Initializer))
-            && follows_template_type.unwrap_or_else(|| {
-                self.output
-                    .get(open_output_len)
-                    .is_some_and(|line| line_opens_typed_initializer(line))
-            });
         // A style indenting braces indents the `}` of a compound literal
         // that its line opened.
         let closing_brace_indent = if closing_line_opened_literal
@@ -1164,8 +1136,7 @@ impl FormatEngine<'_> {
                 || closing_enum
                 || enclosed_run_in
                 || range_for_initializer
-                || call_argument_array
-                || typed_initializer);
+                || call_argument_array);
         // A row a closer breaks off below stands among the elements of the
         // list it closes, not those of a list enclosing it.
         let enclosing_list = self
@@ -1190,8 +1161,7 @@ impl FormatEngine<'_> {
                         || closing_enum
                         || enclosed_run_in
                         || range_for_initializer
-                        || call_argument_array
-                        || typed_initializer));
+                        || call_argument_array));
         // A row of a compound literal the closer parts from it below
         // publishes while the literal is open, as one a closer leading its
         // line leaves.
@@ -1269,8 +1239,7 @@ impl FormatEngine<'_> {
                 || closing_enum
                 || enclosed_run_in
                 || range_for_initializer
-                || call_argument_array
-                || typed_initializer)
+                || call_argument_array)
         {
             self.finish_line();
             if let Some(column) = closing_column {

@@ -712,27 +712,15 @@ fn range_for_braced_initializer_keeps_a_one_line_list() {
 
 #[test]
 fn range_for_double_brace_initializer_stays_run_in() {
-    assert_eq!(
-        format_exact(
-            fixture!(
-                "void f()",
-                "{",
-                "    for (auto item : std::vector<std::vector<const char *>>{{\"red\", \"r\"}, {\"green\", \"g\"}}) {",
-                "        call();",
-                "    }",
-                "}",
-            ),
-            &FormatOptions::default(),
-        ),
-        fixture!(
-            "void f()",
-            "{",
-            "    for (auto item : std::vector<std::vector<const char *>> {{\"red\", \"r\"}, {\"green\", \"g\"}}) {",
-            "        call();",
-            "    }",
-            "}",
-        )
+    let source = fixture!(
+        "void f()",
+        "{",
+        "    for (auto item : std::vector<std::vector<const char *>>{{\"red\", \"r\"}, {\"green\", \"g\"}}) {",
+        "        call();",
+        "    }",
+        "}",
     );
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
 
 #[test]
@@ -2985,46 +2973,30 @@ fn templated_empty_braced_temporary_callable_stays_inline() {
 }
 
 #[test]
-fn template_braced_initializer_gets_space_before_brace() {
-    assert_eq!(
-        format_exact(
-            "void f()\n{\n    index(List<int>{0, 0}, 0);\n}\n",
-            &FormatOptions::default(),
-        ),
+fn template_braced_initializer_keeps_the_gap_before_its_brace() {
+    for source in [
+        "void f()\n{\n    index(List<int>{0, 0}, 0);\n}\n",
         "void f()\n{\n    index(List<int> {0, 0}, 0);\n}\n",
-    );
+    ] {
+        assert_eq!(format_exact(source, &FormatOptions::default()), source);
+    }
 }
 
 #[test]
-fn return_template_direct_list_initializer_has_space_before_brace() {
-    assert_eq!(
-        format_exact(
-            fixture!(
-                "void f()",
-                "{",
-                "    return std::vector<Item>{first, last};",
-                "}",
-            ),
-            &FormatOptions::default(),
-        ),
-        fixture!(
-            "void f()",
-            "{",
-            "    return std::vector<Item> {first, last};",
-            "}",
-        )
+fn return_template_direct_list_initializer_keeps_the_gap_before_its_brace() {
+    let source = fixture!(
+        "void f()",
+        "{",
+        "    return std::vector<Item>{first, last};",
+        "}",
     );
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
 
 #[test]
-fn macro_argument_template_braced_initializer_gets_space_before_brace() {
-    assert_eq!(
-        format_exact(
-            "#define API_TEST(name, expr) expr\nAPI_TEST(path, index(List<int>{0, 0}, 0))\n",
-            &FormatOptions::default(),
-        ),
-        "#define API_TEST(name, expr) expr\nAPI_TEST(path, index(List<int> {0, 0}, 0))\n",
-    );
+fn macro_argument_template_braced_initializer_keeps_the_gap_before_its_brace() {
+    let source = "#define API_TEST(name, expr) expr\nAPI_TEST(path, index(List<int>{0, 0}, 0))\n";
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
 
 #[test]
@@ -3035,9 +3007,9 @@ fn templated_empty_braced_temporary_last_call_arg_stays_inline() {
 }
 
 #[test]
-fn braced_temporary_call_argument_after_condition_splits_closing_call() {
+fn braced_temporary_call_argument_after_condition_keeps_its_closing_call() {
     let source = "void f() {\n  if (a ||\n      b) {\n    out = write(out,\n                Result<T>{items, items + 1,\n                          static_cast<uint32_t>(v)});\n  }\n}\n";
-    let expected = "void f() {\n    if (a ||\n            b) {\n        out = write(out,\n                    Result<T> {items, items + 1,\n                               static_cast<uint32_t>(v)\n                              });\n    }\n}\n";
+    let expected = "void f() {\n    if (a ||\n            b) {\n        out = write(out,\n                    Result<T>{items, items + 1,\n                              static_cast<uint32_t>(v)});\n    }\n}\n";
 
     assert_eq!(format_exact(source, &FormatOptions::default()), expected,);
 }
@@ -3045,7 +3017,7 @@ fn braced_temporary_call_argument_after_condition_splits_closing_call() {
 #[test]
 fn long_braced_temporary_argument_after_condition_keeps_element_indent() {
     let source = "void f() {\n  if (a ||\n      b) {\n    out = write_escaped_cp(out,\n                           find_escape_result<Char>{v_array, v_array + 1,\n                                                     static_cast<uint32_t>(v)});\n  }\n}\n";
-    let expected = "void f() {\n    if (a ||\n            b) {\n        out = write_escaped_cp(out,\n                               find_escape_result<Char> {v_array, v_array + 1,\n                                       static_cast<uint32_t>(v)\n                                                        });\n    }\n}\n";
+    let expected = "void f() {\n    if (a ||\n            b) {\n        out = write_escaped_cp(out,\n                               find_escape_result<Char>{v_array, v_array + 1,\n                                       static_cast<uint32_t>(v)});\n    }\n}\n";
 
     assert_eq!(format_exact(source, &FormatOptions::default()), expected,);
 }
