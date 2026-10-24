@@ -960,19 +960,21 @@ fn assignment_logical_chain_preserves_tabbed_rhs_alignment() {
 }
 
 #[test]
-fn google_indent_classes_composes_with_indent_modifiers() {
-    let mut options = FormatOptions::default();
-    apply_command_line_args(
-        &mut options,
-        &["--style=google".to_string(), "--indent-classes".to_string()],
-    )
-    .expect("valid options");
-
-    // Explicit class and modifier indentation levels remain additive.
-    assert_eq!(
-        format_exact("class Item{public:int value;};\n", &options),
-        fixture!("class Item {", "    public:", "        int value;", "};",),
-    );
+fn explicit_indent_classes_overrides_the_modifier_indent_google_implies() {
+    // The style implies indent-modifiers and nothing more, so an explicit
+    // indent-classes takes over as it does from an explicit
+    // indent-modifiers, whichever comes first.
+    for args in [
+        ["--style=google", "--indent-classes"],
+        ["--indent-classes", "--style=google"],
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &args.map(String::from)).expect("valid options");
+        assert_eq!(
+            format_exact("class Item{public:int value;};\n", &options),
+            fixture!("class Item {", "    public:", "        int value;", "};",),
+        );
+    }
 }
 
 #[test]
