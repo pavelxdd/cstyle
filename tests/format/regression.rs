@@ -24515,3 +24515,52 @@ fn break_blocks_all_pads_a_function_try_block_as_any_try_block() {
     check(input, &args, expected);
     check(expected, &args, expected);
 }
+
+#[test]
+fn remove_braces_with_max_code_length_adds_no_blank_lines() {
+    // Short lines leave nothing to split, so the removed closers leave the
+    // chain as removing them does without a length limit.
+    let input = "int f(int v)\n{\n    if (v < 0) {\n        return -1;\n    } else if (v == 0) {\n        return 0;\n    } else {\n        return 1;\n    }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "int f(int v)\n{\n    if (v < 0)\n        return -1;\n    else if (v == 0)\n        return 0;\n    else\n        return 1;\n}\n",
+        ),
+        (
+            "--style=horstmann",
+            "int f(int v)\n{   if (v < 0)\n        return -1;\n    else if (v == 0)\n        return 0;\n    else\n        return 1;\n}\n",
+        ),
+    ] {
+        for limit in [None, Some("--max-code-length=60")] {
+            let args: Vec<&str> = [style, "--remove-braces"]
+                .into_iter()
+                .chain(limit)
+                .collect();
+            check(input, &args, expected);
+            check(expected, &args, expected);
+        }
+    }
+}
+
+#[test]
+fn break_one_line_headers_keeps_a_function_try_with_its_initializer_colon() {
+    // The initializers after `try` belong to the head, not to a statement
+    // run in after a header.
+    let input =
+        "Item::Item()\ntry : one(1), two(2) {\n    go();\n} catch (...) {\n    stop();\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "Item::Item()\ntry :\n    one(1), two(2)\n{\n    go();\n} catch (...)\n{\n    stop();\n}\n",
+        ),
+        (
+            "--style=lisp",
+            "Item::Item()\ntry : one(1), two(2) {\n    go(); }\ncatch (...) {\n    stop(); }\n",
+        ),
+    ] {
+        for args in [&[style][..], &[style, "--break-one-line-headers"][..]] {
+            check(input, args, expected);
+            check(expected, args, expected);
+        }
+    }
+}
