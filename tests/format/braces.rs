@@ -2621,3 +2621,23 @@ fn kr_macro_function_head_in_a_namespace_or_linkage_block_breaks_its_brace_like_
     assert_eq!(format_exact(namespace, &options), namespace);
     assert_eq!(format_exact(linkage, &options), linkage);
 }
+
+#[test]
+fn breaking_styles_break_a_list_brace_on_the_first_line_as_on_any_line() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=allman".to_owned()]).expect("valid options");
+    let source = "int values[] = {\n1, 2,\n};\nint more[] = {\n3, 4,\n};\n";
+    let expected = fixture!(
+        "int values[] =",
+        "{",
+        "    1, 2,",
+        "};",
+        "int more[] =",
+        "{",
+        "    3, 4,",
+        "};",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}

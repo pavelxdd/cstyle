@@ -2034,7 +2034,8 @@ fn indent_col1_comment_in_initializer_does_not_deepen_sibling() {
             &options,
         ),
         fixture!(
-            "static Item items[]= {",
+            "static Item items[]=",
+            "{",
             "    {",
             "        1,",
             "        // note",
@@ -2169,13 +2170,7 @@ fn horstmann_run_in_line_comment_is_idempotent() {
     )
     .expect("valid options");
     let input = fixture!("static Item items[]={", "{", "// note", "1,", "}", "};",);
-    let expected = fixture!(
-        "static Item items[]= {",
-        "  { // note",
-        "    1,",
-        "  }",
-        "};",
-    );
+    let expected = fixture!("static Item items[]=", "{ { // note", "    1,", "  }", "};",);
 
     let first = format_exact(input, &options);
     assert_eq!(first, expected);

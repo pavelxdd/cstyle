@@ -1027,7 +1027,8 @@ fn pad_operators_spaces_address_of_after_cast_in_initializer_braces() {
     assert_eq!(
         actual,
         fixture!(
-            "struct Config s = {",
+            "struct Config s =",
+            "{",
             "    .alpha = (uintptr_t) &value,",
             "    .beta = (uintptr_t) &other,",
             "};",

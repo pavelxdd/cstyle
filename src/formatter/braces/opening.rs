@@ -4431,7 +4431,6 @@ impl FormatEngine<'_> {
             if (break_mode
                 || (self.options.brace_style == BraceStyle::None
                     && self.token_input.token_begins_source_line))
-                && !self.output.is_empty()
                 && !self.is_nested_designated_init_field()
                 // Like any brace nested in an aggregate, a compound literal's
                 // keeps its place.

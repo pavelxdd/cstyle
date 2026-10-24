@@ -2383,7 +2383,7 @@ fn whitesmith_member_after_comment_following_nested_struct_keeps_member_column()
 
 #[test]
 fn vtk_file_scope_struct_array_keeps_brace_rows_at_its_rows() {
-    let input = "static const struct t tests[] = {\n    { /* a */\n        \"a\",\n        TRUE\n    },\n    { /* b */\n        \"b\",\n        FALSE\n    }\n};\n";
+    let input = "static const struct t tests[] =\n{\n    { /* a */\n        \"a\",\n        TRUE\n    },\n    { /* b */\n        \"b\",\n        FALSE\n    }\n};\n";
     check(input, &["--style=vtk"], input);
 }
 
@@ -2672,7 +2672,7 @@ fn ratliff_initializer_after_struct_close_nests_from_the_declaration() {
 fn nested_compound_literal_brace_rows_follow_the_style() {
     let ratliff = "static T a[] = {\n        {\n        .x = 1\n        },\n        {0}\n    };\nvoid f(void) {\n    g(&(T) {\n        .k = (S[]) {\n                {\n                .x = 1\n                },\n                {0}\n            },\n        });\n    }\n";
     check(ratliff, &["--style=ratliff"], ratliff);
-    let whitesmith = "static T a[] = {\n        {\n        .x = 1\n        },\n        {0}\n    };\nvoid f(void)\n    {\n    g(&(T)\n        {\n        .k = (S[])\n            {\n                {\n                .x = 1\n                },\n                {0}\n            },\n        });\n    }\n";
+    let whitesmith = "static T a[] =\n    {\n        {\n        .x = 1\n        },\n        {0}\n    };\nvoid f(void)\n    {\n    g(&(T)\n        {\n        .k = (S[])\n            {\n                {\n                .x = 1\n                },\n                {0}\n            },\n        });\n    }\n";
     check(whitesmith, &["--style=whitesmith"], whitesmith);
 }
 
@@ -4211,8 +4211,13 @@ fn case_block_initializer_rows_align_to_the_first_element() {
 #[test]
 fn every_style_runs_a_brace_into_a_nested_brace() {
     let input = "static const Node d = {\n  {{NULL}, LUA_VEMPTY,  /* value */\n   LUA_TDEADKEY, 0, {NULL}}  /* key */\n};\n";
-    let expected = "static const Node d = {\n    {   {NULL}, LUA_VEMPTY,  /* value */\n        LUA_TDEADKEY, 0, {NULL}\n    }  /* key */\n};\n";
-    for style in ["--style=1tbs", "--style=allman", "--style=kr"] {
+    let attached = "static const Node d = {\n    {   {NULL}, LUA_VEMPTY,  /* value */\n        LUA_TDEADKEY, 0, {NULL}\n    }  /* key */\n};\n";
+    let broken = attached.replacen(" = {", " =\n{", 1);
+    for (style, expected) in [
+        ("--style=1tbs", attached),
+        ("--style=allman", broken.as_str()),
+        ("--style=kr", attached),
+    ] {
         check(input, &[style], expected);
         check(expected, &[style], expected);
     }
@@ -4328,7 +4333,7 @@ fn vtk_initializer_brace_after_a_local_struct_stands_at_its_close() {
 #[test]
 fn vtk_breaks_multiline_rows_of_file_scope_arrays_a_level_in() {
     let input = "static ngx_command_t  cmds[] = {\n\n    { ngx_string(\"slice\"),\n      NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE1,\n      ngx_conf_set_size_slot,\n      0,\n      NULL },\n\n      ngx_null_command\n};\n\nstatic T x[] = {\n    { a, b },\n    { c,\n      d },\n};\n";
-    let expected = "static ngx_command_t  cmds[] = {\n\n        {\n        ngx_string(\"slice\"),\n        NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE1,\n        ngx_conf_set_size_slot,\n        0,\n        NULL\n        },\n\n    ngx_null_command\n};\n\nstatic T x[] =\n{\n    { a, b },\n        {\n        c,\n        d\n        },\n};\n";
+    let expected = "static ngx_command_t  cmds[] =\n{\n\n        {\n        ngx_string(\"slice\"),\n        NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE1,\n        ngx_conf_set_size_slot,\n        0,\n        NULL\n        },\n\n    ngx_null_command\n};\n\nstatic T x[] =\n{\n    { a, b },\n        {\n        c,\n        d\n        },\n};\n";
     check(input, &["--style=vtk"], expected);
     check(expected, &["--style=vtk"], expected);
 }
@@ -5586,7 +5591,7 @@ fn pico_runs_an_initializer_row_brace_into_its_block_comment() {
     check(
         input,
         &["--style=pico"],
-        "static const struct t tests[] = {\n    { \"a\", 1 },\n    {   /* query */\n        \"b\", 2 },\n    {   /* other */\n        \"c\", 3 },\n    { NULL, 0 } };\n",
+        "static const struct t tests[] =\n{   { \"a\", 1 },\n    {   /* query */\n        \"b\", 2 },\n    {   /* other */\n        \"c\", 3 },\n    { NULL, 0 } };\n",
     );
 }
 
@@ -5596,7 +5601,7 @@ fn horstmann_runs_an_initializer_row_brace_into_its_block_comment() {
     check(
         input,
         &["--style=horstmann"],
-        "static const struct t tests[] = {\n    { \"a\", 1 },\n    {   /* query */\n        \"b\", 2\n    },\n    {   /* other */\n        \"c\", 3\n    },\n    { NULL, 0 }\n};\n",
+        "static const struct t tests[] =\n{   { \"a\", 1 },\n    {   /* query */\n        \"b\", 2\n    },\n    {   /* other */\n        \"c\", 3\n    },\n    { NULL, 0 }\n};\n",
     );
 }
 
@@ -6711,7 +6716,7 @@ fn broken_compound_literal_brace_attaches_in_attaching_styles() {
 #[test]
 fn compound_literal_nested_in_an_initializer_keeps_its_brace_attached() {
     let input = "static S s = {\n    .args = (Arg[]) {\n        1,\n        {0},\n        {\n            3\n        },\n    },\n};\n";
-    let expected = "static S s = {\n    .args = (Arg[]) {\n        1,\n        {0},\n        {\n            3\n        },\n    },\n};\n";
+    let expected = "static S s =\n{\n    .args = (Arg[]) {\n        1,\n        {0},\n        {\n            3\n        },\n    },\n};\n";
     check(input, &["--style=allman"], expected);
     check(expected, &["--style=allman"], expected);
 }
@@ -6791,7 +6796,7 @@ fn compound_literal_nested_in_an_initializer_keeps_its_brace_gap() {
 #[test]
 fn whitesmith_last_brace_row_of_a_compound_literal_stands_with_the_rows() {
     let input = "static S s = {\n    .h = (H[]){\n        {1, 2},\n        {0}\n    },\n};\n";
-    let expected = "static S s = {\n    .h = (H[]){\n            {1, 2},\n            {0}\n        },\n    };\n";
+    let expected = "static S s =\n    {\n    .h = (H[]){\n            {1, 2},\n            {0}\n        },\n    };\n";
     check(input, &["--style=whitesmith"], expected);
     check(expected, &["--style=whitesmith"], expected);
 }
@@ -6873,16 +6878,10 @@ fn an_else_after_one_line_blocks_ignores_an_earlier_closed_block() {
 
 #[test]
 fn brace_rows_of_a_nested_compound_literal_stand_at_its_first_row() {
-    check(
-        "T info = {\n    .args = (A[]){\n        {   .name = \"condition\",\n            .subargs = (A[]){\n                {   .name = \"keepref\"\n                },\n                {   .name = \"x\"\n                },\n                {0}\n            }\n        }\n    }\n};\n",
-        &["--style=horstmann"],
-        "T info = {\n    .args = (A[]){\n        {   .name = \"condition\",\n            .subargs = (A[]){\n                {   .name = \"keepref\"\n                },\n                {   .name = \"x\"\n                },\n                {0}\n            }\n        }\n    }\n};\n",
-    );
-    check(
-        "T info = {\n    .args = (A[]){\n        {   .name = \"condition\",\n            .subargs = (A[]){\n                {   .name = \"keepref\" },\n                {   .name = \"x\" },\n                {0 } } } } };\n",
-        &["--style=pico"],
-        "T info = {\n    .args = (A[]){\n        {   .name = \"condition\",\n            .subargs = (A[]){\n                {   .name = \"keepref\" },\n                {   .name = \"x\" },\n                {0 } } } } };\n",
-    );
+    let horstmann = "T info =\n{   .args = (A[]){\n        {   .name = \"condition\",\n            .subargs = (A[]){\n                {   .name = \"keepref\"\n                },\n                {   .name = \"x\"\n                },\n                {0}\n            }\n        }\n    }\n};\n";
+    check(horstmann, &["--style=horstmann"], horstmann);
+    let pico = "T info =\n{   .args = (A[]){\n        {   .name = \"condition\",\n            .subargs = (A[]){\n                {   .name = \"keepref\" },\n                {   .name = \"x\" },\n                {0 } } } } };\n";
+    check(pico, &["--style=pico"], pico);
 }
 
 #[test]
@@ -7420,7 +7419,7 @@ fn removing_braces_keeps_a_comment_on_an_initializer_brace() {
     check(
         "static const struct spec certs[] = {\n  { /* a valid certificate */\n    \"MIIB\",\n    true\n  },\n};\n",
         &["--style=gnu", "--remove-braces"],
-        "static const struct spec certs[] = {\n    { /* a valid certificate */\n        \"MIIB\",\n        true\n    },\n};\n",
+        "static const struct spec certs[] =\n{\n    { /* a valid certificate */\n        \"MIIB\",\n        true\n    },\n};\n",
     );
 }
 
@@ -8211,9 +8210,13 @@ fn designator_row_after_index_initializer_in_same_function_takes_its_level() {
 
 #[test]
 fn index_group_closing_row_takes_its_initializer_level() {
-    let expected = "Item items[] = {\n    [0] = {\n        .value = 1,\n    },\n};\n";
-    let input = expected.replace("    },", "         },");
-    for style in ["--style=kr", "--style=allman"] {
+    let attached = "Item items[] = {\n    [0] = {\n        .value = 1,\n    },\n};\n";
+    let input = attached.replace("    },", "         },");
+    let broken = attached.replacen(" = {", " =\n{", 1);
+    for (style, expected) in [
+        ("--style=kr", attached),
+        ("--style=allman", broken.as_str()),
+    ] {
         check(&input, &[style, "--min-conditional-indent=0"], expected);
     }
 }
@@ -10059,11 +10062,11 @@ fn rows_of_a_comment_run_in_after_a_block_brace_follow_its_opener() {
     for (style, expected) in [
         (
             "--style=pico",
-            "int items[][2] = {\n    {   /* first row\n           second row */\n        1, 2 }, };\n",
+            "int items[][2] =\n{   {   /* first row\n           second row */\n        1, 2 }, };\n",
         ),
         (
             "--style=horstmann",
-            "int items[][2] = {\n    {   /* first row\n           second row */\n        1, 2\n    },\n};\n",
+            "int items[][2] =\n{   {   /* first row\n           second row */\n        1, 2\n    },\n};\n",
         ),
     ] {
         check(input, &[style], expected);
@@ -10106,7 +10109,7 @@ fn rows_of_a_comment_after_an_element_brace_left_of_it_stand_at_the_body() {
         (
             "int items[][2] = {\n  {  /* first\n\t* row\n ** row */\n 1, 2 },\n};\n",
             &["--style=gnu", "--indent=spaces=2"][..],
-            "int items[][2] = {\n  {  /* first\n    * row\n    ** row */\n    1, 2\n  },\n};\n",
+            "int items[][2] =\n{\n  {  /* first\n    * row\n    ** row */\n    1, 2\n  },\n};\n",
         ),
         (
             "int items[][2] = {\n {  /* first\n\t\t** row\n\t * row */\n  1, 2 },\n};\n",
@@ -11641,7 +11644,7 @@ fn pico_joins_a_closer_taking_the_joining_space_out_of_its_comment_gap() {
             "int t[][2] = {{\n    {{ 1,\n      2\n    }},{gap}/* c */\n    {{ 3,\n      4\n    }}{gap}/* d */\n}};\nstruct S {{\n    int a;\n}} s, t;{gap}/* e */\n"
         );
         let expected = format!(
-            "int t[][2] = {{\n    {{   1,\n        2 }},{output_gap}/* c */\n    {{   3,\n        4 }}{output_gap}/* d */\n}};\nstruct S\n{{   int a; }} s, t;{output_gap}/* e */\n"
+            "int t[][2] =\n{{   {{   1,\n        2 }},{output_gap}/* c */\n    {{   3,\n        4 }}{output_gap}/* d */\n}};\nstruct S\n{{   int a; }} s, t;{output_gap}/* e */\n"
         );
         check(&input, &["--style=pico"], &expected);
         check(&expected, &["--style=pico"], &expected);
@@ -11780,11 +11783,15 @@ fn an_element_opening_a_preprocessor_branch_after_one_without_a_comma_stands_wit
         "struct Item items[] = {\n#if A\n    {1, 2}\n#else\n    {3, 4},\n    {5, 6}\n#endif\n};\n";
     let block = "void f()\n{\n    static const struct Item items[] = {\n#if A\n        {1, 2}\n#else\n        {5, 6},\n        {7, 8}\n#endif\n    };\n}\n";
     for (style, input, expected) in [
-        ("vtk", file_scope, file_scope),
+        (
+            "vtk",
+            file_scope,
+            "struct Item items[] =\n{\n#if A\n    {1, 2}\n#else\n    {3, 4},\n    {5, 6}\n#endif\n};\n",
+        ),
         (
             "whitesmith",
             file_scope,
-            "struct Item items[] = {\n#if A\n        {1, 2}\n#else\n        {3, 4},\n        {5, 6}\n#endif\n    };\n",
+            "struct Item items[] =\n    {\n#if A\n        {1, 2}\n#else\n        {3, 4},\n        {5, 6}\n#endif\n    };\n",
         ),
         (
             "ratliff",
@@ -11824,11 +11831,11 @@ fn vtk_sets_one_line_element_rows_at_the_rows_and_broken_element_braces_past_the
     for (input, expected) in [
         (
             "static Item items[] = {\n    { name(\"a\"), NULL, first,\n      0, 0 },\n\n    { name(\"b\"), NULL, second, 0, 0 },\n\n    { name(\"c\"), NULL, third, 0, 0 },\n    { name(\"d\"), NULL,\n      fourth, 0, 0 },\n    { name(\"e\"), NULL, fifth, 0, 0 },\n};\n",
-            "static Item items[] = {\n        {\n        name(\"a\"), NULL, first,\n        0, 0\n        },\n\n    { name(\"b\"), NULL, second, 0, 0 },\n\n    { name(\"c\"), NULL, third, 0, 0 },\n        {\n        name(\"d\"), NULL,\n        fourth, 0, 0\n        },\n    { name(\"e\"), NULL, fifth, 0, 0 },\n};\n",
+            "static Item items[] =\n{\n        {\n        name(\"a\"), NULL, first,\n        0, 0\n        },\n\n    { name(\"b\"), NULL, second, 0, 0 },\n\n    { name(\"c\"), NULL, third, 0, 0 },\n        {\n        name(\"d\"), NULL,\n        fourth, 0, 0\n        },\n    { name(\"e\"), NULL, fifth, 0, 0 },\n};\n",
         ),
         (
             "static Item items[] = {\n    { name(\"b\"), NULL, second, 0, 0 },\n    { name(\"d\"), NULL,\n      fourth, 0, 0 },\n    { name(\"e\"), NULL, fifth, 0, 0 },\n};\n",
-            "static Item items[] = {\n    { name(\"b\"), NULL, second, 0, 0 },\n        {\n        name(\"d\"), NULL,\n        fourth, 0, 0\n        },\n    { name(\"e\"), NULL, fifth, 0, 0 },\n};\n",
+            "static Item items[] =\n{\n    { name(\"b\"), NULL, second, 0, 0 },\n        {\n        name(\"d\"), NULL,\n        fourth, 0, 0\n        },\n    { name(\"e\"), NULL, fifth, 0, 0 },\n};\n",
         ),
     ] {
         check(input, &["--style=vtk"], expected);
@@ -12069,7 +12076,7 @@ fn tab_indents_fill_an_element_brace_run_in_to_rows_below_with_a_tab() {
 #[test]
 fn vtk_sets_a_branch_row_after_a_broken_element_at_the_aggregate_rows() {
     let input = "static const struct Item items[] = {\n#if A\n    {1, 2}\n#elif B\n    {1, 2},\n    {3,\n     4}\n#else\n    {5, 6},\n    {7, 8}\n#endif\n};\n";
-    let expected = "static const struct Item items[] = {\n#if A\n    {1, 2}\n#elif B\n    {1, 2},\n    {\n        3,\n        4\n    }\n#else\n    {5, 6},\n    {7, 8}\n#endif\n};\n";
+    let expected = "static const struct Item items[] =\n{\n#if A\n    {1, 2}\n#elif B\n    {1, 2},\n    {\n        3,\n        4\n    }\n#else\n    {5, 6},\n    {7, 8}\n#endif\n};\n";
     check(input, &["--style=vtk"], expected);
     check(expected, &["--style=vtk"], expected);
 }
@@ -12532,12 +12539,12 @@ fn a_comment_after_a_list_brace_leading_its_line_takes_the_run_in_fill() {
         (
             "{ /* note */ // more",
             &["--style=horstmann", "--indent=tab"][..],
-            "static const struct Item items[] = {\n\t{\t\"first\",\n\t\t\"one\", 0, 1\n\t},\n\t{\t/* note */ // more\n\t\t\"second\",\n\t\t\"two\", 0, 2\n\t},\n};\n",
+            "static const struct Item items[] =\n{\t{\t\"first\",\n\t\t\"one\", 0, 1\n\t},\n\t{\t/* note */ // more\n\t\t\"second\",\n\t\t\"two\", 0, 2\n\t},\n};\n",
         ),
         (
             "{ /* note */ /* more */",
             &["--style=pico"][..],
-            "static const struct Item items[] = {\n    {   \"first\",\n        \"one\", 0, 1 },\n    {   /* note */ /* more */\n        \"second\",\n        \"two\", 0, 2 }, };\n",
+            "static const struct Item items[] =\n{   {   \"first\",\n        \"one\", 0, 1 },\n    {   /* note */ /* more */\n        \"second\",\n        \"two\", 0, 2 }, };\n",
         ),
     ] {
         check(&input.replace("%s", rest), args, expected);
@@ -12582,17 +12589,17 @@ fn a_block_comment_after_a_list_brace_leading_its_line_keeps_the_row_where_brace
         (
             "{  /* note */ {1, 2},",
             &["--style=allman"][..],
-            "static const struct Item items[] = {\n    {\n        \"first\",\n        \"one\", 0, 1\n    },\n    {  /* note */ {1, 2},\n        \"second\",\n        \"two\", 0, 2\n    },\n};\n",
+            "static const struct Item items[] =\n{\n    {\n        \"first\",\n        \"one\", 0, 1\n    },\n    {  /* note */ {1, 2},\n        \"second\",\n        \"two\", 0, 2\n    },\n};\n",
         ),
         (
             "{\t/* note */ \"zero\", /* more */",
             &["--style=gnu", "--indent=tab"][..],
-            "static const struct Item items[] = {\n\t{\n\t\t\"first\",\n\t\t\"one\", 0, 1\n\t},\n\t{\t/* note */ \"zero\", /* more */\n\t\t\"second\",\n\t\t\"two\", 0, 2\n\t},\n};\n",
+            "static const struct Item items[] =\n{\n\t{\n\t\t\"first\",\n\t\t\"one\", 0, 1\n\t},\n\t{\t/* note */ \"zero\", /* more */\n\t\t\"second\",\n\t\t\"two\", 0, 2\n\t},\n};\n",
         ),
         (
             "{ /* note */ \"zero\",",
             &["--style=whitesmith", "--indent=spaces=2"][..],
-            "static const struct Item items[] = {\n    {\n    \"first\",\n    \"one\", 0, 1\n    },\n    { /* note */ \"zero\",\n    \"second\",\n    \"two\", 0, 2\n    },\n  };\n",
+            "static const struct Item items[] =\n  {\n    {\n    \"first\",\n    \"one\", 0, 1\n    },\n    { /* note */ \"zero\",\n    \"second\",\n    \"two\", 0, 2\n    },\n  };\n",
         ),
     ] {
         check(&input.replace("%s", rest), args, expected);
@@ -12607,17 +12614,17 @@ fn rows_of_an_element_brace_a_block_comment_leads_stand_a_level_in_under_vtk() {
         (
             "{\n    /* note */ \"zero\",",
             &["--style=vtk"][..],
-            "static const struct Item items[] = {\n    {\n        \"first\",\n        \"one\", 0, 1\n    },\n    {\n        /* note */ \"zero\",\n        \"third\", 3\n    },\n};\n",
+            "static const struct Item items[] =\n{\n    {\n        \"first\",\n        \"one\", 0, 1\n    },\n    {\n        /* note */ \"zero\",\n        \"third\", 3\n    },\n};\n",
         ),
         (
             "{ /* note */ \"zero\",",
             &["--style=vtk"][..],
-            "static const struct Item items[] = {\n    {\n        \"first\",\n        \"one\", 0, 1\n    },\n    { /* note */ \"zero\",\n        \"third\", 3\n    },\n};\n",
+            "static const struct Item items[] =\n{\n    {\n        \"first\",\n        \"one\", 0, 1\n    },\n    { /* note */ \"zero\",\n        \"third\", 3\n    },\n};\n",
         ),
         (
             "{\n    /* note */ \"zero\",",
             &["--style=vtk", "--indent=tab"][..],
-            "static const struct Item items[] = {\n\t{\n\t\t\"first\",\n\t\t\"one\", 0, 1\n\t},\n\t{\n\t\t/* note */ \"zero\",\n\t\t\"third\", 3\n\t},\n};\n",
+            "static const struct Item items[] =\n{\n\t{\n\t\t\"first\",\n\t\t\"one\", 0, 1\n\t},\n\t{\n\t\t/* note */ \"zero\",\n\t\t\"third\", 3\n\t},\n};\n",
         ),
     ] {
         check(&input.replace("%s", rest), args, expected);
@@ -12632,12 +12639,12 @@ fn rows_of_a_comment_after_an_element_brace_take_its_body_under_vtk_with_tabs() 
         (
             "{ /* note\n       more */",
             &["--style=vtk", "--indent=tab"][..],
-            "static const struct Item items[] = {\n\t{\n\t\t\"first\",\n\t\t\"one\", 0, 1\n\t},\n\t{ /* note\n\t\t   more */\n\t\t\"third\", 3\n\t},\n};\n",
+            "static const struct Item items[] =\n{\n\t{\n\t\t\"first\",\n\t\t\"one\", 0, 1\n\t},\n\t{ /* note\n\t\t   more */\n\t\t\"third\", 3\n\t},\n};\n",
         ),
         (
             "{ /* note\n       more */",
             &["--style=vtk", "--indent=force-tab=4"][..],
-            "static const struct Item items[] = {\n\t{\n\t\t\"first\",\n\t\t\"one\", 0, 1\n\t},\n\t{ /* note\n\t\t   more */\n\t\t\"third\", 3\n\t},\n};\n",
+            "static const struct Item items[] =\n{\n\t{\n\t\t\"first\",\n\t\t\"one\", 0, 1\n\t},\n\t{ /* note\n\t\t   more */\n\t\t\"third\", 3\n\t},\n};\n",
         ),
     ] {
         check(&input.replace("%s", rest), args, expected);
@@ -12657,12 +12664,12 @@ fn a_row_after_a_nested_list_and_a_comment_stands_with_the_rows() {
         (
             "/* note */",
             &["--style=whitesmith"][..],
-            "static const struct Item items[] = {\n        {\n        \"first\",\n        \"one\", 0, 1\n        },\n        {\n            {1, 2}, /* note */\n        \"third\", 3\n        },\n    };\n",
+            "static const struct Item items[] =\n    {\n        {\n        \"first\",\n        \"one\", 0, 1\n        },\n        {\n            {1, 2}, /* note */\n        \"third\", 3\n        },\n    };\n",
         ),
         (
             "/* note */",
             &["--style=vtk"][..],
-            "static const struct Item items[] = {\n    {\n        \"first\",\n        \"one\", 0, 1\n    },\n    {\n        {1, 2}, /* note */\n        \"third\", 3\n    },\n};\n",
+            "static const struct Item items[] =\n{\n    {\n        \"first\",\n        \"one\", 0, 1\n    },\n    {\n        {1, 2}, /* note */\n        \"third\", 3\n    },\n};\n",
         ),
         (
             "// note",
@@ -12971,12 +12978,12 @@ fn a_space_pico_sets_in_an_element_row_a_brace_runs_into_takes_from_its_comment_
     check(
         narrow,
         &["--style=pico"],
-        "static const Node dummy = {\n    {   {NULL }, EMPTY, /* value */\n        DEADKEY, 0, {NULL } } /* key */\n};\n",
+        "static const Node dummy =\n{   {   {NULL }, EMPTY, /* value */\n        DEADKEY, 0, {NULL } } /* key */\n};\n",
     );
     check(
         wide,
         &["--style=pico"],
-        "static const Node dummy = {\n    {   {NULL }, EMPTY,    /* value */\n        DEADKEY, 0, {NULL } } /* key */\n};\n",
+        "static const Node dummy =\n{   {   {NULL }, EMPTY,    /* value */\n        DEADKEY, 0, {NULL } } /* key */\n};\n",
     );
     check(
         wide,
@@ -13192,7 +13199,7 @@ fn a_nested_switch_body_after_an_element_table_stands_a_level_past_its_label() {
     check(
         input,
         &["--style=allman"],
-        "static const struct Item items[] = {\n    { 1 },\n};\n\nvoid f()\n{\n    switch (kind)\n    {\n    case 1:\n    {\n        switch (other)\n        {\n        case 2:\n            value = 2;\n            break;\n        }\n        break;\n    }\n    }\n}\n",
+        "static const struct Item items[] =\n{\n    { 1 },\n};\n\nvoid f()\n{\n    switch (kind)\n    {\n    case 1:\n    {\n        switch (other)\n        {\n        case 2:\n            value = 2;\n            break;\n        }\n        break;\n    }\n    }\n}\n",
     );
 }
 
@@ -13965,7 +13972,7 @@ fn an_element_brace_after_a_comment_alone_opens_its_row_as_one_leading_it() {
     check(
         input,
         &["--style=allman"],
-        "static const struct Item items[] = {\n    {1, 2},\n    /* note */ {\n        3,\n        4\n    },\n    {\n        5,\n        6\n    }\n};\n",
+        "static const struct Item items[] =\n{\n    {1, 2},\n    /* note */ {\n        3,\n        4\n    },\n    {\n        5,\n        6\n    }\n};\n",
     );
 }
 
@@ -15202,7 +15209,7 @@ fn indented_brace_styles_set_a_brace_row_a_comment_leads_with_the_brace_rows() {
     check(
         input,
         &["--style=whitesmith"],
-        "static const struct Item items[] = {\n        {1, 2},\n        /* note */ {\n        3,\n        4\n        },\n        {\n        5,\n        6\n        }\n    };\n",
+        "static const struct Item items[] =\n    {\n        {1, 2},\n        /* note */ {\n        3,\n        4\n        },\n        {\n        5,\n        6\n        }\n    };\n",
     );
     check(
         input,
@@ -15571,12 +15578,12 @@ fn a_comment_line_among_call_arguments_in_a_list_stands_at_the_arguments() {
 
 #[test]
 fn a_comment_in_a_later_branch_of_list_rows_stands_at_the_rows_values_take() {
-    let input = "static const struct Item items[] = {\n#if FEATURE\n    {1, 2}\n#else\n    // note\n    {1, 2},\n#endif\n};\n";
+    let input = "static const struct Item items[] =\n{\n#if FEATURE\n    {1, 2}\n#else\n    // note\n    {1, 2},\n#endif\n};\n";
     check(input, &["--style=vtk"], input);
     check(
         input,
         &["--style=whitesmith"],
-        "static const struct Item items[] = {\n#if FEATURE\n        {1, 2}\n#else\n    // note\n        {1, 2},\n#endif\n    };\n",
+        "static const struct Item items[] =\n    {\n#if FEATURE\n        {1, 2}\n#else\n    // note\n        {1, 2},\n#endif\n    };\n",
     );
 }
 
@@ -16165,7 +16172,9 @@ fn vtk_closes_each_group_of_a_file_scope_aggregate_list_at_its_brace() {
     // row closing one group and opening the next stands at the braces, as
     // the last closer does.
     let input = "static const struct Item items[] = {\n    {\n        1, 2\n    }, {\n        3, 4\n    }\n};\n";
-    check(input, &["--style=vtk"], input);
+    let broken = input.replacen(" = {", " =\n{", 1);
+    check(input, &["--style=vtk"], &broken);
+    check(&broken, &["--style=vtk"], &broken);
     check(input, &["--style=kr"], input);
 }
 
@@ -16360,7 +16369,7 @@ fn a_row_after_a_row_holding_a_closed_inner_list_stands_at_its_own_list() {
 #[test]
 fn a_list_running_in_past_an_element_of_a_nested_list_breaks_after_its_brace() {
     let input = "int list[][2] = {\n    {1, 2}, {3,\n             4}\n};\n";
-    let expected = "int list[][2] = {\n    {1, 2}, {\n        3,\n        4\n    }\n};\n";
+    let expected = "int list[][2] =\n{\n    {1, 2}, {\n        3,\n        4\n    }\n};\n";
     check(input, &["--style=allman"], expected);
     check(expected, &["--style=allman"], expected);
 }
@@ -16518,7 +16527,7 @@ fn a_comment_led_brace_row_sets_its_branch_body_column_for_the_next_branch() {
     check(
         input,
         &["--style=whitesmith"],
-        "static const struct Item items[] = {\n#if FEATURE\n        /* note */ {1, 2}\n#elif OTHER\n        {1, 2},\n        {3, 4}\n#endif\n    };\n",
+        "static const struct Item items[] =\n    {\n#if FEATURE\n        /* note */ {1, 2}\n#elif OTHER\n        {1, 2},\n        {3, 4}\n#endif\n    };\n",
     );
 }
 
@@ -16987,7 +16996,7 @@ fn vtk_keeps_designator_rows_after_an_indented_nested_closer_at_their_level() {
     check(
         input,
         &["--style=vtk"],
-        "static const struct Config config = {\n    .items = {\n        [FIRST] = {\n            .type = 1,\n            .mode = 2,\n            },\n        [SECOND] = {\n            .type = 1,\n            },\n    },\n};\n",
+        "static const struct Config config =\n{\n    .items = {\n        [FIRST] = {\n            .type = 1,\n            .mode = 2,\n            },\n        [SECOND] = {\n            .type = 1,\n            },\n    },\n};\n",
     );
 }
 
@@ -17253,16 +17262,16 @@ fn a_comma_between_template_arguments_ends_no_declarator() {
 #[test]
 fn indented_directives_before_a_brace_row_the_style_sets_in_stand_at_the_list_body() {
     let input = "static const struct Item items[] = {\n    {1, 2},\n#ifdef OTHER\n    {5, 6},\n#endif\n    {7, 8}\n};\n";
-    let expected = "static const struct Item items[] = {\n        {1, 2},\n    #ifdef OTHER\n        {5, 6},\n    #endif\n        {7, 8}\n    };\n";
+    let attached = "static const struct Item items[] = {\n        {1, 2},\n    #ifdef OTHER\n        {5, 6},\n    #endif\n        {7, 8}\n    };\n";
     check(
         input,
         &["--style=whitesmith", "--indent-preproc-cond"],
-        expected,
+        &attached.replacen(" = {", " =\n    {", 1),
     );
     check(
         input,
         &["--style=ratliff", "--indent-preproc-cond"],
-        expected,
+        attached,
     );
 }
 
@@ -17272,7 +17281,7 @@ fn vtk_indents_a_directive_after_a_branch_of_broken_aggregate_rows_at_the_rows()
     check(
         input,
         &["--style=vtk", "--indent-preproc-cond"],
-        "static const struct Item items[] = {\n    #if FEATURE\n    {1, 2}\n    #elif OTHER\n    {1, 2},\n    {\n        3,\n        4\n    }\n    #else\n    #ifdef FEATURE\n    {5, 6},\n    #endif\n    {7, 8}\n    #endif\n};\n",
+        "static const struct Item items[] =\n{\n    #if FEATURE\n    {1, 2}\n    #elif OTHER\n    {1, 2},\n    {\n        3,\n        4\n    }\n    #else\n    #ifdef FEATURE\n    {5, 6},\n    #endif\n    {7, 8}\n    #endif\n};\n",
     );
 }
 
@@ -17808,8 +17817,9 @@ fn run_in_styles_run_a_nested_first_row_into_a_compound_literals_broken_brace() 
 #[test]
 fn a_list_opened_mid_row_of_a_broken_list_breaks_after_its_brace_when_it_spans_rows() {
     let input = "int t[] = {\n    10, { 11,\n          12 },\n    13,\n};\n";
-    let expected = "int t[] = {\n    10, {\n        11,\n        12\n    },\n    13,\n};\n";
-    for style in ["--style=kr", "--style=gnu"] {
+    let attached = "int t[] = {\n    10, {\n        11,\n        12\n    },\n    13,\n};\n";
+    let broken = attached.replacen(" = {", " =\n{", 1);
+    for (style, expected) in [("--style=kr", attached), ("--style=gnu", broken.as_str())] {
         check(input, &[style], expected);
         check(expected, &[style], expected);
     }
@@ -18618,7 +18628,7 @@ fn rows_of_a_designator_value_list_run_in_after_its_brace_stand_a_level_in() {
     // Styles running a list's first element in after its brace set the
     // rows after it a level in, designators or values alike.
     let input = "struct Config value = {\n    .outer = { 1,\n               2 },\n    .two = { .a = 1,\n             .b = 2 },\n    .three = { .a = { 1 },\n               .b = 2 },\n    .last = 3,\n};\n";
-    let expected = "struct Config value = {\n    .outer = { 1,\n        2\n    },\n    .two = { .a = 1,\n        .b = 2\n    },\n    .three = { .a = { 1 },\n        .b = 2\n    },\n    .last = 3,\n};\n";
+    let expected = "struct Config value =\n{   .outer = { 1,\n        2\n    },\n    .two = { .a = 1,\n        .b = 2\n    },\n    .three = { .a = { 1 },\n        .b = 2\n    },\n    .last = 3,\n};\n";
     check(input, &["--style=horstmann"], expected);
     check(expected, &["--style=horstmann"], expected);
 }
@@ -18873,7 +18883,7 @@ fn run_in_styles_level_string_rows_of_a_nested_list_as_other_rows() {
         let input =
             format!("Item value[] = {{\n    [0] = {{ {first},\n            {second} }},\n}};\n");
         let expected =
-            format!("Item value[] = {{\n    [0] = {{ {first},\n        {second}\n    }},\n}};\n");
+            format!("Item value[] =\n{{   [0] = {{ {first},\n        {second}\n    }},\n}};\n");
         check(&input, &["--style=horstmann"], &expected);
         check(&expected, &["--style=horstmann"], &expected);
     }
@@ -19134,7 +19144,7 @@ fn vtk_keeps_a_file_scope_row_a_mid_row_list_breaks_at_the_rows() {
     // rows of the same list.
     let input = "int table[][2] = {\n    {1, 2}, {3,\n             4},\n    {5, 6}\n};\n";
     let expected =
-        "int table[][2] = {\n    {1, 2}, {\n        3,\n        4\n    },\n    {5, 6}\n};\n";
+        "int table[][2] =\n{\n    {1, 2}, {\n        3,\n        4\n    },\n    {5, 6}\n};\n";
     check(input, &["--style=vtk"], expected);
 }
 
@@ -19503,7 +19513,7 @@ fn a_lambda_in_a_brace_list_opens_its_body_as_in_a_call() {
     let input = "Handler handlers[] = {\n    { 1, [] {\n        go();\n    } },\n    { 2, [](int x) {\n        go(x);\n    } },\n};\nvoid f()\n{\n    Handler h[] = {\n        { 2, [](int x) {\n            go(x);\n        } },\n    };\n    call({ [] {\n        go();\n    } });\n}\n";
     let expected = "Handler handlers[] = {\n    {\n        1, [] {\n            go();\n        }\n    },\n    {\n        2, [](int x) {\n            go(x);\n        }\n    },\n};\nvoid f()\n{\n    Handler h[] = {\n        {\n            2, [](int x) {\n                go(x);\n            }\n        },\n    };\n    call({ [] {\n            go();\n        } });\n}\n";
     check(input, &["--style=kr"], expected);
-    let expected = "Handler handlers[] = {\n    {\n        1, [] {\n            go();\n        }\n    },\n    {\n        2, [](int x) {\n            go(x);\n        }\n    },\n};\nvoid f()\n{\n    Handler h[] =\n    {\n        {\n            2, [](int x) {\n                go(x);\n            }\n        },\n    };\n    call({ [] {\n            go();\n        } });\n}\n";
+    let expected = "Handler handlers[] =\n{\n    {\n        1, [] {\n            go();\n        }\n    },\n    {\n        2, [](int x) {\n            go(x);\n        }\n    },\n};\nvoid f()\n{\n    Handler h[] =\n    {\n        {\n            2, [](int x) {\n                go(x);\n            }\n        },\n    };\n    call({ [] {\n            go();\n        } });\n}\n";
     check(input, &["--style=allman"], expected);
 }
 
@@ -19642,10 +19652,10 @@ fn a_goto_label_block_on_an_indented_case_line_keeps_the_case_column() {
 
 #[test]
 fn vtk_keeps_comment_led_rows_of_a_flush_file_scope_list_at_its_rows() {
-    let input = "static const Item items[2] = {\n    /* 0 */ { 1, 0 },\n    { 1, 1 },\n};\n";
+    let input = "static const Item items[2] =\n{\n    /* 0 */ { 1, 0 },\n    { 1, 1 },\n};\n";
     check(input, &["--style=vtk"], input);
     let input =
-        "static const Item items[2] = {\n    /* 0 */ { 1, 0 },\n    /* 1 */ { 1, 1 },\n};\n";
+        "static const Item items[2] =\n{\n    /* 0 */ { 1, 0 },\n    /* 1 */ { 1, 1 },\n};\n";
     check(input, &["--style=vtk"], input);
 }
 
@@ -19765,7 +19775,7 @@ fn rows_inside_and_after_a_comment_led_multi_line_brace_row_stand_as_without_the
     check(
         input,
         &["--style=vtk"],
-        "static const Item items[2] = {\n        /* 0 */ {\n        1,\n        2\n        },\n    { 3, 4 },\n};\n",
+        "static const Item items[2] =\n{\n        /* 0 */ {\n        1,\n        2\n        },\n    { 3, 4 },\n};\n",
     );
 }
 
@@ -23070,10 +23080,11 @@ fn a_compound_literal_among_the_elements_of_a_split_list_keeps_its_brace_gap() {
 #[test]
 fn indented_brace_styles_set_the_brace_rows_of_a_nested_list_a_level_past_its_values() {
     let input = "static S s = {\n    3, {\n        {4},\n        {5}\n    },\n    .k = {\n        {4},\n        {5}\n    },\n    .m = {\n        4,\n        5\n    },\n};\n";
-    let expected = "static S s = {\n    3, {\n            {4},\n            {5}\n        },\n    .k = {\n            {4},\n            {5}\n        },\n    .m = {\n        4,\n        5\n        },\n    };\n";
-    check(input, &["--style=whitesmith"], expected);
-    check(expected, &["--style=whitesmith"], expected);
-    check(input, &["--style=ratliff"], expected);
+    let attached = "static S s = {\n    3, {\n            {4},\n            {5}\n        },\n    .k = {\n            {4},\n            {5}\n        },\n    .m = {\n        4,\n        5\n        },\n    };\n";
+    let broken = attached.replacen(" = {", " =\n    {", 1);
+    check(input, &["--style=whitesmith"], &broken);
+    check(&broken, &["--style=whitesmith"], &broken);
+    check(input, &["--style=ratliff"], attached);
 }
 
 #[test]

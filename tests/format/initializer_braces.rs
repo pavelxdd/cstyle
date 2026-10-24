@@ -1486,7 +1486,8 @@ fn formats_multiline_arrays_without_comma_continuation_overindent() {
     assert_eq!(
         actual,
         fixture!(
-            "int a[] = {",
+            "int a[] =",
+            "{",
             "    1,",
             "    2",
             "};",
@@ -1512,7 +1513,8 @@ fn formats_multiline_compound_literals_without_comma_continuation_overindent() {
     assert_eq!(
         actual,
         fixture!(
-            "struct S s = (struct S) {",
+            "struct S s = (struct S)",
+            "{",
             "    .x = 1,",
             "    .y = 2 // keep",
             "};",
@@ -3224,9 +3226,10 @@ fn range_for_braced_init_list_on_own_line_attaches_to_colon_header() {
 #[test]
 fn indented_brace_styles_indent_nested_initializer_braces() {
     let input = "static char values[A][B] = {\n\t/* row */\n\t{1, 2},\n};\n";
-    let expected = "static char values[A][B] = {\n    /* row */\n        {1, 2},\n    };\n";
+    let attached = "static char values[A][B] = {\n    /* row */\n        {1, 2},\n    };\n";
+    let broken = attached.replacen(" = {", " =\n    {", 1);
 
-    for style in ["whitesmith", "ratliff"] {
+    for (style, expected) in [("whitesmith", broken.as_str()), ("ratliff", attached)] {
         let mut options = FormatOptions::default();
         apply_command_line_args(&mut options, &[format!("--style={style}")])
             .expect("valid options");
@@ -3242,7 +3245,8 @@ fn indented_brace_styles_align_nested_initializer_rows_to_inner_brace() {
         (
             "whitesmith",
             fixture!(
-                "static Item items[]= {",
+                "static Item items[]=",
+                "    {",
                 "        {",
                 "        1,",
                 "        2,",
@@ -3253,7 +3257,8 @@ fn indented_brace_styles_align_nested_initializer_rows_to_inner_brace() {
         (
             "vtk",
             fixture!(
-                "static Item items[]= {",
+                "static Item items[]=",
+                "{",
                 "        {",
                 "        1,",
                 "        2,",
@@ -3845,7 +3850,8 @@ fn designated_element_after_a_comment_keeps_the_element_column() {
 fn whitesmith_indents_the_closing_brace_of_a_nested_designated_element() {
     let options = options_from_args(&["--style=whitesmith"]);
     let source = fixture!(
-        "static const struct s t[] = {",
+        "static const struct s t[] =",
+        "    {",
         "    [A] = {",
         "        .type = 1,",
         "        },",
@@ -3976,7 +3982,8 @@ fn whitesmith_brace_row_after_a_directive_stands_past_the_plain_rows() {
     apply_command_line_args(&mut options, &["--style=whitesmith".to_owned()])
         .expect("valid options");
     let source = fixture!(
-        "static const struct f table[] = {",
+        "static const struct f table[] =",
+        "    {",
         "    FEATURE(\"a\", NULL, 1),",
         "#ifdef X",
         "    FEATURE(\"b\", NULL, 2),",
@@ -3993,7 +4000,8 @@ fn vtk_last_split_brace_row_after_a_one_line_row_stays_at_the_rows() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=vtk".to_owned()]).expect("valid options");
     let source = fixture!(
-        "static const struct testparams testparams[] = {",
+        "static const struct testparams testparams[] =",
+        "{",
         "    { F_A,  CURLE_OK },",
         "    {",
         "        F_RESUME | F_HTTP416,",
@@ -4542,7 +4550,7 @@ fn a_comment_after_a_list_brace_leading_its_line_opens_the_list_rows() {
         ),
         (
             "--style=horstmann",
-            "int items[][2] = {\n    {   /* c */\n        1, 2\n    },\n    {   // d\n        3, 4\n    },\n    {   /* e\n           f */\n        5, 6\n    },\n};\nint more[] =\n{   // g\n    7\n};\n",
+            "int items[][2] =\n{   {   /* c */\n        1, 2\n    },\n    {   // d\n        3, 4\n    },\n    {   /* e\n           f */\n        5, 6\n    },\n};\nint more[] =\n{   // g\n    7\n};\n",
         ),
     ] {
         let mut options = FormatOptions::default();

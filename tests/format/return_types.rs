@@ -503,7 +503,8 @@ fn attach_return_type_does_not_join_initializer_continuations() {
     assert_eq!(
         actual,
         fixture!(
-            "static const option_t options[] = {",
+            "static const option_t options[] =",
+            "{",
             "    {",
             "        1, MAX_CONNECTIONS, 0, 0,",
             "        offsetof(server_t, max_connections)",
