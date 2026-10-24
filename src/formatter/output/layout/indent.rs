@@ -9,9 +9,7 @@ use crate::formatter::constructs::headers::{
 use crate::formatter::constructs::typedefs::immediate_typedef_template_indent_spaces;
 use crate::formatter::constructs::{labels, switch_cases};
 use crate::formatter::continuation::call_arguments::callee_name_start_before_open;
-use crate::formatter::continuation::operator_chains::{
-    assignment_value_column, inline_stream_opener_argument_indent_spaces,
-};
+use crate::formatter::continuation::operator_chains::inline_stream_opener_argument_indent_spaces;
 use crate::formatter::continuation::split_declaration_assignment_indent_spaces;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{self, CommentKind, Token};
@@ -330,18 +328,11 @@ impl FormatEngine<'_> {
             return None;
         }
         let column = array_bound_operator_column(trimmed)?;
-        let lead = leading_visual_width(previous, self.options.tab_width);
-        if column.saturating_sub(lead) <= self.options.max_continuation_indent {
-            return Some(column);
-        }
-        // Past the maximum it continues at the value an assignment gives,
-        // else two levels in, as a paren does.
-        let code = self.output.code_trimmed_of(previous);
-        Some(
-            assignment_value_column(code, self.options.tab_width)
-                .filter(|&value| value.saturating_sub(lead) <= self.options.max_continuation_indent)
-                .unwrap_or(lead + 2 * self.options.indent_width),
-        )
+        // Past the maximum the continuation worked out for the row holds,
+        // as it weighs the parens around the subscript.
+        let statement_base = self.continuation_base_indent() * self.options.indent_width;
+        (column.saturating_sub(statement_base) <= self.options.max_continuation_indent)
+            .then_some(column)
     }
 
     pub(crate) fn adjusted_line_indent_delta(&self, adjusted: &str) -> usize {

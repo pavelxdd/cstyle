@@ -1312,6 +1312,9 @@ impl FormatEngine<'_> {
             }
         }
 
+        if let Some(spaces) = self.open_subscript_indent_spaces() {
+            return ContinuationIndent::Spaces(spaces);
+        }
         if !self.options.indent_after_parens
             && self.layout.frame_stack.active_delimiter().is_some()
             && let Some(spaces) = self.layout.nesting.current_continuation_indent_spaces()
@@ -1337,39 +1340,6 @@ impl FormatEngine<'_> {
             if let Some(spaces) = self.stream_operator_indent_spaces() {
                 return ContinuationIndent::Spaces(spaces);
             }
-        }
-
-        // A subscript left open aligns the next line past its bracket, as
-        // astyle counts brackets as parentheses.
-        if !self.options.indent_after_parens
-            && let line = self.current.trimmed_end()
-            && let Some(open) = self.open_paren_column_of(line)
-            && line[open..].starts_with('[')
-            // An Objective-C message aligns its own way.
-            && self.layout.frame_stack.bracket_depth() > 0
-            && !self.layout.objc.message_active
-            && line[..open]
-                .chars()
-                .next_back()
-                .is_some_and(|ch| ch == ']' || ch == '_' || ch.is_alphanumeric())
-        {
-            let indent = self.current_line_indent_spaces();
-            let lead = self.current.len() - self.current.trimmed_start().len();
-            let column = indent
-                + visual_width_from(
-                    &self.current[lead..open + 1],
-                    indent,
-                    self.options.tab_width,
-                );
-            // Past the maximum it continues two levels in, as a paren does.
-            let statement_base = self.continuation_base_indent() * self.options.indent_width;
-            return ContinuationIndent::Spaces(
-                if column.saturating_sub(statement_base) > self.options.max_continuation_indent {
-                    statement_base + 2 * self.options.indent_width
-                } else {
-                    column
-                },
-            );
         }
         if (!self.in_initializer_brace() || self.innermost_brace_is_brace_list())
             && !self.innermost_init_block_brace()
@@ -2048,6 +2018,50 @@ impl FormatEngine<'_> {
         )
     }
 
+    /// The column a subscript the line leaves open holds the next row at:
+    /// past its bracket, as astyle counts brackets as parentheses, whatever
+    /// parens stand around it.
+    fn open_subscript_indent_spaces(&self) -> Option<usize> {
+        if self.options.indent_after_parens
+            // An Objective-C message aligns its own way.
+            || self.layout.frame_stack.bracket_depth() == 0
+            || self.layout.objc.message_active
+        {
+            return None;
+        }
+        let line = self.current.trimmed_end();
+        let open = self.open_paren_column_of(line)?;
+        if !line[open..].starts_with('[')
+            || !line[..open]
+                .chars()
+                .next_back()
+                .is_some_and(|ch| ch == ']' || ch == '_' || ch.is_alphanumeric())
+        {
+            return None;
+        }
+        let indent = self.current_line_indent_spaces();
+        let lead = self.current.len() - self.current.trimmed_start().len();
+        let column = indent
+            + visual_width_from(
+                &self.current[lead..open + 1],
+                indent,
+                self.options.tab_width,
+            );
+        // Past the maximum it continues two levels past its row, as a paren
+        // does, and no nearer than the column the parens around it hold.
+        let statement_base = self.continuation_base_indent() * self.options.indent_width;
+        if column.saturating_sub(statement_base) <= self.options.max_continuation_indent {
+            return Some(column);
+        }
+        let capped = indent + 2 * self.options.indent_width;
+        Some(
+            self.layout
+                .nesting
+                .current_continuation_indent_spaces()
+                .map_or(capped, |around| capped.max(around)),
+        )
+    }
+
     pub(crate) fn array_bound_operator_continuation_indent_spaces(&self) -> Option<usize> {
         let line = self.current.trimmed_end();
         if !head_ends_binary_operator(line) {
@@ -2066,19 +2080,24 @@ impl FormatEngine<'_> {
                 .unwrap_or_else(|| self.current_line_indent_spaces() + continuation);
             return Some(previous + continuation);
         }
-        // Past the maximum it continues at the value an assignment gives,
-        // else two levels in, as a paren does.
-        if column > self.options.max_continuation_indent {
-            let lead = self.current_line_indent_spaces();
+        // Past the maximum, measured as a subscript left open measures it, it
+        // continues at the value an assignment gives, else two levels past
+        // its row, and no nearer than the column the parens around it hold.
+        let lead = self.current_line_indent_spaces();
+        let statement_base = self.continuation_base_indent() * self.options.indent_width;
+        if (lead + column).saturating_sub(statement_base) > self.options.max_continuation_indent {
+            let capped = self
+                .assignment_continuation_indent_spaces()
+                .filter(|&value| value.saturating_sub(lead) <= self.options.max_continuation_indent)
+                .unwrap_or(lead + 2 * self.options.indent_width);
             return Some(
-                self.assignment_continuation_indent_spaces()
-                    .filter(|&value| {
-                        value.saturating_sub(lead) <= self.options.max_continuation_indent
-                    })
-                    .unwrap_or(lead + 2 * self.options.indent_width),
+                self.layout
+                    .nesting
+                    .current_continuation_indent_spaces()
+                    .map_or(capped, |around| capped.max(around)),
             );
         }
-        Some(self.current_line_indent_spaces() + column)
+        Some(lead + column)
     }
 
     fn parameter_default_operator_continuation_indent_spaces(&self) -> Option<usize> {

@@ -22265,6 +22265,23 @@ fn rows_of_a_paren_among_a_base_s_template_arguments_stand_in_the_paren() {
 }
 
 #[test]
+fn rows_of_a_subscript_within_parens_stand_past_its_bracket() {
+    // As outside parens and after an operator ending the row; the parens
+    // around hold them only past the maximum continuation.
+    let input = "void f()\n{\n    free(ctx->filenames_after[ctx->num_tables_after\n                              - 2]);\n    free(ctx->filenames_after[ctx->num_tables_after -\n                              2]);\n    value = table[first_index\n                  + 2];\n    value = call(table[first_index\n                       + 2]);\n}\n";
+    check(input, &["--style=kr"], input);
+    let input = "void f()\n{\n    if (ready) {\n        free(ctx->table_of_item_filenames_after[ctx->num_item_tables_after - 2]);\n    }\n}\n";
+    let expected = "void f()\n{\n    if (ready) {\n        free(ctx->table_of_item_filenames_after[ctx->num_item_tables_after\n                                                - 2]);\n    }\n}\n";
+    let options = ["--style=kr", "--max-code-length=60"];
+    check(input, &options, expected);
+    check(expected, &options, expected);
+    // Past the maximum the operand rows stand two levels past their row,
+    // and no nearer than the paren around the subscript.
+    let input = "void f()\n{\n    if (ready)\n        if (results->sizes &&\n                parse_object_size(object_info_values.items[size_index +\n                                  1].string,\n                                  &results->sizes[i]))\n            run();\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
 fn parts_the_code_length_splits_among_template_arguments_stand_as_their_rows() {
     // Wherever the template stands, a base's or a class head's among them,
     // and wherever the split falls.
