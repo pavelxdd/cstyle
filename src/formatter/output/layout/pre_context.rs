@@ -198,6 +198,15 @@ impl FormatEngine<'_> {
             if let Some(spaces) = self.lambda_call_argument_after_split_indent_spaces(line) {
                 layout.exact_indent_spaces = Some(spaces);
             } else if !line_start.starts_with("/*") {
+                // The columns the row registers for the parameters it
+                // leaves open move with it.
+                if self.pending_line_opens_split_lambda_parameters() {
+                    self.lambda_row_planned_lead = Some(
+                        layout
+                            .exact_indent_spaces
+                            .unwrap_or(layout.indent * self.options.indent_width),
+                    );
+                }
                 layout.indent = layout.normal_indent;
                 layout.exact_indent_spaces = None;
             }

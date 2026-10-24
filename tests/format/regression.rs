@@ -22150,7 +22150,7 @@ fn the_parameter_row_opening_a_lambda_body_stands_with_the_parameters() {
     // As every row before it, past the parameters' paren, whether the
     // body's brace stood on it or below it.
     let input = "void f() {\n  auto check =\n      [](int a,\n         int b,\n         int c) {\n        go(a);\n      };\n  call(x, [](int a,\n             int b,\n             int c) {\n    return a;\n  });\n  auto other = [](int a,\n                  int b,\n                  int c) -> int {\n    return a;\n  };\n  call(x, [](int a,\n             int b)\n  {\n    return a;\n  });\n}\n";
-    let expected = "void f()\n{\n    auto check =\n        [](int a,\n           int b,\n           int c) {\n        go(a);\n    };\n    call(x, [](int a,\n               int b,\n               int c) {\n        return a;\n    });\n    auto other = [](int a,\n                    int b,\n                    int c) -> int {\n        return a;\n    };\n    call(x, [](int a,\n               int b) {\n        return a;\n    });\n}\n";
+    let expected = "void f()\n{\n    auto check =\n    [](int a,\n       int b,\n       int c) {\n        go(a);\n    };\n    call(x, [](int a,\n               int b,\n               int c) {\n        return a;\n    });\n    auto other = [](int a,\n                    int b,\n                    int c) -> int {\n        return a;\n    };\n    call(x, [](int a,\n               int b) {\n        return a;\n    });\n}\n";
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
@@ -22166,7 +22166,7 @@ fn a_split_lambda_head_with_a_trailing_return_type_keeps_its_body_brace() {
 #[test]
 fn the_second_parameter_row_of_an_assigned_lambda_opening_its_body_stands_with_the_first() {
     let input = "void f() {\n  auto check =\n      [](const char* str,\n         Buffer& buffer) {\n        go(str);\n      };\n}\n";
-    let expected = "void f()\n{\n    auto check =\n        [](const char* str,\n           Buffer& buffer) {\n        go(str);\n    };\n}\n";
+    let expected = "void f()\n{\n    auto check =\n    [](const char* str,\n       Buffer& buffer) {\n        go(str);\n    };\n}\n";
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }

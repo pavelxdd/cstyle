@@ -21,7 +21,7 @@ use crate::formatter::output::model::{ContextualLineLayout, LineLayout, LineRepl
 use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
-use crate::formatter::structure::blocks::{BlockKind, is_code_token};
+use crate::formatter::structure::blocks::{BlockKind, is_code_token, next_code_token};
 use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::language::{self, is_macro_like_word};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
@@ -56,6 +56,12 @@ impl FormatEngine<'_> {
         })
     }
 
+    /// Whether the pending line opens a lambda's body, or the lambda whose
+    /// parameters go on past it to the row that opens the body.
+    pub(crate) fn pending_line_opens_lambda(&self) -> bool {
+        self.pending_line_opens_lambda_body() || self.pending_line_opens_split_lambda_parameters()
+    }
+
     /// Whether the pending line starts inside a lambda's parameter list, a
     /// row continuing the parameters after its capture.
     pub(crate) fn pending_line_continues_lambda_parameters(&self) -> bool {
@@ -77,6 +83,69 @@ impl FormatEngine<'_> {
                     .previous_code_token(open)
                     .is_some_and(|before| matches!(self.tree.tokens[before], Token::Symbol(']')))
         })
+    }
+
+    /// Whether the pending line opens a lambda whose parameters go on past
+    /// it to the row that opens the lambda's body.
+    pub(crate) fn pending_line_opens_split_lambda_parameters(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let Some(span) = self.output.pending_tokens() else {
+            return false;
+        };
+        let Some(last) = self.tree.previous_code_token(span.last + 1) else {
+            return false;
+        };
+        let Some(params) = groups.opened_at(last).or_else(|| groups.enclosing(last)) else {
+            return false;
+        };
+        let group = groups.get(params);
+        let (open, Some(close)) = (group.open, group.close) else {
+            return false;
+        };
+        if group.delimiter != Delimiter::Paren
+            || open < span.first
+            || close <= span.last
+            || !self
+                .tree
+                .previous_code_token(open)
+                .is_some_and(|before| matches!(tokens[before], Token::Symbol(']')))
+        {
+            return false;
+        }
+        // Specifiers and a return type may stand between the parameters
+        // and the body, whose brace ends the parameters' last row unless the
+        // style breaks it off, or the source does under no style.
+        let mut index = close;
+        while let Some(next) = next_code_token(tokens, index + 1) {
+            if let Some(nested) = groups.opened_at(next) {
+                if groups.get(nested).delimiter == Delimiter::Brace {
+                    let attached = match self.options.brace_style {
+                        BraceStyle::None => !tokens[index + 1..next]
+                            .iter()
+                            .any(|token| matches!(token, Token::Newline)),
+                        BraceStyle::Allman
+                        | BraceStyle::Gnu
+                        | BraceStyle::Whitesmith
+                        | BraceStyle::Horstmann
+                        | BraceStyle::Pico
+                        | BraceStyle::Vtk => false,
+                        _ => true,
+                    };
+                    return attached && self.tree.blocks.kind(nested) == Some(BlockKind::Lambda);
+                }
+                match groups.get(nested).close {
+                    Some(end) => index = end,
+                    None => return false,
+                }
+                continue;
+            }
+            if matches!(tokens[next], Token::Symbol(';' | ',' | ')' | '}')) {
+                return false;
+            }
+            index = next;
+        }
+        false
     }
 
     pub(crate) fn begin_contextual_line_layout(

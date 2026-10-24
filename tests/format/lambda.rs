@@ -584,6 +584,24 @@ fn lambda_parameter_continuation_aligns_at_the_parameters_paren() {
 }
 
 #[test]
+fn lambda_parameter_continuation_aligns_at_its_paren_on_a_row_set_at_the_statement() {
+    // An argument row opening a lambda stands at the statement; the rows of
+    // the lambda's parameters align at its paren where the row stands.
+    let source = fixture!(
+        "void helper()",
+        "{",
+        "    run(",
+        "    out, [values](Item first,",
+        "                  Item second) {",
+        "        return copy(values, first, second);",
+        "    });",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
+}
+
+#[test]
 fn lambda_parameter_continuation_preserves_open_paren_alignment() {
     let source = fixture!(
         "void f()",

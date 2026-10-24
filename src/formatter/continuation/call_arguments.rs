@@ -2224,9 +2224,16 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn line_opens_statement_level_lambda(&self, line: &LineView<'_>) -> bool {
-        // A row of a lambda's parameters may open its body too.
+        // A row of a lambda's parameters may open its body too, and a row
+        // opening a lambda whose parameters go on opens it there.
         (line.opens_attachable_lambda_block(self.options)
-            || line.trimmed_end().ends_with('{') && self.pending_line_opens_statement_lambda_body())
+            || line.trimmed_end().ends_with('{') && self.pending_line_opens_statement_lambda_body()
+            || self.pending_line_opens_split_lambda_parameters()
+                && self
+                    .layout
+                    .frame_stack
+                    .active_constructor_initializer()
+                    .is_none())
             && !self.pending_line_in_message()
             || self.line_opens_block_argument(line)
     }

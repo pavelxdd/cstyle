@@ -3167,6 +3167,25 @@ fn inline_member_initializer_split_after_its_paren_continues_past_the_list() {
 }
 
 #[test]
+fn argument_row_opening_a_lambda_split_in_its_parameters_stays_at_the_statement() {
+    // The row holding the lambda's head stands at the statement whether its
+    // body opens on it or on the row its parameters go on to.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=kr".to_owned(),
+            "--max-code-length=60".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let source = "auto write_values(Iter out, View values) -> Iter {\n  return write_padded<Item, default_align>(\n      out, config, values.size(), [values](reserve_iterator<Iter> it) {\n        return copy<Item>(values.data(), it);\n      });\n}\n";
+    let expected = "auto write_values(Iter out, View values) -> Iter\n{\n    return write_padded<Item, default_align>(\n    out, config, values.size(), [values](reserve_iterator<Iter>\n                                         it) {\n        return copy<Item>(values.data(), it);\n    });\n}\n";
+
+    assert_stable_max_length_format(source, &options, expected);
+}
+
+#[test]
 fn aggregate_brace_split_from_its_assignment_stands_at_the_statement() {
     let mut options = FormatOptions::default();
     apply_command_line_args(

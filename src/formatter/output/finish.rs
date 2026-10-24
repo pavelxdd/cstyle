@@ -244,6 +244,7 @@ impl FormatEngine<'_> {
             } else {
                 self.finish_line_text(line);
             }
+            self.follow_lambda_row_to_statement();
             let output_line_index =
                 output_line_index + std::mem::take(&mut self.layout.blank_lines_before_pending);
             self.reset_continuation_after_output_line(line, output_line_index);
@@ -298,6 +299,39 @@ impl FormatEngine<'_> {
         self.layout.literal_line.preserve_raw_literal_line_end = false;
         self.preserve_run_in_join_space = false;
         self.reset_after_finished_line();
+    }
+
+    /// Moves the columns a row registered past the lead the engine planned
+    /// for it to where the layout set the row at its statement.
+    fn follow_lambda_row_to_statement(&mut self) {
+        let Some(planned) = self.lambda_row_planned_lead.take() else {
+            return;
+        };
+        let Some(line) = self.output.len().checked_sub(1) else {
+            return;
+        };
+        let lead = self.output.lead_width(line, self.options.tab_width);
+        let shift = lead as isize - planned as isize;
+        if shift == 0 {
+            return;
+        }
+        let base = self.continuation_base_indent() * self.options.indent_width;
+        self.layout.nesting.shift_columns_from(
+            planned,
+            shift,
+            base,
+            self.options.max_continuation_indent,
+        );
+        self.layout
+            .frame_stack
+            .move_split_line_frames(line, line, planned, shift, lead);
+        self.split_line_shift = Some(SplitLineShift {
+            line,
+            from_column: planned,
+            shift,
+            declaration_columns: None,
+            moved_stack: true,
+        });
     }
 
     fn reset_continuation_after_output_line(&mut self, line: &str, output_line_index: usize) {

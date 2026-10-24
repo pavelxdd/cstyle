@@ -418,6 +418,9 @@ pub(crate) struct FormatEngine<'a> {
     /// as a statement split off its case label or a head off its return
     /// type.
     pub(crate) split_line_shift: Option<SplitLineShift>,
+    /// The lead the engine planned for a row the layout sets at its
+    /// statement for the lambda it opens, whose parameters go on past it.
+    pub(crate) lambda_row_planned_lead: Option<usize>,
     /// A label broke its line before comments; the statement after them
     /// starts a line of its own.
     pub(crate) statement_after_label_pending: bool,
@@ -598,6 +601,7 @@ impl<'a> FormatEngine<'a> {
             brace_frame_awaits_line: false,
             braceless_exit_after_line: false,
             split_line_shift: None,
+            lambda_row_planned_lead: None,
             statement_after_label_pending: false,
             disabled_formatting: None,
             current_is_preindented: false,

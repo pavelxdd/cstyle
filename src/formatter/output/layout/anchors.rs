@@ -132,7 +132,7 @@ impl FormatEngine<'_> {
         // and drops what it held for one that opens a lambda's body.
         let continues_stack =
             previous_index.is_some_and(|before| !self.ends_stack_statement(before));
-        if continues_stack && self.pending_line_opens_lambda_body() {
+        if continues_stack && self.pending_line_opens_lambda() {
             return None;
         }
         // Rules for a statement's place in its block read statements only.
@@ -2056,7 +2056,7 @@ impl FormatEngine<'_> {
         };
         // A lambda opening its body on the line stands at the statement.
         if matches!(tokens[first], Token::Symbol('{' | '}'))
-            || self.pending_line_opens_lambda_body()
+            || self.pending_line_opens_lambda()
         {
             return None;
         }
@@ -3721,7 +3721,7 @@ impl FormatEngine<'_> {
             return None;
         }
         // A lambda opening its body on the line stands as past any comma.
-        if self.pending_line_opens_lambda_body() {
+        if self.pending_line_opens_lambda() {
             return None;
         }
         let comment =
