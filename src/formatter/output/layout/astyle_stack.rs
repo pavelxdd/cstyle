@@ -667,6 +667,14 @@ impl FormatEngine<'_> {
         self.replayed_stack_indent(first, false)
     }
 
+    /// The indent a part the code length split off at `first` takes when it
+    /// starts among template arguments, as a row there does.
+    pub(crate) fn split_template_argument_indent(&self, first: usize) -> Option<usize> {
+        self.replayed_stack(first, false)
+            .filter(|&(_, among_template_arguments)| among_template_arguments)
+            .map(|(indent, _)| indent)
+    }
+
     /// The indent astyle's continuation stack gives the line starting at
     /// `first`, replayed from the start of its statement.
     fn astyle_stack_indent(&self, first: usize) -> Option<usize> {
@@ -685,6 +693,13 @@ impl FormatEngine<'_> {
     /// `first`, replayed from the start of its statement; the line closes
     /// a stacked initializer brace when `closes_stacked_brace`.
     fn replayed_stack_indent(&self, first: usize, closes_stacked_brace: bool) -> Option<usize> {
+        self.replayed_stack(first, closes_stacked_brace)
+            .map(|(indent, _)| indent)
+    }
+
+    /// The replayed indent of the line starting at `first`, and whether
+    /// template arguments stand open there.
+    fn replayed_stack(&self, first: usize, closes_stacked_brace: bool) -> Option<(usize, bool)> {
         let tokens = &self.tree.tokens;
         let start = self.stack_statement_start(first)?;
         if first - start > MAX_REPLAYED_TOKENS {
@@ -934,6 +949,15 @@ impl FormatEngine<'_> {
                     let list = self.tree.groups.opened_at(index)?;
                     index = self.tree.groups.get(list).close?;
                 }
+                // A class's bases start over from their own rows.
+                Token::Symbol(':')
+                    if replay.depth == 0 && self.class_head_key_before(index).is_some() =>
+                {
+                    replay.stack.clear();
+                    if starts_line {
+                        replay.line_space = relative(index)?;
+                    }
+                }
                 Token::Symbol('{' | '}' | ';' | ':') => return None,
                 _ if index == start && is_control_keyword(token) => {
                     replay.header_paren = next_code_token(tokens, index + 1);
@@ -1051,6 +1075,7 @@ impl FormatEngine<'_> {
         } else {
             replay.stack.last().copied()
         };
+        let among_template_arguments = replay.angles > 0;
         self.astyle_replay_cache.set(Some(ReplayCache {
             address,
             start,
@@ -1063,12 +1088,13 @@ impl FormatEngine<'_> {
             conditionals,
         }));
         let top = top?;
-        Some(
+        Some((
             block_lead
                 + top
                 + header_levels * self.options.indent_width
                 + self.case_unindent_spaces(),
-        )
+            among_template_arguments,
+        ))
     }
 
     /// The lead of the block brace alone on the line before `start_line`

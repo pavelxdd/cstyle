@@ -22251,6 +22251,26 @@ fn rows_of_a_paren_among_a_base_s_template_arguments_stand_in_the_paren() {
 }
 
 #[test]
+fn parts_the_code_length_splits_among_template_arguments_stand_as_their_rows() {
+    // Wherever the template stands, a base's or a class head's among them,
+    // and wherever the split falls.
+    let options = ["--style=kr", "--max-code-length=60"];
+    let input = "template <typename T>\nstruct is_range<T, void>\n    : std::integral_constant<bool, (has_first_member<T>::value || has_second_member<T>::value)> {};\ntemplate <typename R>\nstruct formatter<\n    R, Char,\n    enable_if_t<format_kind<R, Char>::value == format_kind::string || format_kind<R, Char>::value == format_kind::debug>> {\n};\n";
+    let expected = "template <typename T>\nstruct is_range<T, void>\n    : std::integral_constant<bool, (has_first_member<T>::value\n                                    || has_second_member<T>::value)> {};\ntemplate <typename R>\nstruct formatter<\n    R, Char,\n    enable_if_t<format_kind<R, Char>::value ==\n                format_kind::string\n                || format_kind<R, Char>::value == format_kind::debug>> {\n};\n";
+    check(input, &options, expected);
+    check(expected, &options, expected);
+    let input = "template <typename T>\nstruct is_range<T, void>\n    : std::integral_constant<bool, (has_first_item_list<T>::value ||\n                                    has_second_item_lists<T>::value)> {};\n";
+    let expected = "template <typename T>\nstruct is_range<T, void>\n    : std::integral_constant<bool,\n                             (has_first_item_list<T>::value ||\n                              has_second_item_lists<T>::value)> {};\n";
+    check(input, &options, expected);
+    check(expected, &options, expected);
+    // The rows after a base's angle count from the colon's row.
+    let input = "template <typename T>\nstruct range_kind\n    : conditional_t<\n        is_range<T>::value, detail::range_kind<T>,\n        std::integral_constant<range_format, range_format::disabled>> {};\n";
+    check(input, &options, input);
+    let input = "template <typename T>\nstruct is_string_like<T, void>\n    : std::is_convertible<decltype(std::declval<T>().data()),\n        const typename T::value_type*> {};\n";
+    check(input, &["--style=linux", "--indent-after-parens"], input);
+}
+
+#[test]
 fn rows_of_template_arguments_after_an_angle_ending_its_line_stand_a_continuation_in() {
     // Every row of them, as the rows of a paren ending its line do; a
     // closer leading its row stands at the line the angle opened on.

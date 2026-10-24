@@ -524,8 +524,10 @@ impl FormatEngine<'_> {
         }) {
             return Some((self.continuation_base_indent() + 1) * self.options.indent_width);
         }
-        // A part within a template head stands with its parameters.
-        self.split_part_stack_indent(first)
+        // A part among template arguments stands as a row there does; one
+        // within a template head stands with its parameters.
+        self.split_template_argument_indent(first)
+            .or_else(|| self.split_part_stack_indent(first))
             .or_else(|| self.template_head_row_indent(first))
             .or_else(|| self.tree_anchor_indent(first, part))
     }
