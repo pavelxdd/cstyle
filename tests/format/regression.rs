@@ -24805,3 +24805,82 @@ fn a_macro_headed_function_after_a_directive_takes_its_style_s_brace() {
     );
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_specialized_type_head_after_its_template_takes_its_style_s_brace() {
+    let attached = "template <> struct formatter<date> {\n    int x;\n};\ntemplate <typename T> struct node<T> : base<T> {\n    int y;\n};\n";
+    let broken = attached.replace(" {\n", "\n{\n");
+    for style in [
+        "--style=kr",
+        "--style=java",
+        "--style=lisp",
+        "--style=stroustrup",
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_string()]).expect("valid options");
+        let expected = format_bytes(attached.as_bytes(), &options).expect("format bytes");
+        let actual = format_bytes(broken.as_bytes(), &options).expect("format bytes");
+        assert_eq!(
+            String::from_utf8(actual),
+            String::from_utf8(expected),
+            "{style}"
+        );
+    }
+    check(&broken, &["--style=allman"], &broken);
+}
+
+#[test]
+fn a_function_head_ending_in_a_qualifier_takes_its_style_s_brace() {
+    let attached = "Status& Status::operator=(Status&& rhs) noexcept {\n    return *this;\n}\n";
+    let broken = attached.replace(" {\n", "\n{\n");
+    for style in ["--style=java", "--style=lisp", "--style=ratliff"] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_string()]).expect("valid options");
+        let expected = format_bytes(attached.as_bytes(), &options).expect("format bytes");
+        let actual = format_bytes(broken.as_bytes(), &options).expect("format bytes");
+        assert_eq!(
+            String::from_utf8(actual),
+            String::from_utf8(expected),
+            "{style}"
+        );
+    }
+    check(&broken, &["--style=kr"], &broken);
+}
+
+#[test]
+fn a_split_function_head_with_a_trailing_return_type_takes_its_style_s_brace() {
+    let attached =
+        "auto write(int out,\n           char modifier = 0) -> int {\n    return out;\n}\n";
+    let broken = attached.replace(" {\n", "\n{\n");
+    for style in ["--style=java", "--style=lisp", "--style=ratliff"] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_string()]).expect("valid options");
+        let expected = format_bytes(attached.as_bytes(), &options).expect("format bytes");
+        let actual = format_bytes(broken.as_bytes(), &options).expect("format bytes");
+        assert_eq!(
+            String::from_utf8(actual),
+            String::from_utf8(expected),
+            "{style}"
+        );
+    }
+    check(&broken, &["--style=kr"], &broken);
+}
+
+#[test]
+fn a_function_head_ending_in_a_pointer_run_takes_its_style_s_brace() {
+    let attached = "auto get() -> const char** {\n    return 0;\n}\nclass Item {\n    static auto get() -> const char** {\n        return 0;\n    }\n};\n";
+    let broken = attached
+        .replace("** {\n    return", "**\n{\n    return")
+        .replace("** {\n        return", "**\n    {\n        return");
+    for style in ["--style=java", "--style=lisp", "--style=ratliff"] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_string()]).expect("valid options");
+        let expected = format_bytes(attached.as_bytes(), &options).expect("format bytes");
+        let actual = format_bytes(broken.as_bytes(), &options).expect("format bytes");
+        assert_eq!(
+            String::from_utf8(actual),
+            String::from_utf8(expected),
+            "{style}"
+        );
+    }
+}

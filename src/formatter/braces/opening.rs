@@ -1,9 +1,9 @@
 use crate::config::{BraceStyle, IndentStyle, LineEnding};
 use crate::formatter::braces::classification::{
-    ExternCGuard, block_indent_extra, brace_indent_applies, current_ends_block_literal_header,
-    is_lambda_body_header, is_lambda_capture_header, is_namespace_or_module_block_header,
-    line_ends_lambda_parameter_list, line_opens_lambda_or_capture_only_block,
-    line_opens_parameterized_lambda_block,
+    ExternCGuard, block_indent_extra, brace_indent_applies, code_ends_definition_header,
+    current_ends_block_literal_header, is_lambda_body_header, is_lambda_capture_header,
+    is_namespace_or_module_block_header, line_ends_lambda_parameter_list,
+    line_opens_lambda_or_capture_only_block, line_opens_parameterized_lambda_block,
 };
 use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::braces::initializers::{
@@ -4101,12 +4101,24 @@ impl FormatEngine<'_> {
         {
             return self.style_attaches_opening_brace(brace_type, None);
         }
-        // An interface's head, published before its brace, takes the
-        // brace its style attaches as a class's held head does.
-        if brace_type == BraceType::Interface
-            && !self.preprocessor.last_output_was_preprocessor
+        // A type's head published before its brace, as after a template's
+        // head on its line, takes the brace its style attaches as a held
+        // head does.
+        if matches!(
+            brace_type,
+            BraceType::Struct
+                | BraceType::Union
+                | BraceType::Class
+                | BraceType::Interface
+                | BraceType::Enum
+        ) && !self.preprocessor.last_output_was_preprocessor
             && self.current_is_blank()
             && self.brace_head_ends_last_output_line()
+            // A comment or a splice after the head keeps the brace below.
+            && self.output.last().is_some_and(|last| {
+                line_comment_split_limit(last).min(trailing_comment_split_limit(last)) == last.len()
+                    && !last.trimmed_end().ends_with('\\')
+            })
         {
             return self.style_attaches_opening_brace(brace_type, None);
         }
@@ -4179,11 +4191,14 @@ impl FormatEngine<'_> {
                 return false;
             }
             if comment_start == last.len() {
-                return trimmed.ends_with(')')
+                return code_ends_definition_header(trimmed)
                     || is_lambda_body_header(trimmed)
-                    // A closure's head may list no parameters.
-                    || self.pushed_brace_kind() == Some(BlockKind::Lambda)
-                        && self.brace_head_ends_last_output_line()
+                    // A closure's head may list no parameters, and a
+                    // function's may end in its trailing return type.
+                    || matches!(
+                        self.pushed_brace_kind(),
+                        Some(BlockKind::Lambda | BlockKind::FunctionBody)
+                    ) && self.brace_head_ends_last_output_line()
                     || objc_method_header
                     || after_initializer_list;
             }

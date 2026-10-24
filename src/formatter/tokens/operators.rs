@@ -742,6 +742,10 @@ impl FormatEngine<'_> {
             && matches!(operator, "*" | "&" | "^")
         {
             self.pointer_run.skip_adjacent_pointer_operators -= 1;
+            // The run's text, pushed with its first operator, holds this one.
+            if let Some(index) = self.current.active_token() {
+                self.current.record_token_range(index, index);
+            }
             if resolved_pointer_align(self.options, operator) == PointerAlign::None
                 && self.pointer_run.skip_adjacent_pointer_operators == 0
             {
