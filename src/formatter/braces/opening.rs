@@ -3258,9 +3258,20 @@ impl FormatEngine<'_> {
                 {
                     Some(comment.as_str())
                 }
-                // A block comment before the first element stays with it.
+                // A block comment before the first element stays with it,
+                // save in styles that break a list's brace off its rows.
                 Some(Token::Comment(CommentKind::Block, comment))
-                    if !comment.contains('\n') && self.comments.next_comment_ends_line =>
+                    if !comment.contains('\n')
+                        && self.comments.next_comment_ends_line
+                        && !(matches!(brace_type, BraceType::Array | BraceType::Initializer)
+                            && !self.brace_opens_list_element()
+                            && matches!(
+                                self.options.brace_style,
+                                BraceStyle::Allman
+                                    | BraceStyle::Whitesmith
+                                    | BraceStyle::Vtk
+                                    | BraceStyle::Gnu
+                            )) =>
                 {
                     Some(comment.as_str())
                 }
@@ -3367,10 +3378,11 @@ impl FormatEngine<'_> {
             })
             .unwrap_or(self.layout.line_state.is_one_line_block);
         // A style that breaks braces keeps a list's first row after a block
-        // comment on its brace's line.
+        // comment on its brace's line; a comment alone there is that row.
         let runs_into_comment_row = matches!(brace_type, BraceType::Array | BraceType::Initializer)
             && matches!(next, Some(Token::Comment(CommentKind::Block, comment)) if !comment.contains('\n'))
-            && !runs_list_rows_in(self.options.brace_style);
+            && !runs_list_rows_in(self.options.brace_style)
+            && !(self.comments.next_comment_ends_line && !self.brace_opens_list_element());
         // Blocks opened back to back share their lines as one block.
         let opens_fused_blocks = self
             .tree
@@ -4192,6 +4204,19 @@ impl FormatEngine<'_> {
             }
             is_single_trailing_block_comment(comment) || comment.starts_with("//")
         })
+    }
+
+    /// Whether the brace being pushed opens an element of a brace list.
+    fn brace_opens_list_element(&self) -> bool {
+        self.current
+            .active_token()
+            .and_then(|brace| self.tree.groups.enclosing(brace))
+            .is_some_and(|list| {
+                matches!(
+                    self.tree.blocks.kind(list),
+                    Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                )
+            })
     }
 
     /// Whether the head before the brace being pushed ends the last output

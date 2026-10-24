@@ -24953,3 +24953,14 @@ fn a_line_comment_after_a_brace_joining_a_published_head_opens_the_body() {
         "TEST(a, b) {\n    // note\n    int x;\n}\ntemplate <> struct formatter<date> {\n    // note\n    int y;\n};\n",
     );
 }
+
+#[test]
+fn a_block_comment_alone_after_a_broken_list_brace_starts_the_rows() {
+    // Only elements after the comment keep the brace's row; a comment
+    // alone after it is the list's first row.
+    let input = "static const struct item ITEMS[] =\n{   /* first, second */\n    { 1, 2 },\n    { 3, 4 },\n};\n";
+    let expected = "static const struct item ITEMS[] =\n{\n    /* first, second */\n    { 1, 2 },\n    { 3, 4 },\n};\n";
+    for style in ["--style=allman", "--style=gnu", "--style=vtk"] {
+        check(input, &[style], expected);
+    }
+}
