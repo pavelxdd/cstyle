@@ -25095,3 +25095,11 @@ fn each_guarded_extern_c_block_in_a_namespace_leaves_its_body_unindented() {
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
+
+#[test]
+fn a_comment_after_a_semicolonless_macro_call_in_a_namespace_stands_at_the_statement() {
+    let input = "namespace demo {\nGENERATE(stats,\n    lookup(index))\n/* note */\nGENERATE(stats)\n}\nextern \"C\" {\nGENERATE(stats,\nlookup(index))\n/* note */\nGENERATE(stats)\n}\n";
+    let expected = "namespace demo\n{\nGENERATE(stats,\n         lookup(index))\n/* note */\nGENERATE(stats)\n}\nextern \"C\" {\n    GENERATE(stats,\n             lookup(index))\n    /* note */\n    GENERATE(stats)\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}

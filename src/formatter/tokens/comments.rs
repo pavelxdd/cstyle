@@ -2838,10 +2838,12 @@ impl FormatEngine<'_> {
             {
                 return Some(0);
             }
-            // A macro call that closes all its parens at file scope ends its
-            // statement without `;`.
-            if self.layout.nesting.brace_type_stack.is_empty()
-                && self.layout.nesting.paren_depth == 0
+            // A macro call that closes all its parens at declaration scope
+            // ends its statement without `;`.
+            if matches!(
+                self.layout.nesting.brace_type_stack.last(),
+                None | Some(BraceType::Namespace | BraceType::Extern)
+            ) && self.layout.nesting.paren_depth == 0
                 && code.ends_with(')')
                 && !trimmed.starts_with('#')
                 && self
@@ -2865,7 +2867,7 @@ impl FormatEngine<'_> {
                     }
                 }
                 if balance == 0 {
-                    return Some(0);
+                    return Some(self.layout.indentation.indent() * self.options.indent_width);
                 }
             }
         }
