@@ -24929,3 +24929,15 @@ fn a_function_body_after_parameter_declarations_keeps_its_line_in_attach_styles(
         assert!(output.contains("const char *name;\n"), "{style}\n{output}");
     }
 }
+
+#[test]
+fn a_macro_block_brace_before_a_line_comment_takes_its_style_s_place() {
+    // The comment after the brace moves into the block; the brace goes where
+    // the style puts it, apart from the head.
+    let input = "TEST(name)\n{ // note\n    int x;\n}\nvoid f()\n{\n    FOREACH(x)\n    { // note\n        go();\n    }\n}\n";
+    check(
+        input,
+        &["--style=kr"],
+        "TEST(name)\n{\n    // note\n    int x;\n}\nvoid f()\n{\n    FOREACH(x) {\n        // note\n        go();\n    }\n}\n",
+    );
+}

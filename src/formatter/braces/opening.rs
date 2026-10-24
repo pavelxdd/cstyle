@@ -2395,37 +2395,6 @@ impl FormatEngine<'_> {
                 .columns(self.options.indent_width),
             );
         } else if self.current_is_blank()
-            && matches!(next, Some(Token::Comment(CommentKind::Line, _)))
-            && !self.options.add_braces
-            && self.options.brace_style == BraceStyle::OneTrueBrace
-            && self.output.last().is_some_and(|line| {
-                let code = &self.output.code_of(line);
-                let trimmed = code.trimmed();
-                let first = trimmed
-                    .split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_')
-                    .next()
-                    .unwrap_or_default();
-                trimmed.ends_with(')')
-                    && !line[trailing_comment_split_limit(line)..]
-                        .trimmed_start()
-                        .starts_with("/*")
-                    && !trimmed.starts_with('#')
-                    && !is_header(self.options, first)
-            })
-        {
-            let (mut line, tokens) = self.output.pop_with_tokens().unwrap_or_default();
-            self.republish_tokens(tokens);
-            line.push('{');
-            if let Some(Token::Comment(CommentKind::Line, comment)) = next {
-                line.push(' ');
-                line.push_str(comment.trimmed_end());
-                self.comments.skip_next_attached_comment = true;
-            }
-            self.layout.command_state.observe_char('{');
-            self.adjust_and_publish_line(line);
-            self.update_current_brace_indent_from_last_output_line();
-            self.previous_was_newline = false;
-        } else if self.current_is_blank()
             && !self.token_input.token_begins_source_line
             && self
                 .output
