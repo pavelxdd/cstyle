@@ -24986,3 +24986,12 @@ fn a_declarator_split_off_a_run_in_declaration_stands_where_a_reformat_puts_it()
         );
     }
 }
+
+#[test]
+fn an_enum_list_whose_brace_leads_its_rows_runs_in_as_a_struct_body_in_the_default_style() {
+    check(
+        "enum Name\n{ A,\n  B };\ntypedef enum\n{ A, /* note */\n  B\n} Kind;\nvoid f()\n{\n    enum\n    { A, B,\n        C };\n    enum Other\n    { D, E };\n}\n",
+        &[],
+        "enum Name\n{   A,\n    B\n};\ntypedef enum\n{   A, /* note */\n    B\n} Kind;\nvoid f()\n{\n    enum\n    {   A, B,\n        C\n    };\n    enum Other\n    { D, E };\n}\n",
+    );
+}

@@ -2198,12 +2198,15 @@ impl FormatEngine<'_> {
         {
             self.finish_line();
         }
+        // A list that goes on over lines runs its rows in after the brace,
+        // as any block does.
         if brace_type == BraceType::Enum
             && self.token_input.token_begins_source_line
             && self.current_is_blank()
             && self.options.brace_style == BraceStyle::None
             && !matches!(next, None | Some(Token::Newline))
             && !self.comments.next_comment_ends_line
+            && !self.brace_list_spans_lines(token_index)
         {
             let first_is_brace = matches!(next, Some(Token::Symbol('{')));
             self.open_inline_array_brace(
