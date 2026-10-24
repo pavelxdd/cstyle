@@ -2043,7 +2043,7 @@ fn return_logical_after_split_template_function_parameter_stays_at_body_indent()
             "template <typename T>\nFIXED auto apply(Result dst, T value, const rules& r = {},\n                 context_id = {}) -> Result {\n  return r.type() != none &&\n         r.type() != string\n      ? apply_value(dst, value, r)\n      : apply_bytes(dst, value ? \"true\" : \"false\", r);\n}\n",
             &FormatOptions::default(),
         ),
-        "template <typename T>\nFIXED auto apply(Result dst, T value, const rules& r = {},\ncontext_id = {}) -> Result {\n    return r.type() != none &&\n    r.type() != string\n    ? apply_value(dst, value, r)\n    : apply_bytes(dst, value ? \"true\" : \"false\", r);\n}\n",
+        "template <typename T>\nFIXED auto apply(Result dst, T value, const rules& r = {},\ncontext_id = {}) -> Result {\n    return r.type() != none &&\n    r.type() != string\n        ? apply_value(dst, value, r)\n        : apply_bytes(dst, value ? \"true\" : \"false\", r);\n}\n",
     );
 }
 
@@ -2054,12 +2054,12 @@ fn return_ternary_colon_after_split_template_declaration_logical_condition_align
             "template <typename T,\n          SELECT_IF(check<T>::value)>\nFIXED auto apply(Result dst, T value, const rules& r = {},\n                 context_id = {}) -> Result {\n  return r.type() != none &&\n                 r.type() != string\n             ? apply_value(dst, value, r)\n             : apply_bytes(dst, value ? \"true\" : \"false\", r);\n}\n",
             &FormatOptions::default(),
         ),
-        "template <typename T,\n          SELECT_IF(check<T>::value)>\nFIXED auto apply(Result dst, T value, const rules& r = {},\ncontext_id = {}) -> Result {\n    return r.type() != none &&\n    r.type() != string\n    ? apply_value(dst, value, r)\n        : apply_bytes(dst, value ? \"true\" : \"false\", r);\n}\n",
+        "template <typename T,\n          SELECT_IF(check<T>::value)>\nFIXED auto apply(Result dst, T value, const rules& r = {},\ncontext_id = {}) -> Result {\n    return r.type() != none &&\n    r.type() != string\n        ? apply_value(dst, value, r)\n            : apply_bytes(dst, value ? \"true\" : \"false\", r);\n}\n",
     );
 }
 
 #[test]
-fn statement_level_ternary_colon_aligns_to_base_indent() {
+fn statement_level_ternary_colon_takes_a_continuation_indent() {
     assert_eq!(
         format_exact(
             fixture!(
@@ -2075,14 +2075,14 @@ fn statement_level_ternary_colon_aligns_to_base_indent() {
             "void f()",
             "{",
             "    condition() ? call1()",
-            "    : call2();",
+            "        : call2();",
             "}",
         )
     );
 }
 
 #[test]
-fn statement_level_ternary_continuation_aligns_to_base_indent() {
+fn statement_level_ternary_continuation_takes_a_continuation_indent() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=linux".to_owned()]).expect("valid options");
 
@@ -2091,12 +2091,12 @@ fn statement_level_ternary_continuation_aligns_to_base_indent() {
             "void f(void)\n{\n\tflag ? call_a(x, y) :\n\t\tcall_b(x, y);\n}\n",
             &options,
         ),
-        "void f(void)\n{\n    flag ? call_a(x, y) :\n    call_b(x, y);\n}\n",
+        "void f(void)\n{\n    flag ? call_a(x, y) :\n        call_b(x, y);\n}\n",
     );
 }
 
 #[test]
-fn statement_level_ternary_with_multiple_parens_continuation_aligns_to_base_indent() {
+fn statement_level_ternary_with_multiple_parens_continuation_takes_a_continuation_indent() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=linux".to_owned()]).expect("valid options");
 
@@ -2105,7 +2105,7 @@ fn statement_level_ternary_with_multiple_parens_continuation_aligns_to_base_inde
             "void f(void)\n{\n\tcond(a) ? aa(bb(x), cc(y)) :\n\t\tdd(x);\n}\n",
             &options,
         ),
-        "void f(void)\n{\n    cond(a) ? aa(bb(x), cc(y)) :\n    dd(x);\n}\n",
+        "void f(void)\n{\n    cond(a) ? aa(bb(x), cc(y)) :\n        dd(x);\n}\n",
     );
 }
 
@@ -2150,7 +2150,7 @@ fn stroustrup_ternary_colon_continuations_preserve_source_gap() {
             "       const char* src, size_t size)",
             "{",
             "    size < 16 ? alpha<Flag, /*Other=*/true>(dst, src, size)",
-            "    : alpha<Flag, /*Other=*/false>(dst, src, size);",
+            "        : alpha<Flag, /*Other=*/false>(dst, src, size);",
             "}",
         )
     );
@@ -5000,8 +5000,8 @@ fn adjacent_string_call_argument_before_stream_keeps_string_indent() {
             "void f()",
             "{",
             "    Table::addRow(\"utf16\")",
-            "            << ByteArray(\"\\xfe\\xff\"",
-            "                         \"\\x00\\xe5\", 4) << value;",
+            "        << ByteArray(\"\\xfe\\xff\"",
+            "                     \"\\x00\\xe5\", 4) << value;",
             "}",
         )
     );
@@ -5063,9 +5063,9 @@ fn adjacent_string_in_line_start_stream_call_keeps_string_column() {
             "void f()",
             "{",
             "    Table::addRow(\"mix\")",
-            "            << TextBox::fromText(\"base\"",
-            "                                 \"tail\")",
-            "            << \"x\";",
+            "        << TextBox::fromText(\"base\"",
+            "                             \"tail\")",
+            "        << \"x\";",
             "}",
         )
     );
@@ -5093,12 +5093,12 @@ fn adjacent_string_in_line_start_stream_call_skips_preprocessor_lines() {
             "void f()",
             "{",
             "    Table::addRow(\"x\")",
-            "            << TextBox(\"entrylist/file,\"",
+            "        << TextBox(\"entrylist/file,\"",
             "#ifndef X",
-            "                       \"entrylist/linktofile.lnk,\"",
+            "                   \"entrylist/linktofile.lnk,\"",
             "#endif",
-            "                       \"entrylist/directory/dummy,\"",
-            "                       \"entrylist/writable\").split(',');",
+            "                   \"entrylist/directory/dummy,\"",
+            "                   \"entrylist/writable\").split(',');",
             "}",
         )
     );
@@ -5277,7 +5277,7 @@ fn braced_value_stream_continuation_after_indented_stream_head_keeps_base_indent
         "void f()",
         "{",
         "    append(\"row\")",
-        "            << name",
+        "        << name",
         "    << List{",
         "        A,",
         "        B,",
@@ -5316,7 +5316,7 @@ fn braced_stream_value_over_max_keeps_source_item_indent() {
 }
 
 #[test]
-fn member_chain_after_prior_return_statement_does_not_use_return_indent() {
+fn member_chain_after_prior_return_statement_takes_a_continuation_indent() {
     let source = fixture!(
         "class C {",
         "    List values()",
@@ -5328,7 +5328,7 @@ fn member_chain_after_prior_return_statement_does_not_use_return_indent() {
         "    void send()",
         "    {",
         "        object()",
-        "        .call();",
+        "            .call();",
         "    }",
         "};",
     );
@@ -5342,9 +5342,9 @@ fn nested_braced_value_inside_stream_call_keeps_base_indent() {
         "void f()",
         "{",
         "    append(\"row\")",
-        "            << wrap(",
+        "        << wrap(",
         "    Value { 1, \"foo\", { { \"bar\", 2 } } })",
-        "            << expected;",
+        "        << expected;",
         "}",
     );
 
@@ -5510,7 +5510,7 @@ fn stream_chain_continues_after_multiline_braced_argument() {
             "void f()\n{\n    Check::append(\"row\")\n        << \"input\"\n        << ValueVector{u\"a\"_v, u\"bc\"_v, u\"d\"_v, u\"e\"_v, u\"\"_v, u\"g\"_v,\n                       u\"hi\"_v, u\"\"_v, u\"\"_v, u\"\"_v, u\"\"_v}\n        << \"output\";\n}\n",
             &FormatOptions::default(),
         ),
-        "void f()\n{\n    Check::append(\"row\")\n            << \"input\"\n            << ValueVector{u\"a\"_v, u\"bc\"_v, u\"d\"_v, u\"e\"_v, u\"\"_v, u\"g\"_v,\n                           u\"hi\"_v, u\"\"_v, u\"\"_v, u\"\"_v, u\"\"_v}\n            << \"output\";\n}\n",
+        "void f()\n{\n    Check::append(\"row\")\n        << \"input\"\n        << ValueVector{u\"a\"_v, u\"bc\"_v, u\"d\"_v, u\"e\"_v, u\"\"_v, u\"g\"_v,\n                       u\"hi\"_v, u\"\"_v, u\"\"_v, u\"\"_v, u\"\"_v}\n        << \"output\";\n}\n",
     );
 }
 
@@ -5738,7 +5738,7 @@ fn comma_led_call_argument_continuation_keeps_tab_split() {
 }
 
 #[test]
-fn leading_stream_operator_chain_off_call_uses_two_levels() {
+fn leading_stream_operator_chain_off_call_takes_one_continuation_indent() {
     let mut options = FormatOptions::default();
     let args = [
         "--style=kr",
@@ -5752,7 +5752,7 @@ fn leading_stream_operator_chain_off_call_uses_two_levels() {
     ]
     .map(str::to_owned);
     apply_command_line_args(&mut options, &args).expect("valid options");
-    let source = "void f()\n{\n\tfor(const ITEMS item: items) {\n\t\tCHECK_EQ(item, state.values[i])\n\t\t        << \"Failed for dataset #\" << i\n\t\t        << \" origin: \" << linenumber;\n\t}\n}\n";
+    let source = "void f()\n{\n\tfor(const ITEMS item: items) {\n\t\tCHECK_EQ(item, state.values[i])\n\t\t    << \"Failed for dataset #\" << i\n\t\t    << \" origin: \" << linenumber;\n\t}\n}\n";
 
     assert_eq!(format_exact(source, &options), source);
 }

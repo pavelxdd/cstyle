@@ -242,7 +242,11 @@ impl FormatEngine<'_> {
             && !previous_code.trimmed_start().starts_with("return ")
             && self.open_paren_column_of(previous_code).is_none()
         {
-            spaces = Some(normal_indent * self.options.indent_width);
+            // Nothing anchors the arm: it continues the statement a
+            // continuation in.
+            spaces = Some(
+                (normal_indent + self.options.continuation_indent) * self.options.indent_width,
+            );
         }
         spaces
     }

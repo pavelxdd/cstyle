@@ -1077,7 +1077,7 @@ fn lambda_stream_chain_keeps_source_aligned_following_operator() {
 }
 
 #[test]
-fn stream_chain_after_split_lambda_header_uses_two_indent_levels() {
+fn stream_chain_after_split_lambda_header_takes_one_continuation_indent() {
     let source = fixture!(
         "void f()",
         "{",
@@ -1085,7 +1085,7 @@ fn stream_chain_after_split_lambda_header_uses_two_indent_levels() {
         "                  const Locale &loc = Locale::classic())",
         "    {",
         "        Check::append(\"%s:%s\", loc.name().c_str(), textOf(format))",
-        "                << format << val << loc << expected;",
+        "            << format << val << loc << expected;",
         "    };",
         "}",
     );

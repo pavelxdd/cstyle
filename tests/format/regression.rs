@@ -4549,7 +4549,7 @@ fn statement_label_after_default_owns_allman_block() {
 #[test]
 fn leading_assignment_ignores_continuation_indent() {
     let input = "void f()\n{\n    int x\n      = 3;\n    int y =\n      3;\n    x = a\n      + b;\n    foo(a,\n        b)\n      + c;\n}\n";
-    let expected = "void f()\n{\n    int x\n        = 3;\n    int y =\n                3;\n    x = a\n        + b;\n    foo(a,\n        b)\n    + c;\n}\n";
+    let expected = "void f()\n{\n    int x\n        = 3;\n    int y =\n                3;\n    x = a\n        + b;\n    foo(a,\n        b)\n                + c;\n}\n";
     check(input, &["--indent-continuation=3"], expected);
     check(expected, &["--indent-continuation=3"], expected);
 }
@@ -7663,7 +7663,7 @@ fn broken_else_ifs_keep_their_level_after_a_ternary_colon_and_on_macro_rows() {
     check(
         "void f(void)\n{\n    if( a ) {\n        SWAP(a[0],a[i])\n    } else if( b ) {\n        SWAP(a[i],a[j])\n        s ? g(d) :\n        h(d);\n    }\n    x();\n}\n",
         &["--style=kr", "--break-elseifs"],
-        "void f(void)\n{\n    if( a ) {\n        SWAP(a[0],a[i])\n    } else\n        if( b ) {\n            SWAP(a[i],a[j])\n            s ? g(d) :\n            h(d);\n        }\n    x();\n}\n",
+        "void f(void)\n{\n    if( a ) {\n        SWAP(a[0],a[i])\n    } else\n        if( b ) {\n            SWAP(a[i],a[j])\n            s ? g(d) :\n                h(d);\n        }\n    x();\n}\n",
     );
 }
 
@@ -18611,9 +18611,9 @@ fn indent_after_parens_sets_a_constructor_initializer_s_ternary_rows_a_continuat
 
 #[test]
 fn indent_after_parens_continues_a_shift_chain_from_a_row_it_leads() {
-    // A shift leading a row with nothing registered stands two levels in;
-    // the rows after it continue a level past that row.
-    let input = "void f()\n{\n    check(x)\n            << a\n                << b\n                << c;\n    cout << a\n        << b\n        << c;\n}\n";
+    // A shift leading a row with nothing registered stands a continuation
+    // indent in; the rows after it continue a level past that row.
+    let input = "void f()\n{\n    check(x)\n        << a\n            << b\n            << c;\n    cout << a\n        << b\n        << c;\n}\n";
     check(input, &["--style=allman", "--indent-after-parens"], input);
 }
 
@@ -21796,7 +21796,7 @@ fn an_operator_row_after_a_macro_call_spanning_rows_continues_the_statement() {
     // The operator continues the call's value; the call stands alone as no
     // statement.
     let input = "void f() {\n  CHECK_SAME(first,\n             second)\n      << \"note: \" << first;\n  CHECK_SAME(first,\n             second)\n      << \"note: \"\n      << first;\n}\n";
-    let expected = "void f()\n{\n    CHECK_SAME(first,\n               second)\n            << \"note: \" << first;\n    CHECK_SAME(first,\n               second)\n            << \"note: \"\n            << first;\n}\n";
+    let expected = "void f()\n{\n    CHECK_SAME(first,\n               second)\n        << \"note: \" << first;\n    CHECK_SAME(first,\n               second)\n        << \"note: \"\n        << first;\n}\n";
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
@@ -23126,11 +23126,13 @@ fn an_argument_row_before_a_block_argument_stands_at_its_stacked_parens() {
 }
 
 #[test]
-fn a_ternary_colon_row_after_angles_stands_at_the_statement_as_after_any_condition() {
+fn a_ternary_colon_row_after_angles_takes_a_continuation_indent_as_after_any_condition() {
     // Template arguments, comparisons and comments among them register no
     // column; a shift does.
     let input = "void f()\n{\n    ready() ? f(a)\n    : g(b);\n    is<T>() ? f(a)\n    : g(b);\n    Item<Value<int>>::ready ? f(a)\n    : g(b);\n    a < b ? f(a)\n    : g(b);\n    size < 16 ? alpha<Flag, /*Other=*/true>(a)\n    : alpha<Flag, false>(a);\n    a << b ? f(a)\n      : g(b);\n}\n";
-    check(input, &["--style=allman"], input);
+    let expected = "void f()\n{\n    ready() ? f(a)\n        : g(b);\n    is<T>() ? f(a)\n        : g(b);\n    Item<Value<int>>::ready ? f(a)\n        : g(b);\n    a < b ? f(a)\n        : g(b);\n    size < 16 ? alpha<Flag, /*Other=*/true>(a)\n        : alpha<Flag, false>(a);\n    a << b ? f(a)\n      : g(b);\n}\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
 }
 
 #[test]
@@ -25143,7 +25145,7 @@ fn an_argument_row_past_the_maximum_after_a_file_scope_initializer_row_stands_tw
 #[test]
 fn a_shift_row_after_parens_closing_a_logical_chain_continues_the_statement() {
     let input = "void helper()\n{\n    check(value.size() >= 2\n          || value[1])\n        << describe(value);\n    stream << check(value.size() >= 2\n                    || value[1])\n        << describe(value);\n    VERIFY(value.size() >= 2\n           && value[1] == 0)\n        << describe(value);\n}\n";
-    let expected = "void helper()\n{\n    check(value.size() >= 2\n          || value[1])\n            << describe(value);\n    stream << check(value.size() >= 2\n                    || value[1])\n           << describe(value);\n    VERIFY(value.size() >= 2\n           && value[1] == 0)\n            << describe(value);\n}\n";
+    let expected = "void helper()\n{\n    check(value.size() >= 2\n          || value[1])\n        << describe(value);\n    stream << check(value.size() >= 2\n                    || value[1])\n           << describe(value);\n    VERIFY(value.size() >= 2\n           && value[1] == 0)\n        << describe(value);\n}\n";
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
@@ -25200,6 +25202,18 @@ fn rows_of_an_assigned_compound_literal_after_a_run_in_element_stand_at_the_firs
     // list's do, assigned or among a call's arguments.
     let input = "void f(void)\n{\n    *p = (struct s) { 1, 2,\n        3\n    };\n    value = (struct s) { .first = 1,\n        .second = 2 };\n    go((struct s) { .first = 1,\n        .second = 2 });\n}\n";
     let expected = "void f(void)\n{\n    *p = (struct s) { 1, 2,\n                      3\n    };\n    value = (struct s) { .first = 1,\n                         .second = 2\n    };\n    go((struct s) { .first = 1,\n                    .second = 2 });\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
+fn a_statement_continued_on_rows_no_column_anchors_takes_one_continuation_indent() {
+    // Rows continuing an expression statement stand one continuation
+    // indent past it whatever operator leads or ends them; rows an
+    // assignment's value or a shift on the first row anchors align there.
+    // A type split from its declarator at a `&&` stays a declaration.
+    let input = "void helper()\n{\n    value\n    + other;\n    value.ready\n    && other;\n    value\n    << other;\n    ready() ? f(a)\n    : g(b);\n    ready()\n    ? f(a)\n    : g(b);\n    value\n    .first()\n    .second();\n    value\n    ->member();\n    call(a)\n    + other;\n    call(a)\n    && other;\n    call(a,\n         b)\n    + other;\n    call(a,\n         b)\n    && other;\n    call(a,\n         b)\n    << other;\n    value +\n    other;\n    value.ready &&\n    other;\n    ready() ? f(a) :\n    g(b);\n    value\n    + other\n    + more;\n    if (ready)\n        value\n    + other;\n    result = value\n    + other;\n    stream << first\n    << second;\n    Item &&\n    item = make();\n}\n";
+    let expected = "void helper()\n{\n    value\n        + other;\n    value.ready\n        && other;\n    value\n        << other;\n    ready() ? f(a)\n        : g(b);\n    ready()\n        ? f(a)\n        : g(b);\n    value\n        .first()\n        .second();\n    value\n        ->member();\n    call(a)\n        + other;\n    call(a)\n        && other;\n    call(a,\n         b)\n        + other;\n    call(a,\n         b)\n        && other;\n    call(a,\n         b)\n        << other;\n    value +\n        other;\n    value.ready &&\n        other;\n    ready() ? f(a) :\n        g(b);\n    value\n        + other\n        + more;\n    if (ready)\n        value\n            + other;\n    result = value\n             + other;\n    stream << first\n           << second;\n    Item &&\n    item = make();\n}\n";
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }

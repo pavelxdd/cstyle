@@ -1895,6 +1895,10 @@ pub(crate) fn is_pointer_declaration_segment(segment: &str) -> bool {
     if segment.contains(':') && segment.replace("::", "").contains(':') {
         return false;
     }
+    // A member access names no type; a pack's `...` may follow one.
+    if segment.contains('.') && segment.replace("...", "").contains('.') {
+        return false;
+    }
     let mut words = segment
         .split(|ch: char| !is_identifier_continue(ch))
         .filter(|word| !word.is_empty());

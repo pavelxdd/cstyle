@@ -236,6 +236,7 @@ impl FormatEngine<'_> {
     }
 
     fn push_dot(&mut self, next: Option<&Token>) {
+        self.continue_statement_at_row_lead(".");
         let keeps_padded_space = ((self.layout.previous == PreviousToken::Comma
             && (self.options.pad_commas || self.options.pad_operators))
             || (self.layout.previous == PreviousToken::Operator && self.options.pad_operators))
@@ -2035,6 +2036,7 @@ impl FormatEngine<'_> {
     }
 
     fn push_question(&mut self, next: Option<&Token>) {
+        self.continue_statement_at_row_lead("?");
         let pad_off =
             !self.options.pad_operators || self.layout.line_state.operator_padding_disabled;
         let should_pad = !pad_off && !self.is_in_case_label_expression();

@@ -1254,10 +1254,14 @@ impl FormatEngine<'_> {
                 && self.open_paren_column_of(line).is_none()
                 && !self.current_is_conditional_header_continuation()
             {
+                // With nothing anchoring the arm, it stands a continuation in.
                 let spaces = self
                     .assignment_continuation_indent_spaces()
                     .or_else(|| self.return_continuation_indent_spaces())
-                    .unwrap_or_else(|| self.statement_line_indent_spaces());
+                    .unwrap_or_else(|| {
+                        self.statement_line_indent_spaces()
+                            + self.options.continuation_indent * self.options.indent_width
+                    });
                 return ContinuationIndent::Spaces(spaces);
             }
         }

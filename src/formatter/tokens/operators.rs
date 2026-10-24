@@ -61,6 +61,32 @@ pub(crate) fn leads_keyword_colon(tail: &str) -> bool {
     tail.starts_with(':') && !tail.starts_with("::")
 }
 
+/// Whether `operator` leading a row continues the statement before it: a
+/// binary operator no statement starts with, or a member access.
+fn leads_statement_continuation(operator: &str) -> bool {
+    matches!(
+        operator,
+        "&&" | "||"
+            | "<<"
+            | ">>"
+            | "=="
+            | "!="
+            | "<="
+            | ">="
+            | "<=>"
+            | "<"
+            | ">"
+            | "/"
+            | "%"
+            | "|"
+            | "^"
+            | "+"
+            | "-"
+            | "->"
+            | "->*"
+    )
+}
+
 pub(crate) fn starts_with_chain_operator(line: &str) -> bool {
     if starts_with_word_operator(line) {
         return true;
@@ -704,8 +730,29 @@ impl FormatEngine<'_> {
                 .continuation_indent
                 .set_next_line_spaces(stream.chain_anchor_column);
         }
-        if matches!(operator, "<<" | ">>")
-            && self.current.trimmed().is_empty()
+        if leads_statement_continuation(operator) {
+            self.continue_statement_at_row_lead(operator);
+        }
+    }
+
+    /// Sets the column of a row `lead`, an operator or a member access,
+    /// starts when it continues the statement before it past nothing that
+    /// registered a column.
+    pub(crate) fn continue_statement_at_row_lead(&mut self, lead: &str) {
+        // Only a block holds statements: rows of a list are its elements,
+        // and rows at declaration scope follow declarations or macros.
+        let in_statement_block = matches!(
+            self.layout.nesting.brace_type_stack.last(),
+            Some(BraceType::Command | BraceType::Definition)
+        );
+        // An Objective-C method's `-` or `+` starts a declaration, and a
+        // trailing return type goes on with a function's head.
+        let starts_method = matches!(lead, "-" | "+") && self.active_token_starts_declaration();
+        let trailing_return = lead == "->" && self.active_token_follows_parameters();
+        if self.current.trimmed().is_empty()
+            && in_statement_block
+            && !starts_method
+            && !trailing_return
             && self.layout.continuation_indent.next_line_indent.is_none()
             && self
                 .layout
@@ -727,18 +774,80 @@ impl FormatEngine<'_> {
                 })
         {
             // A row after an operand of the statement's chain goes on with
-            // the chain.
-            let spaces = self
-                .layout
-                .frame_stack
-                .active_stream()
-                .and_then(|_| self.previous_stream_chain_indent_spaces())
-                .unwrap_or(
-                    self.continuation_base_indent() * self.options.indent_width
-                        + 2 * self.options.indent_width,
-                );
+            // the chain; one nothing anchors stands a continuation past the
+            // statement.
+            let spaces = matches!(lead, "<<" | ">>")
+                .then(|| {
+                    self.layout
+                        .frame_stack
+                        .active_stream()
+                        .and_then(|_| self.previous_stream_chain_indent_spaces())
+                })
+                .flatten()
+                .unwrap_or_else(|| self.statement_continuation_indent_spaces());
             self.layout.continuation_indent.set_next_line_spaces(spaces);
         }
+    }
+
+    /// Whether the token being pushed follows a parameter list, past only
+    /// the qualifiers a function or lambda head takes after it.
+    fn active_token_follows_parameters(&self) -> bool {
+        let tree = &self.tree;
+        let Some(mut index) = self.current.active_token() else {
+            return false;
+        };
+        while let Some(before) = tree.previous_code_token(index) {
+            match &tree.tokens[before] {
+                Token::Symbol(')') => {
+                    let Some(group) = tree.groups.closed_at(before) else {
+                        return false;
+                    };
+                    let open = tree.groups.get(group).open;
+                    let opener = tree
+                        .previous_code_token(open)
+                        .map(|token| &tree.tokens[token]);
+                    if tree.functions.is_parameter_list(group)
+                        || matches!(opener, Some(Token::Symbol(']')))
+                    {
+                        return true;
+                    }
+                    // A qualifier's own parens, as `noexcept(...)`.
+                    if !matches!(opener, Some(Token::Word(word)) if matches!(word.as_str(), "noexcept" | "throw"))
+                    {
+                        return false;
+                    }
+                    index = open;
+                }
+                Token::Word(word)
+                    if matches!(
+                        word.as_str(),
+                        "const"
+                            | "volatile"
+                            | "noexcept"
+                            | "throw"
+                            | "mutable"
+                            | "constexpr"
+                            | "consteval"
+                            | "override"
+                            | "final"
+                    ) =>
+                {
+                    index = before;
+                }
+                Token::Operator(operator) if matches!(operator.as_str(), "&" | "&&") => {
+                    index = before;
+                }
+                _ => return false,
+            }
+        }
+        false
+    }
+
+    /// The column of a row continuing the statement past nothing that
+    /// registered a column: a continuation indent past the statement.
+    pub(crate) fn statement_continuation_indent_spaces(&self) -> usize {
+        (self.continuation_base_indent() + self.options.continuation_indent)
+            * self.options.indent_width
     }
 
     fn try_push_operator_special_case(

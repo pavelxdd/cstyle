@@ -585,7 +585,7 @@ impl FormatEngine<'_> {
     /// `-` or `+` does: in no group but a declaration scope's braces, and
     /// after a statement's end or an `@` directive's line, not inside an
     /// expression the line before continues.
-    fn active_token_starts_declaration(&self) -> bool {
+    pub(crate) fn active_token_starts_declaration(&self) -> bool {
         let tree = &self.tree;
         let Some(index) = self
             .current
