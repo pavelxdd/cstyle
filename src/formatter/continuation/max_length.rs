@@ -1,7 +1,8 @@
 use crate::config::{BraceStyle, FormatOptions, PointerAlign, ReferenceAlign};
 use crate::formatter::braces::classification::is_lambda_capture_header;
 use crate::formatter::constructs::constructor_initializers::{
-    advance_max_length_constructor_replay, start_max_length_constructor_replay,
+    advance_max_length_constructor_replay, has_inline_constructor_initializer_colon,
+    start_max_length_constructor_replay,
 };
 use crate::formatter::constructs::headers::is_conditional_header_line;
 use crate::formatter::constructs::labels::max_length_inline_access_body_indent_extra;
@@ -1332,8 +1333,13 @@ fn continuation_indent_for_split(
                     registered
                 }
             }
+            // An initializer list the head holds continues it a level.
             None => return_value_indent(head, base_indent_width)
                 .or_else(|| assignment_value_indent(head, base_indent_width))
+                .or_else(|| {
+                    has_inline_constructor_initializer_colon(head)
+                        .then_some(base_indent_width + indent_width)
+                })
                 .unwrap_or(base_indent_width),
         };
         let target = previous + configured_continuation_spaces;

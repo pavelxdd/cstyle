@@ -3148,6 +3148,25 @@ fn declaration_after_a_linkage_specification_split_before_its_name_continues_not
 }
 
 #[test]
+fn inline_member_initializer_split_after_its_paren_continues_past_the_list() {
+    // The initializer list continues the head a level, and the arguments a
+    // level past it, as on a second run.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=kr".to_owned(),
+            "--max-code-length=60".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let source = "struct Config {\n    Config(detail::buffer_size size) : buffer_size(size.value_of_it) {}\n};\n";
+    let expected = "struct Config {\n    Config(detail::buffer_size size) : buffer_size(\n            size.value_of_it) {}\n};\n";
+
+    assert_stable_max_length_format(source, &options, expected);
+}
+
+#[test]
 fn aggregate_brace_split_from_its_assignment_stands_at_the_statement() {
     let mut options = FormatOptions::default();
     apply_command_line_args(
