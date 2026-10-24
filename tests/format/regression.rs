@@ -21545,6 +21545,20 @@ fn a_logical_or_between_template_arguments_keeps_the_angles_a_template() {
 }
 
 #[test]
+fn an_operator_within_parens_among_template_arguments_keeps_the_angles_a_template() {
+    // The parens hold an expression of their own.
+    let input = "using Check = enable_if_t<std::is_assignable<decltype(*std::declval<It&>()++), T>::value>;\nusing Wide = Box<decltype(first + second), Item>;\nusing Size = Holder<sizeof(Item) * 2>;\n";
+    check(input, &["-p"], input);
+    let input = "template <typename It, typename T>\nstruct is_output<\n    It, T,\n    enable_if_t<std::is_assignable<decltype(*std::declval<It&>()++),\n                                   T>::value>> : std::true_type {};\n";
+    check(input, &["--style=kr"], input);
+    // A comparison in a default's parens opens no angle of the head, and a
+    // logical operator among the head's parameters leaves it a head.
+    let input = "template <long long Num, int N = 0,\n          bool Enabled = (N < 19) && (Num <= max_value<long long>() / 10)>\nstruct Item {\n    static constexpr bool value = Num<N && N>Num;\n};\n";
+    let expected = "template <long long Num, int N = 0,\n          bool Enabled = (N < 19) && (Num <= max_value<long long>() / 10)>\nstruct Item {\n    static constexpr bool value = Num < N && N > Num;\n};\n";
+    check(input, &["-p"], expected);
+}
+
+#[test]
 fn comparisons_joined_by_a_logical_operator_before_an_operand_stay_comparisons() {
     // A name or a paren after the `>` of arguments a logical operator joins
     // reads as the right operand of a comparison, not as what a template

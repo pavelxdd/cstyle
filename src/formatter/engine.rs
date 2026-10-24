@@ -1394,8 +1394,11 @@ impl<'a> FormatEngine<'a> {
             self.layout.line_state.template_angle_depth,
             || self.template_opener_at(index),
         );
+        // A head's parameters open their angles; a comparison in parens there
+        // opens none.
         if matches!(template_angle, TemplateAngle::None)
             && self.template_continuation_active()
+            && self.layout.nesting.paren_depth == 0
             && matches!(tokens.get(index), Some(Token::Operator(operator)) if operator == "<")
             && next_index.is_some()
             && !matches!(next, Some(Token::Operator(operator)) if operator == "=")
