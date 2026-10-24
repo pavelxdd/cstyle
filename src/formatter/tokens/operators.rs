@@ -908,6 +908,8 @@ impl FormatEngine<'_> {
         operator_role: OperatorRole,
         split_rvalue_reference: bool,
     ) {
+        // An operator a function's name spells assigns nothing.
+        let names_operator = trailing_word(&self.current) == language::OPERATOR;
         match operator {
             "::" => {
                 if self.layout.previous == PreviousToken::OpenParen
@@ -1011,7 +1013,7 @@ impl FormatEngine<'_> {
                 self.current.push_str(operator);
                 self.emit_trailing_source_space();
             }
-            _ if trailing_word(&self.current) == language::OPERATOR => {
+            _ if names_operator => {
                 self.emit_source_space();
                 self.current.push_str(operator);
                 self.emit_trailing_source_space();
@@ -1428,7 +1430,10 @@ impl FormatEngine<'_> {
                 self.emit_trailing_source_space();
             }
         }
-        if language::is_assignment_operator(operator) && !self.in_aggregate_declaration_brace() {
+        if language::is_assignment_operator(operator)
+            && !names_operator
+            && !self.in_aggregate_declaration_brace()
+        {
             let rhs_next = if self.comments.next_comment_ends_line {
                 None
             } else {

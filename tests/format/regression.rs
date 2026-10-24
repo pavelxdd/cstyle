@@ -25020,3 +25020,13 @@ fn indent_tab_aligns_a_row_continued_after_a_default_style_run_in_brace_in_space
         "struct Item\n{\tint a = (1 +\n\t         2);\n\tint b;\n};\n",
     );
 }
+
+#[test]
+fn an_assignment_operator_a_function_name_spells_registers_no_continuation() {
+    let input = "auto operator|=(Item rhs) ->\nItem&\n{\n}\nItem& operator=(Item rhs)\nconst;\nclass Item {\n    auto operator+=(Item rhs) ->\n    Item&\n    {\n    }\n};\n";
+    check(
+        input,
+        &["--style=kr"],
+        "auto operator|=(Item rhs) ->\nItem&\n{\n}\nItem& operator=(Item rhs)\nconst;\nclass Item\n{\n    auto operator+=(Item rhs) ->\n    Item&\n    {\n    }\n};\n",
+    );
+}

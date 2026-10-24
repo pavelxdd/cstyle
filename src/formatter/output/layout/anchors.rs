@@ -2118,8 +2118,10 @@ impl FormatEngine<'_> {
         let mut index = start;
         loop {
             match &tokens[index] {
+                // An operator function's name assigns nothing.
                 Token::Word(word)
                     if word == "return"
+                        || word == "operator"
                         || word == "template" && next_code_token(tokens, index + 1).is_some_and(|next| matches!(&tokens[next], Token::Operator(operator) if operator.starts_with('<')))
                         || is_header(word) =>
                 {
