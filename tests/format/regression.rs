@@ -25114,3 +25114,11 @@ fn a_comment_after_a_semicolonless_macro_call_in_a_namespace_stands_at_the_state
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
+
+#[test]
+fn a_stream_row_after_an_operand_row_of_a_trailing_shift_stands_at_the_chain() {
+    let input = "void f()\n{\n    stream << \"first value \" <<\n    value\n    << \" second\";\n    if (ready) {\n        LOGEVENT(WARNING) << \"Exceeded match limit of \" <<\n        match_limit\n        << \" when matching \" << pattern << \"x\";\n    }\n}\n";
+    let expected = "void f()\n{\n    stream << \"first value \" <<\n           value\n           << \" second\";\n    if (ready) {\n        LOGEVENT(WARNING) << \"Exceeded match limit of \" <<\n                          match_limit\n                          << \" when matching \" << pattern << \"x\";\n    }\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}

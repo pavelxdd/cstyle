@@ -726,8 +726,17 @@ impl FormatEngine<'_> {
                         .is_none()
                 })
         {
-            let spaces = self.continuation_base_indent() * self.options.indent_width
-                + 2 * self.options.indent_width;
+            // A row after an operand of the statement's chain goes on with
+            // the chain.
+            let spaces = self
+                .layout
+                .frame_stack
+                .active_stream()
+                .and_then(|_| self.previous_stream_chain_indent_spaces())
+                .unwrap_or(
+                    self.continuation_base_indent() * self.options.indent_width
+                        + 2 * self.options.indent_width,
+                );
             self.layout.continuation_indent.set_next_line_spaces(spaces);
         }
     }

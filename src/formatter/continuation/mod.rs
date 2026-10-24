@@ -2231,14 +2231,16 @@ impl FormatEngine<'_> {
 
     pub(crate) fn previous_stream_chain_indent_spaces(&self) -> Option<usize> {
         let previous_line = self.output.len().checked_sub(1)?;
-        let stream = self
-            .layout
-            .frame_stack
+        // A row holding no shift continues the chain of the row with the
+        // last one, from that row's first.
+        let frames = &self.layout.frame_stack;
+        let stream = frames
             .first_stream_on_output_line(previous_line)
             .or_else(|| {
-                self.layout
-                    .frame_stack
-                    .stream_before_output_line(self.output.len())
+                let last = frames.stream_before_output_line(self.output.len())?;
+                frames
+                    .first_stream_on_output_line(last.operator_output_line)
+                    .or(Some(last))
             })?;
         let base = self.continuation_base_indent() * self.options.indent_width;
         if stream.line_contains_nested_brace {
