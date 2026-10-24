@@ -626,6 +626,10 @@ impl FormatEngine<'_> {
     }
 
     pub(super) fn current_ends_compound_literal_type(&self) -> bool {
+        // A function's parameters cast nothing, wherever their line starts.
+        if self.pushed_brace_kind() == Some(BlockKind::FunctionBody) {
+            return false;
+        }
         if self.current_is_blank() {
             // A directive's condition casts nothing after it.
             return self.output.last().is_some_and(|last| {

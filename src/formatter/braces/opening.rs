@@ -4048,8 +4048,9 @@ impl FormatEngine<'_> {
             return true;
         }
         // A compound literal nested in an aggregate keeps its place, as any
-        // brace there does.
-        line_ends_compound_literal_cast(last)
+        // brace there does; a function's parameters cast nothing.
+        brace_type != BraceType::Definition
+            && line_ends_compound_literal_cast(last)
             && (matches!(
                 self.options.brace_style,
                 BraceStyle::Attach | BraceStyle::Lisp | BraceStyle::Ratliff

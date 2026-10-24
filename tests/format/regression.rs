@@ -25030,3 +25030,14 @@ fn an_assignment_operator_a_function_name_spells_registers_no_continuation() {
         "auto operator|=(Item rhs) ->\nItem&\n{\n}\nItem& operator=(Item rhs)\nconst;\nclass Item\n{\n    auto operator+=(Item rhs) ->\n    Item&\n    {\n    }\n};\n",
     );
 }
+
+#[test]
+fn a_function_body_after_parameters_on_their_own_line_takes_its_style_s_brace() {
+    let expected = "int helper\n(int value)\n{\n    return value;\n}\nclass Item\n{\n    int helper\n    (int value)\n    {\n    }\n};\n";
+    for input in [
+        "int helper\n(int value)\n{\n    return value;\n}\nclass Item {\n    int helper\n    (int value)\n    {\n    }\n};\n",
+        "int helper\n    (int value) {\n    return value;\n}\nclass Item {\n    int helper\n    (int value) {\n    }\n};\n",
+    ] {
+        check(input, &["--style=kr"], expected);
+    }
+}
