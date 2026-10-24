@@ -309,8 +309,16 @@ impl FormatEngine<'_> {
         let top = walk.top();
         let &(column, line_indent, _) = walk.node(top)?;
         let opener_indent = column + 1;
-        let base = self.continuation_base_indent() * self.options.indent_width;
-        if opener_indent < self.options.max_continuation_indent {
+        let statement_indent = if start < len {
+            leading_visual_width(&self.output[start], self.options.tab_width)
+        } else {
+            0
+        };
+        let base =
+            statement_indent.max(self.continuation_base_indent() * self.options.indent_width);
+        let fits =
+            |spaces: usize| spaces.saturating_sub(base) < self.options.max_continuation_indent;
+        if fits(opener_indent) {
             return Some(opener_indent);
         }
         if line_indent > base {
@@ -319,7 +327,7 @@ impl FormatEngine<'_> {
         std::iter::successors(Some(walk.below(top)), |&node| Some(walk.below(node)))
             .map_while(|node| walk.node(node))
             .map(|(column, _, _)| column + 1)
-            .find(|spaces| *spaces < self.options.max_continuation_indent)
+            .find(|&spaces| fits(spaces))
             .or(Some(base + self.options.indent_width * 2))
     }
 

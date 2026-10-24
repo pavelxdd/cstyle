@@ -3594,3 +3594,15 @@ fn max_code_length_splits_a_declaration_before_its_name_past_template_arguments(
         "static inline std::map<std::string, int>*\nempty_named_groups()\n{\n    return value;\n}\n",
     );
 }
+
+#[test]
+fn max_code_length_keeps_a_new_call_argument_row_in_a_lambda_body_at_its_paren() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    let source = "void helper()\n{\n    if (ready) {\n        call_once(flag, [](Prog* prog) {\n            prog->dfa_longest_ = new DFA(prog, kLongestMatch,\n                                         prog->dfa_mem_ / 2);\n        }, this);\n    }\n}\n";
+    assert_stable_max_length_format(source, &options, source);
+}
