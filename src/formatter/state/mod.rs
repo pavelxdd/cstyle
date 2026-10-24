@@ -249,6 +249,14 @@ impl NestingState {
         self.continuation_indent_spaces_stack.push(spaces);
     }
 
+    /// The column the innermost paren registered for its rows, if any.
+    pub(crate) fn current_paren_continuation_column(&self) -> Option<usize> {
+        let checkpoint = *self.continuation_indent_checkpoint_stack.last()?;
+        (self.continuation_indent_spaces_stack.len() > checkpoint)
+            .then(|| self.continuation_indent_spaces_stack.last().copied())
+            .flatten()
+    }
+
     pub(crate) fn restore_continuation_checkpoint(&mut self) {
         let target_size = self.continuation_indent_checkpoint_stack.pop().unwrap_or(0);
         self.continuation_indent_spaces_stack.truncate(target_size);

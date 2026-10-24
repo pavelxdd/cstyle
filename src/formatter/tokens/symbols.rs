@@ -710,8 +710,19 @@ impl FormatEngine<'_> {
         {
             self.layout.continuation_indent.logical_chain_indent_spaces = None;
         }
+        let closed_column = self
+            .layout
+            .frame_stack
+            .active_delimiter()
+            .filter(|frame| frame.opener_output_line < self.output.len())
+            .and_then(|_| self.layout.nesting.current_paren_continuation_column());
         self.layout.nesting.exit_paren();
         self.layout.frame_stack.pop_delimiter(self.output.len());
+        if let Some(column) = closed_column {
+            self.layout
+                .frame_stack
+                .record_line_closed_paren_column(column);
+        }
         self.layout.indentation.exit_paren();
         // An operator no statement starts with continues the call's value.
         let continued = self

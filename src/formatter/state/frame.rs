@@ -343,7 +343,7 @@ pub(crate) struct FrameStack {
     closed_delimiters_unordered: bool,
     line_closed_delimiter_continuation_indent: Option<usize>,
     line_closed_delimiter_line_indent_spaces: Option<usize>,
-    line_closed_delimiter_opener_column: Option<usize>,
+    line_closed_paren_columns: Vec<usize>,
     line_closed_call_logical_operand_indent: Option<(usize, usize)>,
     line_closed_lambda_parameter_list: bool,
     line_closed_brackets: Vec<BracketFrame>,
@@ -394,13 +394,6 @@ impl FrameStack {
         {
             self.line_closed_delimiter_continuation_indent = entry.frame.continuation_indent_column;
             self.line_closed_delimiter_line_indent_spaces = Some(entry.frame.line_indent_spaces);
-        }
-        if entry.frame.opener_output_line < current_output_line {
-            let column = entry.frame.opener_output_column;
-            self.line_closed_delimiter_opener_column = Some(
-                self.line_closed_delimiter_opener_column
-                    .map_or(column, |closed| closed.min(column)),
-            );
         }
         if entry.frame.opener_output_line < current_output_line
             && let Some(call) = entry.frame.call.as_ref()
@@ -479,15 +472,20 @@ impl FrameStack {
         self.line_closed_delimiter_line_indent_spaces
     }
 
-    /// The leftmost opener of the delimiters the line closed that earlier
-    /// lines opened.
-    pub(crate) fn line_closed_delimiter_opener_column(&self) -> Option<usize> {
-        self.line_closed_delimiter_opener_column
+    /// Records `column`, which a paren an earlier line opened set for its
+    /// rows, as closed on the line.
+    pub(crate) fn record_line_closed_paren_column(&mut self, column: usize) {
+        self.line_closed_paren_columns.push(column);
+    }
+
+    /// Whether `column` is one a paren the line closed set for its rows.
+    pub(crate) fn line_closed_paren_column(&self, column: usize) -> bool {
+        self.line_closed_paren_columns.contains(&column)
     }
 
     pub(crate) fn take_line_closed_delimiter_continuation_indent(&mut self) -> Option<usize> {
         self.line_closed_delimiter_line_indent_spaces = None;
-        self.line_closed_delimiter_opener_column = None;
+        self.line_closed_paren_columns.clear();
         self.line_closed_delimiter_continuation_indent.take()
     }
 

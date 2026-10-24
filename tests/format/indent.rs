@@ -2097,6 +2097,9 @@ fn statement_level_ternary_colon_after_an_argument_row_takes_a_continuation_inde
         "    ready ? first(value,",
         "                  other) :",
         "        second(value);",
+        "    is_locked<Item...>() ? helper::write_buffered_values(output,",
+        "            first, second)",
+        "        : helper::write(output, first, second);",
         "}",
     );
 
