@@ -571,6 +571,38 @@ fn angle_depth(line: &str) -> isize {
     depth
 }
 
+/// What follows the template head leading `line`, as the declaration in
+/// `template <typename T> struct Item`; all of `line` when no closed head
+/// leads it.
+pub(crate) fn after_template_head(line: &str) -> &str {
+    let trimmed = line.trimmed_start();
+    let Some(rest) = trimmed.strip_prefix("template") else {
+        return line;
+    };
+    let rest = rest.trimmed_start();
+    if !rest.starts_with('<') {
+        return line;
+    }
+    let start = trimmed.len() - rest.len();
+    let mut depth = 0usize;
+    let mut paren_depth = 0usize;
+    for (offset, ch) in trimmed[start..].char_indices() {
+        match ch {
+            '(' | '[' => paren_depth += 1,
+            ')' | ']' => paren_depth = paren_depth.saturating_sub(1),
+            '<' if paren_depth == 0 => depth += 1,
+            '>' if paren_depth == 0 => {
+                depth -= 1;
+                if depth == 0 {
+                    return &trimmed[start + offset + 1..];
+                }
+            }
+            _ => {}
+        }
+    }
+    line
+}
+
 pub(crate) fn is_template_declaration_head_line(line: &str) -> bool {
     let trimmed = line.trimmed_start();
     let Some(rest) = trimmed.strip_prefix("template") else {

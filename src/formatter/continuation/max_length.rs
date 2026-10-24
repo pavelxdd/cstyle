@@ -6,6 +6,7 @@ use crate::formatter::constructs::constructor_initializers::{
 use crate::formatter::constructs::headers::is_conditional_header_line;
 use crate::formatter::constructs::labels::max_length_inline_access_body_indent_extra;
 use crate::formatter::constructs::switch_cases::max_length_inline_case_body_indent_extra;
+use crate::formatter::constructs::template_declarations::after_template_head;
 use crate::formatter::continuation::{ContinuationIndent, min_conditional_indent_spaces};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, token_text, tokenize};
@@ -995,19 +996,21 @@ fn continuation_indent_for_split(
     let head = split.head.as_str();
     // A declaration split at the whitespace before its name continues
     // nothing astyle registered, unless an aggregate keyword leads it.
-    // Macro calls the head closes register nothing either.
-    let macro_groups = head.contains('(')
-        && unmatched_open_paren_columns(head).is_empty()
+    // Macro calls the head closes register nothing either, nor does a
+    // template head before the declaration.
+    let declaration = after_template_head(head);
+    let macro_groups = declaration.contains('(')
+        && unmatched_open_paren_columns(declaration).is_empty()
         && (split.tail.starts_with(is_identifier_continue)
             // A function pointer's parameters split from its `(*name)`.
             || split.tail.starts_with('(')
-                && head.trimmed_end().ends_with(')')
-                && head.contains("(*"))
-        && head.match_indices('(').all(|(at, _)| {
+                && declaration.trimmed_end().ends_with(')')
+                && declaration.contains("(*"))
+        && declaration.match_indices('(').all(|(at, _)| {
             // A function pointer's `(*name)` and the parameters after it.
-            head[at + 1..].trimmed_start().starts_with('*')
-                || head[..at].trimmed_end().ends_with_any(b"()")
-                || head[..at]
+            declaration[at + 1..].trimmed_start().starts_with('*')
+                || declaration[..at].trimmed_end().ends_with_any(b"()")
+                || declaration[..at]
                     .rsplit(|ch: char| !is_identifier_continue(ch))
                     .next()
                     .is_some_and(|word| {
@@ -1019,7 +1022,7 @@ fn continuation_indent_for_split(
                     })
         });
     // Member access registers nothing.
-    let unaccessed_head = head.replace("->", ".");
+    let unaccessed_head = declaration.replace("->", ".");
     if !following_split
         && unaccessed_head.chars().all(|ch| {
             is_identifier_continue(ch)
@@ -1027,10 +1030,10 @@ fn continuation_indent_for_split(
                 || matches!(ch, '*' | '&' | ':' | '<' | '>' | '.')
                 || macro_groups && matches!(ch, '(' | ')' | ',')
         })
-        && head.ends_with(|ch: char| {
+        && declaration.ends_with(|ch: char| {
             is_identifier_continue(ch) || matches!(ch, '*' | '&' | '>') || macro_groups && ch == ')'
         })
-        && !head
+        && !declaration
             .split(|ch: char| !is_identifier_continue(ch))
             .any(|word| {
                 matches!(word, "return" | "case" | "goto")

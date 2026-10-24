@@ -10,6 +10,7 @@ use crate::formatter::constructs::class_declarations::code_opens_class_base_clau
 use crate::formatter::constructs::headers::is_header;
 use crate::formatter::constructs::return_types::is_return_type_line;
 use crate::formatter::constructs::switch_cases::find_case_colon;
+use crate::formatter::constructs::template_declarations::after_template_head;
 use crate::formatter::continuation::max_length::lambda_parameter_continuation_indent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
@@ -2509,8 +2510,9 @@ pub(crate) fn min_conditional_indent_spaces(options: &FormatOptions) -> usize {
 /// Whether `line` names a struct, union or class type its declarators or
 /// head continue on the next line after, as `static const struct Item`.
 pub(crate) fn splits_aggregate_declaration_name(line: &str) -> bool {
-    // A comment leading the type leaves the declaration it leads.
-    let line = after_leading_comments(line);
+    // A comment leading the type leaves the declaration it leads, and a
+    // template head the declaration it introduces.
+    let line = after_template_head(after_leading_comments(line));
     if line.ends_with_any(b";{}=")
         || line.contains_any_byte(b"([)],")
         || line.trimmed_start().starts_with_any(b"/*")

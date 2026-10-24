@@ -3404,3 +3404,18 @@ fn max_code_length_aligns_a_stream_row_a_level_past_the_shift_after_a_braceless_
         "void f()\n{\n    if (ready) REPORT(ERROR) << value.name << \" on \" <<\n                                 value.text << \": want \";\n    if (ready)\n        helper();\n    else stream << first_value << second_value << third_value <<\n                    fourth_one;\n}\n",
     );
 }
+
+#[test]
+fn max_code_length_splits_a_templated_declaration_as_its_reformat_lays_it_out() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "template <typename Char, typename T> auto check_every_listed_item() -> bool\n{\n    return true;\n}\ntemplate <typename Char, typename... T> void check_every_listed_value()\n{\n}\ntemplate <typename T, typename Enable = void> struct numeric_traits_value;\ntemplate <typename Char, typename T> static inline Item first_listed_value;\n",
+        &options,
+        "template <typename Char, typename T> auto\ncheck_every_listed_item() -> bool\n{\n    return true;\n}\ntemplate <typename Char, typename... T> void\ncheck_every_listed_value()\n{\n}\ntemplate <typename T, typename Enable = void> struct\n    numeric_traits_value;\ntemplate <typename Char, typename T> static inline Item\nfirst_listed_value;\n",
+    );
+}
