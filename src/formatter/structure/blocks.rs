@@ -511,16 +511,15 @@ fn classify_in_expression(
     }
 }
 
-/// Whether the brace right after the `(` at `paren`, on its line, ends a
-/// statement with `;` at its own level: a brace on the next line is a
-/// macro's block argument.
+/// Whether the brace right after the `(` at `paren`, on its line or the
+/// next, ends a statement with `;` at its own level.
 fn holds_statement(tokens: &[Token], groups: &Groups, paren: usize) -> bool {
     let Some(open) = next_code_token(tokens, paren + 1) else {
         return false;
     };
     if tokens[paren + 1..open]
         .iter()
-        .any(|token| !matches!(token, Token::Whitespace(_)))
+        .any(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
     {
         return false;
     }

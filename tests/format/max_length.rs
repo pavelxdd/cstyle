@@ -3154,10 +3154,7 @@ fn inline_member_initializer_split_after_its_paren_continues_past_the_list() {
     let mut options = FormatOptions::default();
     apply_command_line_args(
         &mut options,
-        &[
-            "--style=kr".to_owned(),
-            "--max-code-length=60".to_owned(),
-        ],
+        &["--style=kr".to_owned(), "--max-code-length=60".to_owned()],
     )
     .expect("valid options");
     let source = "struct Config {\n    Config(detail::buffer_size size) : buffer_size(size.value_of_it) {}\n};\n";
@@ -3173,16 +3170,32 @@ fn argument_row_opening_a_lambda_split_in_its_parameters_stays_at_the_statement(
     let mut options = FormatOptions::default();
     apply_command_line_args(
         &mut options,
-        &[
-            "--style=kr".to_owned(),
-            "--max-code-length=60".to_owned(),
-        ],
+        &["--style=kr".to_owned(), "--max-code-length=60".to_owned()],
     )
     .expect("valid options");
     let source = "auto write_values(Iter out, View values) -> Iter {\n  return write_padded<Item, default_align>(\n      out, config, values.size(), [values](reserve_iterator<Iter> it) {\n        return copy<Item>(values.data(), it);\n      });\n}\n";
     let expected = "auto write_values(Iter out, View values) -> Iter\n{\n    return write_padded<Item, default_align>(\n    out, config, values.size(), [values](reserve_iterator<Iter>\n                                         it) {\n        return copy<Item>(values.data(), it);\n    });\n}\n";
 
     assert_stable_max_length_format(source, &options, expected);
+}
+
+#[test]
+fn statements_of_a_block_argument_split_wherever_its_brace_stood() {
+    // A brace holding statements among a call's arguments is a block, not a
+    // list, whether it followed the paren or stood on the next line.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_owned(), "--max-code-length=60".to_owned()],
+    )
+    .expect("valid options");
+    let expected = "void helper()\n{\n    CHECK( {\n        if (!ready)\n            throw helper_error(status, \"cannot open the file {}\",\n                               filename);\n    });\n}\n";
+    for source in [
+        "void helper() {\n  CHECK(\n      {\n        if (!ready)\n          throw helper_error(status, \"cannot open the file {}\", filename);\n      });\n}\n",
+        "void helper() {\n  CHECK( {\n        if (!ready)\n          throw helper_error(status, \"cannot open the file {}\", filename);\n      });\n}\n",
+    ] {
+        assert_stable_max_length_format(source, &options, expected);
+    }
 }
 
 #[test]
