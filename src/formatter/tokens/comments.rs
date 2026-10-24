@@ -1801,7 +1801,14 @@ impl FormatEngine<'_> {
                 .or_else(|| follows_objc_interface.then_some(self.options.indent_width))
         {
             let output_len = self.output.len();
-            if let Some((_, delimiter)) = self.layout.frame_stack.active_delimiter_mut()
+            // A comment in a brace sets no column for the parens around it.
+            let in_brace = self
+                .current
+                .active_comment()
+                .and_then(|comment| self.tree.groups.enclosing(comment))
+                .is_some_and(|group| self.tree.groups.get(group).delimiter == Delimiter::Brace);
+            if !in_brace
+                && let Some((_, delimiter)) = self.layout.frame_stack.active_delimiter_mut()
                 && delimiter.opener_output_line < output_len
             {
                 delimiter.continuation_indent_column = Some(spaces);
@@ -2598,6 +2605,25 @@ impl FormatEngine<'_> {
         self.stacked_initializer_row_indent(first)
     }
 
+    /// Whether the active comment directly follows the brace of the list it
+    /// stands in.
+    fn comment_follows_list_brace(&self) -> bool {
+        self.layout.frame_stack.active_brace().is_some_and(|frame| {
+            matches!(
+                frame.semantic_kind,
+                BraceSemanticKind::Array
+                    | BraceSemanticKind::Initializer
+                    | BraceSemanticKind::CompoundLiteral
+                    | BraceSemanticKind::DeferArray
+            ) && frame.open_token.is_some()
+                && self
+                    .current
+                    .active_comment()
+                    .and_then(|comment| self.tree.previous_code_token(comment))
+                    == frame.open_token
+        })
+    }
+
     /// Whether the comment at `index` leads a closer, past the comments
     /// between them.
     fn comment_leads_closer(&self, comment: &str, index: usize) -> bool {
@@ -2949,6 +2975,10 @@ impl FormatEngine<'_> {
                         .line_indent(LineKind::SwitchLabel, self.options)
                         * self.options.indent_width,
                 );
+            }
+            // A comment after a list's brace stands where the list's rows do.
+            if code.ends_with('{') && self.comment_follows_list_brace() {
+                return self.active_body_comment_indent_spaces();
             }
             code.ends_with('{').then(|| {
                 let body_indent = (self

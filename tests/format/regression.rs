@@ -25302,3 +25302,27 @@ fn a_brace_list_argument_leading_its_row_stands_as_any_argument() {
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn a_block_comment_leading_a_list_argument_rows_stands_with_them() {
+    // A comment after a list's brace stands where the list's rows do, and
+    // the arguments after the list stay at the call's column.
+    let input = "void helper()\n{\n    result(first,\n    {\n        /* note */\n        value\n    },\n    more);\n    result(first,\n    {\n        /* note */\n    });\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void helper()\n{\n    result(first, {\n        /* note */\n        value\n    },\n           more);\n    result(first, {\n        /* note */\n    });\n}\n",
+        ),
+        (
+            "--style=allman",
+            "void helper()\n{\n    result(first,\n           {\n               /* note */\n               value\n           },\n           more);\n    result(first,\n           {\n               /* note */\n           });\n}\n",
+        ),
+        (
+            "--style=vtk",
+            "void helper()\n{\n    result(first,\n           {\n           /* note */\n           value\n           },\n           more);\n    result(first,\n           {\n           /* note */\n           });\n}\n",
+        ),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
