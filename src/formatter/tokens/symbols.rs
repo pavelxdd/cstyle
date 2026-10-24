@@ -772,7 +772,8 @@ impl FormatEngine<'_> {
             };
         let declarator_alignment =
             declarator_operator.map(|operator| resolved_pointer_align(self.options, operator));
-        let opens_attribute = matches!(next, Some(Token::Symbol('[')));
+        let opens_attribute =
+            matches!(next, Some(Token::Symbol('['))) && self.bracket_opens_attribute();
         let opens_structured_binding =
             declarator_operator == Some("&") && trailing_word(declarator_prefix) == "auto";
         let attaches_declarator_group =
@@ -845,6 +846,23 @@ impl FormatEngine<'_> {
         self.options.mode == Mode::C
             && self.token_input.token_begins_source_line
             && self.current.trimmed().is_empty()
+    }
+
+    /// Whether the `[` being pushed opens an attribute, `[[...]]`, rather
+    /// than a message whose receiver is a message, `[[a b] c]`.
+    fn bracket_opens_attribute(&self) -> bool {
+        let groups = &self.tree.groups;
+        let tokens = &self.tree.tokens;
+        self.current
+            .active_token()
+            .and_then(|open| groups.opened_at(open))
+            .and_then(|outer| {
+                let outer = groups.get(outer);
+                let inner = groups.opened_at(next_code_token(tokens, outer.open + 1)?)?;
+                let inner_close = groups.get(inner).close?;
+                Some(next_code_token(tokens, inner_close + 1) == outer.close)
+            })
+            .unwrap_or(true)
     }
 
     fn bracket_opens_objc_message(&self) -> bool {

@@ -1572,3 +1572,26 @@ fn objc_message_continuation_aligns_under_its_first_selector_after_return_too() 
     let source = "void f(void) {\n    result = [helper alpha:a\n                     beta:b];\n    return [helper alpha:a\n                   beta:b];\n    return 1 + [helper alpha:a\n                       beta:b];\n    call([helper alpha:a\n                 beta:b]);\n}\n";
     assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
+
+#[test]
+fn a_nested_message_after_a_logical_or_bitwise_operator_keeps_its_space() {
+    // `[[a b] c]` sends to a message's result; only `[[...]]` closing
+    // together is an attribute a declarator takes.
+    let input = "void f()\n{\n    if (a && [[b c] d]) go();\n    x = a & [[b c] d];\n}\nvoid g(int && [[maybe_unused]] x, int * [[maybe_unused]] y);\n";
+    let expected = "void f()\n{\n    if (a && [[b c] d]) go();\n    x = a & [[b c] d];\n}\nvoid g(int &&[[maybe_unused]] x, int *[[maybe_unused]] y);\n";
+    for option in ["--align-pointer=name", "--align-reference=name"] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(
+            &mut options,
+            &["--style=kr".to_string(), option.to_string()],
+        )
+        .expect("valid options");
+        let expected = if option == "--align-reference=name" {
+            expected.replace("int *[[", "int * [[")
+        } else {
+            expected.to_string()
+        };
+        assert_eq!(format_exact(input, &options), expected);
+        assert_eq!(format_exact(&expected, &options), expected);
+    }
+}
