@@ -24730,3 +24730,52 @@ fn indent_classes_indents_the_members_of_an_attributed_class() {
         check(expected, &args, expected);
     }
 }
+
+#[test]
+fn a_function_like_define_ending_in_a_label_leaves_the_next_line_at_its_level() {
+    // A directive is no constructor head, whatever its last colon.
+    let input = "#define CASE(x) case x:\n#define LABEL(x) x:\nint f(int v);\nstruct Item {\n#define FIELD(x) case (x):\n    int value;\n};\n";
+    for style in [
+        "--style=kr",
+        "--style=allman",
+        "--style=whitesmith",
+        "--style=lisp",
+    ] {
+        let expected = match style {
+            "--style=whitesmith" => {
+                "#define CASE(x) case x:\n#define LABEL(x) x:\nint f(int v);\nstruct Item\n    {\n#define FIELD(x) case (x):\n    int value;\n    };\n"
+            }
+            "--style=lisp" => {
+                "#define CASE(x) case x:\n#define LABEL(x) x:\nint f(int v);\nstruct Item {\n#define FIELD(x) case (x):\n    int value; };\n"
+            }
+            "--style=kr" => {
+                "#define CASE(x) case x:\n#define LABEL(x) x:\nint f(int v);\nstruct Item {\n#define FIELD(x) case (x):\n    int value;\n};\n"
+            }
+            _ => {
+                "#define CASE(x) case x:\n#define LABEL(x) x:\nint f(int v);\nstruct Item\n{\n#define FIELD(x) case (x):\n    int value;\n};\n"
+            }
+        };
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn break_return_type_leaves_heads_in_alternative_branches_alike() {
+    // Neither alternative of a head split by conditional branches is told
+    // apart from the other: both stay as written.
+    let input = "#ifdef WIDE\nint f(long value)\n#else\nint f(int value)\n#endif\n{\n    return value;\n}\n";
+    for style in ["--style=kr", "--style=allman"] {
+        check(input, &[style, "--break-return-type"], input);
+    }
+}
+
+#[test]
+fn indent_preproc_block_indents_code_after_a_continued_condition() {
+    // A condition continued over lines opens its block as a one-line one.
+    let input = "#if defined(ALPHA) && \\\n    defined(BETA)\nint value;\n#endif\n#if defined(ALPHA)\nint other;\n#endif\n";
+    let expected = "#if defined(ALPHA) && \\\n    defined(BETA)\n    int value;\n#endif\n#if defined(ALPHA)\n    int other;\n#endif\n";
+    let args = ["--style=kr", "--indent-preproc-block"];
+    check(input, &args, expected);
+    check(expected, &args, expected);
+}
