@@ -1663,3 +1663,18 @@ fn constructor_initializer_ternary_new_call_keeps_one_line_lambda_argument() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn a_paren_row_after_a_name_aligns_under_it_only_in_constructor_initializers() {
+    // A member's initializer paren on its own row stands under the member;
+    // after a ternary arm or a declarator, a paren row continues the
+    // statement as any other row does.
+    let mut options = FormatOptions::default();
+    let args = ["--style=kr"].map(str::to_owned);
+    apply_command_line_args(&mut options, &args).expect("valid options");
+    let source = "Item::Item()\n    : first\n    (value),\n      second\n    (other)\n{\n}\nvoid f()\n{\n    int first = 1\n        , second\n        (value);\n    total = ready ? first\n        : second\n        (value);\n    const auto result =\n        ready\n        ? value.count()\n        : detail::convert<precision>\n          (fraction).count();\n}\n";
+    let expected = "Item::Item()\n    : first\n      (value),\n      second\n      (other)\n{\n}\nvoid f()\n{\n    int first = 1\n                , second\n                (value);\n    total = ready ? first\n            : second\n            (value);\n    const auto result =\n        ready\n        ? value.count()\n        : detail::convert<precision>\n        (fraction).count();\n}\n";
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}

@@ -504,6 +504,7 @@ impl FormatEngine<'_> {
                 self.current.push_str(&" ".repeat(spaces));
                 self.current_is_preindented = true;
             } else if self.layout.nesting.paren_depth == 0
+                && self.in_constructor_initializer()
                 && let Some(spaces) =
                     constructor_initializer_name_indent_from_line(self.options, previous)
             {
