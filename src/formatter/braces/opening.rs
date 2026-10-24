@@ -4221,12 +4221,14 @@ impl FormatEngine<'_> {
         })
     }
 
-    /// Whether the code before the brace being pushed ends the last output
-    /// line.
+    /// Whether the head before the brace being pushed ends the last output
+    /// line; a declaration's `;` there ends no head, as after a K&R
+    /// definition's parameter declarations.
     fn brace_head_ends_last_output_line(&self) -> bool {
         self.current
             .active_token()
             .and_then(|brace| self.tree.previous_code_token(brace))
+            .filter(|&head| !matches!(self.tree.tokens[head], Token::Symbol(';')))
             .and_then(|head| self.output.line_with_token(head))
             .is_some_and(|line| line + 1 == self.output.len())
     }

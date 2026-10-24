@@ -24911,3 +24911,21 @@ fn a_block_argument_before_more_arguments_is_no_statement_expression() {
     }
     check(attached, &["--style=allman"], broken);
 }
+
+#[test]
+fn a_function_body_after_parameter_declarations_keeps_its_line_in_attach_styles() {
+    let input = "static int\nhelper (value, name)\n    int value;\n    const char *name;\n{\n    return value;\n}\n";
+    for style in [
+        "--style=java",
+        "--style=lisp",
+        "--style=ratliff",
+        "--style=google",
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_string()]).expect("valid options");
+        let output =
+            String::from_utf8(format_bytes(input.as_bytes(), &options).expect("format bytes"))
+                .expect("utf8");
+        assert!(output.contains("const char *name;\n"), "{style}\n{output}");
+    }
+}
