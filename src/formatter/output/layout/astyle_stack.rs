@@ -103,6 +103,8 @@ struct Replay {
     line_space: usize,
     assigned_this_line: bool,
     header_paren: Option<usize>,
+    /// Whether a class head's bases are being replayed.
+    class_bases: bool,
 }
 
 impl Replay {
@@ -891,6 +893,15 @@ impl FormatEngine<'_> {
                     if replay.depth > 0 {
                         let size = *replay.sizes.last()?;
                         replay.stack.truncate(size + 1);
+                    } else if replay.class_bases
+                        && token_line == start_line
+                        && next_on_line.is_none()
+                        && !replay.continuation
+                    {
+                        // The bases after a class head's first line stand a
+                        // level past it.
+                        replay.stack.push(self.options.indent_width);
+                        replay.continuation = true;
                     } else if next_on_line.is_none() && !replay.continuation {
                         // A `,` ending the statement's first line registers
                         // the line's second word.
@@ -961,6 +972,7 @@ impl FormatEngine<'_> {
                     if replay.depth == 0 && self.class_head_key_before(index).is_some() =>
                 {
                     replay.stack.clear();
+                    replay.class_bases = true;
                     if starts_line {
                         replay.line_space = relative(index)?;
                     }

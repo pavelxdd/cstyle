@@ -25795,7 +25795,21 @@ fn a_list_brace_after_a_row_the_assignment_leads_stands_as_after_a_trailing_assi
             expected,
         );
         check(expected, &[style], expected);
-        let trailing = expected.replace("items\n    =\n", "items =\n").replace("items\n=\n", "items =\n");
+        let trailing = expected
+            .replace("items\n    =\n", "items =\n")
+            .replace("items\n=\n", "items =\n");
         check(&trailing, &[style], &trailing);
     }
+}
+
+#[test]
+fn a_base_the_code_length_splits_off_a_class_head_stands_as_one_the_source_breaks() {
+    let expected = "class StreamReader : public BufferedInputSource,\n    public InputStream\n{\npublic:\n    int value;\n};\n";
+    let options = ["--style=kr", "--max-code-length=60"];
+    check(
+        "class StreamReader : public BufferedInputSource, public InputStream {\npublic:\n    int value;\n};\n",
+        &options,
+        expected,
+    );
+    check(expected, &options, expected);
 }

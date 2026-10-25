@@ -4002,9 +4002,9 @@ impl FormatEngine<'_> {
         }
         // A style indenting braces indents the brace alone on its line, as
         // after a `=` ending the statement's line.
-        let brace_indent = usize::from(
-            first == open && self.should_indent_brace_line(BraceType::Initializer),
-        ) * self.options.indent_width;
+        let brace_indent =
+            usize::from(first == open && self.should_indent_brace_line(BraceType::Initializer))
+                * self.options.indent_width;
         Some(lead + brace_indent)
     }
 
