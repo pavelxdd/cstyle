@@ -2692,7 +2692,13 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
                     b')' => {
                         let member_access =
                             next == b'-' && line[end..].trimmed_start().starts_with("->");
-                        if !(matches!(next, b')' | b' ' | b';' | b',' | b'.') || member_access) {
+                        // A postfix increment or decrement holds its operand.
+                        let postfix =
+                            line[end..].starts_with("++") || line[end..].starts_with("--");
+                        if !(matches!(next, b')' | b' ' | b';' | b',' | b'.')
+                            || member_access
+                            || postfix)
+                        {
                             register((&mut fit, &mut pending), WHITESPACE, end, end <= width);
                         }
                     }

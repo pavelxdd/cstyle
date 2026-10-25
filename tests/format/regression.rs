@@ -25757,3 +25757,12 @@ fn a_declarator_the_code_length_splits_off_stands_at_the_first_past_a_tab() {
     );
     check(expected, &options, expected);
 }
+
+#[test]
+fn the_code_length_never_splits_a_postfix_increment_from_its_operand() {
+    // A trailing comment leaves the code past the maximum; the operand and
+    // its `++` stay together, as `value[index]++` does.
+    let input = "void f(void)\n{\n    for (index = 0; index < count; index++)\n        (item->count[lengths[index]])++;   /* counts each length below the limit */\n    (item->total)--;   /* counts each length below the limit and more */\n}\n";
+    let options = ["--style=kr", "--max-code-length=60"];
+    check(input, &options, input);
+}
