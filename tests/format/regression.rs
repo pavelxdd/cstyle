@@ -7828,12 +7828,18 @@ fn braces_added_around_a_do_body_on_its_own_line_break_it() {
 }
 
 #[test]
-fn run_in_declarators_register_the_name_or_the_array_value() {
-    check(
-        "int f(void)\n{\n    static const char xl[] = \"ab\",\n        xu[] = \"AB\";\n    if (x)\n    {\n        int a,\n            b;\n    }\n}\n",
-        &["--style=horstmann"],
-        "int f(void)\n{   static const char xl[] = \"ab\",\n                             xu[] = \"AB\";\n    if (x)\n    {   int a,\n        b;\n    }\n}\n",
-    );
+fn run_in_declarators_after_an_array_stand_as_after_a_name() {
+    for (first, next) in [("xl[] = \"ab\"", "xu[] = \"AB\""), ("xl = 'a'", "xu = 'A'")] {
+        check(
+            &format!(
+                "int f(void)\n{{\n    static const char {first},\n        {next};\n    if (x)\n    {{\n        int a,\n            b;\n    }}\n}}\n"
+            ),
+            &["--style=horstmann"],
+            &format!(
+                "int f(void)\n{{   static const char {first},\n                          {next};\n    if (x)\n    {{   int a,\n        b;\n    }}\n}}\n"
+            ),
+        );
+    }
 }
 
 #[test]
@@ -18079,11 +18085,11 @@ fn member_declarator_after_a_value_continued_in_parentheses_stands_at_the_value(
 }
 
 #[test]
-fn declarator_after_a_run_in_list_spanning_lines_stands_where_the_assignment_registers() {
+fn declarator_after_a_run_in_list_spanning_lines_stands_at_the_assigned_name() {
     let cases = [
         (
             "void run()\n{\n    int value[2] = {1,\n                    2},\n        other;\n}\n",
-            "void run()\n{\n    int value[2] = {1,\n                    2\n                   },\n                   other;\n}\n",
+            "void run()\n{\n    int value[2] = {1,\n                    2\n                   },\n        other;\n}\n",
         ),
         (
             "void run()\n{\n    Item value = {1,\n                  2},\n        other;\n}\n",
@@ -18091,7 +18097,7 @@ fn declarator_after_a_run_in_list_spanning_lines_stands_where_the_assignment_reg
         ),
         (
             "int value[2] = {1,\n                2},\n    other;\n",
-            "int value[2] = {1,\n                2\n               },\n               other;\n",
+            "int value[2] = {1,\n                2\n               },\n    other;\n",
         ),
         (
             "struct Item {\n    Item value = {1,\n                  2},\n        other;\n};\n",
@@ -18105,15 +18111,15 @@ fn declarator_after_a_run_in_list_spanning_lines_stands_where_the_assignment_reg
 }
 
 #[test]
-fn member_declarators_after_an_assignment_stand_where_a_statement_registers() {
+fn member_declarators_after_an_assignment_stand_at_the_assigned_name() {
     let cases = [
         (
             "struct Item {\n    int value[2] = 3,\n        other;\n};\n",
-            "struct Item {\n    int value[2] = 3,\n                   other;\n};\n",
+            "struct Item {\n    int value[2] = 3,\n        other;\n};\n",
         ),
         (
             "struct Item {\n    int value[2] = {1, 2},\n        other;\n};\n",
-            "struct Item {\n    int value[2] = {1, 2},\n                   other;\n};\n",
+            "struct Item {\n    int value[2] = {1, 2},\n        other;\n};\n",
         ),
         (
             "struct Item {\n    int *value = {1, 2},\n        other;\n};\n",
@@ -18127,21 +18133,19 @@ fn member_declarators_after_an_assignment_stand_where_a_statement_registers() {
 }
 
 #[test]
-fn declarators_after_several_assignments_stand_at_the_last_registered_one() {
-    // A value after `]` registers on each assignment; a name only on the
-    // first assignment after a name.
+fn declarators_after_several_assignments_stand_at_the_first_assigned_name() {
     let cases = [
         (
             "void run()\n{\n    int value = 3, other[2] = 4,\n        last;\n}\n",
-            "void run()\n{\n    int value = 3, other[2] = 4,\n                              last;\n}\n",
+            "void run()\n{\n    int value = 3, other[2] = 4,\n        last;\n}\n",
         ),
         (
             "void run()\n{\n    int other[2] = 4, value = 3,\n        last;\n}\n",
-            "void run()\n{\n    int other[2] = 4, value = 3,\n                      last;\n}\n",
+            "void run()\n{\n    int other[2] = 4, value = 3,\n        last;\n}\n",
         ),
         (
             "struct Item {\n    int other[2] = 4, value = 3,\n        last;\n};\n",
-            "struct Item {\n    int other[2] = 4, value = 3,\n                      last;\n};\n",
+            "struct Item {\n    int other[2] = 4, value = 3,\n        last;\n};\n",
         ),
         (
             "void run()\n{\n    int value = 3, other = 4,\n        last;\n}\n",
@@ -18163,7 +18167,7 @@ fn closer_of_a_run_in_list_before_more_declarators_stands_under_its_brace() {
         ),
         (
             "int value[2] = {1,\n                2}, other,\n    last;\n",
-            "int value[2] = {1,\n                2\n               }, other,\n               last;\n",
+            "int value[2] = {1,\n                2\n               }, other,\n    last;\n",
         ),
         (
             "struct Item {\n    Item value = {1,\n                  2}, other;\n};\n",
@@ -22379,6 +22383,14 @@ fn rows_continuing_a_head_after_an_unmatched_closing_brace_keep_their_columns() 
     // The brace a conditional branch leaves unmatched ends nothing the rows
     // after it continue.
     let input = "#ifdef __cplusplus\n}\n#endif\n\nchar *\nformat_value(struct Context *context, char *buffer,\n             double value)\n{\n    return 0;\n}\n}\nint other = run(first,\n                second);\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_declarator_after_array_declarators_with_lists_stands_at_the_first_declarator() {
+    // As after scalar declarators: an array's bounds and its closed list
+    // leave the first name the column.
+    let input = "static int first[3] = { 1, 2, 3 }, second[3] = { 4, 5, 6 },\n           third = 7;\nstatic int first = 1, second = run(1, 2),\n           third = 7;\nvoid f()\n{\n    int first[3] = { 1, 2, 3 }, second[3] = { 4, 5, 6 },\n        third = 7;\n    int grid[2][2] = { { 1, 2 }, { 3, 4 } },\n        other = 5;\n}\n";
     check(input, &["--style=kr"], input);
 }
 

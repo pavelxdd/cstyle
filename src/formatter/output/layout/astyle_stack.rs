@@ -1002,11 +1002,16 @@ impl FormatEngine<'_> {
                     if operator.ends_with('=')
                         && !matches!(operator.as_str(), "==" | "!=" | "<=" | ">=") =>
                 {
-                    let previous = self.tree.previous_code_token(index)?;
-                    if operator == "="
-                        && !matches!(tokens[previous], Token::Symbol(']'))
-                        && self.statement_ends_with_comma(index, token_line, first)
+                    let mut previous = self.tree.previous_code_token(index)?;
+                    // An array declarator's name stands before its bounds.
+                    while matches!(tokens[previous], Token::Symbol(']'))
+                        && let Some(bounds) = self.tree.groups.closed_at(previous)
+                        && let Some(before) =
+                            self.tree.previous_code_token(self.tree.groups.get(bounds).open)
                     {
+                        previous = before;
+                    }
+                    if operator == "=" && self.statement_ends_with_comma(index, token_line, first) {
                         // astyle registers again at each such line and
                         // drifts pointer declarators; the first holds.
                         if !replay.assigned_this_line

@@ -2231,7 +2231,7 @@ fn multiline_macro_arg_with_struct_does_not_indent_following_function() {
 }
 
 #[test]
-fn declarators_after_a_comma_stand_where_the_first_assignment_registers() {
+fn declarators_after_a_comma_stand_at_the_name_the_first_assignment_assigns() {
     let actual = format_exact(
         fixture!(
             "void f(void)",
@@ -2257,9 +2257,9 @@ fn declarators_after_a_comma_stand_where_the_first_assignment_registers() {
             "    int c, d = 1,",
             "           e;",
             "    int x[2] = {1, 2},",
-            "               y;",
+            "        y;",
             "    static const char lower[] = \"abc\",",
-            "                                upper[] = \"ABC\";",
+            "                      upper[] = \"ABC\";",
             "    int a = 1, /* note */",
             "        b;",
             "}",

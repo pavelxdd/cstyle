@@ -3520,26 +3520,17 @@ impl FormatEngine<'_> {
     }
 
     /// The `=` at the level of the declaration from `start` before
-    /// `line_end` whose registration holds after the line: the last one
-    /// after a `]`, which registers its value, past the first one after a
-    /// name; `None` when a parenthesis comes before any.
+    /// `line_end` whose registration holds after the line: the first one;
+    /// `None` when a parenthesis comes before any.
     fn declaration_assignment(&self, start: usize, line_end: usize) -> Option<Option<usize>> {
         let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
         let mut registering = None;
-        let mut named = false;
         let mut index = start;
         while index < line_end {
             match &tokens[index] {
                 Token::Operator(operator) if operator == "=" => {
-                    let after_bracket = self
-                        .tree
-                        .previous_code_token(index)
-                        .is_some_and(|before| matches!(tokens[before], Token::Symbol(']')));
-                    if after_bracket || !named {
-                        registering = Some(index);
-                        named |= !after_bracket;
-                    }
+                    registering.get_or_insert(index);
                 }
                 Token::Symbol('(') if registering.is_none() => return None,
                 _ => {}
@@ -3554,8 +3545,8 @@ impl FormatEngine<'_> {
     }
 
     /// The column the `=` at `assign` registers for the declarators after
-    /// it: the value after a `]`, else the name it assigns, a level past it
-    /// for a statement run in after a block brace.
+    /// it: the name it assigns, past an array's bounds, a level past it for
+    /// a statement run in after a block brace.
     fn assigned_declarator_column(&self, assign: usize, run_in: bool) -> Option<usize> {
         let tokens = &self.tree.tokens;
         // astyle drops the indent of an `=` whose value starts with `new`.
@@ -3564,16 +3555,20 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let before = self.tree.previous_code_token(assign)?;
-        let (target, run_in_extra) = match &tokens[before] {
-            Token::Symbol(']') => (next_code_token(tokens, assign + 1)?, 0),
-            Token::Word(_) => (
-                dotted_name_start(tokens, before),
-                usize::from(run_in) * self.options.indent_width,
-            ),
-            _ => return None,
-        };
-        Some(self.token_column(target)? + run_in_extra)
+        let mut before = self.tree.previous_code_token(assign)?;
+        while matches!(tokens[before], Token::Symbol(']')) {
+            let bounds = self.tree.groups.closed_at(before)?;
+            before = self
+                .tree
+                .previous_code_token(self.tree.groups.get(bounds).open)?;
+        }
+        if !matches!(tokens[before], Token::Word(_)) {
+            return None;
+        }
+        Some(
+            self.token_column(dotted_name_start(tokens, before))?
+                + usize::from(run_in) * self.options.indent_width,
+        )
     }
 
     /// Whether the `,` at `comma` belongs to an initializer list in `group`
