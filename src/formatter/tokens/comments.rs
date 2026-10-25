@@ -3592,8 +3592,8 @@ impl FormatEngine<'_> {
                     }
                 } else if self.options.strip_comment_prefix {
                     // astyle keeps the text of a row of a comment opened
-                    // after code at its column, past a leading `*`, and no
-                    // further left than the code.
+                    // after code at its column, past a leading `*`, and at
+                    // least one indent in.
                     let text = line.trimmed_start();
                     let body = if text.starts_with('*') && !text.starts_with("*/") {
                         &text[1..]
@@ -3612,7 +3612,7 @@ impl FormatEngine<'_> {
                         0,
                         tab_width,
                     )
-                    .max(self.current_line_indent_spaces());
+                    .max(self.options.indent_width);
                     if body.trimmed().is_empty() {
                         String::new()
                     } else if text.starts_with("*/") || keeps_row {

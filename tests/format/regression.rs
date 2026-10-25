@@ -3228,6 +3228,34 @@ fn remove_comment_prefix_leaves_rows_of_a_trailing_comment_in_place() {
 }
 
 #[test]
+fn remove_comment_prefix_raises_a_trailing_comment_s_row_to_one_indent_only() {
+    // Text past one indent stands where it is however deep the code, in a
+    // block or a braceless body, and a converted tab leaves it there.
+    let input = "void f()\n{\n    {\n        {\n            {\n                run(); /* first row\n      * second row */\n            }\n        }\n    }\n    if (a)\n        if (b)\n            run(); /* first row\n      * second row */\n    run(); /* first row\n * second row */\n}\n";
+    let expected = "void f()\n{\n    {\n        {\n            {\n                run(); /* first row\n        second row */\n            }\n        }\n    }\n    if (a)\n        if (b)\n            run(); /* first row\n        second row */\n    run(); /* first row\n    second row */\n}\n";
+    check(
+        input,
+        &["--style=allman", "--remove-comment-prefix"],
+        expected,
+    );
+    check(
+        expected,
+        &["--style=allman", "--remove-comment-prefix"],
+        expected,
+    );
+    let input = "void f()\n{\n\tfor (;;)\n\t{\n\t\t{\n\t\t\tif (last)\n\t\tbreak; /* first row\n\t\t\t  second row */\n\t\t}\n\t}\n}\n";
+    let options = [
+        "--style=allman",
+        "--indent=force-tab=4",
+        "--remove-comment-prefix",
+        "--convert-tabs",
+    ];
+    let expected = "void f()\n{\n\tfor (;;)\n\t{\n\t\t{\n\t\t\tif (last)\n\t\t\t\tbreak; /* first row\n              second row */\n\t\t}\n\t}\n}\n";
+    check(input, &options, expected);
+    check(expected, &options, expected);
+}
+
+#[test]
 fn remove_comment_prefix_lays_rows_of_a_comment_after_an_element_brace_from_its_opener() {
     // Its rows keep their offset past the `/*`, at least one indent, wherever
     // the brace's row moves the opener, as without the option they keep it.
