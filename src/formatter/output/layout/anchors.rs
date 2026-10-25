@@ -4527,12 +4527,11 @@ impl FormatEngine<'_> {
         });
         let content = next_code_token(tokens, assignment.unwrap_or(open) + 1)?;
         let column = self.token_column(content)?;
-        // Parens past the continuation limit leave the arm to the stack.
-        if column
-            > self
-                .output
-                .lead_width(previous_line, self.options.tab_width)
-                + self.options.max_continuation_indent
+        // Parens past the continuation limit, measured from the block as
+        // a paren's rows are, leave the arm to the stack.
+        let block = self.continuation_base_indent() * self.options.indent_width;
+        if (column + self.case_unindent_spaces()).saturating_sub(block)
+            > self.options.max_continuation_indent
         {
             return None;
         }

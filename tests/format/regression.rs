@@ -22363,6 +22363,14 @@ fn rows_continuing_a_head_after_an_unmatched_closing_brace_keep_their_columns() 
 }
 
 #[test]
+fn a_ternary_arm_in_parens_past_the_maximum_measured_from_the_block_stands_two_levels_in() {
+    // As a paren's rows past the maximum do: the maximum counts from the
+    // block, not from the row holding the parens.
+    let input = "void f()\n{\n    int fd = open_file(filename,\n                       WRITE_ONLY | CREATE | TEXT_MODE | (append ? APPEND_MODE :\n                               TRUNCATE_MODE), READ_WRITE);\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
 fn a_ternary_arm_row_of_a_value_assigned_in_parens_continues_the_value() {
     // As after any other operator ending the row, and as at statement level.
     let input = "void f()\n{\n    run(first = value ? other :\n                third);\n    run(first = value ?\n                other : third);\n    run(first = value +\n                other);\n    first = value ? other :\n            third;\n    run(value ? other :\n        third);\n}\n";
