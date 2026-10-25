@@ -253,6 +253,38 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) constructor_context_look: crate::formatter::output::buffer::LineLook,
     /// The look back for a line that is `(` alone.
     pub(crate) paren_alone_look: crate::formatter::output::buffer::LineLook,
+    /// The look back for a line whose code is `else` or ends with `} else`.
+    pub(crate) else_code_look: crate::formatter::output::buffer::LineLook,
+    /// Whether each group is a control block in a chain of `else if`
+    /// headed by an `if` with a braceless body.
+    pub(crate) braced_chain_blocks: std::cell::OnceCell<Vec<bool>>,
+    /// The line of the head found last for a chain of `else if`.
+    pub(crate) else_chain_head:
+        std::cell::Cell<Option<crate::formatter::output::layout::anchors::ElseChainHead>>,
+    /// The head found last for a chain of `else if` an `else` after a
+    /// block other than its `if`'s body may part from.
+    pub(crate) dangling_chain_head:
+        std::cell::Cell<Option<crate::formatter::output::layout::anchors::ElseChainHead>>,
+    /// The look back for a line of code past comments and directives.
+    pub(crate) code_past_comments_look: crate::formatter::output::buffer::LineLook,
+    /// The look back for the member row a constructor initializer row
+    /// goes on from.
+    pub(crate) initializer_member_look: crate::formatter::output::buffer::LineLook,
+    /// The look back for a line a comment after a case label reads.
+    pub(crate) case_body_line_look: crate::formatter::output::buffer::LineLook,
+    /// The `=` the last walk back over adjacent literals found, by the
+    /// literal it set out from and the group holding them.
+    pub(crate) string_assign_walk:
+        std::cell::Cell<Option<crate::formatter::output::layout::anchors::StringAssignWalk>>,
+    /// The column a closer joining lines in Lisp style was last found at:
+    /// its line, the column, and the output version then.
+    pub(crate) lisp_join_column: std::cell::Cell<Option<(usize, usize, u64)>>,
+    /// The look for the code after the comments leading a line.
+    next_code_look: crate::formatter::structure::blocks::TokenLook,
+    /// The look for the token after the comments from a comment on.
+    pub(crate) after_comments_look: crate::formatter::structure::blocks::TokenLook,
+    /// The look back for a line no directive holds.
+    non_directive_look: crate::formatter::output::buffer::LineLook,
     /// The look back for a line ending the lines of a `new` call.
     pub(crate) new_call_lines_end_look: crate::formatter::output::buffer::LineLook,
     /// The look back for a line ending with `,` in an over-long `new` call.
@@ -267,6 +299,8 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) line_comment_cache: std::cell::Cell<Option<LineCommentCache>>,
     /// Which tokens of the tree open a template.
     template_openers: std::cell::OnceCell<Vec<bool>>,
+    /// The tree's template spans as astyle reads them.
+    pub(crate) astyle_template_spans: std::cell::OnceCell<Vec<(usize, usize)>>,
     /// Which groups of the tree are parens holding a compound literal that
     /// spans lines.
     pub(crate) multiline_literal_parens: std::cell::OnceCell<Vec<bool>>,
@@ -276,6 +310,13 @@ pub(crate) struct FormatEngine<'a> {
     bracket_closes: std::cell::OnceCell<Vec<(u32, u32)>>,
     /// Indices of the `case` and `default` words, in order.
     case_labels: std::cell::OnceCell<Vec<u32>>,
+    /// Indices of the braces opening a lambda's body, in order.
+    lambda_body_braces: std::cell::OnceCell<Vec<u32>>,
+    /// Indices of the closers of the groups other than a lambda's body that
+    /// hold a `;` at their own level, in order.
+    statement_group_closes: std::cell::OnceCell<Vec<u32>>,
+    /// The `:` and `,` tokens that separate constructor initializers.
+    constructor_initializer_separators: std::cell::OnceCell<Vec<u32>>,
     /// The source columns of the line being formatted, kept to reuse their
     /// buffers.
     line_columns: LineSourceColumns,
@@ -287,8 +328,6 @@ pub(crate) struct FormatEngine<'a> {
             Option<crate::formatter::constructs::switch_cases::ActiveCaseLayout>,
         >,
     >,
-    /// The look backs for an open lambda body read so far.
-    pub(crate) open_lambda_cache: std::cell::RefCell<buffer::LookBackAnswers<Option<usize>>>,
     /// The look backs for the begin of the macro block a line lies in read
     /// so far.
     pub(crate) macro_block_cache: std::cell::RefCell<buffer::LookBackAnswers<Option<usize>>>,
@@ -298,9 +337,15 @@ pub(crate) struct FormatEngine<'a> {
     /// The last brace or newline token looked for: the tokens' address,
     /// where the look started, and the token found.
     pub(crate) brace_or_newline_cache: std::cell::Cell<Option<(usize, usize, usize)>>,
+    /// Where the last walk past run-in headers stopped, to read on from.
+    pub(crate) run_in_walk_cache:
+        std::cell::Cell<Option<crate::formatter::output::layout::astyle_stack::RunInWalk>>,
     /// The last `return` an operand row looked back to: the tokens'
     /// address, the row's first token, and the `return`.
     pub(crate) operand_return_cache: std::cell::Cell<Option<(usize, usize, Option<usize>)>>,
+    /// The last row standing at its statement past a lambda body.
+    pub(crate) lambda_operand_cache:
+        std::cell::Cell<Option<crate::formatter::output::layout::anchors::LambdaOperandRow>>,
     /// The braces of the last parens looked in: the tokens' address, the
     /// parens, and their first brace and last that is no compound literal's.
     pub(crate) paren_braces_cache:
@@ -334,9 +379,6 @@ pub(crate) struct FormatEngine<'a> {
     /// The last look back from a member declarator's `,`.
     pub(crate) member_declarator_cache:
         std::cell::Cell<Option<crate::formatter::output::layout::anchors::MemberDeclaratorLook>>,
-    /// The last function body asked whether its declaration holds braces:
-    /// the tokens' address, the body's `{`, and the answer.
-    pub(crate) header_braces_cache: std::cell::Cell<Option<(usize, usize, bool)>>,
     /// The output lines the bodies of the blocks asked about lately take
     /// their columns from, most recent first.
     pub(crate) block_body_anchor_cache:
@@ -376,6 +418,9 @@ pub(crate) struct FormatEngine<'a> {
     /// as a statement split off its case label or a head off its return
     /// type.
     pub(crate) split_line_shift: Option<SplitLineShift>,
+    /// The lead the engine planned for a row the layout sets at its
+    /// statement for the lambda it opens, whose parameters go on past it.
+    pub(crate) lambda_row_planned_lead: Option<usize>,
     /// A label broke its line before comments; the statement after them
     /// starts a line of its own.
     pub(crate) statement_after_label_pending: bool,
@@ -390,6 +435,8 @@ pub(crate) struct FormatEngine<'a> {
     /// index.
     pub(crate) adjuster_before_observed_lone_brace: Option<(usize, line_adjust::LineAdjuster)>,
     pub(crate) unmatched_closing_brace_recovery: bool,
+    /// The paren depth an unmatched closing brace left.
+    pub(crate) unmatched_closing_brace_paren_depth: usize,
     pub(crate) preserve_run_in_join_space: bool,
     pub(crate) one_line_block_mode: bool,
     /// A one-line block being formatted on the line after a directive.
@@ -404,6 +451,8 @@ pub(crate) struct FormatEngine<'a> {
     /// Whether the line in layout starts a statement inside a block after
     /// a line of code that ended one with `;`.
     pub(crate) plain_statement_line: bool,
+    /// The output line last laid out and the level of its statement.
+    pub(crate) last_laid_out_statement_level: Option<(usize, usize)>,
     pub(crate) space_after_cast: bool,
     pub(crate) pad_close_paren_pending: bool,
     pub(crate) header_paren: headers::HeaderParenState,
@@ -415,6 +464,8 @@ pub(crate) struct FormatEngine<'a> {
     /// Closing braces add-braces put after statements.
     pub(crate) added_closing_braces: IndexSet<usize>,
     pub(crate) added_opener_overruns: IndexMap<usize, usize>,
+    /// Comments whose gap add-braces set after the statement it braced.
+    pub(crate) added_comment_gaps: IndexSet<usize>,
     pub(crate) syntax_roles: SyntaxRoles,
     pub(crate) tree: SourceTree,
     pub(crate) pending_extern: bool,
@@ -449,6 +500,18 @@ impl<'a> FormatEngine<'a> {
             open_paren_walk: Default::default(),
             empty_new_call_look: Default::default(),
             paren_alone_look: Default::default(),
+            else_code_look: Default::default(),
+            code_past_comments_look: Default::default(),
+            case_body_line_look: Default::default(),
+            initializer_member_look: Default::default(),
+            string_assign_walk: std::cell::Cell::new(None),
+            lisp_join_column: std::cell::Cell::new(None),
+            next_code_look: Default::default(),
+            after_comments_look: Default::default(),
+            braced_chain_blocks: std::cell::OnceCell::new(),
+            else_chain_head: std::cell::Cell::new(None),
+            dangling_chain_head: std::cell::Cell::new(None),
+            non_directive_look: Default::default(),
             constructor_context_look: Default::default(),
             brace_code_look: Default::default(),
             argument_end_look: Default::default(),
@@ -466,11 +529,12 @@ impl<'a> FormatEngine<'a> {
             line_columns: LineSourceColumns::default(),
             finished_line_buffer: String::new(),
             active_case_cache: std::cell::RefCell::default(),
-            open_lambda_cache: std::cell::RefCell::default(),
             macro_block_cache: std::cell::RefCell::default(),
             stack_start_cache: std::cell::RefCell::default(),
             brace_or_newline_cache: std::cell::Cell::new(None),
+            run_in_walk_cache: std::cell::Cell::new(None),
             operand_return_cache: std::cell::Cell::new(None),
+            lambda_operand_cache: std::cell::Cell::new(None),
             paren_braces_cache: std::cell::Cell::new(None),
             case_label_cache: std::cell::Cell::new(None),
             assignment_rhs_cache: std::cell::Cell::new(None),
@@ -480,15 +544,18 @@ impl<'a> FormatEngine<'a> {
             stacked_assignment_cache: std::cell::Cell::new(None),
             declarator_start_cache: std::cell::Cell::new(None),
             member_declarator_cache: std::cell::Cell::new(None),
-            header_braces_cache: std::cell::Cell::new(None),
             block_body_anchor_cache: std::cell::RefCell::new([None; 4]),
             token_column_cache: std::cell::Cell::new(None),
             astyle_replay_cache: std::cell::Cell::new(None),
             template_openers: std::cell::OnceCell::new(),
+            astyle_template_spans: std::cell::OnceCell::new(),
             multiline_literal_parens: std::cell::OnceCell::new(),
             bracket_closes: std::cell::OnceCell::new(),
             designator_chain_cache: std::cell::RefCell::new(None),
             case_labels: std::cell::OnceCell::new(),
+            lambda_body_braces: std::cell::OnceCell::new(),
+            statement_group_closes: std::cell::OnceCell::new(),
+            constructor_initializer_separators: std::cell::OnceCell::new(),
             constructor_colon_cache: std::cell::Cell::new(None),
             layout: LayoutState {
                 indentation: IndentationState::default(),
@@ -536,6 +603,7 @@ impl<'a> FormatEngine<'a> {
             brace_frame_awaits_line: false,
             braceless_exit_after_line: false,
             split_line_shift: None,
+            lambda_row_planned_lead: None,
             statement_after_label_pending: false,
             disabled_formatting: None,
             current_is_preindented: false,
@@ -543,6 +611,7 @@ impl<'a> FormatEngine<'a> {
             adjuster_before_lone_brace: None,
             adjuster_before_observed_lone_brace: None,
             unmatched_closing_brace_recovery: false,
+            unmatched_closing_brace_paren_depth: 0,
             preserve_run_in_join_space: false,
             one_line_block_mode: false,
             one_line_block_after_directive: false,
@@ -553,6 +622,7 @@ impl<'a> FormatEngine<'a> {
             may_have_class_base_access: true,
             may_have_noexcept: true,
             plain_statement_line: false,
+            last_laid_out_statement_level: None,
             space_after_cast: false,
             pad_close_paren_pending: false,
             header_paren: headers::HeaderParenState::default(),
@@ -562,6 +632,7 @@ impl<'a> FormatEngine<'a> {
             preprocessor: preprocessor::PreprocessorState::default(),
             access_modified_braces: IndexSet::default(),
             added_closing_braces: IndexSet::default(),
+            added_comment_gaps: IndexSet::default(),
             added_opener_overruns: IndexMap::default(),
             syntax_roles: SyntaxRoles::new(0),
             tree: SourceTree::default(),
@@ -685,6 +756,7 @@ impl<'a> FormatEngine<'a> {
             );
             self.added_closing_braces = added.closers;
             self.added_opener_overruns = added.opener_overruns;
+            self.added_comment_gaps = added.gapped_comments;
             added.tokens
         } else {
             tokens
@@ -703,19 +775,23 @@ impl<'a> FormatEngine<'a> {
         );
         self.preprocessor.indentable_blocks = preprocessor_block_indentability(tokens);
         self.access_modified_braces = syntax::access_modified_brace_indices(tokens);
-        self.inline_array.list_rows = syntax::brace_list_rows(
+        self.inline_array.list_rows = std::rc::Rc::new(syntax::brace_list_rows(
             tokens,
             &self.tree,
             matches!(
                 self.options.brace_style,
                 BraceStyle::Horstmann | BraceStyle::Pico
             ),
-        );
+        ));
         let mut cursor = TokenLineCursor::new(tokens);
         while let Some(line) = cursor.next_line() {
             self.format_line(tokens, line);
         }
-        self.finish_line();
+        if !self.formatting_disabled() {
+            self.finish_line();
+        } else if !self.current.is_empty() {
+            self.finish_disabled_line();
+        }
         self
     }
 
@@ -729,6 +805,7 @@ impl<'a> FormatEngine<'a> {
 
     fn format_line(&mut self, tokens: &[Token], line: TokenLine) {
         self.observe_input_line(&tokens[line.start..line.end]);
+        self.observe_formatting_markers(&tokens[line.start..line.end]);
         if !self.formatting_disabled()
             && self.try_push_case_line_marker(tokens, line.start, line.end)
         {
@@ -768,6 +845,16 @@ impl<'a> FormatEngine<'a> {
                 );
             }
             if self.formatting_disabled() {
+                if matches!(tokens[index], Token::Newline)
+                    && self
+                        .disabled_formatting
+                        .as_ref()
+                        .is_some_and(DisabledFormattingState::enables_after_line)
+                {
+                    // The line's end is formatted again.
+                    self.enable_formatting();
+                    continue;
+                }
                 let next = next_non_whitespace(tokens, index + 1, line.end)
                     .and_then(|next_index| tokens.get(next_index));
                 self.push_disabled(&tokens[index], next);
@@ -936,12 +1023,18 @@ impl<'a> FormatEngine<'a> {
         // Comments before the next line's code leave its shape to the code.
         let (code_following, code_after_following) =
             if matches!(following, Some(Token::Comment(..))) {
-                let first = next_code_token(tokens, index + 1);
+                let first = if std::ptr::eq(tokens, self.tree.tokens.as_slice()) {
+                    self.next_code_look.find(tokens, index + 1, is_code_token)
+                } else {
+                    next_code_token(tokens, index + 1)
+                };
                 let second = first.and_then(|first| next_code_token(tokens, first + 1));
                 (first.map(|i| &tokens[i]), second.map(|i| &tokens[i]))
             } else {
                 (following, after_following)
             };
+        self.next_line.code_leads_with_open_brace =
+            matches!(code_following, Some(Token::Symbol('{')));
         self.next_line.code_leads_with_close_brace =
             matches!(code_following, Some(Token::Symbol('}')));
         self.next_line.word_followed_by_open_paren = matches!(
@@ -1007,6 +1100,129 @@ impl<'a> FormatEngine<'a> {
             .map(|&index| index as usize)
     }
 
+    /// The braces opening a lambda's body after `start` and up to `end`, in
+    /// order.
+    pub(crate) fn lambda_body_braces_within(
+        &self,
+        start: usize,
+        end: usize,
+    ) -> impl Iterator<Item = usize> + '_ {
+        let braces = self.lambda_body_braces.get_or_init(|| {
+            let groups = &self.tree.groups;
+            let mut braces: Vec<u32> = groups
+                .ids()
+                .filter(|&group| self.tree.blocks.kind(group) == Some(BlockKind::Lambda))
+                .map(|group| groups.get(group).open as u32)
+                .collect();
+            braces.sort_unstable();
+            braces
+        });
+        let from = braces.partition_point(|&index| (index as usize) <= start);
+        let to = braces.partition_point(|&index| (index as usize) <= end);
+        braces[from..to.max(from)]
+            .iter()
+            .map(|&index| index as usize)
+    }
+
+    /// The closers of the groups holding statements after `start` and
+    /// before `end`, in order.
+    pub(crate) fn statement_group_closes_within(
+        &self,
+        start: usize,
+        end: usize,
+    ) -> impl Iterator<Item = usize> + '_ {
+        let closes = self.statement_group_closes();
+        let from = closes.partition_point(|&index| (index as usize) <= start);
+        let to = closes.partition_point(|&index| (index as usize) < end);
+        closes[from..to.max(from)]
+            .iter()
+            .map(|&index| index as usize)
+    }
+
+    pub(crate) fn statement_group_closes(&self) -> &[u32] {
+        self.statement_group_closes.get_or_init(|| {
+            let groups = &self.tree.groups;
+            let mut holds = vec![false; groups.len()];
+            for (index, token) in self.tree.tokens.iter().enumerate() {
+                if matches!(token, Token::Symbol(';'))
+                    && let Some(group) = groups.enclosing(index)
+                {
+                    holds[group.index()] = true;
+                }
+            }
+            let mut closes: Vec<u32> = groups
+                .ids()
+                .filter(|&group| {
+                    holds[group.index()] && self.tree.blocks.kind(group) != Some(BlockKind::Lambda)
+                })
+                .filter_map(|group| groups.get(group).close)
+                .map(|close| close as u32)
+                .collect();
+            closes.sort_unstable();
+            closes
+        })
+    }
+
+    /// Whether the token at `index` is the `:` opening a constructor's
+    /// initializers or a `,` between them.
+    pub(crate) fn separates_constructor_initializers(&self, index: usize) -> bool {
+        self.constructor_initializer_separators
+            .get_or_init(|| {
+                let tokens = &self.tree.tokens;
+                let groups = &self.tree.groups;
+                let mut separators = Vec::new();
+                for head in self.tree.functions.heads() {
+                    let (Some(close), Some(body)) = (groups.get(head.params).close, head.body)
+                    else {
+                        continue;
+                    };
+                    let level = groups.enclosing(close);
+                    let mut colon = false;
+                    // Between initializers, angles only hold template
+                    // arguments.
+                    let mut angles = 0usize;
+                    for at in close + 1..groups.get(body).open {
+                        if groups.enclosing(at) != level {
+                            continue;
+                        }
+                        match &tokens[at] {
+                            Token::Symbol(':') if !colon => {
+                                colon = true;
+                                separators.push(at as u32);
+                            }
+                            Token::Symbol(',') if colon && angles == 0 => {
+                                separators.push(at as u32);
+                            }
+                            Token::Operator(operator) if colon => match operator.as_str() {
+                                "<" => angles += 1,
+                                ">" => angles = angles.saturating_sub(1),
+                                ">>" => angles = angles.saturating_sub(2),
+                                _ => {}
+                            },
+                            _ => {}
+                        }
+                    }
+                }
+                separators.sort_unstable();
+                separators
+            })
+            .binary_search(&(index as u32))
+            .is_ok()
+    }
+
+    /// Whether the line being built ends with the colon opening the
+    /// initializers of a function-try-block's constructor.
+    fn current_ends_function_try_initializer_colon(&self) -> bool {
+        let code = self.current[..self.current_trailing_comment_split_limit()].trimmed();
+        code.ends_with(':')
+            && (code == ":" || self.current_line_has_class_initializer_colon)
+            && self
+                .layout
+                .frame_stack
+                .active_constructor_initializer()
+                .is_some_and(|frame| frame.function_try)
+    }
+
     /// Whether the `[` at `open` starts an initializer designator. Each `[`
     /// of a chain of subscripts has the chain's answer, kept for the next.
     fn bracket_chain_designator(&self, tokens: &[Token], open: usize, end: usize) -> bool {
@@ -1040,7 +1256,13 @@ impl<'a> FormatEngine<'a> {
         };
         let mut cursor = index;
         while let Some(before) = self.tree.previous_code_token(cursor) {
+            // An angle in parens closes none outside them.
+            if let Some(group) = self.tree.groups.closed_at(before) {
+                cursor = self.tree.groups.get(group).open;
+                continue;
+            }
             match &tokens[before] {
+                Token::Symbol('(' | '[') => return false,
                 Token::Operator(operator) if operator == ">" => depth += 1,
                 Token::Operator(operator) if operator == ">>" => depth += 2,
                 Token::Operator(operator) if operator == "<" && self.template_opener_at(before) => {
@@ -1057,7 +1279,7 @@ impl<'a> FormatEngine<'a> {
         false
     }
 
-    fn template_opener_at(&self, index: usize) -> bool {
+    pub(crate) fn template_opener_at(&self, index: usize) -> bool {
         self.template_openers
             .get_or_init(|| template_openers(&self.tree.tokens))
             .get(index)
@@ -1175,8 +1397,11 @@ impl<'a> FormatEngine<'a> {
             self.layout.line_state.template_angle_depth,
             || self.template_opener_at(index),
         );
+        // A head's parameters open their angles; a comparison in parens there
+        // opens none.
         if matches!(template_angle, TemplateAngle::None)
             && self.template_continuation_active()
+            && self.layout.nesting.paren_depth == 0
             && matches!(tokens.get(index), Some(Token::Operator(operator)) if operator == "<")
             && next_index.is_some()
             && !matches!(next, Some(Token::Operator(operator)) if operator == "=")
@@ -1340,9 +1565,11 @@ impl<'a> FormatEngine<'a> {
             .iter()
             .find(|token| !matches!(token, Token::Whitespace(_)))
             .is_some_and(|token| matches!(token, Token::Preprocessor(_)))
-            && (0..self.output.len())
-                .rev()
-                .find(|&index| !self.output.is_directive_line(index))
+            && self
+                .output
+                .last_line_looked(&self.non_directive_look, 0, self.output.len(), |index| {
+                    !self.output.is_directive_line(index)
+                })
                 .is_some_and(|index| {
                     self.output.comment_start_index(index) == index
                         && !self.output.code_before_comment_trimmed(index).is_empty()
@@ -1370,6 +1597,11 @@ impl<'a> FormatEngine<'a> {
                     .continuation_indent
                     .next_input_line_follows_lambda_body,
             );
+        self.layout
+            .continuation_indent
+            .input_line_template_arguments_spaces = (!(directive || empty)
+            && self.within_template_arguments())
+        .then(|| self.current_line_indent_spaces());
         self.layout.line_state.passed_semicolon = false;
         self.layout.line_state.passed_colon = false;
         self.layout.line_state.ternary_colon = false;
@@ -1402,8 +1634,6 @@ impl<'a> FormatEngine<'a> {
             }
         }
         self.layout.line_state.has_literal_quote = has_literal;
-        self.layout.line_state.indent_off_follows_code =
-            has_comment && preprocessor::indent_off_follows_code(tokens);
         self.layout.line_state.operator_padding_disabled = has_comment
             && tokens.iter().any(
                 |token| matches!(token, Token::Comment(_, comment) if comment.contains("*NOPAD*")),
@@ -1439,8 +1669,6 @@ impl<'a> FormatEngine<'a> {
             }
         }
         self.layout.line_state.trailing_comment_columns = trailing_comment_columns.into();
-        self.layout.line_state.has_nested_designated_init_brace =
-            has_open_brace && initializers::has_nested_designated_init_brace(tokens);
 
         if has_semicolon {
             let mut statement_count = 0usize;
@@ -1460,7 +1688,7 @@ impl<'a> FormatEngine<'a> {
                         if after_statement
                             && paren_depth <= 0
                             && is_code_token(token)
-                            && !matches!(token, Token::Symbol('}' | ')' | '\\')) =>
+                            && !matches!(token, Token::Symbol('}' | ')')) =>
                     {
                         statement_count += 1;
                     }
@@ -1674,6 +1902,7 @@ impl<'a> FormatEngine<'a> {
             });
         self.pointer_run.trailing_ws = None;
         self.pointer_run.next_is_name_like = false;
+        self.pointer_run.group_follows_run = false;
         self.pointer_run.followed_by_reference = false;
         self.pointer_run.reference_has_name = false;
         self.pointer_run.followed_by_comment = false;
@@ -1709,6 +1938,8 @@ impl<'a> FormatEngine<'a> {
             let after_run_index = next_non_whitespace(tokens, last + 1, tokens.len());
             let after_run = after_run_index.and_then(|index| tokens.get(index));
             self.pointer_run.next_is_name_like = pointers::pointer_next_is_name_like(after_run);
+            self.pointer_run.group_follows_run =
+                matches!(after_run, Some(Token::Symbol('(' | '[' | '.')));
             self.pointer_run.followed_by_reference = matches!(
                 after_run,
                 Some(Token::Operator(operator)) if matches!(operator.as_str(), "&" | "&&")
@@ -1957,10 +2188,16 @@ impl<'a> FormatEngine<'a> {
 
     fn current_cast_words(&self) -> Option<Vec<&str>> {
         let current = self.current.trimmed_end();
+        // An operator leading its row follows the cast ending the row before.
+        if current.is_empty() {
+            return self.earlier_row_cast_words();
+        }
         if !current.ends_with(')') {
             return None;
         }
-        let open = self.current.last_close_paren_match()?;
+        let Some(open) = self.current.last_close_paren_match() else {
+            return self.earlier_row_cast_words();
+        };
         if current[..open]
             .chars()
             .next_back()
@@ -1999,6 +2236,56 @@ impl<'a> FormatEngine<'a> {
                 .filter(|part| !part.is_empty())
                 .collect(),
         )
+    }
+
+    /// The words of a cast whose `)` the row ends and whose `(` an earlier
+    /// row holds, read from the tokens as `current_cast_words` reads a row.
+    fn earlier_row_cast_words(&self) -> Option<Vec<&str>> {
+        let tokens = &self.tree.tokens;
+        // The `)` being pushed, or the one before the token being pushed.
+        let close = self
+            .current
+            .active_token()
+            .and_then(|token| {
+                if matches!(tokens[token], Token::Symbol(')')) {
+                    Some(token)
+                } else {
+                    self.tree.previous_code_token(token)
+                }
+            })
+            .filter(|&close| matches!(tokens[close], Token::Symbol(')')))?;
+        let group = self.tree.groups.closed_at(close)?;
+        // Parameters declare names, no type to convert to.
+        if self.tree.functions.is_parameter_list(group) || self.tree.functions.is_declarator(group)
+        {
+            return None;
+        }
+        let open = self.tree.groups.get(group).open;
+        // A name before the `(` calls it, as `sizeof` measures its operand.
+        if self
+            .tree
+            .previous_code_token(open)
+            .is_some_and(|before| matches!(tokens[before], Token::Word(_) | Token::Number(_)))
+        {
+            return None;
+        }
+        let inner: Vec<&Token> = tokens[open + 1..close]
+            .iter()
+            .filter(|token| is_code_token(token))
+            .collect();
+        let stars = inner
+            .iter()
+            .rev()
+            .take_while(|token| matches!(token, Token::Operator(operator) if operator == "*"))
+            .count();
+        let words = inner[..inner.len() - stars]
+            .iter()
+            .map(|token| match token {
+                Token::Word(word) => Some(word.as_str()),
+                _ => None,
+            })
+            .collect::<Option<Vec<_>>>()?;
+        (!words.is_empty()).then_some(words)
     }
 
     fn push_newline(&mut self) {
@@ -2069,6 +2356,8 @@ impl<'a> FormatEngine<'a> {
                 .set_next_line_level(header_indent + usize::from(!follows_function_try));
             self.previous_was_newline = true;
         } else if self.next_line.leads_with_class_base {
+            // The clause stands a level past the head, however its rows
+            // split.
             let header_indent = self.layout.indentation.indent();
             self.finish_line();
             self.layout.nesting.clear_continuation_indents();
@@ -2185,6 +2474,11 @@ impl<'a> FormatEngine<'a> {
             self.previous_was_newline = true;
         } else if self.current.trimmed_end().ends_with('\\')
             && self.layout.nesting.paren_depth == 0
+            // A finished statement leaves the splice nothing to continue.
+            && !matches!(
+                self.layout.command_state.previous_command_char,
+                Some(';' | '}')
+            )
             && self.current_line_indent_spaces()
                 > self.continuation_base_indent() * self.options.indent_width
         {
@@ -2192,13 +2486,7 @@ impl<'a> FormatEngine<'a> {
             self.finish_line();
             self.layout.continuation_indent.set_next_line_spaces(spaces);
             self.previous_was_newline = true;
-        } else if self.current[..self.current_trailing_comment_split_limit()].trimmed() == ":"
-            && self
-                .layout
-                .frame_stack
-                .active_constructor_initializer()
-                .is_some_and(|frame| frame.function_try)
-        {
+        } else if self.current_ends_function_try_initializer_colon() {
             self.finish_line();
             self.layout
                 .continuation_indent
@@ -2237,7 +2525,7 @@ impl<'a> FormatEngine<'a> {
         } else if self.current_initializer_member_before_closing_brace() {
             self.finish_line();
             self.previous_was_newline = true;
-        } else if self.unmatched_closing_brace_recovery {
+        } else if self.unmatched_closing_brace_resets_line() {
             self.finish_line();
             self.layout.continuation_indent.set_next_line_spaces(0);
             self.layout.indentation.clear_continuation_indents();
@@ -2321,16 +2609,16 @@ impl<'a> FormatEngine<'a> {
             self.previous_was_newline = true;
         } else if self.newline_breaks_statement && self.statement_follows_complete_header() {
             // A statement the source broke after a header's one-line body
-            // continues a level in, and a `return` value a level more.
-            let levels = 1 + usize::from(
-                trailing_word(
-                    self.current[..self.current_trailing_comment_split_limit()].trimmed(),
-                ) == "return",
-            );
+            // continues past the body, as any statement run in there.
+            let levels =
+                self.current_run_in_header_levels().max(1) + self.options.continuation_indent;
             self.finish_line();
+            // The output row stands where a case block's unindent left it,
+            // which moves the next row too.
             if let Some(last) = self.output.last() {
                 let spaces = columns::leading_visual_width(last, self.options.tab_width)
-                    + levels * self.options.indent_width;
+                    + levels * self.options.indent_width
+                    + self.case_unindent_spaces();
                 self.layout.continuation_indent.set_next_line_spaces(spaces);
             }
             self.previous_was_newline = true;
@@ -2402,32 +2690,23 @@ impl<'a> FormatEngine<'a> {
         let has_array_bound_operator_continuation = self
             .array_bound_operator_continuation_indent_spaces()
             .is_some();
-        let after_compound_literal_comma =
-            std::mem::take(&mut self.layout.compound_literal.after_comma)
-                && self.layout.compound_literal.arg_paren_depth
-                    == Some(self.layout.nesting.paren_depth)
-                && self.layout.compound_literal.arg_brace_depth
-                    == Some(self.layout.nesting.brace_header_stack.len());
         let has_macro_call_argument_continuation =
             matches!(self.layout.previous, PreviousToken::Comma)
-                && !after_compound_literal_comma
                 && self.macro_call_argument_indent_spaces().is_some();
-        let saved_indent = if after_compound_literal_comma {
-            Some(ContinuationIndent::Spaces(
-                self.current_line_indent_spaces(),
-            ))
+        let saved_indent = self
+            .layout
+            .continuation_indent
+            .after_one_shot_continuation_indent
+            .take();
+        // A block among the arguments ends what was saved for them.
+        let saved_indent = if has_array_bound_operator_continuation
+            || has_macro_call_argument_continuation
+            || self.continues_arguments_after_block_argument()
+        {
+            None
         } else {
-            self.layout
-                .continuation_indent
-                .after_one_shot_continuation_indent
-                .take()
+            saved_indent
         };
-        let saved_indent =
-            if has_array_bound_operator_continuation || has_macro_call_argument_continuation {
-                None
-            } else {
-                saved_indent
-            };
         let indent = saved_indent.unwrap_or_else(|| self.next_continuation_indent());
         let follows_lambda_body =
             saved_indent.is_none() && self.continues_arguments_after_lambda_body();
@@ -2516,7 +2795,7 @@ impl<'a> FormatEngine<'a> {
             && self.open_paren_column_of(code).is_none()
     }
 
-    fn incomplete_control_header(&self) -> bool {
+    pub(crate) fn incomplete_control_header(&self) -> bool {
         let Some(header @ ("if" | "for" | "while" | "switch")) =
             self.layout.command_state.current_header.as_deref()
         else {
@@ -2532,14 +2811,23 @@ impl<'a> FormatEngine<'a> {
     /// Whether a word of a statement follows a complete control header on
     /// the line.
     fn statement_follows_complete_header(&self) -> bool {
-        let code = self.current[..self.current_trailing_comment_split_limit()].trimmed();
-        matches!(
-            self.layout.command_state.current_header.as_deref(),
-            Some("if" | "for" | "while" | "switch" | "else")
-        ) && self.header_paren.depth.is_none()
+        let code = self.current_code_before_trailing_comment().trimmed_start();
+        let Some(header @ ("if" | "for" | "while" | "switch" | "else" | "do")) =
+            self.layout.command_state.current_header.as_deref()
+        else {
+            return false;
+        };
+        self.header_paren.depth.is_none()
             && !self.incomplete_control_header()
             && code.ends_with(is_identifier_continue)
-            && code.trim_start_matches('}').trimmed_start() != "else"
+            && trailing_word(code) != header
+    }
+
+    /// Whether the line ends where an unmatched closing brace leaves
+    /// nothing to continue: rows in parens opened since it continue them.
+    pub(crate) fn unmatched_closing_brace_resets_line(&self) -> bool {
+        self.unmatched_closing_brace_recovery
+            && self.layout.nesting.paren_depth <= self.unmatched_closing_brace_paren_depth
     }
 
     fn header_allows_statement_break(&self) -> bool {
@@ -2563,10 +2851,34 @@ impl<'a> FormatEngine<'a> {
         self.disabled_formatting.is_some()
     }
 
+    /// Disables formatting from the start of a line a disabling marker leads,
+    /// and enables it again after a line an enabling marker leads.
+    fn observe_formatting_markers(&mut self, tokens: &[Token]) {
+        let (disables, enables) = leading_formatting_markers(tokens);
+        if let Some(disabled) = self.disabled_formatting.as_mut() {
+            if enables {
+                disabled.enable_after_line();
+            }
+        } else if disables {
+            self.finish_line();
+            self.disabled_formatting = Some(DisabledFormattingState::capture(self));
+        }
+    }
+
+    fn enable_formatting(&mut self) {
+        self.finish_disabled_line();
+        if let Some(disabled) = self.disabled_formatting.take() {
+            disabled.restore(self);
+        }
+        self.layout.previous_pre_adjust_line = self.output.last().cloned();
+        self.reset_block_spacing();
+        self.previous_was_newline = false;
+    }
+
     fn push_disabled(&mut self, token: &Token, next: Option<&Token>) {
-        let is_indent_on =
-            matches!(token, Token::Comment(_, comment) if comment.contains("*INDENT-ON*"));
-        if !is_indent_on && let Some(disabled) = self.disabled_formatting.as_mut() {
+        if !is_formatting_marker(token)
+            && let Some(disabled) = self.disabled_formatting.as_mut()
+        {
             disabled.push_token(
                 token,
                 TokenPushContext {
@@ -2584,16 +2896,6 @@ impl<'a> FormatEngine<'a> {
 
         match token {
             Token::Newline => self.finish_disabled_line(),
-            Token::Comment(_, comment) if comment.contains("*INDENT-ON*") => {
-                self.push_disabled_raw_text(comment);
-                self.finish_disabled_line();
-                if let Some(disabled) = self.disabled_formatting.take() {
-                    disabled.restore(self);
-                }
-                self.layout.previous_pre_adjust_line = self.output.last().cloned();
-                self.reset_block_spacing();
-                self.previous_was_newline = false;
-            }
             _ => self.push_disabled_raw_text(&token_text(token)),
         }
     }
@@ -2608,6 +2910,29 @@ impl<'a> FormatEngine<'a> {
             }
         }
     }
+}
+
+fn is_formatting_marker(token: &Token) -> bool {
+    matches!(token, Token::Comment(_, comment)
+        if comment.contains("*INDENT-OFF*") || comment.contains("*INDENT-ON*"))
+}
+
+/// Whether the comments leading the input line `tokens` disable and enable
+/// formatting: a marker counts in a comment of one line that no code and no
+/// comment of several lines precede.
+fn leading_formatting_markers(tokens: &[Token]) -> (bool, bool) {
+    let (mut disables, mut enables) = (false, false);
+    for token in tokens {
+        match token {
+            Token::Whitespace(_) | Token::Newline => {}
+            Token::Comment(_, comment) if !comment.contains('\n') => {
+                disables |= comment.contains("*INDENT-OFF*");
+                enables |= comment.contains("*INDENT-ON*");
+            }
+            _ => break,
+        }
+    }
+    (disables, enables)
 }
 
 /// Number of `}` tokens that directly follow the `;` at `index`, skipping layout.
@@ -2680,6 +3005,22 @@ pub(crate) fn closer_width_after_semicolon(
     // pads it with.
     if header.is_some() {
         return (width + 1, None);
+    }
+    // A comment ending the line stays on the braces' line after them.
+    let comment_at = usize::from(matches!(tail.first(), Some(Token::Whitespace(_))));
+    if let Some(Token::Comment(_, comment)) = tail.get(comment_at)
+        && !comment.contains('\n')
+        && tail[comment_at + 1..]
+            .iter()
+            .find(|token| !matches!(token, Token::Whitespace(_)))
+            .is_none_or(|token| matches!(token, Token::Newline))
+    {
+        let gap = match tail.first() {
+            Some(Token::Whitespace(gap)) => gap.as_str(),
+            _ => " ",
+        };
+        let suffix = format!("{}{gap}{}", " }".repeat(width / 2), comment.trimmed_end());
+        return (suffix.len(), Some(suffix));
     }
     for token in tail {
         match token {

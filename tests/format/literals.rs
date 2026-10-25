@@ -665,3 +665,15 @@ fn raw_literal_preprocessor_text_does_not_open_conditional_region() {
 
     assert_eq!(format_exact(source, &options), source);
 }
+
+#[test]
+fn rows_of_a_subscript_after_a_string_literal_continue_past_its_bracket() {
+    // A string literal's subscript is no message send, so its operand rows
+    // stand past the bracket, as after a name.
+    let mut options = FormatOptions::default();
+    let args = ["--style=kr"].map(str::to_owned);
+    apply_command_line_args(&mut options, &args).expect("valid options");
+    let source = "int f(const char *ptr)\n{\n    return \"abcd\"[(*ptr & 0xFF) >>\n                  4];\n    return table[(*ptr & 0xFF) >>\n                 4];\n    x = \"abcd\"[value +\n               4];\n    x = u8\"abcd\"[value +\n                 4];\n    x = 'a'[value +\n            4];\n}\n";
+
+    assert_eq!(format_exact(source, &options), source);
+}

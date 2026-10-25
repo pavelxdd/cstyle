@@ -272,7 +272,7 @@ fn lambda_call_argument_after_split_arg_uses_call_line_indent() {
 }
 
 #[test]
-fn get_if_argument_aligns_to_value_expression_in_lambda_body() {
+fn template_call_argument_in_lambda_body_aligns_past_value_expression() {
     assert_eq!(
         format_exact(
             fixture!(
@@ -280,7 +280,7 @@ fn get_if_argument_aligns_to_value_expression_in_lambda_body() {
                 "{",
                 "    callback( //",
                 "            [&value](const Request &request) {",
-                "                const auto *result = std::get_if<Result>(",
+                "                const auto *result = store::lookup<Result>(",
                 "                        &request.result);",
                 "            });",
                 "}",
@@ -292,7 +292,7 @@ fn get_if_argument_aligns_to_value_expression_in_lambda_body() {
             "{",
             "    callback( //",
             "    [&value](const Request &request) {",
-            "        const auto *result = std::get_if<Result>(",
+            "        const auto *result = store::lookup<Result>(",
             "                                 &request.result);",
             "    });",
             "}",
@@ -360,6 +360,25 @@ fn one_line_parameterized_lambda_in_braced_initializer_breaks_body() {
             "}",
         )
     );
+}
+
+// A parameter list before a body reads as no cast to a literal: one parameter
+// breaks the body like none or several.
+#[test]
+fn one_line_lambda_argument_breaks_its_body_whatever_its_parameter_count() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=kr".to_owned()]).expect("valid options");
+
+    for parameters in ["()", "(int n)", "(Item item)", "(int)", "(int n, int m)"] {
+        assert_eq!(
+            format_exact(
+                &format!("void f() {{\n    x.on([]{parameters} {{ return n; }});\n}}\n"),
+                &options,
+            ),
+            format!("void f()\n{{\n    x.on([]{parameters} {{\n        return n;\n    }});\n}}\n"),
+            "{parameters}"
+        );
+    }
 }
 
 #[test]
@@ -538,7 +557,7 @@ fn lambda_split_call_after_closed_ternary_argument_aligns_to_call() {
 }
 
 #[test]
-fn lambda_parameter_continuation_keeps_lambda_line_indent() {
+fn lambda_parameter_continuation_aligns_at_the_parameters_paren() {
     assert_eq!(
         format_exact(
             fixture!(
@@ -556,12 +575,30 @@ fn lambda_parameter_continuation_keeps_lambda_line_indent() {
             "void f()",
             "{",
             "    const auto call = [](const char* name,",
-            "    const Value& value) {",
+            "                         const Value& value) {",
             "        return value;",
             "    };",
             "}",
         )
     );
+}
+
+#[test]
+fn lambda_parameter_continuation_aligns_at_its_paren_on_a_row_set_at_the_statement() {
+    // An argument row opening a lambda stands at the statement; the rows of
+    // the lambda's parameters align at its paren where the row stands.
+    let source = fixture!(
+        "void helper()",
+        "{",
+        "    run(",
+        "    out, [values](Item first,",
+        "                  Item second) {",
+        "        return copy(values, first, second);",
+        "    });",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
 
 #[test]
@@ -880,6 +917,26 @@ fn no_param_multiline_lambda_empty_invocation_stays_on_the_closer_line() {
 }
 
 #[test]
+fn an_invoked_lambda_keeps_its_call_on_its_closer_row_in_every_style() {
+    // With or without a parameter list, as a call in any other place.
+    let source = "void f() {\n  static int* text = []() {\n    return make();\n  }();\n  int value = [] {\n    return 1;\n  }() + 2;\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void f()\n{\n    static int* text = []() {\n        return make();\n    }();\n    int value = [] {\n        return 1;\n    }() + 2;\n}\n",
+        ),
+        (
+            "--style=whitesmith",
+            "void f()\n    {\n    static int* text = []()\n        {\n        return make();\n        }();\n    int value = []\n        {\n        return 1;\n        }() + 2;\n    }\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_owned()]).expect("valid options");
+        assert_eq!(format_exact(source, &options), expected);
+    }
+}
+
+#[test]
 fn trailing_return_multiline_lambda_empty_invocation_stays_attached() {
     let source = "void f()\n{\n    auto value = []() -> int {\n        return 1;\n    }();\n}\n";
 
@@ -932,7 +989,7 @@ fn lambda_call_argument_after_comma_uses_inner_call_indent() {
         "void f()",
         "{",
         "    auto report = onScopeExit([inputScale, progressValue, elapsedTime]() {",
-        "        qDebug(\"format\",",
+        "        notify(\"format\",",
         "               inputScale, progressValue, elapsedTime);",
         "    });",
         "}",
@@ -1038,15 +1095,15 @@ fn lambda_stream_chain_keeps_source_aligned_following_operator() {
 }
 
 #[test]
-fn stream_chain_after_split_lambda_header_uses_two_indent_levels() {
+fn stream_chain_after_split_lambda_header_takes_one_continuation_indent() {
     let source = fixture!(
         "void f()",
         "{",
         "    auto row = [](const String &format, Value val, const String &expected,",
         "                  const Locale &loc = Locale::classic())",
         "    {",
-        "        Check::append(\"%s:%s\", loc.name().c_str(), qPrintable(format))",
-        "                << format << val << loc << expected;",
+        "        Check::append(\"%s:%s\", loc.name().c_str(), textOf(format))",
+        "            << format << val << loc << expected;",
         "    };",
         "}",
     );
@@ -1061,7 +1118,7 @@ fn lambda_return_ternary_with_braced_true_arm_aligns_to_return_value() {
             "void f() {\n  return apply_result<char>(\n      dst, rules, count, content_count, [=](generic_iterator<ResultIt> at) {\n        return is_ready\n                   ? create_generic_value(bounded_result_iterator{at, count}, v)\n                         .stored_iterator_ref\n                   : copy<char>(v.data(), v.data() + count, at);\n      });\n}\n",
             &FormatOptions::default(),
         ),
-        "void f() {\n    return apply_result<char>(\n    dst, rules, count, content_count, [=](generic_iterator<ResultIt> at) {\n        return is_ready\n               ? create_generic_value(bounded_result_iterator{at, count}, v)\n               .stored_iterator_ref\n               :\n               copy<char>(v.data(), v.data() + count, at);\n    });\n}\n",
+        "void f() {\n    return apply_result<char>(\n    dst, rules, count, content_count, [=](generic_iterator<ResultIt> at) {\n        return is_ready\n               ? create_generic_value(bounded_result_iterator{at, count}, v)\n               .stored_iterator_ref\n               : copy<char>(v.data(), v.data() + count, at);\n    });\n}\n",
     );
 }
 
@@ -1147,8 +1204,7 @@ fn default_keeps_ternary_colon_with_closed_auto_lambda_arm() {
         fixture!(
             "auto value = condition ? [] {",
             "    return 1;",
-            "} :",
-            "[] { return 2; };",
+            "} : [] { return 2; };",
         )
     );
 }
@@ -1331,5 +1387,156 @@ fn one_line_lambda_body_after_its_parameters_breaks_whatever_their_count() {
             expected,
             "{parameters}"
         );
+    }
+}
+
+#[test]
+fn call_arguments_in_lambda_body_of_assigned_call_continue_from_their_call() {
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f()",
+                "{",
+                "    auto result = run([value]() {",
+                "        log(\"format\",",
+                "            value, other);",
+                "    });",
+                "}",
+            ),
+            &FormatOptions::default(),
+        ),
+        fixture!(
+            "void f()",
+            "{",
+            "    auto result = run([value]() {",
+            "        log(\"format\",",
+            "            value, other);",
+            "    });",
+            "}",
+        )
+    );
+}
+
+#[test]
+fn template_call_ending_its_row_in_lambda_body_continues_past_assigned_value() {
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f()",
+                "{",
+                "    run([value]() {",
+                "        auto *item = helper<Item>(",
+                "            value);",
+                "    });",
+                "}",
+            ),
+            &FormatOptions::default(),
+        ),
+        fixture!(
+            "void f()",
+            "{",
+            "    run([value]() {",
+            "        auto *item = helper<Item>(",
+            "                         value);",
+            "    });",
+            "}",
+        )
+    );
+}
+
+#[test]
+fn capture_only_lambda_body_continues_statements_as_one_with_parameters() {
+    let source = fixture!(
+        "void f()",
+        "{",
+        "    run([value] {",
+        "        int total = first +",
+        "        second;",
+        "        auto item = helper(",
+        "            value);",
+        "    });",
+        "    run([value]() {",
+        "        int total = first +",
+        "        second;",
+        "        auto item = helper(",
+        "            value);",
+        "    });",
+        "}",
+    );
+    assert_eq!(
+        format_exact(source, &FormatOptions::default()),
+        fixture!(
+            "void f()",
+            "{",
+            "    run([value] {",
+            "        int total = first +",
+            "                    second;",
+            "        auto item = helper(",
+            "                        value);",
+            "    });",
+            "    run([value]() {",
+            "        int total = first +",
+            "                    second;",
+            "        auto item = helper(",
+            "                        value);",
+            "    });",
+            "}",
+        )
+    );
+}
+
+#[test]
+fn lambda_argument_head_keeps_its_column_when_a_comment_follows_its_brace() {
+    // A comment after the body's brace stays on the head's row when the
+    // brace breaks onto its own; the head keeps the argument column.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=allman".to_owned()]).expect("valid options");
+    assert_eq!(
+        format_exact(
+            "void f()\n{\n    std::sort(items.begin(), items.end(),\n              [](const Item &first, const Item &second) { /* note */\n                  return first.value < second.value;\n              });\n}\n",
+            &options,
+        ),
+        "void f()\n{\n    std::sort(items.begin(), items.end(),\n              [](const Item &first, const Item &second)   /* note */\n    {\n        return first.value < second.value;\n    });\n}\n"
+    );
+}
+
+#[test]
+fn a_lambda_in_a_braceless_body_opens_its_body_from_the_line_its_statement_starts() {
+    // Run in after the header the statement starts at the header's level;
+    // on a line of its own it starts at the body's.
+    let input = "void f()\n{\n    while (ready) callback([&](int item) {\n        return item + first;\n    });\n    while (ready)\n        callback([&](int item) {\n        return item + first;\n    });\n}\n";
+    for (style, expected) in [
+        (
+            "--style=kr",
+            "void f()\n{\n    while (ready) callback([&](int item) {\n        return item + first;\n    });\n    while (ready)\n        callback([&](int item) {\n            return item + first;\n        });\n}\n",
+        ),
+        (
+            "--style=gnu",
+            "void f()\n{\n    while (ready) callback([&](int item)\n    {\n        return item + first;\n    });\n    while (ready)\n        callback([&](int item)\n        {\n            return item + first;\n        });\n}\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_owned()]).expect("valid options");
+        assert_eq!(format_exact(input, &options), expected, "{style}");
+    }
+}
+
+#[test]
+fn a_closure_body_brace_below_a_head_without_parameters_attaches_in_attach_styles() {
+    // A lambda or a block literal takes its style's brace whether or not
+    // its head lists parameters, wherever the source placed the brace.
+    let attached = "void load()\n{\n    auto f = [] {\n        done();\n    };\n    auto g = [&] mutable {\n        done();\n    };\n    call(queue, [] {\n        done();\n    });\n    dispatch_async(queue, ^ {\n        done();\n    });\n    block = ^ {\n        done();\n    };\n}\n";
+    let broken = attached.replace(" {\n        done", "\n    {\n        done");
+    for style in [
+        "--style=kr",
+        "--style=java",
+        "--style=stroustrup",
+        "--style=1tbs",
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_owned()]).expect("valid options");
+        let expected = format_exact(attached, &options);
+        assert_eq!(format_exact(&broken, &options), expected, "{style}");
+        assert!(expected.contains("auto f = [] {\n"), "{style}\n{expected}");
     }
 }

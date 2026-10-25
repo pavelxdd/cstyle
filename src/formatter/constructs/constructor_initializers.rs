@@ -5,7 +5,7 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::{ConstructorInitializerFrame, ConstructorInitializerLayout};
-use crate::formatter::structure::blocks::is_code_token;
+use crate::formatter::structure::blocks::{BlockKind, is_code_token};
 use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::{language, scoped_name_is_constructor};
 use crate::formatter::text::columns::column_after;
@@ -194,8 +194,8 @@ impl FormatEngine<'_> {
     }
 
     /// Whether the last constructor's initializers may still be read: its
-    /// frame stays recorded past the body, which opens outside any
-    /// function.
+    /// frame stays recorded until its body closes, and the body opens
+    /// outside any function.
     pub(crate) fn in_constructor_initializer(&self) -> bool {
         self.layout
             .frame_stack
@@ -406,6 +406,50 @@ impl FormatEngine<'_> {
     }
 
     /// What output line `index` decides for the look back, if anything.
+    /// Whether a lambda's body closes among the constructor's initializers
+    /// before the token at `index`: astyle reads the rows after it as the
+    /// constructor's.
+    pub(crate) fn lambda_closes_among_initializers_before(&self, index: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let mut cursor = index;
+        while let Some(before) = self.tree.previous_code_token(cursor) {
+            if let Some(group) = groups.closed_at(before) {
+                let open = groups.get(group).open;
+                if (open..=before).any(|inner| {
+                    matches!(tokens[inner], Token::Symbol('}'))
+                        && groups.closed_at(inner).is_some_and(|body| {
+                            self.tree.blocks.kind(body) == Some(BlockKind::Lambda)
+                        })
+                }) {
+                    return true;
+                }
+                cursor = open;
+                continue;
+            }
+            if matches!(tokens[before], Token::Symbol(':' | ';' | '{' | '}')) {
+                return false;
+            }
+            cursor = before;
+        }
+        false
+    }
+
+    /// Whether the code of output line `index` ends with the brace of a
+    /// braced initializer, which neither opens nor closes a body.
+    fn line_ends_initializer_brace(&self, index: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        self.output
+            .line_tokens(index)
+            .and_then(|span| {
+                (span.first..=span.last)
+                    .rev()
+                    .find(|&at| is_code_token(&tokens[at]))
+            })
+            .and_then(|last| self.tree.groups.delimited_by(last))
+            .is_some_and(|group| self.tree.blocks.kind(group) == Some(BlockKind::Initializer))
+    }
+
     fn constructor_scan_step(&self, index: usize) -> Option<ConstructorScan> {
         // The body of a block comment holds no code.
         if self.output.comment_start_index(index) != index {
@@ -413,11 +457,18 @@ impl FormatEngine<'_> {
         }
         let code = self.output.code_before_comment(index).trimmed_end();
         let trimmed = self.output.code_body(index);
-        if trimmed.starts_with(':') && !trimmed.starts_with("::") {
-            if code.ends_with('{') || code.ends_with('}') {
+        let braced_initializer = || self.line_ends_initializer_brace(index);
+        // A conditional's colon neither starts nor ends the list.
+        if trimmed.starts_with(':')
+            && !trimmed.starts_with("::")
+            && !self.colon_line_is_ternary_arm(index)
+        {
+            if code.ends_with(';')
+                || (code.ends_with('{') || code.ends_with('}')) && !braced_initializer()
+            {
                 return Some(ConstructorScan::Stop);
             }
-            if self.colon_line_is_ternary_arm(index) {
+            if self.colon_line_stands_in_parens(index) {
                 return Some(ConstructorScan::Stop);
             }
             let after_colon =
@@ -430,10 +481,44 @@ impl FormatEngine<'_> {
             }
             return Some(ConstructorScan::Head { index });
         }
-        if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
+        if trimmed.ends_with(';')
+            || (trimmed.ends_with('{') || trimmed.ends_with('}')) && !braced_initializer()
+        {
             return Some(ConstructorScan::Stop);
         }
         None
+    }
+
+    /// Whether output line `index` holds the colon after a function's
+    /// parameters, and their qualifiers, that opens its initializers.
+    fn line_holds_initializer_colon(&self, index: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        self.output.line_tokens(index).is_some_and(|span| {
+            (span.first..=span.last).any(|colon| {
+                matches!(tokens[colon], Token::Symbol(':'))
+                    && std::iter::successors(self.tree.previous_code_token(colon), |&before| {
+                        matches!(tokens[before], Token::Word(_))
+                            .then(|| self.tree.previous_code_token(before))
+                            .flatten()
+                    })
+                    .find(|&before| !matches!(tokens[before], Token::Word(_)))
+                    .and_then(|close| groups.closed_at(close))
+                    .is_some_and(|params| self.tree.functions.is_parameter_list(params))
+            })
+        })
+    }
+
+    /// Whether the colon leading output line `index` stands inside parens,
+    /// as an asm statement's operands do, where no initializer list starts.
+    fn colon_line_stands_in_parens(&self, index: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        self.output
+            .line_tokens(index)
+            .and_then(|span| (span.first..=span.last).find(|&at| is_code_token(&tokens[at])))
+            .filter(|&colon| matches!(tokens[colon], Token::Symbol(':')))
+            .and_then(|colon| self.tree.groups.enclosing(colon))
+            .is_some_and(|group| self.tree.groups.get(group).delimiter == Delimiter::Paren)
     }
 
     fn colon_line_is_ternary_arm(&self, colon_index: usize) -> bool {
@@ -524,27 +609,45 @@ impl FormatEngine<'_> {
             return None;
         }
         // Directives between the members leave the member before them.
-        let previous_index = self.output.scoped_range().rev().find(|&index| {
-            let head = self.output.trimmed(index);
-            !head.is_empty()
-                && !head.starts_with("//")
-                && !head.starts_with('#')
-                && self.output.directive_of_continuation(index).is_none()
-        })?;
+        let range = self.output.scoped_range();
+        let previous_index = self.output.last_line_looked(
+            &self.initializer_member_look,
+            range.start,
+            range.end,
+            |index| {
+                let head = self.output.trimmed(index);
+                !head.is_empty()
+                    && !head.starts_with("//")
+                    && !head.starts_with('#')
+                    && self.output.directive_of_continuation(index).is_none()
+            },
+        )?;
         let previous = &self.output[previous_index];
         let previous_code = self.output.code_trimmed_of(previous);
-        if !previous_code.ends_with(',') && previous_code.trimmed() != ":" {
+        // So do the arguments of a member whose name ends the row before.
+        let member_arguments =
+            trimmed.starts_with('(') && previous_code.ends_with(is_identifier_continue);
+        if !previous_code.ends_with(',') && previous_code.trimmed() != ":" && !member_arguments {
             return None;
         }
+        // The constructor's body may open on the last member's row.
         if self
             .open_paren_column_of(previous_code.trimmed_start())
             .is_some()
             || has_unmatched_open_brace(previous_code)
-            || has_unmatched_open_brace(trimmed)
+            || has_unmatched_open_brace(trimmed) && !self.pending_line_ends_opening_function_body()
         {
             return None;
         }
-        let base_indent = self.constructor_initializer_base_indent_spaces()?;
+        // A head whose initializers run on after its colon stands a level
+        // out of them.
+        let base_indent = match self.constructor_initializer_base_indent_spaces() {
+            Some(base) => base,
+            None if member_arguments && self.line_holds_initializer_colon(previous_index) => {
+                leading_visual_width(previous, self.options.tab_width) + self.options.indent_width
+            }
+            None => return None,
+        };
         // A row that closes the parens it starts in is still an argument.
         let starts_in_parens = match self.output.pending_tokens() {
             Some(span) => self
@@ -561,6 +664,17 @@ impl FormatEngine<'_> {
             return Some(leading_visual_width(previous, self.options.tab_width));
         }
         Some(base_indent)
+    }
+
+    /// Whether the line being laid out ends with the brace of a function's
+    /// body.
+    fn pending_line_ends_opening_function_body(&self) -> bool {
+        self.output.pending_tokens().is_some_and(|span| {
+            matches!(self.tree.tokens[span.last], Token::Symbol('{'))
+                && self.tree.groups.opened_at(span.last).is_some_and(|group| {
+                    self.tree.blocks.kind(group) == Some(BlockKind::FunctionBody)
+                })
+        })
     }
 
     pub(crate) fn constructor_initializer_preprocessor_branch_indent_spaces(
@@ -632,13 +746,18 @@ impl FormatEngine<'_> {
             (_, Some((hard, true))) => Some(hard),
             _ => None,
         }?;
-        // Parens a later line leaves open hold the row as any call's.
+        // Parens a later line leaves open hold the row as any call's, and
+        // one closing the parens the decided line leaves open ends them.
+        let (_, decided_opens) = line_paren_imbalance(self.output.code_before_comment(decided));
+        let mut decided_open = decided_opens.len();
         let mut depth = 0usize;
         for index in decided + 1..self.output.len() {
             let (closes, opens) = line_paren_imbalance(self.output.code_before_comment(index));
-            depth = depth.saturating_sub(closes) + opens.len();
+            let closes_later = closes.min(depth);
+            decided_open = decided_open.saturating_sub(closes - closes_later);
+            depth = depth - closes_later + opens.len();
         }
-        if depth > 0 {
+        if depth > 0 || !decided_opens.is_empty() && decided_open == 0 {
             return None;
         }
         let code = self.output.code_before_comment_trimmed(decided);
@@ -813,7 +932,14 @@ impl FormatEngine<'_> {
         if trimmed.starts_with('?')
             && let Some(open) = self.open_paren_column_of(previous_code)
         {
-            return Some(column_after(previous_code, open, self.options.tab_width));
+            // Indenting after parens sets the arm a continuation past its
+            // paren's line.
+            return Some(if self.options.indent_after_parens {
+                leading_visual_width(previous, self.options.tab_width)
+                    + self.options.continuation_indent * self.options.indent_width
+            } else {
+                column_after(previous_code, open, self.options.tab_width)
+            });
         }
         None
     }

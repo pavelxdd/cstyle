@@ -3,10 +3,12 @@ use crate::formatter::constructs::headers::starts_header_word;
 use crate::formatter::constructs::labels;
 use crate::formatter::constructs::switch_cases::find_case_colon;
 use crate::formatter::engine::FormatEngine;
+use crate::formatter::lexer::Token;
 use crate::formatter::state::BraceType;
 use crate::formatter::state::frame::{BraceFrame, BraceSemanticKind};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::structure::blocks::BlockKind;
+use crate::formatter::syntax::language::leading_header;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan;
 use crate::formatter::text::line_scan::{
@@ -14,7 +16,7 @@ use crate::formatter::text::line_scan::{
     is_comment_only_line, trailing_comment_split_limit,
 };
 use crate::formatter::text::trim::Trimmed;
-use crate::source::lex::{is_word_char, leading_identifier};
+use crate::source::lex::is_word_char;
 
 fn case_label_token_offset(line: &str, header: &str) -> Option<usize> {
     // Comments leading the line are no part of its code.
@@ -22,7 +24,7 @@ fn case_label_token_offset(line: &str, header: &str) -> Option<usize> {
     let code = &line[..lead + trailing_comment_split_limit(&line[lead..])];
     // Labels that lead the line, or follow the brace closing the case
     // before, own what follows them all.
-    let trimmed = code.trimmed_start().trim_start_matches('}').trimmed_start();
+    let trimmed = after_leading_comments(code.trimmed_start().trim_start_matches('}'));
     if (trimmed.starts_with("case") || trimmed.starts_with("default"))
         && code.matches(':').count() > 1
         && trimmed.starts_with(header)
@@ -62,11 +64,16 @@ fn holds_code(line: &str) -> bool {
 }
 
 /// Whether a label after `prefix` stands at the labels' column: after the
-/// brace closing the case before, or after comments alone.
+/// brace closing the case before, after comments, or after both. A block
+/// run into the line and closed on it leads the label as its closer does.
 fn brace_led(prefix: &str) -> bool {
     let prefix = prefix.trimmed();
-    !prefix.is_empty()
-        && (prefix.chars().all(|ch| ch == '}') || after_leading_comments(prefix).is_empty())
+    if prefix.starts_with('{')
+        && let Some((0, end)) = line_scan::inline_brace_pair_range(prefix)
+    {
+        return after_leading_comments(&prefix[end..]).is_empty();
+    }
+    !prefix.is_empty() && after_leading_comments(prefix.trim_start_matches('}')).is_empty()
 }
 
 fn leading_case_label_count(line: &str) -> usize {
@@ -140,6 +147,37 @@ impl FormatEngine<'_> {
         None
     }
 
+    /// The lead of the output line on which the head of the class whose
+    /// body the `{` at `brace` opens starts, once that line is out.
+    pub(crate) fn class_head_line_lead(&self, brace: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let statements = &self.tree.statements;
+        let mut start = brace;
+        // A colon before the class key ends a label, one after it opens the
+        // bases.
+        let mut passed_class_key = false;
+        while !statements.starts_block_statement(start)
+            && statements.braceless_header(start).is_none()
+            && let Some(previous) = self.tree.previous_code_token(start)
+            && !matches!(tokens[previous], Token::Symbol(';' | '{' | '}'))
+            && !(passed_class_key && matches!(tokens[previous], Token::Symbol(':')))
+            // The head stands within the parens around it.
+            && groups.opened_at(previous).is_none()
+        {
+            start = groups
+                .closed_at(previous)
+                .map_or(previous, |group| groups.get(group).open);
+            passed_class_key |= matches!(
+                &tokens[start],
+                Token::Word(word)
+                    if matches!(word.as_str(), "class" | "struct" | "union" | "interface" | "enum")
+            );
+        }
+        let line = self.output.line_with_token(start)?;
+        Some(self.output.lead_width(line, self.options.tab_width))
+    }
+
     pub(super) fn push_brace_frame(
         &mut self,
         brace_header: Option<&String>,
@@ -173,6 +211,15 @@ impl FormatEngine<'_> {
             .current
             .find("*/")
             .is_some_and(|close| self.current[..close].rfind("/*").is_none());
+        let header_candidate = self
+            .current
+            .trimmed_start()
+            .strip_prefix('}')
+            .map_or(self.current.trimmed_start(), after_leading_comments);
+        let follows_closer = !header_candidate.is_empty()
+            && self.current.trimmed_start().starts_with('}')
+            && brace_type == BraceType::Command
+            && lambda_header_indent.is_none();
         let line_indent = if closes_interrupted_comment {
             brace_header
                 .and_then(|header| {
@@ -188,9 +235,21 @@ impl FormatEngine<'_> {
             self.output_objc_method_header_indent_spaces()
                 .or_else(|| self.split_definition_header_indent_spaces())
                 .unwrap_or(current_line_indent)
-        } else if class_base && !self.current_is_blank() {
+        } else if let Some(lead) = matches!(
+            brace_type,
+            BraceType::Class | BraceType::Interface | BraceType::Struct | BraceType::Union
+        )
+        .then(|| self.class_head_line_lead(self.current.active_token()?))
+        .flatten()
+        {
+            // A class's body opens a level past the line its head starts,
+            // whatever rows the head takes.
+            lead + self.case_unindent_spaces()
+        } else if class_base && !self.current_is_blank() || follows_closer {
             // A class's body opens a level past its head, whatever row of
-            // its bases the brace ends.
+            // its bases the brace ends; a statement on a closer's row stands
+            // where its block's statements do, whatever column a style sets
+            // the closer at.
             (self
                 .layout
                 .indentation
@@ -200,14 +259,9 @@ impl FormatEngine<'_> {
         } else {
             current_line_indent
         };
-        let header_candidate = self
-            .current
-            .trimmed_start()
-            .strip_prefix('}')
-            .map_or(self.current.trimmed_start(), str::trim_start);
         let split_header = !header_candidate.is_empty()
             && brace_header.is_some_and(|header| {
-                leading_identifier(header_candidate) != header
+                leading_header(header_candidate) != header
                     && !(header == "if" && header_candidate.starts_with("else if"))
             });
         let semantic_kind = self.brace_semantic_kind(brace_type, opens_lambda_body);
@@ -468,7 +522,6 @@ impl FormatEngine<'_> {
         // Comments leading the line took its code's column; one trailing it
         // takes no part in the label.
         let trimmed = after_leading_comments(line.trimmed_start());
-        let code_end = self.output.code_trimmed_of(line).trimmed_end();
         let lead = leading_visual_width(line, self.options.tab_width);
         let case_unindent = self.case_unindent_spaces();
         if let Some(frame) = self.layout.frame_stack.active_brace_mut().filter(|frame| {
@@ -480,7 +533,7 @@ impl FormatEngine<'_> {
             ) && trimmed.trimmed_end().ends_with('=');
             let opener = if frame.case_block {
                 (trimmed.starts_with("case") || trimmed.starts_with("default"))
-                    && code_end.ends_with(':')
+                    && self.output.code_trimmed_of(line).ends_with(':')
             } else {
                 frame
                     .header
@@ -516,6 +569,7 @@ impl FormatEngine<'_> {
         let Some(mut line) = self.output.last() else {
             return;
         };
+        let mut header_on_earlier_row = false;
         // A header continued onto the brace's line, as a max-code-length
         // split leaves it, stands where its first line does.
         if let Some(header) = self
@@ -548,6 +602,7 @@ impl FormatEngine<'_> {
                     .find(|line| starts_header(line))
             {
                 line = header_line;
+                header_on_earlier_row = true;
             }
         }
         let code = self.output.code_of(line).trimmed();
@@ -596,9 +651,12 @@ impl FormatEngine<'_> {
                         && frame.sibling_indent_column < sibling)
                     || (frame.semantic_kind == BraceSemanticKind::Lambda
                         && frame.sibling_indent_column != sibling)
+                    // A header's own row published before the brace's
+                    // places the block, as the brace's row does otherwise.
                     || (frame.semantic_kind == BraceSemanticKind::Command
                         && frame.split_header
-                        && frame.header.is_some()))
+                        && frame.header.is_some()
+                        && !header_on_earlier_row))
         }) {
             return;
         }
@@ -620,7 +678,7 @@ impl FormatEngine<'_> {
                                 BraceSemanticKind::Array | BraceSemanticKind::Initializer
                             ) && sibling > 0
                             || frame.semantic_kind == BraceSemanticKind::Lambda
-                            && (frame.header_indent_column > 0 || vtk_constructor_lambda)
+                            && (!self.vtk_flush_lambda(frame) || vtk_constructor_lambda)
                             || self.should_indent_brace_line(frame.brace_type))
                     || self.options.brace_style == BraceStyle::Ratliff
                         && matches!(
@@ -630,6 +688,13 @@ impl FormatEngine<'_> {
                     // A block's own brace line stands at its body.
                     || self.options.brace_style == BraceStyle::Ratliff
                         && frame.semantic_kind == BraceSemanticKind::Command
+            })
+            // VTK sets an element's rows by the array around it.
+            && !self.layout.frame_stack.active_brace().is_some_and(|frame| {
+                self.options.brace_style == BraceStyle::Vtk
+                    && frame
+                        .open_token
+                        .is_some_and(|open| self.vtk_element_rows_past_brace(open))
             });
         // Ratliff closes the aggregate a declaration defines at its body:
         // an initializer opened on that line nests from the declaration.
@@ -643,6 +708,18 @@ impl FormatEngine<'_> {
                 )
             }) {
             sibling.saturating_sub(self.options.indent_width)
+        } else {
+            sibling
+        };
+        // A lambda's rows take its columns as exact indents, which come
+        // before the case unindent the brace's line took.
+        let sibling = if self
+            .layout
+            .frame_stack
+            .active_brace()
+            .is_some_and(|frame| frame.semantic_kind == BraceSemanticKind::Lambda)
+        {
+            sibling + self.case_unindent_spaces()
         } else {
             sibling
         };
@@ -691,6 +768,25 @@ impl FormatEngine<'_> {
             }
         }
         let recovery = self.layout.nesting.exit_brace();
+        // A list among arguments leaves their continuation as it found it.
+        if recovery.parens == 0
+            && matches!(
+                self.layout.nesting.last_closed_brace_type,
+                Some(
+                    BraceType::Array
+                        | BraceType::CompoundLiteral
+                        | BraceType::Initializer
+                        | BraceType::DeferArray
+                )
+            )
+            && let Some(spaces) = self
+                .layout
+                .frame_stack
+                .active_delimiter()
+                .and_then(|delimiter| delimiter.continuation_indent_column)
+        {
+            self.layout.nesting.restore_paren_continuation(spaces);
+        }
         for _ in 0..recovery.parens {
             self.layout.frame_stack.pop_delimiter(self.output.len());
         }

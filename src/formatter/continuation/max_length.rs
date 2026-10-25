@@ -1,44 +1,61 @@
 use crate::config::{BraceStyle, FormatOptions, PointerAlign, ReferenceAlign};
 use crate::formatter::braces::classification::is_lambda_capture_header;
 use crate::formatter::constructs::constructor_initializers::{
-    advance_max_length_constructor_replay, start_max_length_constructor_replay,
+    advance_max_length_constructor_replay, has_inline_constructor_initializer_colon,
+    start_max_length_constructor_replay,
 };
 use crate::formatter::constructs::headers::is_conditional_header_line;
 use crate::formatter::constructs::labels::max_length_inline_access_body_indent_extra;
 use crate::formatter::constructs::switch_cases::max_length_inline_case_body_indent_extra;
+use crate::formatter::constructs::template_declarations::after_template_head;
 use crate::formatter::continuation::{ContinuationIndent, min_conditional_indent_spaces};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, token_text, tokenize};
-use crate::formatter::structure::TokenSpan;
+use crate::formatter::state::indentation::LineKind;
 use crate::formatter::structure::blocks::BlockKind;
-use crate::formatter::structure::blocks::is_code_token;
+use crate::formatter::structure::blocks::{is_code_token, next_code_token};
 use crate::formatter::structure::groups::{Delimiter, GroupId};
+use crate::formatter::structure::{LineComments, TokenSpan};
 use crate::formatter::syntax::language::{self, is_non_type_keyword, is_pointer_type_word};
 use crate::formatter::syntax::{
-    TemplateAngle, function_name_start, known_template_angle_role, scoped_name_is_constructor,
-    template_openers,
+    TemplateAngle, astyle_template_spans, function_name_start, known_template_angle_role,
+    scoped_name_is_constructor, template_openers,
 };
-use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
+use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
-    advance_quoted_literal, last_unmatched_open_delimiter, line_paren_imbalance,
-    trailing_comment_split_limit, unmatched_open_bracket_column, unmatched_open_paren_column,
+    advance_quoted_literal, after_leading_comments, code_contains, has_top_level_char,
+    last_unmatched_open_delimiter, line_paren_imbalance, trailing_comment_split_limit,
+    trailing_comment_start, unmatched_open_bracket_column, unmatched_open_paren_column,
     unmatched_open_paren_columns,
 };
 use crate::formatter::text::trim::Trimmed;
-use crate::formatter::tokens::operators::find_assignment_operator;
 use crate::formatter::tokens::operators::{
-    array_bound_operator_column, head_ends_assignment_operator, leads_keyword_colon,
+    array_bound_operator_column, find_assignment_operator, head_ends_assignment_operator,
+    leads_keyword_colon, leads_statement_continuation,
 };
 use crate::formatter::tokens::pointers::is_pointer_declaration_segment;
 use crate::source::lex::{is_identifier_continue, is_identifier_start, trailing_word};
 
+/// A message on the line being split: the byte offsets of its bracket and of
+/// its closer on the line, its first selector's column and offset, and the
+/// column one past its bracket.
+#[derive(Clone, Copy)]
+pub(crate) struct ObjCMessageRows {
+    pub(crate) open_offset: usize,
+    pub(crate) close_offset: Option<usize>,
+    pub(crate) selector: Option<(usize, usize)>,
+    pub(crate) selector_read: bool,
+    pub(crate) bracket_spaces: usize,
+}
+
 #[derive(Default)]
 pub(crate) struct MaxLengthLineState {
     suffix_width: usize,
-    /// The braces and `while` attached after the statement on its line.
-    while_suffix: Option<String>,
-    objc_message_indent_spaces: Option<usize>,
+    /// The braces attached after the statement on its line, with the
+    /// `while` or the comment that follows them there.
+    closer_suffix: Option<String>,
+    objc_messages: Vec<ObjCMessageRows>,
     /// The part of a split line being published stands where astyle's
     /// stack or the syntax tree put it.
     anchored_part: bool,
@@ -57,16 +74,34 @@ impl MaxLengthLineState {
         self.suffix_width = width;
     }
 
-    pub(crate) fn set_while_suffix(&mut self, suffix: Option<String>) {
-        self.while_suffix = suffix;
+    pub(crate) fn set_closer_suffix(&mut self, suffix: Option<String>) {
+        self.closer_suffix = suffix;
     }
 
-    fn objc_message_indent_spaces(&self) -> Option<usize> {
-        self.objc_message_indent_spaces
+    /// The column of the rows a split makes in the innermost message it
+    /// splits: its first selector's, or one past its bracket when the split
+    /// comes before that selector; and whether the split moves the first
+    /// selector of a message the line leaves open.
+    fn objc_message_indent_spaces(&self, split_at: usize) -> Option<(usize, bool)> {
+        let rows = self
+            .objc_messages
+            .iter()
+            .filter(|rows| {
+                rows.open_offset < split_at
+                    && rows.close_offset.is_none_or(|close| split_at <= close)
+            })
+            .max_by_key(|rows| rows.open_offset)?;
+        Some(match rows.selector {
+            Some((spaces, offset)) if split_at > offset => (spaces, false),
+            selector => (
+                rows.bracket_spaces,
+                selector.is_some() && rows.close_offset.is_none(),
+            ),
+        })
     }
 
-    pub(crate) fn set_objc_message_indent_spaces(&mut self, spaces: Option<usize>) {
-        self.objc_message_indent_spaces = spaces;
+    pub(crate) fn set_objc_messages(&mut self, messages: Vec<ObjCMessageRows>) {
+        self.objc_messages = messages;
     }
 
     pub(crate) fn take_anchored_part(&mut self) -> bool {
@@ -113,11 +148,11 @@ impl FormatEngine<'_> {
         // stays whole.
         let suffix_room = self.max_length_line.suffix_width().max(1).max(
             self.max_length_line
-                .while_suffix
+                .closer_suffix
                 .as_ref()
                 .map_or(0, String::len),
         );
-        if line.len() + suffix_room <= brace_row_layout.first_width {
+        if line.trimmed_end().len() + suffix_room <= brace_row_layout.first_width {
             self.push_output_line_with_indent(line, structural_level, indent);
             return;
         }
@@ -150,16 +185,19 @@ impl FormatEngine<'_> {
             usize::from(broken_attached_brace)
         };
         let final_first_width = first_width.saturating_sub(suffix_width).max(1);
-        let first_rules = SplitRules::new(self.options).with_offset(brace_row_layout.prefix_width);
-        // A `while` attached after the statement's braces shares its line,
-        // so the line splits where the whole of it would, and not before
-        // the `while` when it would split there.
-        let while_suffix = line
+        let templates = self.line_template_angles();
+        let first_rules = SplitRules::new(self.options)
+            .with_offset(brace_row_layout.prefix_width)
+            .with_templates(templates);
+        // A `while` or a comment attached after the statement's braces
+        // shares its line, so the line splits where the whole of it would,
+        // and not past the statement when it would split there.
+        let closer_suffix = line
             .trimmed_end()
             .ends_with(';')
-            .then(|| self.max_length_line.while_suffix.clone())
+            .then(|| self.max_length_line.closer_suffix.clone())
             .flatten();
-        let split = match &while_suffix {
+        let split = match &closer_suffix {
             Some(suffix) => split_result(
                 &format!("{}{suffix}", line.trimmed_end()),
                 first_width,
@@ -174,6 +212,17 @@ impl FormatEngine<'_> {
         let Some(split) = split else {
             self.push_output_line_with_indent(line, structural_level, indent);
             return;
+        };
+        // Each part holds the comments whose text it holds: the head the one
+        // leading the line, the part a comment ends the line's last.
+        let line_comments = self.output.take_pending_comments();
+        let part_comments = |part: &str, leads: bool| {
+            line_comments.map(|comments| LineComments {
+                lead: comments.lead.filter(|_| leads),
+                last: comments
+                    .last
+                    .filter(|_| trailing_comment_start(part).is_some()),
+            })
         };
         let current_line_owner = if brace_row_layout.attaches_lisp_closer
             || configured_indent_width > structural_level * self.options.indent_width
@@ -197,6 +246,31 @@ impl FormatEngine<'_> {
                 | BraceStyle::Horstmann
         );
         let last_held = LastHeldBytes::of(line);
+        // The brace a style breaks from the `=` ending the line's code.
+        let brace_follows = self.output.pending_tokens().is_some_and(|span| {
+            let tokens = &self.tree.tokens;
+            (span.first..=span.last)
+                .rev()
+                .find(|&index| is_code_token(&tokens[index]))
+                .and_then(|last| {
+                    if matches!(tokens[last], Token::Symbol('{')) {
+                        self.tree.previous_code_token(last)
+                    } else {
+                        Some(last)
+                    }
+                })
+                .is_some_and(|assign| {
+                    matches!(&tokens[assign], Token::Operator(operator) if operator == "=")
+                        && next_code_token(tokens, assign + 1)
+                            .is_some_and(|next| matches!(tokens[next], Token::Symbol('{')))
+                })
+        });
+        let block_spaces = (self
+            .layout
+            .indentation
+            .line_indent(LineKind::Normal, self.options)
+            + self.case_body_indent_extra(LineKind::Normal))
+            * self.options.indent_width;
         let split_indent_inputs = SplitIndentInputs {
             base_indent_width,
             limit_base_indent_width: configured_indent_width,
@@ -210,19 +284,50 @@ impl FormatEngine<'_> {
             indent_after_parens: self.options.indent_after_parens,
             following_split: false,
             break_lambda_parameters,
+            block_spaces,
+            brace_follows,
             held: last_held.from(0),
         };
         let mut next_indent = continuation_indent_for_split(line, &split, &split_indent_inputs)
+            .or_else(|| self.split_operator_row_indent(line, split.tail))
             .unwrap_or(split_indent);
-        if brace_row_layout.attaches_lisp_closer {
+        // A brace ending the head opens a body the row after it stands in.
+        if brace_row_layout.attaches_lisp_closer && !split.head.trimmed_end().ends_with('{') {
             next_indent = ContinuationIndent::Level(self.layout.indentation.indent());
+        }
+        // A row split past a function's parameters, or opening them, stands
+        // at the head, as one the source broke there does.
+        if self.split_follows_function_parameters(line, split.tail)
+            || self.split_opens_function_parameters(line, split.tail)
+        {
+            next_indent = ContinuationIndent::Spaces(base_indent_width);
+        }
+        // So does a declarator split off its type's template arguments,
+        // whatever the arguments left open.
+        let mut declarator_part = split_ends_template_type(&split.head);
+        if declarator_part {
+            next_indent = ContinuationIndent::Spaces(base_indent_width);
         }
         let conditional_floor =
             self.maximum_length_conditional_continuation_floor(line, base_indent_width);
-        if let Some(spaces) = self.max_length_line.objc_message_indent_spaces() {
+        let objc_message_rows = self
+            .max_length_line
+            .objc_message_indent_spaces(split.split_at)
+            .map(|(spaces, moves_selector)| {
+                // The message's rows after the line align with the selector
+                // the split moved.
+                if moves_selector && self.layout.objc.message_align.is_some() {
+                    self.layout.objc.message_align = Some(spaces);
+                }
+                spaces
+            });
+        if let Some(spaces) = objc_message_rows {
             next_indent = ContinuationIndent::Spaces(spaces);
         }
+        // The floor holds the condition's rows; the statement the header
+        // runs in after it goes on at the header's body.
         if let Some(floor) = conditional_floor
+            && !splits_header_body_statement(&split)
             && next_indent.columns(self.options.indent_width) < floor
         {
             next_indent = ContinuationIndent::Spaces(floor);
@@ -233,19 +338,25 @@ impl FormatEngine<'_> {
                     .or_else(|| max_length_inline_access_body_indent_extra(self.options, line))
             })
             .flatten();
+        // The rest of a line split after a statement is the next statement.
+        let head_ends_statement = self.split_ends_statement(&line[..line.len() - split.tail.len()]);
         if ends_statement_before_comment(&split.head) {
             next_indent = indent;
+        } else if head_ends_statement {
+            next_indent = ContinuationIndent::Spaces(block_spaces);
         }
-        // A `goto` split from its label continues one level in.
-        if split
-            .head
-            .trimmed_end()
-            .strip_suffix("goto")
-            .is_some_and(|before| !before.ends_with(is_identifier_continue))
+        if let Some(spaces) = self.goto_label_split_indent(
+            self.output.pending_tokens(),
+            line,
+            &split.head,
+            split.tail,
+            base_indent_width,
+        ) {
+            next_indent = ContinuationIndent::Spaces(spaces);
+        }
+        if let Some(extra) = inline_body_indent_extra
+            && !head_ends_statement
         {
-            next_indent = ContinuationIndent::Spaces(base_indent_width + self.options.indent_width);
-        }
-        if let Some(extra) = inline_body_indent_extra {
             next_indent =
                 ContinuationIndent::Spaces(next_indent.columns(self.options.indent_width) + extra);
         }
@@ -268,6 +379,16 @@ impl FormatEngine<'_> {
         };
         let source_tokens = self.output.pending_tokens();
         let mut part_scan = SplitPartScan::default();
+        self.set_split_part_tokens(
+            source_tokens,
+            line,
+            line,
+            line.len() - split.tail.len(),
+            &mut part_scan,
+        );
+        if let Some(comments) = part_comments(&split.head, true) {
+            self.output.set_pending_comments(comments);
+        }
         self.push_output_line_with_indent(&split.head, structural_level, indent);
         let mut tail = split.tail;
         loop {
@@ -275,7 +396,9 @@ impl FormatEngine<'_> {
             // Each tail ends the line.
             debug_assert!(line.ends_with(tail));
             let held = last_held.from(line.len() - tail.len());
-            let rules = SplitRules::new(self.options).holding(held);
+            let rules = SplitRules::new(self.options)
+                .holding(held)
+                .with_templates(templates.after(&line[..line.len() - tail.len()]));
             let Some(split) = split_result(tail, tail_width, rules).or_else(|| {
                 (suffix_width > 0).then(|| {
                     split_result(tail, tail_width.saturating_sub(suffix_width).max(1), rules)
@@ -283,7 +406,7 @@ impl FormatEngine<'_> {
             }) else {
                 break;
             };
-            let mut following_indent = continuation_indent_for_split(
+            let placed = continuation_indent_for_split(
                 tail,
                 &split,
                 &SplitIndentInputs {
@@ -293,8 +416,8 @@ impl FormatEngine<'_> {
                     held,
                     ..split_indent_inputs
                 },
-            )
-            .unwrap_or(next_indent);
+            );
+            let mut following_indent = placed.unwrap_or(next_indent);
             following_indent = advance_max_length_constructor_replay(
                 self.options,
                 &mut constructor_replay,
@@ -304,18 +427,31 @@ impl FormatEngine<'_> {
                 following_indent,
             );
             // A split past the closer of every paren the line opened
-            // continues the statement itself.
+            // continues the statement itself, at the value of an assignment
+            // the row being split holds as it stands on that row.
             if !constructor_replay.has_constructor_initializer()
                 && line_paren_imbalance(split.head.as_str()).0 > 0
                 && unmatched_open_paren_columns(&line[..line.len() - split.tail.len()]).is_empty()
             {
+                let row = next_indent.columns(self.options.indent_width);
+                let row_assignment_value = top_level_assignment_index(tail)
+                    .filter(|&assignment| assignment < split.head.len())
+                    .and_then(|_| assignment_value_indent(tail, row))
+                    .map(|value| {
+                        if value - row > self.options.max_continuation_indent {
+                            row + 2 * self.options.indent_width
+                        } else {
+                            value
+                        }
+                    });
                 following_indent = ContinuationIndent::Spaces(
                     return_value_indent(line, base_indent_width)
+                        .or(row_assignment_value)
                         .or_else(|| assignment_value_indent(line, base_indent_width))
                         .unwrap_or(base_indent_width),
                 );
             }
-            if let Some(spaces) = self.max_length_line.objc_message_indent_spaces() {
+            if let Some(spaces) = objc_message_rows {
                 following_indent = ContinuationIndent::Spaces(spaces);
             }
             if let Some(floor) = conditional_floor
@@ -323,21 +459,54 @@ impl FormatEngine<'_> {
             {
                 following_indent = ContinuationIndent::Spaces(floor);
             }
-            self.set_split_part_tokens(source_tokens, line, tail, &mut part_scan);
-            if let Some(spaces) = self.split_part_indent(tail) {
+            if let Some(spaces) = self.goto_label_split_indent(
+                source_tokens,
+                line,
+                &split.head,
+                split.tail,
+                next_indent.columns(self.options.indent_width),
+            ) {
+                following_indent = ContinuationIndent::Spaces(spaces);
+            }
+            if self.split_ends_statement(&line[..line.len() - split.tail.len()]) {
+                following_indent = ContinuationIndent::Spaces(block_spaces);
+            }
+            self.set_split_part_tokens(
+                source_tokens,
+                line,
+                tail,
+                line.len() - split.tail.len(),
+                &mut part_scan,
+            );
+            if !declarator_part && let Some(spaces) = self.split_part_indent(tail) {
+                // The parts no rule places go on from where the tree
+                // anchors the part before them.
+                if placed.is_none() && following_indent == next_indent {
+                    following_indent = ContinuationIndent::Spaces(spaces);
+                }
                 next_indent = ContinuationIndent::Spaces(spaces);
                 self.max_length_line.anchored_part = true;
             }
+            if let Some(comments) = part_comments(&split.head, false) {
+                self.output.set_pending_comments(comments);
+            }
             self.push_output_line_with_indent(&split.head, next_structural_level, next_indent);
             self.max_length_line.anchored_part = false;
+            declarator_part = split_ends_template_type(&line[..line.len() - split.tail.len()]);
+            if declarator_part {
+                following_indent = ContinuationIndent::Spaces(base_indent_width);
+            }
             tail = split.tail;
             next_indent = following_indent;
         }
         if !tail.trimmed().is_empty() {
-            self.set_split_part_tokens(source_tokens, line, tail, &mut part_scan);
-            if let Some(spaces) = self.split_part_indent(tail) {
+            self.set_split_part_tokens(source_tokens, line, tail, line.len(), &mut part_scan);
+            if !declarator_part && let Some(spaces) = self.split_part_indent(tail) {
                 next_indent = ContinuationIndent::Spaces(spaces);
                 self.max_length_line.anchored_part = true;
+            }
+            if let Some(comments) = part_comments(tail, false) {
+                self.output.set_pending_comments(comments);
             }
             self.push_output_line_with_indent(tail, next_structural_level, next_indent);
             self.max_length_line.anchored_part = false;
@@ -364,18 +533,238 @@ impl FormatEngine<'_> {
         if !part.trimmed_start().starts_with(&*token_text(token)) {
             return None;
         }
-        self.split_part_stack_indent(first)
+        // A part opening a lambda's body ends what the statement continued,
+        // unless it continues the lambda's parameters.
+        if part.trimmed_end().ends_with('{')
+            && self.pending_line_opens_statement_lambda_body()
+            && !self.pending_line_continues_lambda_parameters()
+        {
+            return Some(
+                (self
+                    .layout
+                    .indentation
+                    .line_indent(LineKind::Normal, self.options)
+                    + self.case_body_indent_extra(LineKind::Normal))
+                    * self.options.indent_width,
+            );
+        }
+        // A part after the colon opening a class's bases stands a level past
+        // the head, as a row that colon ends continues.
+        if self.tree.previous_code_token(first).is_some_and(|colon| {
+            matches!(self.tree.tokens[colon], Token::Symbol(':'))
+                && self.class_head_key_before(colon).is_some()
+        }) {
+            return Some((self.continuation_base_indent() + 1) * self.options.indent_width);
+        }
+        // A part among template arguments stands as a row there does; one
+        // within a template head stands with its parameters.
+        self.split_template_argument_indent(first)
+            .or_else(|| self.split_part_stack_indent(first))
+            .or_else(|| self.template_head_row_indent(first))
             .or_else(|| self.tree_anchor_indent(first, part))
     }
 
-    /// Gives the part of the split `line` that starts with `part` the source
-    /// tokens from its first one on. The parts come in order along the line,
-    /// so `scan` resumes the walk where the last part's first token was found.
+    /// Whether `tail`, the end of `line`, starts past the parameters of a
+    /// function head the line holds, outside any group.
+    fn split_follows_function_parameters(&self, line: &str, tail: &str) -> bool {
+        let Some(span) = self.output.pending_tokens() else {
+            return false;
+        };
+        let Some(tail_first) = self.split_tail_first_token(line, tail) else {
+            return false;
+        };
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let outer = groups.enclosing(tail_first);
+        // Only qualifiers and a trailing return type follow the parameters;
+        // initializers, declarators and a `=` specifier after them continue
+        // the head.
+        (span.first..tail_first).rev().any(|index| {
+            matches!(tokens[index], Token::Symbol(')'))
+                && groups.closed_at(index).is_some_and(|params| {
+                    self.tree.functions.by_params(params).is_some()
+                        && groups.enclosing(groups.get(params).open) == outer
+                })
+                && !tokens[index..tail_first]
+                    .iter()
+                    .any(|token| matches!(token, Token::Symbol(':' | ',')))
+                && !tokens[index..=tail_first]
+                    .iter()
+                    .any(|token| matches!(token, Token::Operator(operator) if operator == "="))
+        }) && outer.is_none_or(|group| groups.get(group).delimiter == Delimiter::Brace)
+    }
+
+    /// Whether `tail`, the end of `line`, opens the parameters of a function
+    /// head the line holds; a member's initializer opens none.
+    fn split_opens_function_parameters(&self, line: &str, tail: &str) -> bool {
+        self.split_tail_first_token(line, tail)
+            .is_some_and(|first| {
+                self.tree
+                    .groups
+                    .opened_at(first)
+                    .and_then(|params| self.tree.functions.by_params(params))
+                    .is_some_and(|head| {
+                        !self
+                            .tree
+                            .previous_code_token(head.start)
+                            .is_some_and(|before| {
+                                matches!(self.tree.tokens[before], Token::Symbol(':' | ','))
+                            })
+                    })
+            })
+    }
+
+    /// The indent of `tail`, the end of `line`, when an operator leading it
+    /// continues a statement of a block: a continuation past the statement,
+    /// as a row the source broke before the operator takes.
+    fn split_operator_row_indent(&self, line: &str, tail: &str) -> Option<ContinuationIndent> {
+        let first = self.split_tail_first_token(line, tail)?;
+        let Token::Operator(operator) = &self.tree.tokens[first] else {
+            return None;
+        };
+        let in_statement_block = self.tree.groups.enclosing(first).is_some_and(|group| {
+            matches!(
+                self.tree.blocks.kind(group),
+                Some(
+                    BlockKind::FunctionBody
+                        | BlockKind::Control
+                        | BlockKind::Block
+                        | BlockKind::Lambda
+                        | BlockKind::StatementExpression
+                )
+            )
+        });
+        // A trailing return type goes on with a lambda's head.
+        (in_statement_block
+            && leads_statement_continuation(operator)
+            && !matches!(operator.as_str(), "->" | "->*"))
+        .then(|| ContinuationIndent::Spaces(self.statement_continuation_indent_spaces()))
+    }
+
+    /// The first source token of `tail`, the end of the pending `line`.
+    /// The indent of the label a split of `line` moves off its `goto`
+    /// ending `head` on a row at `row_indent`: one level in, or past the
+    /// body of headers the `goto` runs in after.
+    fn goto_label_split_indent(
+        &self,
+        line_tokens: Option<TokenSpan>,
+        line: &str,
+        head: &str,
+        tail: &str,
+        row_indent: usize,
+    ) -> Option<usize> {
+        head.trimmed_end()
+            .strip_suffix("goto")
+            .filter(|before| !before.ends_with(is_identifier_continue))?;
+        let levels = match self.split_tail_run_in_header_levels(line_tokens, line, tail) {
+            0 => 1,
+            headers => headers + self.options.continuation_indent,
+        };
+        Some(row_indent + levels * self.options.indent_width)
+    }
+
+    /// How many levels the headers whose bodies run in before it on the
+    /// line indent the statement holding the start of `tail`, the end of
+    /// `line`, whose tokens are `line_tokens`.
+    fn split_tail_run_in_header_levels(
+        &self,
+        line_tokens: Option<TokenSpan>,
+        line: &str,
+        tail: &str,
+    ) -> usize {
+        line_tokens
+            .and_then(|span| {
+                let tail_first = self.tail_first_token_in(span, line, tail)?;
+                self.run_in_headers_from(span.first, tail_first, |index| {
+                    (span.first..=span.last).contains(&index)
+                })
+            })
+            .map_or(0, |(levels, _)| levels)
+    }
+
+    fn split_tail_first_token(&self, line: &str, tail: &str) -> Option<usize> {
+        self.tail_first_token_in(self.output.pending_tokens()?, line, tail)
+    }
+
+    /// The first code token of `tail`, the end of `line`, whose tokens are
+    /// `span`.
+    fn tail_first_token_in(&self, span: TokenSpan, line: &str, tail: &str) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let tail_start = line.len() - tail.len();
+        let mut cursor = 0;
+        for index in span.first..=span.last {
+            if !is_code_token(&tokens[index]) {
+                continue;
+            }
+            let text = token_text(&tokens[index]);
+            let offset = line[cursor..].find(&*text)?;
+            if cursor + offset >= tail_start {
+                return Some(index);
+            }
+            cursor += offset + text.len();
+        }
+        None
+    }
+
+    /// The template angles astyle reads the line being built in.
+    fn line_template_angles(&self) -> TemplateAngles {
+        let Some(span) = self.output.pending_tokens() else {
+            return TemplateAngles::default();
+        };
+        let tokens = &self.tree.tokens;
+        let spans = self
+            .astyle_template_spans
+            .get_or_init(|| astyle_template_spans(tokens));
+        let first = span.first;
+        let depth = spans[..spans.partition_point(|&(open, _)| open < first)]
+            .last()
+            .filter(|&&(_, close)| close >= first)
+            .map_or(0, |&(open, _)| {
+                tokens[open..first]
+                    .iter()
+                    .filter_map(|token| match token {
+                        Token::Operator(operator) => Some(operator),
+                        _ => None,
+                    })
+                    .flat_map(|operator| operator.chars())
+                    .fold(0usize, |depth, ch| match ch {
+                        '<' => depth + 1,
+                        '>' => depth.saturating_sub(1),
+                        _ => depth,
+                    })
+            });
+        let mut count = 0usize;
+        let mut openers = 0u64;
+        for index in first..=span.last.min(tokens.len().saturating_sub(1)) {
+            if matches!(&tokens[index], Token::Operator(operator) if &**operator == "<") {
+                if count == u64::BITS as usize {
+                    return TemplateAngles::default();
+                }
+                if spans
+                    .binary_search_by_key(&index, |&(open, _)| open)
+                    .is_ok()
+                {
+                    openers |= 1 << count;
+                }
+                count += 1;
+            }
+        }
+        TemplateAngles {
+            depth,
+            source: Some((count, openers)),
+        }
+    }
+
+    /// Gives the part of the split `line` that starts with `part` and ends
+    /// before `end` the source tokens it holds. The parts come in order
+    /// along the line, so `scan` resumes the walk where the last part's
+    /// first token was found.
     fn set_split_part_tokens(
         &mut self,
         source: Option<TokenSpan>,
         line: &str,
         part: &str,
+        end: usize,
         scan: &mut SplitPartScan,
     ) {
         let Some(source) = source else {
@@ -410,16 +799,61 @@ impl FormatEngine<'_> {
             if cursor + offset >= from {
                 scan.skipped = index - source.first;
                 scan.cursor = cursor;
-                self.output.set_pending_tokens(Some(TokenSpan {
-                    first: index,
-                    last: source.last,
-                }));
+                let last = self.split_part_last_token(source, line, index, cursor, end);
+                self.output
+                    .set_pending_tokens(Some(TokenSpan { first: index, last }));
                 return;
             }
             cursor += offset + text.len();
         }
         scan.ended = true;
     }
+
+    /// The last of the source tokens from `first`, found in `line` from
+    /// `cursor` on, that starts before `end`.
+    fn split_part_last_token(
+        &self,
+        source: TokenSpan,
+        line: &str,
+        first: usize,
+        mut cursor: usize,
+        end: usize,
+    ) -> usize {
+        if end >= line.len() {
+            return source.last;
+        }
+        let mut last = first;
+        for index in first..=source.last {
+            let token = &self.tree.tokens[index];
+            if !is_code_token(token) {
+                continue;
+            }
+            let text = token_text(token);
+            let Some(offset) = line[cursor..].find(&*text) else {
+                break;
+            };
+            if cursor + offset >= end {
+                break;
+            }
+            last = index;
+            cursor += offset + text.len();
+        }
+        last
+    }
+}
+
+/// Whether every `,` of `head` parts template arguments.
+fn commas_within_angles(head: &str) -> bool {
+    let mut depth = 0usize;
+    head.chars().all(|ch| {
+        match ch {
+            '<' => depth += 1,
+            '>' => depth = depth.saturating_sub(1),
+            ',' => return depth > 0,
+            _ => {}
+        }
+        true
+    })
 }
 
 /// A split right after a block comment that follows a finished statement
@@ -439,6 +873,25 @@ fn ends_statement_before_comment(head: &str) -> bool {
 }
 
 impl FormatEngine<'_> {
+    /// Whether the text of a line before a split ends with a `;` outside
+    /// parens.
+    fn split_ends_statement(&self, before: &str) -> bool {
+        if !before.trimmed_end().ends_with(';') {
+            return false;
+        }
+        let groups = &self.tree.groups;
+        let open_at_start = self.output.pending_tokens().map_or(0, |span| {
+            groups.enclosing(span.first).map_or(0, |group| {
+                groups
+                    .ancestors(group)
+                    .take_while(|&group| groups.get(group).delimiter != Delimiter::Brace)
+                    .count()
+            })
+        });
+        let (closers, opens) = line_paren_imbalance(before);
+        open_at_start + opens.len() == closers
+    }
+
     /// Rows of an initializer, and of the braces astyle takes for one,
     /// stay whole.
     fn initializer_row(&self) -> bool {
@@ -457,14 +910,19 @@ impl FormatEngine<'_> {
                     self.tree.blocks.kind(group),
                     Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
                 ) || self.is_enum_body(group)
-                    || self.is_directive_block(group)
-                        && self
-                            .tree
-                            .previous_code_token(self.tree.groups.get(group).open)
-                            .is_some_and(|before| {
-                                matches!(self.tree.tokens[before], Token::Symbol('{'))
-                            })
+                    || self.is_directive_list_block(group)
             })
+    }
+
+    /// Whether the row being built starts inside parens an earlier row
+    /// opened.
+    fn pending_row_in_earlier_parens(&self) -> bool {
+        self.output.pending_tokens().is_some_and(|span| {
+            self.tree.groups.enclosing(span.first).is_some_and(|group| {
+                let group = self.tree.groups.get(group);
+                group.delimiter == Delimiter::Paren && group.open < span.first
+            })
+        })
     }
 
     /// Splits a row led by a block comment with code after it.
@@ -483,34 +941,65 @@ impl FormatEngine<'_> {
         let split = split_result(code, width, SplitRules::new(self.options))?;
         let lead_width = leading_visual_width(line, self.options.tab_width);
         let head = format!("{lead}{}", split.head);
-        // Rows split off inside parens align after the paren they continue.
-        let paren_column = (!self.options.indent_after_parens)
-            .then(|| unmatched_open_paren_column(&head))
-            .flatten()
-            .map(|open| visual_width_from(&head[..=open], 0, self.options.tab_width));
-        // Past an assignment they align at its value.
-        let value_column = (!self.options.indent_after_parens)
-            .then(|| find_assignment_operator(&head))
-            .flatten()
-            .map(|(start, operator)| start + operator.len())
-            .filter(|&value| !head[value..].trim().is_empty())
-            .map(|value| {
-                let value = value + (head[value..].len() - head[value..].trim_start().len());
-                visual_width_from(&head[..value], 0, self.options.tab_width)
-            });
+        // The rows split off continue as those of any line split there, the
+        // comments leading it read as the blanks they stand in for.
+        let step = self.options.continuation_indent * self.options.indent_width;
+        let code_start = code.len() - after_leading_comments(code).len();
+        let blanked = format!("{}{}", " ".repeat(code_start), &code[code_start..]);
+        let blanked_split = (split.split_at > code_start)
+            .then(|| {
+                split_result_at(
+                    &blanked,
+                    split.split_at,
+                    width,
+                    SplitRules::new(self.options),
+                )
+            })
+            .flatten();
+        let inputs = SplitIndentInputs {
+            base_indent_width: lead_width,
+            limit_base_indent_width: lead_width,
+            current_indent_width: lead_width,
+            indent_width: self.options.indent_width,
+            max_continuation_indent: self.options.max_continuation_indent,
+            configured_continuation_spaces: step,
+            min_conditional_spaces: min_conditional_indent_spaces(self.options),
+            configured_indent: ContinuationIndent::Spaces(lead_width + step),
+            indent_after_parens: self.options.indent_after_parens,
+            following_split: false,
+            break_lambda_parameters: matches!(
+                self.options.brace_style,
+                BraceStyle::Allman
+                    | BraceStyle::Whitesmith
+                    | BraceStyle::Vtk
+                    | BraceStyle::Gnu
+                    | BraceStyle::Horstmann
+            ),
+            block_spaces: lead_width,
+            brace_follows: false,
+            held: LastHeldBytes::of(&blanked).from(0),
+        };
         // Indenting after parens, an assignment before the paren stacks a
         // level of its own.
-        let step = self.options.continuation_indent * self.options.indent_width;
         let stacked_assignment = self.options.indent_after_parens
             && unmatched_open_paren_column(&head).is_some_and(|open| {
                 find_assignment_operator(&head).is_some_and(|(start, _)| start < open)
             });
-        let tail_spaces = if let Some(column) = paren_column.or(value_column) {
-            column
-        } else if ends_statement_before_comment(&split.head) {
+        let tail_spaces = if ends_statement_before_comment(&split.head) {
             lead_width
-        } else {
+        } else if self.options.indent_after_parens {
             lead_width + step * (1 + usize::from(stacked_assignment))
+        } else {
+            // A row in parens opened before it goes on at its own column.
+            let fallback =
+                if line_paren_imbalance(&blanked).0 > 0 || self.pending_row_in_earlier_parens() {
+                    lead_width
+                } else {
+                    lead_width + step
+                };
+            blanked_split
+                .and_then(|split| continuation_indent_for_split(&blanked, &split, &inputs))
+                .map_or(fallback, |indent| indent.columns(self.options.indent_width))
         };
         Some((head, split.tail.to_string(), tail_spaces))
     }
@@ -649,6 +1138,10 @@ struct SplitIndentInputs {
     indent_after_parens: bool,
     following_split: bool,
     break_lambda_parameters: bool,
+    /// The level of the block holding the line, in spaces.
+    block_spaces: usize,
+    /// A `{` the style breaks from the line's `=` follows it.
+    brace_follows: bool,
     /// What the line split holds.
     held: HeldBytes,
 }
@@ -676,30 +1169,70 @@ fn continuation_indent_for_split(
         indent_after_parens,
         following_split,
         break_lambda_parameters,
+        block_spaces,
+        brace_follows,
         held,
         ..
     } = *inputs;
+    // A comment split off an `=` before a brace stands at the block, as a
+    // comment line between them does.
+    if brace_follows
+        && split.head.trimmed_end().ends_with('=')
+        && split.tail.starts_with("/*")
+        && !holds_code(split.tail)
+    {
+        return Some(ContinuationIndent::Spaces(block_spaces));
+    }
+    let head = split.head.as_str();
+    // Only an assignment before the split holds what follows it.
     let line_assignment_value_indent = || {
         held.equals
-            .then(|| assignment_value_indent(line, base_indent_width))
+            .then(|| {
+                top_level_assignment_index(line)
+                    .filter(|&assignment| assignment < head.len())
+                    .and_then(|_| assignment_value_indent(line, base_indent_width))
+            })
             .flatten()
     };
-    let head = split.head.as_str();
+    if splits_header_body_statement(split) {
+        // The body split off its headers stands at their body, as does a
+        // word after a `)` ending the head, which a row there starts anew;
+        // the rest of a statement begun there continues past it.
+        let (levels, statement) = run_in_headers(head);
+        let continuation = if statement.is_empty()
+            || statement.ends_with(')') && split.tail.starts_with(is_identifier_continue)
+        {
+            0
+        } else {
+            configured_continuation_spaces
+        };
+        return Some(ContinuationIndent::Spaces(
+            base_indent_width + levels * indent_width + continuation,
+        ));
+    }
     // A declaration split at the whitespace before its name continues
     // nothing astyle registered, unless an aggregate keyword leads it.
-    // Macro calls the head closes register nothing either.
-    let macro_groups = head.contains('(')
-        && unmatched_open_paren_columns(head).is_empty()
+    // Macro calls the head closes register nothing either, nor does a
+    // linkage specification or a template head before the declaration.
+    let declaration = after_template_head(after_linkage_specification(head));
+    let macro_groups = declaration.contains('(')
+        && unmatched_open_paren_columns(declaration).is_empty()
         && (split.tail.starts_with(is_identifier_continue)
+            // A pointer or reference declarator, as a name.
+            || split.tail.starts_with(['*', '&'])
+                && split.tail[1..].trim_start_matches(['*', '&']).starts_with(is_identifier_start)
             // A function pointer's parameters split from its `(*name)`.
             || split.tail.starts_with('(')
-                && head.trimmed_end().ends_with(')')
-                && head.contains("(*"))
-        && head.match_indices('(').all(|(at, _)| {
+                && declaration.trimmed_end().ends_with(')')
+                && declaration
+                    .match_indices('(')
+                    .any(|(at, _)| opens_pointer_declarator(&declaration[at + 1..])))
+        && declaration.match_indices('(').all(|(at, _)| {
             // A function pointer's `(*name)` and the parameters after it.
-            head[at + 1..].trimmed_start().starts_with('*')
-                || head[..at].trimmed_end().ends_with_any(b"()")
-                || head[..at]
+            opens_pointer_declarator(&declaration[at + 1..])
+                || declaration[..at].trimmed_end().ends_with_any(b"()")
+                || declaration[..at]
+                    .trimmed_end()
                     .rsplit(|ch: char| !is_identifier_continue(ch))
                     .next()
                     .is_some_and(|word| {
@@ -711,18 +1244,21 @@ fn continuation_indent_for_split(
                     })
         });
     // Member access registers nothing.
-    let unaccessed_head = head.replace("->", ".");
+    let unaccessed_head = declaration.replace("->", ".");
+    let commas_in_angles = commas_within_angles(&unaccessed_head);
     if !following_split
+        && !leads_statement_continuation(leading_operator(split.tail))
         && unaccessed_head.chars().all(|ch| {
             is_identifier_continue(ch)
                 || ch.is_whitespace()
                 || matches!(ch, '*' | '&' | ':' | '<' | '>' | '.')
                 || macro_groups && matches!(ch, '(' | ')' | ',')
+                || commas_in_angles && ch == ','
         })
-        && head.ends_with(|ch: char| {
+        && declaration.ends_with(|ch: char| {
             is_identifier_continue(ch) || matches!(ch, '*' | '&' | '>') || macro_groups && ch == ')'
         })
-        && !head
+        && !declaration
             .split(|ch: char| !is_identifier_continue(ch))
             .any(|word| {
                 matches!(word, "return" | "case" | "goto")
@@ -751,27 +1287,51 @@ fn continuation_indent_for_split(
     if split.tail.starts_with('{') && head.trimmed_end().ends_with('=') {
         return Some(ContinuationIndent::Spaces(base_indent_width));
     }
+    // What trails the aggregate's brace ending the head opens its body.
+    if head.trimmed_end().ends_with('{') {
+        return Some(ContinuationIndent::Spaces(block_spaces + indent_width));
+    }
     // A label split from the labels before it lines up with them.
     if splits_before_label(split) {
         return Some(ContinuationIndent::Spaces(base_indent_width));
     }
-    // An array bound continues under its trailing operator; past the
-    // maximum at the value an assignment gives, else two levels in.
-    if last_unmatched_open_delimiter(head)
-        .is_some_and(|(open, at)| open == '[' && !head[..at].contains(']'))
+    // An array bound or a subscript continues past its bracket, under its
+    // trailing operator. Past the maximum, measured from the block as a
+    // row's continuation is, it continues at the value an assignment gives,
+    // else two levels past the row, and no nearer than the column the paren
+    // around it holds.
+    if let Some((_, bracket)) = last_unmatched_open_delimiter(head).filter(|&(open, _)| open == '[')
         && let Some(column) = array_bound_operator_column(head)
     {
+        let within = |column: usize| column.saturating_sub(block_spaces) <= max_continuation_indent;
+        if within(base_indent_width + column) {
+            return Some(ContinuationIndent::Spaces(base_indent_width + column));
+        }
+        let two_levels = base_indent_width + indent_width * 2;
+        let capped = assignment_value_indent(head, base_indent_width)
+            .filter(|&value| value - base_indent_width <= max_continuation_indent)
+            .unwrap_or(two_levels);
+        let around = unmatched_open_paren_columns(&head[..bracket])
+            .last()
+            .map(|&open| {
+                let after = &head[open + 1..];
+                base_indent_width + open + 1 + after.len() - after.trimmed_start().len()
+            })
+            .map(|column| if within(column) { column } else { two_levels });
         return Some(ContinuationIndent::Spaces(
-            if column > max_continuation_indent {
-                assignment_value_indent(head, base_indent_width)
-                    .filter(|&value| value - base_indent_width <= max_continuation_indent)
-                    .unwrap_or(base_indent_width + indent_width * 2)
-            } else {
-                base_indent_width + column
-            },
+            around.map_or(capped, |around| capped.max(around)),
         ));
     }
     let has_open_paren = !unmatched_open_paren_columns(head).is_empty();
+    // A row led by an initializer list's or a base list's `:` splits
+    // into rows under its first element.
+    if !has_open_paren
+        && let Some(after_colon) = line.trimmed_start().strip_prefix(':')
+        && !after_colon.starts_with(':')
+    {
+        let element = line.len() - after_colon.trimmed_start().len();
+        return Some(ContinuationIndent::Spaces(base_indent_width + element));
+    }
     if let Some(spaces) = lambda_parameter_continuation_indent(
         head,
         base_indent_width,
@@ -810,9 +1370,14 @@ fn continuation_indent_for_split(
         return Some(configured_indent);
     }
 
-    if split.kind == SplitKind::Whitespace
+    let splits_at_shift = split.head.trimmed_end().ends_with("<<")
+        || split.tail.starts_with("<<") && !split.tail.starts_with("<<=");
+    // So does an operand split before its parens outside any the head opened.
+    let splits_operand_parens =
+        split.tail.starts_with('(') && unmatched_open_paren_columns(head).is_empty();
+    if (split.kind == SplitKind::Whitespace || splits_at_shift || splits_operand_parens)
         && held.less
-        && let Some(spaces) = stream_chain_continuation_indent(line, base_indent_width)
+        && let Some(spaces) = stream_chain_continuation_indent(head, base_indent_width)
     {
         return Some(ContinuationIndent::Spaces(
             if current_indent_width > base_indent_width {
@@ -900,8 +1465,13 @@ fn continuation_indent_for_split(
                     registered
                 }
             }
+            // An initializer list the head holds continues it a level.
             None => return_value_indent(head, base_indent_width)
                 .or_else(|| assignment_value_indent(head, base_indent_width))
+                .or_else(|| {
+                    has_inline_constructor_initializer_colon(head)
+                        .then_some(base_indent_width + indent_width)
+                })
                 .unwrap_or(base_indent_width),
         };
         let target = previous + configured_continuation_spaces;
@@ -924,6 +1494,28 @@ fn continuation_indent_for_split(
             .then(|| assignment_continuation_indent(line, head, base_indent_width))
             .flatten()
     })
+}
+
+/// The run of operator characters `text` starts with.
+fn leading_operator(text: &str) -> &str {
+    let end = text
+        .find(|ch: char| {
+            !matches!(
+                ch,
+                '+' | '-' | '*' | '/' | '%' | '&' | '|' | '^' | '<' | '>' | '=' | '!' | '~'
+            )
+        })
+        .unwrap_or(text.len());
+    &text[..end]
+}
+
+/// What follows a linkage specification, as `extern "C"`, leading `line`.
+fn after_linkage_specification(line: &str) -> &str {
+    line.trimmed_start()
+        .strip_prefix("extern")
+        .and_then(|rest| rest.trimmed_start().strip_prefix('"'))
+        .and_then(|literal| literal.find('"').map(|end| &literal[end + 1..]))
+        .unwrap_or(line)
 }
 
 fn split_function_declaration_head(head: &str) -> bool {
@@ -998,16 +1590,103 @@ fn nested_new_continuation_indent(
     )
 }
 
+/// The column a stream chain's rows align at: its first shift outside
+/// parens, which `line` holds. An assignment, a condition or a `return`
+/// before the shift aligns the rows by its own rule.
 fn stream_chain_continuation_indent(line: &str, base_indent_width: usize) -> Option<usize> {
-    let shift = line.find("<<")?;
+    // The `<<` naming an operator shifts nothing.
+    let names_operator = |index: usize| {
+        line[..index]
+            .strip_suffix("operator")
+            .is_some_and(|before| !before.ends_with(is_identifier_continue))
+    };
+    let shift = line
+        .match_indices("<<")
+        .map(|(index, _)| index)
+        .find(|&index| !names_operator(index))?;
     let operand = line[..shift].trimmed_end();
     if operand.is_empty()
-        || operand.contains_any_byte(b"(=?")
+        || !unmatched_open_paren_columns(operand).is_empty()
+        || has_top_level_char(operand, '=')
+        || has_top_level_char(operand, '?')
         || operand.trimmed_start().starts_with("return")
     {
         return None;
     }
     Some(base_indent_width + shift)
+}
+
+/// Whether `split` breaks the statement a braceless header runs in on its
+/// line before a word or an operator, right after the header or with
+/// nothing in the statement registering a column: the rest goes on from
+/// the header's body, as a row the source breaks there does.
+fn splits_header_body_statement(split: &SplitResult) -> bool {
+    split.kind == SplitKind::Whitespace
+        && split.tail.starts_with(|ch: char| {
+            is_identifier_continue(ch)
+                || matches!(
+                    ch,
+                    '"' | '\''
+                        | '+'
+                        | '-'
+                        | '*'
+                        | '/'
+                        | '%'
+                        | '&'
+                        | '|'
+                        | '^'
+                        | '='
+                        | '<'
+                        | '>'
+                        | '.'
+                        | '!'
+                        | '~'
+                )
+        })
+        && unmatched_open_paren_columns(&split.head).is_empty()
+        && header_body(&split.head).is_some_and(|body| {
+            !["<<", ">>", "=", "?"]
+                .iter()
+                .any(|registers| code_contains(body, registers))
+        })
+}
+
+/// How many levels the braceless headers leading `text` indent the
+/// statement they run in on the line, an `else if` being one header, and
+/// that statement's code.
+fn run_in_headers(text: &str) -> (usize, &str) {
+    let mut levels = 0;
+    let mut rest = text.trimmed();
+    while let Some(body) = header_body(rest) {
+        let else_if = rest.starts_with("else")
+            && body.starts_with("if")
+            && !body[2..].starts_with(is_identifier_continue);
+        levels += usize::from(!else_if);
+        rest = body;
+    }
+    (levels, rest)
+}
+
+/// The code after a control header leading `text`, empty when the header
+/// ends it.
+fn header_body(text: &str) -> Option<&str> {
+    let text = text.trimmed_start();
+    let word_end = text
+        .find(|ch: char| !is_identifier_continue(ch))
+        .unwrap_or(text.len());
+    let rest = &text[word_end..];
+    let body = match &text[..word_end] {
+        "else" | "do" => rest,
+        "if" | "while" | "for" => {
+            let rest = rest.trimmed_start();
+            if !rest.starts_with('(') {
+                return None;
+            }
+            &rest[matching_close_paren(rest, 0)? + 1..]
+        }
+        _ => return None,
+    };
+    Some(body.trimmed())
 }
 
 fn return_value_indent(line: &str, base_indent_width: usize) -> Option<usize> {
@@ -1093,6 +1772,9 @@ fn top_level_assignment_index(line: &str) -> Option<usize> {
     let mut paren_depth = 0usize;
     let mut bracket_depth = 0usize;
     let mut angle_depth = 0usize;
+    // An assignment in a block the line closes is no assignment of its
+    // statement.
+    let mut brace_depth = 0usize;
     let mut previous = '\0';
     let mut iter = line.char_indices().peekable();
     while let Some((index, ch)) = iter.next() {
@@ -1101,14 +1783,24 @@ fn top_level_assignment_index(line: &str) -> Option<usize> {
             ')' => paren_depth = paren_depth.saturating_sub(1),
             '[' => bracket_depth += 1,
             ']' => bracket_depth = bracket_depth.saturating_sub(1),
+            '{' if paren_depth == 0 && bracket_depth == 0 => brace_depth += 1,
+            '}' if paren_depth == 0 && bracket_depth == 0 => {
+                brace_depth = brace_depth.saturating_sub(1);
+            }
             '<' if paren_depth == 0 && bracket_depth == 0 => angle_depth += 1,
             '>' if angle_depth > 0 => angle_depth -= 1,
-            '=' if paren_depth == 0 && bracket_depth == 0 && angle_depth == 0 => {
+            '=' if paren_depth == 0
+                && bracket_depth == 0
+                && angle_depth == 0
+                && (brace_depth == 0 || !line[index..].contains('}')) =>
+            {
                 let next = iter.peek().map(|(_, ch)| *ch).unwrap_or('\0');
+                // An operator function's name assigns nothing.
                 if !matches!(
                     previous,
                     '=' | '!' | '<' | '>' | '+' | '-' | '*' | '/' | '%' | '&' | '|' | '^'
                 ) && next != '='
+                    && trailing_word(line[..index].trimmed_end()) != language::OPERATOR
                 {
                     return Some(index);
                 }
@@ -1147,7 +1839,124 @@ struct SplitResult<'a> {
     indent: ContinuationIndent,
 }
 
-fn template_argument_ranges(line: &str) -> Vec<(usize, usize)> {
+/// Whether the split part `before` is a type its line declares, a name
+/// and its template arguments after any qualifiers: the declarator after it
+/// continues nothing, as on a source row of its own.
+fn split_ends_template_type(before: &str) -> bool {
+    let before = before.trimmed_end();
+    let Some(&(open, end)) = line_template_argument_ranges(before).last() else {
+        return false;
+    };
+    let words = before[..open].trimmed();
+    end == before.len()
+        && words.starts_with(is_identifier_start)
+        && words.split_whitespace().all(|word| {
+            word.chars()
+                .all(|ch| is_identifier_continue(ch) || ch == ':')
+                && !matches!(
+                    word,
+                    "return" | "co_return" | "co_yield" | "throw" | "new" | "delete" | "case"
+                )
+        })
+}
+
+/// The template angles astyle reads a line in: the depth it starts at
+/// and, for the source's `<`s on it in order, which open a template.
+#[derive(Clone, Copy, Default)]
+struct TemplateAngles {
+    depth: usize,
+    /// The count of the line's `<`s and a bit for each that opens a
+    /// template; none when the source's angles are not known.
+    source: Option<(usize, u64)>,
+}
+
+impl TemplateAngles {
+    /// Walks the tokens of `text` from these angles, telling `visit` each
+    /// token's offset and length with the depths before and after it, and
+    /// gives the angles after the text with the count of `<`s it passed.
+    fn walk(self, text: &str, mut visit: impl FnMut(usize, usize, usize, usize)) -> (Self, usize) {
+        let Some((count, openers)) = self.source else {
+            return (self, 0);
+        };
+        let mut depth = self.depth;
+        let mut seen = 0usize;
+        let mut offset = 0usize;
+        for token in tokenize(text) {
+            let len = token_text(&token).len();
+            let before = depth;
+            if let Token::Operator(operator) = &token {
+                if &**operator == "<" {
+                    if depth > 0 || seen < count && openers >> seen & 1 == 1 {
+                        depth += 1;
+                    }
+                    seen += 1;
+                } else if depth > 0 {
+                    for ch in operator.chars() {
+                        match ch {
+                            '<' => depth += 1,
+                            '>' => depth -= 1,
+                            _ => {}
+                        }
+                        if depth == 0 {
+                            break;
+                        }
+                    }
+                }
+            }
+            visit(offset, len, before, depth);
+            offset += len;
+        }
+        let rest = count.saturating_sub(seen);
+        let openers = openers.checked_shr(seen as u32).unwrap_or(0);
+        (
+            Self {
+                depth,
+                source: Some((rest, openers)),
+            },
+            seen,
+        )
+    }
+
+    /// The angles the text after `head` starts in.
+    fn after(self, head: &str) -> Self {
+        self.walk(head, |_, _, _, _| {}).0
+    }
+}
+
+/// The spans of `line` within template angles: by the angles astyle reads
+/// the source in when they are known, else those the line's own `>`s
+/// close.
+fn template_argument_ranges(line: &str, angles: TemplateAngles) -> Vec<(usize, usize)> {
+    let Some((count, openers)) = angles.source else {
+        return line_template_argument_ranges(line);
+    };
+    if angles.depth == 0 && openers == 0 {
+        return Vec::new();
+    }
+    let mut ranges = Vec::new();
+    let mut outer_start = (angles.depth > 0).then_some(0);
+    let (_, seen) = angles.walk(line, |offset, len, before, depth| {
+        if before == 0 && depth > 0 {
+            outer_start = Some(offset);
+        } else if before > 0
+            && depth == 0
+            && let Some(start) = outer_start.take()
+        {
+            ranges.push((start, offset + len));
+        }
+    });
+    // The source's `<`s must be the line's.
+    if seen != count {
+        return line_template_argument_ranges(line);
+    }
+    if let Some(start) = outer_start {
+        ranges.push((start, line.len()));
+    }
+    ranges
+}
+
+/// The spans of `line` within the template angles its own `>`s close.
+fn line_template_argument_ranges(line: &str) -> Vec<(usize, usize)> {
     // Only a `>` closes a `<` into a template.
     if !line.contains('<') || !line.contains('>') {
         return Vec::new();
@@ -1305,6 +2114,7 @@ fn split_point_at(
             return None;
         }
         if is_pointer_split_operator(line, start, end, operator)
+            || operator == "&&" && is_reference_declarator(line, start, end)
             || line[end..].trimmed_start().starts_with("/*")
         {
             return None;
@@ -1447,11 +2257,22 @@ fn is_function_call_split(line: &str, open_paren: usize) -> bool {
 }
 
 fn is_pointer_split_operator(line: &str, start: usize, end: usize, operator: &str) -> bool {
-    if !matches!(operator, "*" | "&" | "^") {
-        return false;
-    }
+    matches!(operator, "*" | "&" | "^") && declares_pointer_at(line, start, end)
+}
+
+/// Whether the `&&` at `start..end` of `line` declares a reference rather
+/// than joining conditions.
+fn is_reference_declarator(line: &str, start: usize, end: usize) -> bool {
+    line[..start].trimmed_end().ends_with('>') || declares_pointer_at(line, start, end)
+}
+
+/// Whether the operator at `start..end` of `line` declares a pointer or a
+/// reference: a name or a pack follows it, and a type or a declaration
+/// before it.
+fn declares_pointer_at(line: &str, start: usize, end: usize) -> bool {
     let before = line[..start].trimmed_end();
     let after = line[end..].trimmed_start();
+    let after = after.strip_prefix("...").map_or(after, str::trim_start);
     if after
         .chars()
         .next()
@@ -1667,6 +2488,7 @@ struct SplitRules {
     /// sits in, not one-line blocks.
     closers_follow_statement: bool,
     held: HeldBytes,
+    templates: TemplateAngles,
 }
 
 impl SplitRules {
@@ -1680,6 +2502,7 @@ impl SplitRules {
             offset: 0,
             closers_follow_statement: false,
             held: HeldBytes::default(),
+            templates: TemplateAngles::default(),
         }
     }
 
@@ -1689,6 +2512,10 @@ impl SplitRules {
 
     fn with_offset(self, offset: usize) -> Self {
         Self { offset, ..self }
+    }
+
+    fn with_templates(self, templates: TemplateAngles) -> Self {
+        Self { templates, ..self }
     }
 
     fn with_closers_following_statement(self) -> Self {
@@ -1718,8 +2545,8 @@ const ASTYLE_OPERATORS: [&str; 46] = [
 fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usize> {
     let break_after_logical = rules.break_after_logical;
     let bytes = line.as_bytes();
-    let templates = if rules.held.less && rules.held.greater {
-        template_argument_ranges(line)
+    let templates = if rules.templates.source.is_some() || rules.held.less && rules.held.greater {
+        template_argument_ranges(line, rules.templates)
     } else {
         Vec::new()
     };
@@ -1858,8 +2685,11 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
             end = index + operator.len();
             let next = peek(index + 1);
             let before = index.checked_sub(1).map(|before| bytes[before]);
-            if next != b'/' && unbroken_depth == 0 {
+            // An `=` ending the line's code splits off the comment after it.
+            let ends_code = *operator == "=" && !holds_code(&line[end..]);
+            if (next != b'/' || ends_code) && unbroken_depth == 0 {
                 match *operator {
+                    "&&" if is_reference_declarator(line, index, end) => {}
                     "||" | "&&" => {
                         if break_after_logical {
                             register((&mut fit, &mut pending), AND_OR, end, end <= width);
@@ -1883,7 +2713,22 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
                         register((&mut fit, &mut pending), WHITESPACE, index, index <= width);
                     }
                     "=" | ":" => {
-                        let at = if end < width { end } else { index };
+                        // A brace ending the code after it stays on the line
+                        // it fits, where the style attaches it; only what
+                        // trails it moves on.
+                        let rest = &line[end..];
+                        let brace = rest.trimmed_start();
+                        let after_brace = end + rest.len() - brace.len() + 1;
+                        let at = if brace.starts_with('{')
+                            && !holds_code(&brace[1..])
+                            && after_brace <= width
+                        {
+                            after_brace
+                        } else if end < width {
+                            end
+                        } else {
+                            index
+                        };
                         if previous_non_space == b']' {
                             register((&mut fit, &mut pending), WHITESPACE, at, index <= width);
                         } else if before
@@ -1928,7 +2773,7 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
                             b'&' => rules.reference_to_type,
                             _ => false,
                         };
-                        if !matches!(next, b')' | b'(' | b':')
+                        if !matches!(next, b')' | b'(' | b':' | b';')
                             && previous_non_space != b'('
                             && (!to_type || potential_operator(previous_non_space))
                         {
@@ -1938,7 +2783,13 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
                     b')' => {
                         let member_access =
                             next == b'-' && line[end..].trimmed_start().starts_with("->");
-                        if !(matches!(next, b')' | b' ' | b';' | b',' | b'.') || member_access) {
+                        // A postfix increment or decrement holds its operand.
+                        let postfix =
+                            line[end..].starts_with("++") || line[end..].starts_with("--");
+                        if !(matches!(next, b')' | b' ' | b';' | b',' | b'.')
+                            || member_access
+                            || postfix)
+                        {
                             register((&mut fit, &mut pending), WHITESPACE, end, end <= width);
                         }
                     }
@@ -1986,6 +2837,18 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
         index = end;
     }
     None
+}
+
+/// Whether `rest`, the text after a `(`, names a pointer declarator, as in
+/// `(*name)` or `(CALLING_CONVENTION *name)`.
+fn opens_pointer_declarator(rest: &str) -> bool {
+    let mut rest = rest.trimmed_start();
+    while rest.starts_with(is_identifier_start) {
+        rest = rest
+            .trim_start_matches(is_identifier_continue)
+            .trimmed_start();
+    }
+    rest.starts_with('*')
 }
 
 fn holds_code(text: &str) -> bool {

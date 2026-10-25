@@ -55,14 +55,28 @@ impl FormatEngine<'_> {
                     return None;
                 }
                 // A comment row whose own whitespace holds a tab keeps it past
-                // the indent of the comment's first line.
+                // the indent of the comment's first line, or of the block
+                // whose brace the comment follows.
                 if let Some(opener) = self.comment_opener(index)
                     && opener != index
                     && line[..line.len() - text.len()].contains('\t')
                 {
-                    let width = self.output.lead_width(opener, tab_width);
+                    let mut width = self.output.lead_width(opener, tab_width);
+                    let follows_block_brace =
+                        self.output.code_trimmed_of(&self.output[opener]).trimmed() == "{";
+                    if follows_block_brace {
+                        width += indent_width;
+                    }
                     if line.starts_with(&" ".repeat(width)) {
-                        return Some((width, self.tab_columns(opener, width)));
+                        let tab_columns = if follows_block_brace {
+                            match self.output_indent_style {
+                                IndentStyle::ForceTabs => width / tab_width * tab_width,
+                                _ => width / indent_width * indent_width,
+                            }
+                        } else {
+                            self.tab_columns(opener, width)
+                        };
+                        return Some((width, tab_columns));
                     }
                 }
                 let width = self.output.lead_width(index, tab_width);
@@ -71,14 +85,9 @@ impl FormatEngine<'_> {
                     // line and align past them in spaces.
                     IndentStyle::ForceTabs => {
                         self.comment_opener(index)
-                            .filter(|&opener| {
-                                self.output.line_tokens(opener).is_none()
-                                    && self.output.trimmed(opener).starts_with("/*")
-                                    && !self.comment_row_indents_with_tab(opener, index)
-                            })
-                            .map_or(width, |opener| {
-                                self.output.lead_width(opener, tab_width).min(width)
-                            })
+                            .filter(|&opener| !self.comment_row_indents_with_tab(opener, index))
+                            .and_then(|opener| self.comment_rows_tab_base(opener, index))
+                            .map_or(width, |base| base.min(width))
                             / tab_width
                             * tab_width
                     }
@@ -90,6 +99,10 @@ impl FormatEngine<'_> {
                 Some((width, tab_columns))
             })
             .collect();
+        let runs_body_in = matches!(
+            self.options.brace_style,
+            BraceStyle::Horstmann | BraceStyle::Pico
+        );
         for (index, row) in rows.into_iter().enumerate() {
             let Some((width, tab_columns)) = row else {
                 continue;
@@ -118,8 +131,11 @@ impl FormatEngine<'_> {
                 Some(rest)
                     if rest.starts_with("  ")
                         && !rest.trimmed().is_empty()
-                        && !rest.trimmed_start().starts_with("/*")
-                        && !rest.trimmed_start().starts_with("//")
+                        // A comment keeps the gap it had after a brace but
+                        // where the style runs the block's body in.
+                        && (runs_body_in && self.starts_with_block_brace(index)
+                            || !rest.trimmed_start().starts_with("/*")
+                                && !rest.trimmed_start().starts_with("//"))
                         && (self.starts_with_block_brace(index)
                             || self.output.line_tokens(index).is_none()
                             || rest.trimmed_start().starts_with('{')
@@ -205,20 +221,24 @@ impl FormatEngine<'_> {
     /// where the statement it continues starts; `None` when the line starts
     /// a statement or stands at its own level.
     fn statement_indent_width(&self, index: usize) -> Option<usize> {
-        if let Some(span) = self.output.line_tokens(index) {
+        // A row closing a comment before code aligns as the comment's rows.
+        let closes_comment = self.continues_comment(index);
+        if let Some(span) = self.output.line_tokens(index)
+            && !closes_comment
+        {
             return self.token_statement_indent_width(span.first, index);
         }
         let text = self.output.trimmed(index);
         // A line the tree does not cover that a brace leads, as one around a
         // statement braces were added to, opens a block.
-        if text.starts_with('{') {
+        if text.starts_with('{') && !closes_comment {
             return None;
         }
         if let Some(opener) = self.comment_opener(index) {
             // A trailing comment's rows align in spaces; a standalone
             // comment's rows keep the tabs of its first line.
-            let trailing = self.output.line_tokens(opener).is_some()
-                || !self.output.trimmed(opener).starts_with("/*");
+            let trailing =
+                self.line_holds_code(opener) || !self.output.trimmed(opener).starts_with("/*");
             // The rows of a comment after a block's brace stand in the block.
             if trailing && self.output.code_trimmed_of(&self.output[opener]).trimmed() == "{" {
                 return Some(
@@ -357,6 +377,28 @@ impl FormatEngine<'_> {
         code.strip_suffix('\\').unwrap_or(code).trimmed()
     }
 
+    /// The column up to which the rows of the block comment opened on line
+    /// `opener` indent with tabs: the comment's indent when it stands alone,
+    /// the block body's when it runs in after the block's brace.
+    fn comment_rows_tab_base(&self, opener: usize, index: usize) -> Option<usize> {
+        let tab_width = self.options.tab_width.max(1);
+        if self.output.line_tokens(opener).is_none() {
+            return self
+                .output
+                .trimmed(opener)
+                .starts_with("/*")
+                .then(|| self.output.lead_width(opener, tab_width));
+        }
+        if !self.row_code(opener).ends_with('{') {
+            return None;
+        }
+        let body = (index + 1..self.output.len())
+            .find(|&line| self.comment_opener(line) != Some(opener))?;
+        self.output.line_tokens(body)?;
+        let lead = self.output.lead_width(body, tab_width);
+        (lead > self.output.lead_width(opener, tab_width)).then_some(lead)
+    }
+
     /// Whether output line `index` continues a standalone comment that
     /// starts in column one: astyle keeps such a comment as written.
     fn continues_column_one_comment(&self, index: usize) -> bool {
@@ -368,6 +410,9 @@ impl FormatEngine<'_> {
     /// Whether the source row of the block comment opened on line `opener`
     /// that output line `index` holds indents past the comment with a tab.
     fn comment_row_indents_with_tab(&self, opener: usize, index: usize) -> bool {
+        if self.options.convert_tabs {
+            return false;
+        }
         let tokens = &self.tree.tokens;
         let Some(comment) = self.output.comment_token(opener) else {
             return false;
@@ -422,15 +467,27 @@ impl FormatEngine<'_> {
         })
     }
 
-    /// The line opening the block comment that output line `index`, holding
-    /// no code, continues.
-    fn comment_opener(&self, index: usize) -> Option<usize> {
-        // The row ending a comment holds that comment's token and no code.
-        if self.output.line_tokens(index).is_some_and(|span| {
+    /// Whether output line `index` starts inside a block comment opened on
+    /// a line before it.
+    fn continues_comment(&self, index: usize) -> bool {
+        self.output.lead_comment(index).is_some() && self.output.comment_start_index(index) != index
+    }
+
+    /// Whether output line `index` holds a token other than a comment.
+    pub(crate) fn line_holds_code(&self, index: usize) -> bool {
+        self.output.line_tokens(index).is_some_and(|span| {
             self.tree.tokens[span.first..=span.last]
                 .iter()
                 .any(|token| !matches!(token, Token::Comment(..) | Token::Whitespace(_)))
-        }) {
+        })
+    }
+
+    /// The line opening the block comment that output line `index`, holding
+    /// no code, continues.
+    fn comment_opener(&self, index: usize) -> Option<usize> {
+        // The row ending a comment holds that comment's token, and the code
+        // after it.
+        if !self.continues_comment(index) && self.line_holds_code(index) {
             return None;
         }
         let opener = self.output.comment_start_index(index);
@@ -599,7 +656,17 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let lead = self.output.lead_width(line, self.options.tab_width);
+        let mut lead = self.output.lead_width(line, self.options.tab_width);
+        // A statement run in after its block's brace stands at the block's
+        // level.
+        if self.output.line_tokens(line).is_some_and(|span| {
+            span.first != start
+                && matches!(self.tree.tokens[span.first], Token::Symbol('{'))
+                && groups.opened_at(span.first).is_some()
+                && groups.opened_at(span.first) == groups.enclosing(start)
+        }) {
+            lead += self.options.indent_width;
+        }
         // An initializer list that starts on its constructor's line still
         // stands one level in.
         let tokens = &self.tree.tokens;
@@ -710,19 +777,25 @@ impl FormatEngine<'_> {
         let initializer_colon = |index: usize| {
             !statement_scope
                 && matches!(tokens[index], Token::Symbol(':'))
-                && self
+                && (self
                     .tree
                     .previous_code_token(index)
                     .is_some_and(|previous| matches!(tokens[previous], Token::Symbol(')')))
+                    || self.separates_constructor_initializers(index))
         };
         loop {
-            if statements.starts_block_statement(start)
+            // A later branch of a conditional continues the code before its
+            // `#if`, and the code after `#endif` its first branch, whatever
+            // statement the tokens in order start there.
+            let previous = self.tree.previous_code_token_in_first_branches(start);
+            let in_order = previous == self.tree.previous_code_token(start);
+            if in_order && statements.starts_block_statement(start)
                 || statements.braceless_header(start).is_some()
                 || initializer_colon(start)
             {
                 return start;
             }
-            let Some(previous) = self.tree.previous_code_token(start) else {
+            let Some(previous) = previous else {
                 return start;
             };
             let closes_expression_brace = groups.closed_at(previous).is_some_and(|group| {
@@ -737,8 +810,14 @@ impl FormatEngine<'_> {
                 || self.ends_access_label(previous)
                 || self.ends_case_label(previous)
                 || self.ends_user_label(previous)
-                // An Objective-C directive such as `@property` starts anew.
+                // An Objective-C directive such as `@property` starts anew,
+                // and so does what follows an `@end`.
                 || matches!(tokens[start], Token::Symbol('@'))
+                || matches!(&tokens[previous], Token::Word(word) if word == "end")
+                    && self
+                        .tree
+                        .previous_code_token(previous)
+                        .is_some_and(|at| matches!(tokens[at], Token::Symbol('@')))
                 || matches!(&tokens[previous], Token::Word(word) if matches!(word.as_str(), "else" | "do"))
                 || self.closes_control_condition(previous)
             {

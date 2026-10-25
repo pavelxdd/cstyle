@@ -1320,7 +1320,7 @@ fn pointer_align_name_treats_constructor_parameters_as_reference_declarators() {
     let actual = format_with(
         fixture!(
             "class A {",
-            "A(Config &config, QString text);",
+            "A(Config &config, String text);",
             "void set(Config &config, const Item &r);",
             "A() { call(e & f); }",
             "};"
@@ -1332,7 +1332,7 @@ fn pointer_align_name_treats_constructor_parameters_as_reference_declarators() {
         actual,
         fixture!(
             "class A {",
-            "    A(Config &config, QString text);",
+            "    A(Config &config, String text);",
             "    void set(Config &config, const Item &r);",
             "    A() {",
             "        call(e & f);",
@@ -1401,6 +1401,59 @@ fn pad_operators_distinguishes_adjacent_pointer_stars_from_multiply_then_derefer
             "}",
         )
     );
+}
+
+// A run of adjacent stars after an operand reads as a pointer to pointer in
+// parentheses and brackets as in a statement; after a number it multiplies.
+#[test]
+fn pad_operators_reads_adjacent_stars_after_an_operand_as_a_pointer_run_everywhere() {
+    let input = fixture!(
+        "void f()",
+        "{",
+        "    if (value **item) go();",
+        "    result = helper(value) **item;",
+        "    call(first, value **item);",
+        "    total = (table[1] **item) + 1;",
+        "    other = (value * *item);",
+        "    scaled = (2 **item);",
+        "    next = (value[i **item]);",
+        "}",
+    );
+    let by_name = fixture!(
+        "void f()",
+        "{",
+        "    if (value **item) go();",
+        "    result = helper(value) **item;",
+        "    call(first, value **item);",
+        "    total = (table[1] **item) + 1;",
+        "    other = (value * *item);",
+        "    scaled = (2 * *item);",
+        "    next = (value[i **item]);",
+        "}",
+    );
+    let by_type = fixture!(
+        "void f()",
+        "{",
+        "    if (value** item) go();",
+        "    result = helper(value)** item;",
+        "    call(first, value** item);",
+        "    total = (table[1]** item) + 1;",
+        "    other = (value * *item);",
+        "    scaled = (2 * *item);",
+        "    next = (value[i** item]);",
+        "}",
+    );
+    for (align, expected) in [
+        (PointerAlign::None, by_name),
+        (PointerAlign::Name, by_name),
+        (PointerAlign::Type, by_type),
+    ] {
+        let mut options = FormatOptions::default();
+        options.pad_operators = true;
+        options.pointer_align = align;
+        assert_eq!(format_with(input, &options), expected, "{align:?}");
+        assert_eq!(format_with(expected, &options), expected, "{align:?}");
+    }
 }
 
 #[test]
@@ -1620,8 +1673,8 @@ fn pointer_align_middle_keeps_split_declarator_tokens_flush() {
         "*\n",
         "value;\n",
         "Box<\n",
-        "Other\n",
-        "*\n",
+        "    Other\n",
+        "    *\n",
         "> item;\n",
     );
     let mut options = FormatOptions::default();
@@ -1631,16 +1684,25 @@ fn pointer_align_middle_keeps_split_declarator_tokens_flush() {
 }
 
 #[test]
-fn reference_align_modes_keep_split_rvalue_reference_flush_with_type() {
-    let source = "Item\n&&value;\n";
-
-    let mut none_options = FormatOptions::default();
-    none_options.reference_align = ReferenceAlign::None;
-    assert_eq!(format_exact(source, &none_options), source);
-
-    let mut middle_options = FormatOptions::default();
-    middle_options.reference_align = ReferenceAlign::Middle;
-    assert_eq!(format_exact(source, &middle_options), "Item\n&& value;\n");
+fn reference_align_modes_keep_the_spacing_of_a_reference_leading_its_row() {
+    // Its type stands on the row before, so only name alignment has a side
+    // to move it to.
+    let source = "Item\n&&value;\nItem\n&& other;\n";
+    for align in [
+        ReferenceAlign::None,
+        ReferenceAlign::Type,
+        ReferenceAlign::Middle,
+    ] {
+        let mut options = FormatOptions::default();
+        options.reference_align = align;
+        assert_eq!(format_exact(source, &options), source);
+    }
+    let mut name_options = FormatOptions::default();
+    name_options.reference_align = ReferenceAlign::Name;
+    assert_eq!(
+        format_exact(source, &name_options),
+        "Item\n&&value;\nItem\n&&other;\n"
+    );
 }
 
 #[test]
@@ -3255,6 +3317,18 @@ fn align_pointer_name_attaches_macro_type_pointer_name() {
 }
 
 #[test]
+fn a_declaration_a_macro_call_names_keeps_its_parameter_pointers() {
+    let source = "EXPORT(int, helper)(Item *first, Item &second);\n";
+    let options = options_from_args(&["--pad-oper"]);
+    assert_eq!(format_exact(source, &options), source);
+    let options = options_from_args(&["--pad-oper", "--align-pointer=type"]);
+    assert_eq!(
+        format_exact(source, &options),
+        "EXPORT(int, helper)(Item* first, Item& second);\n"
+    );
+}
+
+#[test]
 fn macro_type_pointer_parameters_do_not_shift_following_parameter_indent() {
     let options = options_from_args(&[
         "--style=1tbs",
@@ -3578,4 +3652,70 @@ fn xor_after_a_call_in_a_one_line_block_stays_binary() {
     let input = "void f(void)\n{\n    if (x) { srand((unsigned)time(NULL) ^ SEED); }\n}\n";
 
     assert_eq!(format_exact(input, &options), input);
+}
+
+#[test]
+fn align_pointer_name_keeps_the_gap_before_a_function_pointer_declarator() {
+    // The star moves to the declarator; the gap written after it stays
+    // before it, as before any name.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--align-pointer=name".to_owned()])
+        .expect("valid options");
+    let input = "static char *        (*fgets_hook)(char *, int);\nchar *   name;\n";
+    let expected = "static char         *(*fgets_hook)(char *, int);\nchar    *name;\n";
+    assert_eq!(format_exact(input, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn padding_the_first_paren_outside_keeps_the_gaps_around_a_function_pointer_star() {
+    // As padding every paren outside does, the gaps on both sides of the
+    // star stay as written; only the paren gains its space.
+    let input = "char *  (*first)(void);\nchar*  (*second)(void);\n";
+    let expected = "char *  (*first) (void);\nchar *  (*second) (void);\n";
+    for option in ["--pad-paren-out", "--pad-first-paren-out"] {
+        let mut options = FormatOptions::default();
+        let args = ["--align-pointer=name", option].map(str::to_owned);
+        apply_command_line_args(&mut options, &args).expect("valid options");
+        assert_eq!(format_exact(input, &options), expected, "{option}");
+        assert_eq!(format_exact(expected, &options), expected, "{option}");
+    }
+}
+
+#[test]
+fn align_pointer_name_sets_every_later_pointer_declarator_row_at_one_column() {
+    // Each row of star-led declarators stands where the one before it
+    // does; a row is no deeper for coming later.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--align-pointer=name".to_owned()])
+        .expect("valid options");
+    let input = "void f(void)\n{\n    char *a = NULL, *b = NULL,\n          *c = NULL, *d = NULL,\n          *e = NULL;\n}\n";
+    assert_eq!(format_exact(input, &options), input);
+}
+
+#[test]
+fn align_reference_name_attaches_a_reference_to_a_function_pointer_declarator_group_at_file_scope()
+{
+    // The reference goes to the declarator group as a star does, adding no
+    // space after it.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--align-reference=name".to_owned()])
+        .expect("valid options");
+    let input = "Item& (*first)(int);\nItem & (*second)(int);\nint value = mask & (bits);\n";
+    let expected = "Item &(*first)(int);\nItem &(*second)(int);\nint value = mask & (bits);\n";
+    assert_eq!(format_exact(input, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn align_pointer_name_reads_a_macro_head_s_last_argument_list_as_parameters() {
+    // A macro standing for a function's head takes its parameter list as
+    // its last argument; a body follows the call.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--align-pointer=name".to_owned()])
+        .expect("valid options");
+    let input = "EXPORT(void, name, (Item * s)) {\n    go();\n}\nEXPORT(int, other, (Item * s, const char * z)) {\n    go();\n}\nvoid f(void)\n{\n    x = call(a, (b * c));\n}\n";
+    let expected = "EXPORT(void, name, (Item *s)) {\n    go();\n}\nEXPORT(int, other, (Item *s, const char *z)) {\n    go();\n}\nvoid f(void)\n{\n    x = call(a, (b * c));\n}\n";
+    assert_eq!(format_exact(input, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
 }

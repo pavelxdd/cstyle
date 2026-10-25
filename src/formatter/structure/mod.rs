@@ -17,7 +17,7 @@ pub(crate) mod statements;
 use crate::formatter::lexer::{Token, token_text, tokenize};
 use crate::formatter::text::line_scan::preprocessor_directive;
 use crate::formatter::text::line_view::LineView;
-use blocks::{Blocks, is_code_token, next_code_token};
+use blocks::{BlockKind, Blocks, is_code_token, next_code_token, previous_code_token};
 use functions::Functions;
 use groups::Groups;
 use statements::Statements;
@@ -61,7 +61,30 @@ pub(crate) struct SourceTree {
     pub(crate) statements: Statements,
     /// Indices of the directive tokens, in order.
     directives: Vec<usize>,
+    code_look_back: CodeLookBack,
 }
+
+/// How many tokens back a code token is looked for before the looks back
+/// are read.
+const NEAR_CODE_TOKENS: usize = 8;
+
+/// The last two looks back for a code token, the latest first, kept to
+/// read on from: a start among the tokens one passed has its answer, and
+/// one past them reads back only to them. They take no part in what the
+/// tree is.
+#[derive(Debug, Clone, Default)]
+struct CodeLookBack(std::cell::Cell<[Option<CodeLook>; 2]>);
+
+/// A look back's start and the code token it found before it.
+type CodeLook = (usize, Option<usize>);
+
+impl PartialEq for CodeLookBack {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+impl Eq for CodeLookBack {}
 
 impl SourceTree {
     pub(crate) fn build(tokens: &[Token]) -> Self {
@@ -69,9 +92,19 @@ impl SourceTree {
     }
 
     pub(crate) fn build_shared(shared: Rc<Vec<Token>>) -> Self {
+        Self::build_within(shared, None)
+    }
+
+    /// The tree of a block taken out of its context, whose first brace
+    /// group is of `root` kind when given.
+    pub(crate) fn build_block(tokens: &[Token], root: Option<BlockKind>) -> Self {
+        Self::build_within(Rc::new(tokens.to_vec()), root)
+    }
+
+    fn build_within(shared: Rc<Vec<Token>>, root: Option<BlockKind>) -> Self {
         let tokens = shared.as_slice();
         let groups = Groups::build(tokens);
-        let mut blocks = Blocks::build(tokens, &groups);
+        let mut blocks = Blocks::build_within(tokens, &groups, root);
         let functions = Functions::build(tokens, &groups, &blocks);
         blocks.mark_function_bodies(functions.heads().iter().filter_map(|head| head.body));
         let statements = Statements::build(tokens, &groups, &blocks);
@@ -88,6 +121,7 @@ impl SourceTree {
             functions,
             statements,
             directives,
+            code_look_back: CodeLookBack::default(),
         }
     }
 
@@ -117,6 +151,127 @@ impl SourceTree {
             offset += text.len();
         }
         None
+    }
+
+    /// The code token before `index` as a compiler taking the first branch
+    /// of each conditional reads the tokens: a later branch follows the code
+    /// before its `#if`, and the code after `#endif` follows the end of the
+    /// first branch.
+    pub(crate) fn previous_code_token_in_first_branches(&self, index: usize) -> Option<usize> {
+        let mut before = index.min(self.tokens.len());
+        loop {
+            let previous = previous_code_token(&self.tokens, before)?;
+            let start = self
+                .directives
+                .partition_point(|&directive| directive <= previous);
+            // Most code has no directive between a token and the one before.
+            if self
+                .directives
+                .get(start)
+                .is_none_or(|&directive| directive >= before)
+            {
+                return Some(previous);
+            }
+            let end = self
+                .directives
+                .partition_point(|&directive| directive < before);
+            // The last conditional directive between them decides.
+            let jump = self.directives[start..end]
+                .iter()
+                .rev()
+                .find_map(|&directive| {
+                    let Token::Preprocessor(text) = &self.tokens[directive] else {
+                        return None;
+                    };
+                    match preprocessor_directive(&text.text) {
+                        Some("endif") => Some(self.first_branch_end_of(directive)),
+                        Some("else" | "elif" | "elifdef" | "elifndef") => {
+                            Some(self.conditional_start_of(directive))
+                        }
+                        _ => None,
+                    }
+                });
+            match jump {
+                Some(Some(target)) if target < before => before = target,
+                _ => return Some(previous),
+            }
+        }
+    }
+
+    /// The directive ending the first branch of the conditional `endif`
+    /// closes, when it has more than one branch.
+    fn first_branch_end_of(&self, endif: usize) -> Option<usize> {
+        let at = self
+            .directives
+            .partition_point(|&directive| directive < endif);
+        let mut depth = 0usize;
+        let mut first_branch_end = None;
+        for &directive in self.directives[..at].iter().rev() {
+            let Token::Preprocessor(text) = &self.tokens[directive] else {
+                continue;
+            };
+            match preprocessor_directive(&text.text) {
+                Some("endif") => depth += 1,
+                Some("if" | "ifdef" | "ifndef") if depth == 0 => return first_branch_end,
+                Some("if" | "ifdef" | "ifndef") => depth -= 1,
+                Some("else" | "elif" | "elifdef" | "elifndef") if depth == 0 => {
+                    first_branch_end = Some(directive);
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+
+    /// The `#if` of the conditional a branch directive `branch` continues.
+    fn conditional_start_of(&self, branch: usize) -> Option<usize> {
+        let at = self
+            .directives
+            .partition_point(|&directive| directive < branch);
+        let mut depth = 0usize;
+        for &directive in self.directives[..at].iter().rev() {
+            let Token::Preprocessor(text) = &self.tokens[directive] else {
+                continue;
+            };
+            match preprocessor_directive(&text.text) {
+                Some("endif") => depth += 1,
+                Some("if" | "ifdef" | "ifndef") if depth == 0 => return Some(directive),
+                Some("if" | "ifdef" | "ifndef") => depth -= 1,
+                _ => {}
+            }
+        }
+        None
+    }
+
+    /// Whether `token` stands in a branch after the first of a conditional
+    /// that closes before `later`: a compiler taking first branches reads
+    /// nothing of it before `later`.
+    pub(crate) fn in_later_branch_closing_before(&self, token: usize, later: usize) -> bool {
+        let start = self
+            .directives
+            .partition_point(|&directive| directive < token);
+        let end = self
+            .directives
+            .partition_point(|&directive| directive < later);
+        let mut depth = 0usize;
+        for &directive in &self.directives[start..end] {
+            let Token::Preprocessor(text) = &self.tokens[directive] else {
+                continue;
+            };
+            match preprocessor_directive(&text.text) {
+                Some("if" | "ifdef" | "ifndef") => depth += 1,
+                Some("endif") if depth > 0 => depth -= 1,
+                Some("endif")
+                    if self
+                        .first_branch_end_of(directive)
+                        .is_some_and(|first_end| first_end < token) =>
+                {
+                    return true;
+                }
+                _ => {}
+            }
+        }
+        false
     }
 
     /// Whether a directive token lies in `range`.
@@ -154,7 +309,55 @@ impl SourceTree {
     }
 
     /// Last code token before `index`.
+    #[inline]
     pub(crate) fn previous_code_token(&self, index: usize) -> Option<usize> {
-        blocks::previous_code_token(&self.tokens, index)
+        if index > self.tokens.len() {
+            return None;
+        }
+        // Most code tokens stand a few tokens back; only longer walks read
+        // on from the looks.
+        let near = index.saturating_sub(NEAR_CODE_TOKENS);
+        if let Some(found) = (near..index)
+            .rev()
+            .find(|&token| is_code_token(&self.tokens[token]))
+        {
+            return Some(found);
+        }
+        if near == 0 {
+            return None;
+        }
+        self.previous_code_token_far(near)
+    }
+
+    #[inline(never)]
+    fn previous_code_token_far(&self, index: usize) -> Option<usize> {
+        let mut looks = self.code_look_back.0.get();
+        let mut base: Option<usize> = None;
+        for (slot, &(before, found)) in looks
+            .iter()
+            .enumerate()
+            .filter_map(|(slot, look)| look.as_ref().map(|look| (slot, look)))
+        {
+            if index <= before && found.is_none_or(|found| found < index) {
+                return found;
+            }
+            if before < index
+                && base.is_none_or(|base| looks[base].is_some_and(|(far, _)| far < before))
+            {
+                base = Some(slot);
+            }
+        }
+        let found = match base.and_then(|base| looks[base]) {
+            Some((before, found)) => (before..index)
+                .rev()
+                .find(|&token| is_code_token(&self.tokens[token]))
+                .or(found),
+            None => blocks::previous_code_token(&self.tokens, index),
+        };
+        let replaced = base.unwrap_or(1);
+        looks[replaced] = Some((index, found));
+        looks.swap(0, replaced);
+        self.code_look_back.0.set(looks);
+        found
     }
 }

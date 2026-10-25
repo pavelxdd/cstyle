@@ -114,8 +114,7 @@ fn allman_keeps_malformed_define_after_bracket_brace_idempotent() {
 fn gnu_keeps_close_word_after_malformed_define_idempotent() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=gnu".to_owned()]).expect("valid options");
-    let expected =
-        "+  !do&)(&#define X(x) \\...defaulttry->==xNULL[1\n    call\n} x0->]  gamma>=classy>\n";
+    let expected = "+  !do&)(&#define X(x) \\...defaulttry->==xNULL[1\n         call\n} x0->]  gamma>=classy>\n";
 
     assert_eq!(
         format_exact(
@@ -157,7 +156,7 @@ fn indent_preproc_define_preserves_source_indented_closing_parenthesis() {
 }
 
 #[test]
-fn indent_preproc_define_preserves_source_indented_ternary_arm() {
+fn indent_preproc_define_aligns_a_ternary_arm_in_a_list_at_its_value() {
     let source = fixture!(
         "#define ITEM(args) \\",
         "    static const Item item = { \\",
@@ -165,8 +164,19 @@ fn indent_preproc_define_preserves_source_indented_ternary_arm() {
         "                  ? (int)(sizeof(args) - 1) : -1, \\",
         "    };",
     );
+    let expected = fixture!(
+        "#define ITEM(args) \\",
+        "    static const Item item = { \\",
+        "                               .value = ((const void *)(args) != nullptr) \\",
+        "                                        ? (int)(sizeof(args) - 1) : -1, \\",
+        "                             };",
+    );
 
-    assert_eq!(format_exact(source, &one_true_brace_c_options()), source);
+    assert_eq!(format_exact(source, &one_true_brace_c_options()), expected);
+    assert_eq!(
+        format_exact(expected, &one_true_brace_c_options()),
+        expected
+    );
 }
 
 #[test]
@@ -837,11 +847,11 @@ fn indent_preproc_define_statement_expression_body_keeps_block_indent() {
 }
 
 #[test]
-fn indent_preproc_define_drifts_designated_rows_of_a_block_brace() {
+fn indent_preproc_define_keeps_designated_rows_of_a_brace_opening_the_replacement() {
     let mut options = FormatOptions::default();
     options.indent_preproc_define = true;
-    // astyle reads the brace opening the replacement as a block, whose
-    // assignments each register the column past the last.
+    // Each designator row ends its element: the rows stand together, as the
+    // same list does outside a macro.
     let source = fixture!(
         "#define ITEM(name, value) \\",
         "    { \\",
@@ -850,17 +860,18 @@ fn indent_preproc_define_drifts_designated_rows_of_a_block_brace() {
         "        .help = get_help(name), \\",
         "    }",
     );
-    let expected = fixture!(
-        "#define ITEM(name, value) \\",
-        "    { \\",
-        "        .name = (name), \\",
-        "                .value = (value), \\",
-        "                         .help = get_help(name), \\",
-        "    }",
-    );
     let actual = format_with(source, &options);
 
-    assert_eq!(actual, expected);
+    assert_eq!(actual, source);
+    // Rows holding several designators stand together as well.
+    let source = fixture!(
+        "#define EMPTY { \\",
+        "        .first = 0, .second = 0, \\",
+        "        .third = 0, .fourth = 0, .fifth = 0, \\",
+        "        .last = true \\",
+        "    }",
+    );
+    assert_eq!(format_with(source, &options), source);
 }
 
 #[test]
@@ -1774,6 +1785,20 @@ fn indent_preproc_define_block_comment_keeps_structural_tabs() {
             "\t}",
         )
     );
+}
+
+// Rows of a block comment in a define body move with their opener at every
+// depth, and the tabs before a row's backslash keep it where it stood from
+// the row's text.
+#[test]
+fn indent_preproc_define_moves_block_comment_rows_with_their_opener_at_any_depth() {
+    let input = "#define BODY(x) {\t\\\n\t/*\t\t\\\n\t * first note\t\\\n\t * more\t\t\\\n\t */\t\t\\\n\tgo(x);\t\t\\\n\tif (x) {\t\\\n\t\t/*\t\\\n\t\t * inner\t\\\n\t\t */\t\\\n\t\tgo(x);\t\\\n\t}\t\t\\\n}\n";
+    let expected = "#define BODY(x) {   \\\n        /*      \\\n         * first note   \\\n         * more     \\\n         */     \\\n        go(x);      \\\n        if (x) {    \\\n            /*  \\\n             * inner    \\\n             */ \\\n            go(x);  \\\n        }       \\\n    }\n";
+    let mut options = FormatOptions::default();
+    options.indent_preproc_define = true;
+    options.convert_tabs = true;
+    assert_eq!(format_exact(input, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
 }
 
 #[test]
@@ -4507,4 +4532,129 @@ fn split_else_chain_ending_in_an_empty_block_leaves_the_next_block_level() {
     let input = "void f(void)\n{\n    if( a )\n    {}\n    else\n#ifndef X\n        if( b )\n        {\n            x();\n        }\n        else\n        {}\n#endif\n    if( c )\n    {\n        int op = 1;\n        y();\n    }\n}\n";
 
     assert_eq!(format_exact(input, &options), input);
+}
+
+#[test]
+fn a_list_after_one_holding_only_a_directive_closes_at_its_statement() {
+    // The directive leaves the list around it no rows; the list after it
+    // closes where any list of its own closes.
+    let input = "static const struct Item items[] = {\n#include \"items.h\"\n};\n\nstatic const struct Item invalid = {\n    -1, \"invalid\", 0\n};\nint x;\n";
+    for style in ["--style=kr", "--style=java"] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_owned()]).expect("valid options");
+        assert_eq!(format_exact(input, &options), input, "{style}");
+    }
+}
+
+#[test]
+fn indent_preproc_define_keeps_operator_led_body_rows_at_one_column() {
+    // Each row a leading operator continues stands as the one before it;
+    // the last row is no deeper for ending the body.
+    let input = "#define SIZE \\\n    FIRST + 1 \\\n    + SECOND /* note */ \\\n    + THIRD\n\n#define COUNT \\\n    FIRST + 1 \\\n    + SECOND \\\n    + THIRD\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--indent-preproc-define".to_owned()])
+        .expect("valid options");
+    assert_eq!(format_exact(input, &options), input);
+}
+
+#[test]
+fn indent_preproc_define_sets_a_case_label_in_a_body_inside_a_function_as_at_file_scope() {
+    // A define body stands on its own: its label takes the body's column
+    // wherever the define stands.
+    let input = "void f(void)\n{\n    do {\n#define X(type, action) \\\n    case FS_ ## type: \\\n    r = action; \\\n    break;\n\n        switch (kind) {\n            X(A, a());\n        }\n    } while (0);\n}\n#define Y(type, action) \\\n    case FS_ ## type: \\\n    r = action; \\\n    break;\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--indent-preproc-define".to_owned()])
+        .expect("valid options");
+    assert_eq!(format_exact(input, &options), input);
+}
+
+#[test]
+fn a_closing_paren_leading_its_row_stands_at_its_opener_in_a_define_and_at_file_scope() {
+    // As in a function, the paren closing a value's rows stands under the
+    // one opening them, not at the rows.
+    let input = "#define SWAP(x) ( \\\n                  ((x)&0xFF) \\\n                  + ((x)&0xFF00) \\\n                )\nint v = (\n            a\n            + b\n        );\nvoid f(void)\n{\n    v = (\n            a\n            + b\n        );\n}\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--indent-preproc-define".to_owned()])
+        .expect("valid options");
+    assert_eq!(format_exact(input, &options), input);
+}
+
+#[test]
+fn indent_preproc_define_sets_rows_after_a_top_level_comma_as_a_function_does() {
+    // Assignments a comma joins declare nothing: the row after the comma
+    // stands at the statement. A declaration's declarators stand at its
+    // first, as in a function.
+    let input = "#define SET(seq) \\\n    (seq)->first = 1; (seq)->second = 2; \\\n    (seq)->third = 3, (seq)->fourth = 4, \\\n    (seq)->fifth = 5;\n#define DECLARE \\\n    int first = 1, \\\n        second = 2, \\\n        third; \\\n    int one, two, \\\n        three; \\\n    go(first)\nvoid f(void)\n{\n    first = 1, second = 2,\n    third = 3;\n    int one = 1,\n        two = 2,\n        three;\n}\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--indent-preproc-define".to_owned()])
+        .expect("valid options");
+    assert_eq!(format_exact(input, &options), input);
+}
+
+#[test]
+fn indent_preproc_define_keeps_rows_after_a_comment_led_value_at_the_body() {
+    // A value a comment leads declares nothing: the rows after its comma
+    // stand at the body.
+    let input = "#define LIST_INITIALIZER \\\n    /* first */ FIRST_VALUE, \\\n    /* second */ 0, \\\n    /* third */ NULL\n\nint x;\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--indent-preproc-define".to_owned()])
+        .expect("valid options");
+    assert_eq!(format_exact(input, &options), input);
+}
+
+#[test]
+fn conditional_after_a_block_opened_on_a_continued_case_label_stands_at_its_closer() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=1tbs".to_owned(),
+            "--indent-preproc-cond".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    assert_eq!(
+        format_exact(
+            "void f()\n{\n    switch (flags) {\n    case FIRST |\n        THIRD: {\n        value = 2;\n        break;\n    }\n#ifdef FEATURE\n    }\n#endif\n}\n",
+            &options,
+        ),
+        "void f()\n{\n    switch (flags) {\n    case FIRST |\n            THIRD: {\n            value = 2;\n            break;\n        }\n        #ifdef FEATURE\n    }\n        #endif\n}\n"
+    );
+}
+
+#[test]
+fn closing_conditional_past_a_switch_closer_stands_at_its_opener_in_whitesmith() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=whitesmith".to_owned(),
+            "--indent-preproc-cond".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    assert_eq!(
+        format_exact(
+            "void f()\n{\n    switch (flags) {\n    case THIRD: {\n        value = 2;\n        break;\n    }\n#ifdef FEATURE\n    }\n#endif\n}\n",
+            &options,
+        ),
+        "void f()\n    {\n    switch (flags)\n        {\n        case THIRD:\n            {\n            value = 2;\n            break;\n            }\n        #ifdef FEATURE\n        }\n        #endif\n    }\n"
+    );
+}
+
+#[test]
+fn conditional_before_the_closer_of_an_attached_compound_literal_stands_at_its_rows() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_owned(), "--indent-preproc-cond".to_owned()],
+    )
+    .expect("valid options");
+    assert_eq!(
+        format_exact(
+            "void f()\n{\n    x = (struct Item){\n        .value = 1,\n        .other = 2\n#ifdef FEATURE\n    };\n#endif\n}\n",
+            &options,
+        ),
+        "void f()\n{\n    x = (struct Item) {\n        .value = 1,\n        .other = 2\n        #ifdef FEATURE\n    };\n        #endif\n}\n"
+    );
 }

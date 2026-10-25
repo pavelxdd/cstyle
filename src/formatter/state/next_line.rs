@@ -8,6 +8,8 @@ pub(crate) struct NextLineState {
     pub(crate) leads_with_comma: bool,
     pub(crate) leads_with_open_brace: bool,
     pub(crate) leads_with_close_brace: bool,
+    /// The next line's code, past comments before it, starts with `{`.
+    pub(crate) code_leads_with_open_brace: bool,
     /// The next line's code, past comments before it, starts with `}`.
     pub(crate) code_leads_with_close_brace: bool,
     pub(crate) leads_with_else: bool,

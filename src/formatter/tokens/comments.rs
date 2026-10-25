@@ -1,6 +1,6 @@
 use crate::config::{BraceStyle, FormatOptions, IndentStyle, PointerAlign, ReferenceAlign};
-use crate::formatter::braces::classification::ExternCGuard;
-use crate::formatter::braces::initializers::initializer_brace_line_comment_gap;
+use crate::formatter::braces::initializers::initializer_brace_comment_gap;
+use crate::formatter::braces::initializers::runs_list_rows_in;
 use crate::formatter::braces::postprocess::horstmann_run_in_fill;
 use crate::formatter::braces::rewrite::is_standard_add_braces_header;
 use crate::formatter::constructs::headers::is_header;
@@ -9,7 +9,7 @@ use crate::formatter::constructs::labels;
 use crate::formatter::constructs::switch_cases::find_case_colon;
 use crate::formatter::continuation::ContinuationIndent;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::lexer::{CommentKind, Token, token_char_len};
+use crate::formatter::lexer::{CommentKind, Token, token_char_len, token_text};
 use crate::formatter::output::block_spacing::is_break_blocks_closing_header;
 use crate::formatter::output::buffer::LineFilter;
 use crate::formatter::preprocessor::{PreprocessorRegion, is_conditional_preprocessor};
@@ -18,11 +18,14 @@ use crate::formatter::state::frame::{
 };
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
+use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::structure::blocks::is_code_token;
 use crate::formatter::structure::blocks::next_code_token;
 use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::language;
-use crate::formatter::text::columns::{leading_visual_width, visual_column_at, visual_width_from};
+use crate::formatter::text::columns::{
+    leading_visual_width, leading_whitespace_len, visual_column_at, visual_width_from,
+};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
     ContainsAnyByte, after_leading_comments, has_unmatched_open_brace,
@@ -31,8 +34,8 @@ use crate::formatter::text::line_scan::{
     trailing_comment_split_limit, unmatched_open_brace_content_offset,
 };
 use crate::formatter::text::line_view::LineView;
+use crate::formatter::text::tabs::blanks_to_spaces;
 use crate::formatter::text::trim::Trimmed;
-use crate::formatter::tokens::disabled_formatting::DisabledFormattingState;
 use crate::formatter::tokens::operators::{
     find_assignment_operator, head_ends_assignment_operator, head_ends_binary_operator,
     starts_with_chain_operator,
@@ -94,6 +97,9 @@ struct CommentIndents {
     lambda_parameter: Option<usize>,
     /// The label column, for a comment leading a statement label's line.
     label_line: Option<usize>,
+    /// The comment's token, which the rules asked only for some comments
+    /// look back from.
+    token: usize,
 }
 
 /// How an own-line multi-line block comment is reindented, decided from its
@@ -808,8 +814,8 @@ impl FormatEngine<'_> {
 
     pub(crate) fn active_body_comment_indent_spaces(&self) -> Option<usize> {
         let frame = self.layout.frame_stack.active_brace()?;
-        let unindented_extern_c = frame.brace_type == BraceType::Extern
-            && self.extern_c_guard == ExternCGuard::InsideBlock;
+        let unindented_extern_c =
+            frame.brace_type == BraceType::Extern && self.extern_c_guard.inside_block();
         let body_column = if unindented_extern_c
             || frame.brace_type == BraceType::Namespace
                 && (!self.options.indent_namespaces
@@ -864,15 +870,22 @@ impl FormatEngine<'_> {
     fn previous_case_label_body_indent_spaces(&self) -> Option<usize> {
         // Comments, a conditional opening or a plain directive after the
         // label leave the comment in its body.
-        let line = self.output.scoped().iter().rev().find(|line| {
-            let trimmed = line.trimmed_start();
-            !trimmed.is_empty()
-                && (!is_comment_only_line(trimmed) || holds_code_after_leading_comments(trimmed))
-                && !preprocessor_directive(trimmed).is_some_and(|directive| {
-                    matches!(directive, "if" | "ifdef" | "ifndef")
-                        || !is_conditional_preprocessor(directive)
-                })
-        })?;
+        let range = self.output.scoped_range();
+        let line = &self.output[self.output.last_line_looked(
+            &self.case_body_line_look,
+            range.start,
+            range.end,
+            |index| {
+                let trimmed = self.output[index].trimmed_start();
+                !trimmed.is_empty()
+                    && (!is_comment_only_line(trimmed)
+                        || holds_code_after_leading_comments(trimmed))
+                    && !preprocessor_directive(trimmed).is_some_and(|directive| {
+                        matches!(directive, "if" | "ifdef" | "ifndef")
+                            || !is_conditional_preprocessor(directive)
+                    })
+            },
+        )?];
         let code = self.output.code_trimmed_of(line);
         let trimmed = code.trimmed_start();
         let lead = code.len() - trimmed.len();
@@ -922,11 +935,15 @@ impl FormatEngine<'_> {
             None
         };
         // The comments then lead their row; none trails the brace's code.
+        // The continuation of the brace's input line stays with the brace.
         if std::mem::take(&mut self.comments.comment_opens_brace_body) {
             if !self.current_is_blank() {
                 self.finish_line();
             }
             self.layout.line_state.trailing_comment_columns.clear();
+            self.layout
+                .continuation_indent
+                .input_line_continuation_indent = None;
         }
         let indents = self.comment_indents(kind, comment, index);
         let CommentIndents {
@@ -940,18 +957,6 @@ impl FormatEngine<'_> {
                 .continuation_indent
                 .input_line_continuation_indent = Some(ContinuationIndent::Spaces(spaces));
         }
-        if comment.contains("*INDENT-OFF*") && !self.layout.line_state.indent_off_follows_code {
-            self.finish_line();
-            if self.token_input.token_begins_source_line && self.token_input.token_source_column > 0
-            {
-                self.current
-                    .push_str(&" ".repeat(self.token_input.token_source_column));
-            }
-            self.current.push_str(comment.trimmed_end());
-            self.disabled_formatting = Some(DisabledFormattingState::capture(self));
-            return;
-        }
-
         if self.should_break_header_before_comment() {
             self.finish_line();
             self.layout.continuation_indent.next_line_indent = Some(self.statement_level() + 1);
@@ -1077,6 +1082,7 @@ impl FormatEngine<'_> {
         let line_comment_can_carry_continuation = !standalone_line_comment
             || previous_line_ends_operator
             || self.layout.nesting.paren_depth > 0
+            || self.open_template_arguments_indent_spaces().is_some()
             || matches!(
                 self.layout.previous,
                 PreviousToken::Operator | PreviousToken::Comma
@@ -1156,6 +1162,7 @@ impl FormatEngine<'_> {
             class_base: self.class_base_comment_position(kind, comment, index),
             lambda_parameter: lambda_parameter_comment_indent,
             label_line,
+            token: index,
         }
     }
 
@@ -1276,7 +1283,6 @@ impl FormatEngine<'_> {
         {
             self.layout.continuation_indent.next_line_indent = None;
             self.layout.continuation_indent.next_line_indent_spaces = None;
-            self.current_is_preindented = true;
             self.layout.nesting.clear_continuation_indents();
         }
         if kind == CommentKind::Block
@@ -1445,7 +1451,9 @@ impl FormatEngine<'_> {
                 || !self.layout.line_state.column1_line_comment
                 || self.options.indent_col1_comments)
             && self.layout.nesting.paren_depth == 0
-            && self.layout.frame_stack.active_constructor_initializer().is_some())
+            && self.layout.frame_stack.active_constructor_initializer().is_some()
+            // Rows after a lambda among them stand at the constructor.
+            && !self.lambda_closes_among_initializers_before(indents.token))
         .then(|| self.constructor_initializer_base_indent_spaces())
         .flatten();
         // The bases after a comment among them keep the column their head
@@ -1582,12 +1590,18 @@ impl FormatEngine<'_> {
                     == Some(self.layout.nesting.paren_depth);
                 brace_element_comment_indent = in_list_rows
                     .then(|| {
-                        self.current_inline_array_column().or_else(|| {
-                            unmatched_open_brace_content_offset(previous_code).map(|offset| {
-                                visual_width_from(&previous[..offset], 0, self.options.tab_width)
-                                    + self.case_unindent_spaces()
+                        // Indenting after parens stacks the row as its code.
+                        self.comment_led_initializer_row_indent(indents.token)
+                            .or_else(|| self.current_inline_array_column())
+                            .or_else(|| {
+                                unmatched_open_brace_content_offset(previous_code).map(|offset| {
+                                    visual_width_from(
+                                        &previous[..offset],
+                                        0,
+                                        self.options.tab_width,
+                                    ) + self.case_unindent_spaces()
+                                })
                             })
-                        })
                     })
                     .flatten();
                 // Else it stands where the row after it goes on, as the row
@@ -1716,10 +1730,16 @@ impl FormatEngine<'_> {
                 .or(user_label_comment_indent)
                 .or(lambda_parameter_comment_indent)
                 .or(header_condition_row_indent)
+                // Indenting after parens sets the comment at the block's
+                // continuation, or among the rows of a list a level in.
                 .or_else(|| {
                     self.options
                         .indent_after_parens
-                        .then_some(block_comment_continuation_indent)
+                        .then(|| {
+                            self.current_leveled_list_row_column()
+                                .or_else(|| self.comment_led_initializer_row_indent(indents.token))
+                                .or(block_comment_continuation_indent)
+                        })
                         .flatten()
                 })
                 .or_else(|| {
@@ -1753,12 +1773,20 @@ impl FormatEngine<'_> {
                 })
                 .or_else(|| self.current_inline_array_column())
                 .or(block_comment_continuation_indent)
+                // A directive's rows continue no code.
                 .or_else(|| {
-                    self.output.last_non_empty_scoped().and_then(|line| {
-                        let code = self.output.code_trimmed_of(line);
-                        code.ends_with(',')
-                            .then(|| leading_visual_width(line, self.options.tab_width))
-                    })
+                    self.output
+                        .last_non_empty_scoped()
+                        .filter(|_| {
+                            self.output
+                                .last_non_empty_index()
+                                .is_none_or(|index| !self.output.is_directive_line(index))
+                        })
+                        .and_then(|line| {
+                            let code = self.output.code_trimmed_of(line);
+                            code.ends_with(',')
+                                .then(|| leading_visual_width(line, self.options.tab_width))
+                        })
                 })
                 .or_else(|| {
                     self.output.last_non_empty_scoped().and_then(|line| {
@@ -1774,7 +1802,14 @@ impl FormatEngine<'_> {
                 .or_else(|| follows_objc_interface.then_some(self.options.indent_width))
         {
             let output_len = self.output.len();
-            if let Some((_, delimiter)) = self.layout.frame_stack.active_delimiter_mut()
+            // A comment in a brace sets no column for the parens around it.
+            let in_brace = self
+                .current
+                .active_comment()
+                .and_then(|comment| self.tree.groups.enclosing(comment))
+                .is_some_and(|group| self.tree.groups.get(group).delimiter == Delimiter::Brace);
+            if !in_brace
+                && let Some((_, delimiter)) = self.layout.frame_stack.active_delimiter_mut()
                 && delimiter.opener_output_line < output_len
             {
                 delimiter.continuation_indent_column = Some(spaces);
@@ -1837,16 +1872,43 @@ impl FormatEngine<'_> {
             self.layout.continuation_indent.next_line_indent = None;
             self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
         }
+        // Under a conditional, a line comment stands at its level; a
+        // group opened outside the block holding the comment sets no column
+        // there, and the comment stands as without the option.
+        let preprocessor_indent = (kind == CommentKind::Line
+            && standalone_line_comment
+            && self.options.indent_col1_comments)
+            .then(|| {
+                let indent = self
+                    .split_else_preprocessor_branch_body_indent_spaces()
+                    .or_else(|| {
+                        self.layout
+                            .indentation
+                            .current_preprocessor_indent()
+                            .map(|indent| {
+                                indent
+                                    .spaces
+                                    .unwrap_or(indent.level * self.options.indent_width)
+                                    + if self.preprocessor_split_else_active() {
+                                        self.preprocessor.split_else.extra_levels.max(1)
+                                            * self.options.indent_width
+                                    } else {
+                                        0
+                                    }
+                            })
+                    })?;
+                // A group opened outside the block holding the comment, as an
+                // include guard, sets no column inside the block.
+                self.active_body_comment_indent_spaces()
+                    .is_none_or(|body| body <= indent)
+                    .then_some(indent)
+            })
+            .flatten();
         if kind == CommentKind::Line
             && standalone_line_comment
             && !follows_objc_interface
             && constructor_member_comment_indent.is_none()
-            && (self.layout.line_state.column1_line_comment
-                || self
-                    .layout
-                    .indentation
-                    .current_preprocessor_indent()
-                    .is_some())
+            && (self.layout.line_state.column1_line_comment || preprocessor_indent.is_some())
             && self.options.indent_col1_comments
             && line_comment_continuation_indent.is_none()
             && line_comment_stream_chain_indent.is_none()
@@ -1858,30 +1920,6 @@ impl FormatEngine<'_> {
                 .last_line_outside_comment()
                 .is_some_and(|line| line.trimmed_start().starts_with('?'))
         {
-            let preprocessor_indent = self
-                .split_else_preprocessor_branch_body_indent_spaces()
-                .or_else(|| {
-                    self.layout
-                        .indentation
-                        .current_preprocessor_indent()
-                        .map(|indent| {
-                            indent
-                                .spaces
-                                .unwrap_or(indent.level * self.options.indent_width)
-                                + if self.preprocessor_split_else_active() {
-                                    self.preprocessor.split_else.extra_levels.max(1)
-                                        * self.options.indent_width
-                                } else {
-                                    0
-                                }
-                        })
-                });
-            // A group opened outside the block holding the comment, as an
-            // include guard, sets no column inside the block.
-            let preprocessor_indent = preprocessor_indent.filter(|&spaces| {
-                self.active_body_comment_indent_spaces()
-                    .is_none_or(|body| body <= spaces)
-            });
             let spaces = control_header_comment_indent
                 .or(preprocessor_indent)
                 .or(definition_header_comment_indent)
@@ -2055,6 +2093,8 @@ impl FormatEngine<'_> {
         self.previous_was_newline = false;
         if kind == CommentKind::Line {
             let stacked_before_line = self.layout.nesting.current_continuation_indent_spaces();
+            let kept_at_column_one =
+                self.layout.line_state.column1_line_comment && !self.options.indent_col1_comments;
             self.finish_line();
             if let Some(spaces) =
                 line_comment_stream_chain_indent.or(ternary_branch_comment_indent_spaces)
@@ -2062,11 +2102,13 @@ impl FormatEngine<'_> {
                 self.layout.continuation_indent.next_line_indent = None;
                 self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
             } else if standalone_line_comment
+                && !kept_at_column_one
                 && line_comment_continuation_indent.is_some()
                 && let Some(line) = self.output.last()
             {
                 // A comment line within a statement leaves the statement
-                // going on at its own column.
+                // going on at its own column; one kept at column one, where
+                // the statement would have gone on.
                 let spaces = leading_visual_width(line, self.options.tab_width);
                 self.set_next_continuation_indent(ContinuationIndent::Spaces(spaces));
             } else if let Some(indent) = line_comment_continuation_indent {
@@ -2248,17 +2290,11 @@ impl FormatEngine<'_> {
     fn comment_precedes_switch_label(&self) -> bool {
         let tokens = &self.tree.tokens;
         self.current.active_comment().is_some_and(|comment| {
-            tokens[comment + 1..]
-                .iter()
-                .find(|token| {
-                    !matches!(
-                        token,
-                        Token::Whitespace(_) | Token::Newline | Token::Comment(_, _)
-                    )
+            self.after_comments_look
+                .find(tokens, comment + 1, is_past_comments)
+                .is_some_and(|next| {
+                    matches!(&tokens[next], Token::Word(word) if word == "case" || word == "default")
                 })
-                .is_some_and(
-                    |token| matches!(token, Token::Word(word) if word == "case" || word == "default"),
-                )
         })
     }
 
@@ -2332,8 +2368,10 @@ impl FormatEngine<'_> {
                     && !trimmed.starts_with_any(b"{}#")
                     && !trimmed.ends_with_any(b";{}")
                     && !trimmed.contains('=')
-                    && !language::is_header(header))
-                .then(|| leading_visual_width(line, self.options.tab_width))
+                    && !language::is_header(header)
+                    // A returned value continues its statement.
+                    && header != "return")
+                    .then(|| leading_visual_width(line, self.options.tab_width))
             })
         })
         .flatten()
@@ -2555,20 +2593,51 @@ impl FormatEngine<'_> {
             })
     }
 
+    /// The column of the initializer row the comment at `index` leads or
+    /// stands before, as the row's code would stand without it.
+    fn comment_led_initializer_row_indent(&self, index: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let first = next_code_token(tokens, index.checked_add(1)?)?;
+        // A comment alone on its line stands at the row after it, unless
+        // the list closes there.
+        if matches!(tokens[first], Token::Symbol('}'))
+            && tokens[index + 1..first]
+                .iter()
+                .any(|token| matches!(token, Token::Newline))
+        {
+            return None;
+        }
+        self.stacked_initializer_row_indent(first)
+    }
+
+    /// Whether the active comment directly follows the brace of the list it
+    /// stands in.
+    fn comment_follows_list_brace(&self) -> bool {
+        self.layout.frame_stack.active_brace().is_some_and(|frame| {
+            matches!(
+                frame.semantic_kind,
+                BraceSemanticKind::Array
+                    | BraceSemanticKind::Initializer
+                    | BraceSemanticKind::CompoundLiteral
+                    | BraceSemanticKind::DeferArray
+            ) && frame.open_token.is_some()
+                && self
+                    .current
+                    .active_comment()
+                    .and_then(|comment| self.tree.previous_code_token(comment))
+                    == frame.open_token
+        })
+    }
+
     /// Whether the comment at `index` leads a closer, past the comments
     /// between them.
     fn comment_leads_closer(&self, comment: &str, index: usize) -> bool {
         let tokens = &self.tree.tokens;
         matches!(tokens.get(index), Some(Token::Comment(_, text)) if text == comment)
-            && tokens[index + 1..]
-                .iter()
-                .find(|token| {
-                    !matches!(
-                        token,
-                        Token::Whitespace(_) | Token::Newline | Token::Comment(..)
-                    )
-                })
-                .is_some_and(|token| matches!(token, Token::Symbol('}')))
+            && self
+                .after_comments_look
+                .find(tokens, index + 1, is_past_comments)
+                .is_some_and(|next| matches!(tokens[next], Token::Symbol('}')))
     }
 
     /// Whether output line `line`, ending with a brace, opens the body of a
@@ -2601,6 +2670,50 @@ impl FormatEngine<'_> {
                                 && self.output.line_with_token(previous) == Some(index)
                         })
             })
+    }
+
+    /// A comment row continuing a returned value stands at the value, as
+    /// the value's code rows do.
+    fn returned_value_comment_indent_spaces(&self) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let comment = self.current.active_comment()?;
+        let previous = self.tree.previous_code_token(comment)?;
+        let group = groups.enclosing(previous);
+        // The statement starts inside its group, past the groups nested in it.
+        let opener = group.map(|group| groups.get(group).open);
+        let mut index = previous;
+        let keyword = loop {
+            match &tokens[index] {
+                Token::Word(word) if word == "return" && groups.enclosing(index) == group => {
+                    break index;
+                }
+                Token::Symbol(';' | '{' | '}') if groups.enclosing(index) == group => {
+                    return None;
+                }
+                _ => {}
+            }
+            if let Some(nested) = groups.closed_at(index) {
+                index = groups.get(nested).open;
+            }
+            index = self.tree.previous_code_token(index)?;
+            if opener.is_some_and(|opener| index <= opener) {
+                return None;
+            }
+        };
+        let value = next_code_token(tokens, keyword + 1).filter(|&value| value <= previous)?;
+        let line = self.output.line_with_token(keyword)?;
+        if self.output.line_with_token(value) != Some(line) {
+            return None;
+        }
+        // Indenting after parens continues the statement past its line.
+        let column = if self.options.indent_after_parens {
+            self.output.lead_width(line, self.options.tab_width)
+                + self.options.continuation_indent * self.options.indent_width
+        } else {
+            self.token_column(value)?
+        };
+        Some(column + self.case_unindent_spaces())
     }
 
     fn standalone_block_comment_indent_spaces(
@@ -2682,6 +2795,31 @@ impl FormatEngine<'_> {
             {
                 return Some(self.output.lead_width(opener, self.options.tab_width));
             }
+            // A comment after the switch body's brace a style breaks from
+            // its header stands with the labels it comes before.
+            let switch_body_brace_line = trimmed == "{"
+                && self
+                    .current
+                    .active_comment()
+                    .and_then(|comment| self.tree.previous_code_token(comment))
+                    .filter(|&brace| matches!(self.tree.tokens[brace], Token::Symbol('{')))
+                    .and_then(|brace| self.tree.previous_code_token(brace))
+                    .and_then(|close| self.tree.groups.closed_at(close))
+                    .and_then(|parens| {
+                        self.tree
+                            .previous_code_token(self.tree.groups.get(parens).open)
+                    })
+                    .is_some_and(|header| {
+                        matches!(&self.tree.tokens[header], Token::Word(word) if word == "switch")
+                    });
+            if switch_body_brace_line && !self.comment_precedes_switch_statement() {
+                return Some(
+                    self.layout
+                        .indentation
+                        .line_indent(LineKind::SwitchLabel, self.options)
+                        * self.options.indent_width,
+                );
+            }
             if trimmed.starts_with("switch") && code.ends_with('{') {
                 // A comment that followed the `{` attached to the header
                 // stands with the indented case labels.
@@ -2731,10 +2869,12 @@ impl FormatEngine<'_> {
             {
                 return Some(0);
             }
-            // A macro call that closes all its parens at file scope ends its
-            // statement without `;`.
-            if self.layout.nesting.brace_type_stack.is_empty()
-                && self.layout.nesting.paren_depth == 0
+            // A macro call that closes all its parens at declaration scope
+            // ends its statement without `;`.
+            if matches!(
+                self.layout.nesting.brace_type_stack.last(),
+                None | Some(BraceType::Namespace | BraceType::Extern)
+            ) && self.layout.nesting.paren_depth == 0
                 && code.ends_with(')')
                 && !trimmed.starts_with('#')
                 && self
@@ -2758,11 +2898,20 @@ impl FormatEngine<'_> {
                     }
                 }
                 if balance == 0 {
-                    return Some(0);
+                    return Some(self.layout.indentation.indent() * self.options.indent_width);
                 }
             }
         }
         let previous_statement_indent = previous_line.and_then(|line| {
+            // A row a comment's closer leads holds no statement's column.
+            let text = line.trimmed_start();
+            if !text.starts_with("/*")
+                && text
+                    .split_once("*/")
+                    .is_some_and(|(before, _)| !before.contains("/*"))
+            {
+                return None;
+            }
             let code = self.output.code_trimmed_of(line);
             let after_braceless_header = self
                 .output
@@ -2832,6 +2981,10 @@ impl FormatEngine<'_> {
                         * self.options.indent_width,
                 );
             }
+            // A comment after a list's brace stands where the list's rows do.
+            if code.ends_with('{') && self.comment_follows_list_brace() {
+                return self.active_body_comment_indent_spaces();
+            }
             code.ends_with('{').then(|| {
                 let body_indent = (self
                     .layout
@@ -2841,9 +2994,14 @@ impl FormatEngine<'_> {
                     + self.else_if_break_extra())
                     * self.options.indent_width;
                 let trimmed = code.trimmed_start();
-                if comment_starts_header_word(trimmed, "if")
+                let header_line = comment_starts_header_word(trimmed, "if")
                     || comment_starts_header_word(trimmed, "for")
-                    || comment_starts_header_word(trimmed, "while")
+                    || comment_starts_header_word(trimmed, "while");
+                if header_line && let Some(spaces) = self.header_block_first_row_spaces(line) {
+                    // The comment stands where the block's first statement
+                    // does.
+                    spaces
+                } else if header_line
                     || trimmed.starts_with("else if")
                     || trimmed.starts_with("} else")
                     || trimmed.starts_with("case ")
@@ -2921,6 +3079,7 @@ impl FormatEngine<'_> {
             .or(previous_paren_indent)
             .or(previous_element_row_indent)
             .or(definition_header_comment_indent)
+            .or_else(|| self.returned_value_comment_indent_spaces())
             .or_else(|| self.layout.nesting.current_continuation_indent_spaces())
             // An enumerator no comma ends goes on past the comment.
             .or_else(|| {
@@ -3031,13 +3190,14 @@ impl FormatEngine<'_> {
         let previous_line = self.output.len().checked_sub(1)?;
         let previous = self.output.get(previous_line)?;
         let previous_code = self.output.code_trimmed_of(previous);
+        // A row closing parens it did not open ends the chain inside them.
         if !starts_with_chain_operator(previous_code.trimmed_start())
             || self.layout.frame_stack.active_delimiter().is_none()
             || self
                 .layout
                 .frame_stack
                 .active_stream_on_output_line(previous_line)
-                .is_none()
+                .is_none_or(|frame| frame.line_has_positive_paren_delta)
         {
             return None;
         }
@@ -3255,13 +3415,22 @@ impl FormatEngine<'_> {
             }
         {
             // A comment that trailed the brace stands where one on a line of
-            // its own does.
-            let levels = usize::from(self.comment_precedes_switch_statement())
-                * (1 + usize::from(self.options.brace_style == BraceStyle::Ratliff));
-            " ".repeat(
-                leading_visual_width(previous, self.options.tab_width)
-                    + levels * self.options.indent_width,
-            )
+            // its own does: with the labels it comes before, or a level in
+            // before a statement.
+            if self.comment_precedes_switch_statement() {
+                let levels = 1 + usize::from(self.options.brace_style == BraceStyle::Ratliff);
+                " ".repeat(
+                    leading_visual_width(previous, self.options.tab_width)
+                        + levels * self.options.indent_width,
+                )
+            } else {
+                " ".repeat(
+                    self.layout
+                        .indentation
+                        .line_indent(LineKind::SwitchLabel, self.options)
+                        * self.options.indent_width,
+                )
+            }
         } else if let Some(previous) = self.output.last_non_empty_scoped()
             && {
                 let code = self.output.code_trimmed_of(previous);
@@ -3344,7 +3513,11 @@ impl FormatEngine<'_> {
             && self.layout.command_state.current_header.is_none()
             && match self.layout.nesting.brace_type_stack.last() {
                 Some(BraceType::Command) => self.options.brace_style == BraceStyle::OneTrueBrace,
-                Some(BraceType::Array | BraceType::Initializer) => true,
+                // Where braces attach, the comment opens the list's rows.
+                Some(BraceType::Array | BraceType::Initializer) => !matches!(
+                    self.options.brace_style,
+                    BraceStyle::Attach | BraceStyle::Ratliff | BraceStyle::Lisp
+                ),
                 _ => false,
             }
             && self.output.last().is_some_and(|line| line.trimmed() == "{");
@@ -3380,19 +3553,47 @@ impl FormatEngine<'_> {
             } else {
                 self.pad_before_trailing_comment(CommentKind::Block, first);
             }
-            let output_column = leading_visual_width(&self.current, self.options.tab_width.max(1));
+            let tab_width = self.options.tab_width.max(1);
+            let output_column = leading_visual_width(&self.current, tab_width);
             self.record_comment_frame(CommentKind::Block, output_column, true);
+            // The rows of a comment that only braces and comments precede
+            // move with the line's first comment, as those of a comment
+            // opening the line do: trimmed up to its column, laid from it.
+            let line_rows = self.comment_line_first_comment_column();
             self.current.push_str(first.trimmed_end());
             if lines.peek().is_some() {
                 self.finish_line();
             }
+            // The column the line's first comment takes.
+            let line_indent = self.output.last().map_or(0, |line| {
+                let first_comment = line.find("/*").unwrap_or(0);
+                visual_width_from(&line[..first_comment], 0, tab_width)
+            });
+            let (first_comment_column, tab_extra) = line_rows.unwrap_or_default();
+            let mut row_trim = first_comment_column;
             let last_line_has_trailing_token = self.token_input.has_next_meaningful_token;
             while let Some(line) = lines.next() {
-                let shifted = if self.options.strip_comment_prefix {
+                let shifted = if line_rows.is_some() && self.options.strip_comment_prefix {
+                    strip_block_comment_line(
+                        self.options,
+                        line,
+                        false,
+                        &" ".repeat(line_indent),
+                        &mut row_trim,
+                        tab_extra,
+                    )
+                } else if line_rows.is_some() {
+                    if line.trimmed().is_empty() {
+                        String::new()
+                    } else {
+                        let kept =
+                            astyle_comment_row_rest(line, &mut row_trim, tab_extra, tab_width);
+                        format!("{}{}", " ".repeat(line_indent), kept.trimmed_end())
+                    }
+                } else if self.options.strip_comment_prefix {
                     // astyle keeps the text of a row of a comment opened
-                    // after code at its column, past a leading `*`, and no
-                    // further left than the code.
-                    let tab_width = self.options.tab_width.max(1);
+                    // after code at its column, past a leading `*`, and at
+                    // least one indent in.
                     let text = line.trimmed_start();
                     let body = if text.starts_with('*') && !text.starts_with("*/") {
                         &text[1..]
@@ -3411,7 +3612,7 @@ impl FormatEngine<'_> {
                         0,
                         tab_width,
                     )
-                    .max(self.current_line_indent_spaces());
+                    .max(self.options.indent_width);
                     if body.trimmed().is_empty() {
                         String::new()
                     } else if text.starts_with("*/") || keeps_row {
@@ -3423,8 +3624,8 @@ impl FormatEngine<'_> {
                     line.trimmed_end().to_string()
                 };
                 // astyle writes the rows of a comment opened after code as
-                // they stand.
-                let verbatim = shifted == line.trimmed_end();
+                // they stand, past a prefix it removes.
+                let verbatim = line_rows.is_none();
                 // A case block's unindent leaves them standing too.
                 let unindent = self.layout.line_adjuster.comment_row_case_unindent_depth()
                     * self.options.indent_width;
@@ -3486,16 +3687,42 @@ impl FormatEngine<'_> {
         // astyle trims each row up to the opener's column, a column it lowers
         // for the rows after one whose text starts left of it past a tab.
         let mut row_trim = trim_amount;
+        // The columns past their characters that the tabs of the line up to
+        // the trim column take.
         let opener_tab_extra = self.current.active_comment().map_or(0, |opener| {
             let tokens = &self.tree.tokens;
-            let chars: usize = tokens[..opener]
+            let line_start = tokens[..opener]
                 .iter()
-                .rev()
-                .take_while(|token| !matches!(token, Token::Newline))
-                .map(token_char_len)
-                .sum();
+                .rposition(|token| matches!(token, Token::Newline))
+                .map_or(0, |newline| newline + 1);
+            let mut column = 0;
+            let mut chars = 0;
+            for ch in tokens[line_start..opener]
+                .iter()
+                .flat_map(|token| token_text(token).chars().collect::<Vec<_>>())
+            {
+                if column >= trim_amount {
+                    break;
+                }
+                column = if ch == '\t' {
+                    (column / tab_width + 1) * tab_width
+                } else {
+                    column + 1
+                };
+                chars += 1;
+            }
             trim_amount.saturating_sub(chars)
         });
+        // Rows the brace's line takes the opener back from are laid from the
+        // body, a level past the brace in the source as well.
+        let mut strip_trim = if !opener_on_own_line
+            && self.token_input.token_line_opens_with_brace
+            && !self.token_input.token_begins_source_line
+        {
+            self.token_input.token_source_line_indent + self.options.indent_width
+        } else {
+            trim_amount
+        };
         // The column of an opener that stands after the brace on its line.
         let mut merged_opener_column = None;
         let mut opener_shift = 0;
@@ -3511,7 +3738,7 @@ impl FormatEngine<'_> {
             // Horstmann and pico set the opener at the body later.
             if index == 1
                 && self.token_input.token_line_opens_with_brace
-                && !opener_after_tab
+                && (!opener_after_tab || self.output_indent_style == IndentStyle::Spaces)
                 && !matches!(
                     self.options.brace_style,
                     BraceStyle::Horstmann | BraceStyle::Pico
@@ -3524,13 +3751,6 @@ impl FormatEngine<'_> {
                 });
             }
             if index == 0 && run_in_opener {
-                // The comment keeps the gap it had after the brace.
-                let gap = self
-                    .token_input
-                    .previous_input_whitespace
-                    .clone()
-                    .filter(|ws| !ws.contains('\n'))
-                    .unwrap_or_default();
                 // astyle pads an element brace's comment to the body column,
                 // where it lays the rows; keeping the gap moves them along.
                 let element_brace = matches!(
@@ -3540,8 +3760,30 @@ impl FormatEngine<'_> {
                     self.options.brace_style,
                     BraceStyle::Pico | BraceStyle::Horstmann
                 );
+                // The comment keeps the gap it had after the brace but where
+                // the style runs the list's rows in after it.
+                let gap = if element_brace && runs_list_rows_in(self.options.brace_style) {
+                    let brace_line = self
+                        .output
+                        .last()
+                        .map(|line| line.as_str())
+                        .unwrap_or_default();
+                    initializer_brace_comment_gap(&self.output_options(), brace_line)
+                } else {
+                    self.token_input
+                        .previous_input_whitespace
+                        .clone()
+                        .filter(|ws| !ws.contains('\n'))
+                        .unwrap_or_default()
+                        .into_owned()
+                };
                 if let Some(brace_line) = self.output.last_mut() {
-                    brace_line.push_str(&gap);
+                    if self.options.convert_tabs {
+                        let column = visual_width_from(brace_line, 0, tab_width);
+                        brace_line.push_str(&blanks_to_spaces(&gap, column, tab_width));
+                    } else {
+                        brace_line.push_str(&gap);
+                    }
                     run_in_column =
                         element_brace.then(|| visual_width_from(brace_line, 0, tab_width));
                     brace_line.push_str(line.trimmed_end());
@@ -3561,13 +3803,25 @@ impl FormatEngine<'_> {
                         .is_some_and(|brace| brace.trimmed() == "{")
                 {
                     format!("{opener_prefix}{}", line.trimmed_end())
+                } else if let Some(column) = run_in_column {
+                    // The rows of a comment run in after an element brace
+                    // follow its opener, as they do without the option.
+                    strip_block_comment_line(
+                        self.options,
+                        line,
+                        false,
+                        &self.comment_row_prefix(column),
+                        &mut row_trim,
+                        opener_tab_extra,
+                    )
                 } else {
                     strip_block_comment_line(
                         self.options,
                         line,
                         index == 0,
                         opener_prefix,
-                        trim_amount,
+                        &mut strip_trim,
+                        opener_tab_extra,
                     )
                 }
             } else if index == 0
@@ -3635,17 +3889,35 @@ impl FormatEngine<'_> {
                         // stands past the `/*` column.
                         format!(
                             "{}{}",
-                            self.comment_row_prefix(
-                                opener_output_column + tab_overshoot(line, kept)
-                            ),
+                            self.comment_row_prefix(opener_output_column),
                             kept.trimmed_end()
                         )
                     } else if let Some(column) = run_in_column {
-                        format!(
-                            "{}{}",
-                            self.comment_row_prefix(column + tab_overshoot(line, kept)),
-                            kept.trimmed_end()
-                        )
+                        // As after a block's brace, a row past the `/*`
+                        // keeps its offset from it with spaces, and the
+                        // others, and every row with tabs, stand at the body
+                        // with what stands past the `/*` column.
+                        let overshoot = tab_overshoot(line, kept);
+                        if self.output_indent_style == IndentStyle::Spaces
+                            && (kept.len() > kept.trimmed_start().len() || overshoot > 0)
+                        {
+                            format!(
+                                "{}{}",
+                                self.comment_row_prefix(column + overshoot),
+                                kept.trimmed_end()
+                            )
+                        } else {
+                            let body_column = self
+                                .layout
+                                .frame_stack
+                                .active_brace()
+                                .map_or(column, |frame| frame.body_indent_column);
+                            format!(
+                                "{}{}",
+                                self.comment_row_prefix(body_column),
+                                kept.trimmed_end()
+                            )
+                        }
                     } else if self.token_input.token_line_opens_with_brace {
                         let indent = if self.options.indent_classes
                             && matches!(
@@ -3664,21 +3936,23 @@ impl FormatEngine<'_> {
                         match merged_opener_column {
                             // A row past the opener keeps its offset from it
                             // and the others stand at the body.
-                            Some(opener)
-                                if self.output_indent_style == IndentStyle::Spaces
-                                    && !line[..line.len() - line.trimmed_start().len()]
-                                        .contains('\t') =>
-                            {
-                                let column = if row_lead > 0 {
-                                    opener + row_lead
+                            Some(opener) if self.output_indent_style == IndentStyle::Spaces => {
+                                // A tab crossing the `/*` column sets the
+                                // rest of the row past it.
+                                let overshoot = tab_overshoot(line, kept);
+                                if row_lead > 0 || overshoot > 0 {
+                                    format!(
+                                        "{}{}",
+                                        self.comment_row_prefix(opener + overshoot),
+                                        kept.trimmed_end()
+                                    )
                                 } else {
-                                    body_column
-                                };
-                                format!(
-                                    "{}{}",
-                                    self.comment_row_prefix(column),
-                                    trimmed_kept.trimmed_end()
-                                )
+                                    format!(
+                                        "{}{}",
+                                        self.comment_row_prefix(body_column),
+                                        trimmed_kept.trimmed_end()
+                                    )
+                                }
                             }
                             _ => {
                                 let merged_comment_column = self
@@ -3730,12 +4004,19 @@ impl FormatEngine<'_> {
     }
 
     /// Whether the comment follows a block brace the style broke onto a line
-    /// of its own, where the comment opens the body as one on its own line.
+    /// of its own, where the comment opens the body as one on its own line;
+    /// so does one after a list's brace where braces attach.
     fn comment_follows_broken_block_brace(&self) -> bool {
-        matches!(
-            self.layout.nesting.brace_type_stack.last(),
-            Some(BraceType::Command | BraceType::Definition)
-        ) && self.output.last().is_some_and(|line| line.trimmed() == "{")
+        let opens_body = match self.layout.nesting.brace_type_stack.last() {
+            Some(BraceType::Command | BraceType::Definition) => true,
+            Some(BraceType::Array | BraceType::Initializer) => matches!(
+                self.options.brace_style,
+                BraceStyle::Attach | BraceStyle::Ratliff | BraceStyle::Lisp
+            ),
+            _ => false,
+        };
+        opens_body
+            && self.output.last().is_some_and(|line| line.trimmed() == "{")
             && !self
                 .source_run_in_brace_lines
                 .contains(&self.output.len().wrapping_sub(1))
@@ -3753,6 +4034,36 @@ impl FormatEngine<'_> {
 
     /// Whether only opening braces stand before the active comment on its
     /// source line, which the comment's rows follow as they follow one.
+    /// For a comment that only braces and comments precede on its source
+    /// line, the source column of the line's first comment and the columns
+    /// past their characters that the tabs before it take.
+    fn comment_line_first_comment_column(&self) -> Option<(usize, usize)> {
+        let opener = self.current.active_comment()?;
+        let tokens = &self.tree.tokens;
+        let line_start = tokens[..opener]
+            .iter()
+            .rposition(|token| matches!(token, Token::Newline))
+            .map_or(0, |newline| newline + 1);
+        let before = &tokens[line_start..opener];
+        let first = before
+            .iter()
+            .position(|token| matches!(token, Token::Comment(..)))?;
+        if !before.iter().all(|token| {
+            matches!(
+                token,
+                Token::Whitespace(_) | Token::Comment(..) | Token::Symbol('{' | '}')
+            )
+        }) {
+            return None;
+        }
+        let lead: String = before[..first]
+            .iter()
+            .map(|token| token_text(token))
+            .collect();
+        let column = visual_width_from(&lead, 0, self.options.tab_width.max(1));
+        Some((column, column.saturating_sub(lead.chars().count())))
+    }
+
     fn comment_follows_braces_only(&self) -> bool {
         self.current.active_comment().is_some_and(|opener| {
             let mut before = self.tree.tokens[..opener]
@@ -4090,6 +4401,26 @@ impl FormatEngine<'_> {
             })
     }
 
+    /// Whether the current line opens with the brace of an aggregate's body
+    /// that the style broke off the code before it on its source line.
+    fn current_line_broke_off_aggregate_head(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        let Some(first) = self.current.tokens().map(|span| span.first) else {
+            return false;
+        };
+        matches!(tokens.get(first), Some(Token::Symbol('{')))
+            && self
+                .tree
+                .groups
+                .opened_at(first)
+                .is_some_and(|group| self.tree.blocks.kind(group) == Some(BlockKind::Aggregate))
+            && self.tree.previous_code_token(first).is_some_and(|before| {
+                !tokens[before + 1..first]
+                    .iter()
+                    .any(|token| matches!(token, Token::Newline))
+            })
+    }
+
     /// Whether the comment being pushed is a block comment that code follows
     /// on its source line: padding moves no such comment.
     fn block_comment_precedes_code_on_its_line(&self, kind: CommentKind) -> bool {
@@ -4354,6 +4685,15 @@ impl FormatEngine<'_> {
         .then(|| self.layout.line_state.trailing_comment_columns.pop_front())
         .flatten()
         .map(|column| column.saturating_sub(self.broken_off_leading_comments_width()));
+        // The gap add-braces set after the statement it braced stands as set.
+        if self
+            .comments
+            .pushed_comment
+            .is_some_and(|index| self.added_comment_gaps.contains(&index))
+        {
+            self.current.push_str(&gap);
+            return;
+        }
         // A closer after code on its source line runs back into that line,
         // which keeps the gap before its comment.
         if !gap.is_empty() && self.run_in_closer_row() == Some(false) {
@@ -4401,7 +4741,7 @@ impl FormatEngine<'_> {
             && trimmed_code == "{"
             && (self.in_initializer_brace() || self.current_inline_array_column().is_some())
         {
-            let gap = initializer_brace_line_comment_gap(self.options, &self.current);
+            let gap = initializer_brace_comment_gap(&self.output_options(), &self.current);
             self.current.push_str(&gap);
             return;
         }
@@ -4439,11 +4779,14 @@ impl FormatEngine<'_> {
             return;
         }
         // A statement broken off its header's line, or off a block's
-        // closer, keeps the gap before its comment.
+        // closer, keeps the gap before its comment, as does a list broken
+        // off its declaration's head.
         if target_column.is_some()
             && !gap.is_empty()
             && !gap.contains('\t')
-            && (self.current_line_broke_off_header() || self.current_line_broke_off_block_closer())
+            && (self.current_line_broke_off_header()
+                || self.current_line_broke_off_block_closer()
+                || self.current_line_broke_off_aggregate_head())
         {
             // Padding the statement takes from the gap as on any line; a
             // closer added before a closing header gave the gap its columns.
@@ -4497,7 +4840,8 @@ impl FormatEngine<'_> {
         let code_len = self.current_char_len() - out_indent;
         let gap_chars = gap.chars().count();
         // A block comment set against the code stays there unless padding
-        // moved the code into its column, when astyle parts them.
+        // moved the code into the column of one ending the line, when
+        // astyle parts them.
         if kind == CommentKind::Block && gap.is_empty() {
             let ends_line = !self.token_input.has_next_meaningful_token
                 || self
@@ -4505,9 +4849,12 @@ impl FormatEngine<'_> {
                     .next_input_whitespace
                     .as_deref()
                     .is_some_and(|whitespace| whitespace.contains('\n'));
+            if !ends_line {
+                return;
+            }
             if code_len > target_column {
                 self.ensure_space();
-            } else if ends_line {
+            } else {
                 // Code unpadding shortened keeps a trailing comment at its
                 // column.
                 self.current.push_str(&" ".repeat(target_column - code_len));
@@ -4704,6 +5051,12 @@ pub(crate) struct CommentState {
     /// A block added around a statement is being closed on a line of its
     /// own.
     pub(crate) closing_broken_added_block: bool,
+    /// The `;` of a statement braces are being added around on rows of
+    /// their own, the comment after it moving onto its row.
+    pub(crate) broken_added_block_semicolon: Option<usize>,
+    /// The closer, none for an added one, whose comment already joined its
+    /// block's first statement row.
+    pub(crate) joined_closer_comment: Option<Option<usize>>,
     pub(crate) block_comment_close_paren_ends_declaration: bool,
     pub(crate) previous_block_comment_close_paren_ended_declaration: bool,
     /// Source token index of the comment being pushed, of either kind.
@@ -4715,13 +5068,13 @@ fn strip_block_comment_line(
     line: &str,
     is_opener: bool,
     prefix: &str,
-    opener_source_column: usize,
+    row_trim: &mut usize,
+    tab_extra: usize,
 ) -> String {
     let indent_len = options.indent_width;
     let tab_width = options.tab_width.max(1);
-    let chars: Vec<char> = line.chars().collect();
-
     if is_opener {
+        let chars: Vec<char> = line.chars().collect();
         let Some(mut content_start) = chars[2..]
             .iter()
             .position(|&ch| ch != ' ' && ch != '\t')
@@ -4746,78 +5099,54 @@ fn strip_block_comment_line(
         return format!("{prefix}{head}{}{}", " ".repeat(insert), tail.trimmed_end());
     }
 
-    let Some(first) = chars.iter().position(|&ch| ch != ' ' && ch != '\t') else {
+    // A row loses its indent up to the opener's as the rows of any comment
+    // do, then its prefix: a `*` past the indent goes, with the text it
+    // leads set at least one indent in unless a tab stands before it.
+    let (kept, kept_column) = astyle_comment_row_rest_at(line, row_trim, tab_extra, tab_width);
+    // Converted tabs are spaces before the prefix goes.
+    let converted;
+    let kept = if options.convert_tabs && kept.contains('\t') {
+        let lead = leading_whitespace_len(kept);
+        converted = format!(
+            "{}{}",
+            blanks_to_spaces(&kept[..lead], kept_column, tab_width),
+            &kept[lead..]
+        );
+        converted.as_str()
+    } else {
+        kept
+    };
+    let Some(first) = kept.find(|ch| ch != ' ' && ch != '\t') else {
         return String::new();
     };
-    if chars[first] == '*' && chars.get(first + 1) == Some(&'/') {
-        return format!("{prefix}*/");
-    }
-    if chars[first] == '*' {
-        let Some(second) = chars[first + 1..]
-            .iter()
-            .position(|&ch| ch != ' ' && ch != '\t')
-            .map(|pos| first + 1 + pos)
-        else {
+    let rest = &kept[first..];
+    if let Some(after_star) = rest.strip_prefix('*') {
+        if after_star.starts_with('/') {
+            return format!("{prefix}*/");
+        }
+        let Some(gap) = after_star.find(|ch| ch != ' ' && ch != '\t') else {
             return String::new();
         };
-        if chars[second] == '*' {
-            let rel =
-                visual_column_at(&chars, first, tab_width).saturating_sub(opener_source_column);
-            let content: String = chars[first..].iter().collect();
-            return format!("{prefix}{}{}", " ".repeat(rel), content.trimmed_end());
+        let second = first + 1 + gap;
+        if kept[second..].starts_with('*') {
+            return format!("{prefix}{}", kept.trimmed_end());
         }
-        // A tab before the text leaves the line as it was, less its `*`.
-        let own_lead = lead_past_column(&chars[..first], opener_source_column, tab_width);
-        if own_lead.contains(&'\t') || chars[first + 1..second].contains(&'\t') {
-            let mut kept: String = own_lead.iter().chain(&chars[first + 1..]).collect();
-            kept = kept.trimmed_end().to_string();
-            if kept.ends_with('*') {
-                kept.pop();
-                kept = kept.trimmed_end().to_string();
-            }
-            return format!("{prefix}{kept}");
-        }
-        let rel = visual_column_at(&chars, second, tab_width)
-            .saturating_sub(opener_source_column)
-            .max(indent_len);
-        let mut content = chars[second..]
-            .iter()
-            .collect::<String>()
-            .trimmed_end()
-            .to_string();
-        if content.ends_with('*') {
-            content.pop();
-            content = content.trimmed_end().to_string();
-        }
-        return format!("{prefix}{}{content}", " ".repeat(rel));
-    }
-    let content: String = chars[first..].iter().collect();
-    // A line indented with a tab past the opener's column keeps its indent.
-    let own_lead = lead_past_column(&chars[..first], opener_source_column, tab_width);
-    if own_lead.contains(&'\t') {
-        let lead: String = own_lead.iter().collect();
-        return format!("{prefix}{lead}{}", content.trimmed_end());
-    }
-    let rel = visual_column_at(&chars, first, tab_width)
-        .saturating_sub(opener_source_column)
-        .max(indent_len);
-    format!("{prefix}{}{}", " ".repeat(rel), content.trimmed_end())
-}
-
-/// The part of the leading whitespace `lead` past visual column `column`.
-fn lead_past_column(lead: &[char], column: usize, tab_width: usize) -> &[char] {
-    let mut width = 0;
-    for (index, &ch) in lead.iter().enumerate() {
-        if width >= column {
-            return &lead[index..];
-        }
-        width += if ch == '\t' {
-            tab_width - width % tab_width
+        let row = if kept[..second].contains('\t') {
+            format!("{}{}", &kept[..first], &kept[first + 1..])
         } else {
-            1
+            format!("{}{}", " ".repeat(second.max(indent_len)), &kept[second..])
         };
+        let mut row = row.trimmed_end().to_string();
+        if row.ends_with('*') {
+            row.pop();
+            row = row.trimmed_end().to_string();
+        }
+        return format!("{prefix}{row}");
     }
-    &lead[lead.len()..]
+    if !kept[..first].contains('\t') && first < indent_len {
+        return format!("{prefix}{}{}", " ".repeat(indent_len), rest.trimmed_end());
+    }
+    format!("{prefix}{}", kept.trimmed_end())
 }
 
 /// Whether a line holds code or another block comment after its first
@@ -4838,6 +5167,17 @@ fn astyle_comment_row_rest<'a>(
     opener_tab_extra: usize,
     tab_width: usize,
 ) -> &'a str {
+    astyle_comment_row_rest_at(line, trim, opener_tab_extra, tab_width).0
+}
+
+/// `astyle_comment_row_rest` with the column astyle reads the rest's first
+/// character at, from which it converts the tabs left in the rest.
+fn astyle_comment_row_rest_at<'a>(
+    line: &'a str,
+    trim: &mut usize,
+    opener_tab_extra: usize,
+    tab_width: usize,
+) -> (&'a str, usize) {
     let bytes = line.as_bytes();
     let mut tab_extra = 0usize;
     let mut index = 0usize;
@@ -4849,10 +5189,25 @@ fn astyle_comment_row_rest<'a>(
                 if index < tab_extra {
                     *trim = index + opener_tab_extra;
                 }
-                break;
+                return (&line[index..], opener_tab_extra + index);
             }
         }
         index += 1;
     }
-    &line[index..]
+    // A rest whose dropped tabs took other columns than the opener's indent
+    // starts at the trimmed column.
+    let column = if tab_extra == opener_tab_extra {
+        opener_tab_extra + index
+    } else {
+        (*trim).max(opener_tab_extra)
+    };
+    (&line[index..], column)
+}
+
+/// Whether a token is past the blanks and comments after a comment.
+fn is_past_comments(token: &Token) -> bool {
+    !matches!(
+        token,
+        Token::Whitespace(_) | Token::Newline | Token::Comment(..)
+    )
 }

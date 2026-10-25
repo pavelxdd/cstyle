@@ -1195,7 +1195,7 @@ fn linux_preserves_source_break_before_control_header_condition_paren() {
 }
 
 #[test]
-fn catch_like_macro_after_block_stays_attached() {
+fn macro_after_closing_brace_stays_on_its_line() {
     let source = fixture!(
         "void f()",
         "{",
@@ -2266,12 +2266,14 @@ fn else_after_commented_braceless_while_body_matches_if_indent() {
 }
 #[test]
 fn else_after_braceless_body_following_compound_literal_condition_matches_else_if() {
+    // A literal in a call in the condition leaves the header to its body,
+    // which stands a level in as after any condition.
     assert_eq!(
         format_exact(
             "void f(void)\n{\n  if (a)\n    n = 2;\n  else if (!equal (&colors[0], (&(Color) {\n    .x = 1\n  })))\n    n = 1;\n  else\n    n = 0;\n}\n",
             &FormatOptions::default(),
         ),
-        "void f(void)\n{\n    if (a)\n        n = 2;\n    else if (!equal (&colors[0], (&(Color) {\n        .x = 1\n    })))\n    n = 1;\n    else\n        n = 0;\n}\n",
+        "void f(void)\n{\n    if (a)\n        n = 2;\n    else if (!equal (&colors[0], (&(Color) {\n        .x = 1\n    })))\n        n = 1;\n    else\n        n = 0;\n}\n",
     );
 }
 #[test]
@@ -2383,7 +2385,8 @@ fn whitesmith_split_do_after_malformed_colon_owns_next_source_line() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=whitesmith".to_owned()])
         .expect("valid options");
-    let expected = b"+:\n    do\n        f";
+    // A label outside any block adds no level to what follows it.
+    let expected = b"+:\ndo\n    f";
 
     assert_eq!(
         format_bytes(b"+:do\nf", &options).expect("format bytes"),
@@ -2721,7 +2724,7 @@ fn pico_kept_else_block_ends_a_broken_else_if_chain() {
 #[test]
 fn statement_broken_after_a_one_line_header_body_stays_broken() {
     let options = FormatOptions::default();
-    let input = "int f(int x)\n{\n    if (x) return\n            0;\n    else if (x > 1) return\n            1;\n    if (x) goto\n        fail;\n    return 3;\nfail:\n    return 4;\n}\n";
+    let input = "int f(int x)\n{\n    if (x) return\n            0;\n    else if (x > 1) return\n            1;\n    if (x) goto\n            fail;\n    return 3;\nfail:\n    return 4;\n}\n";
     let first = format_exact(input, &options);
 
     assert_eq!(first, input);

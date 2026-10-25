@@ -1,19 +1,15 @@
 use crate::config::{BraceStyle, FormatOptions, IndentStyle};
-use crate::formatter::braces::classification::{
-    is_lambda_body_header, is_namespace_or_module_block_header,
-};
+use crate::formatter::braces::classification::is_namespace_or_module_block_header;
 use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
+use crate::formatter::braces::initializers::runs_list_rows_in;
 use crate::formatter::constructs::{labels, switch_cases};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{self, Token};
-use crate::formatter::state::indentation::LineKind;
-use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     ContainsAnyByte, is_bare_comment_line, line_ends_with_comment, line_paren_imbalance,
     preprocessor_directive, trailing_comment_split_limit,
 };
-use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 
 pub(crate) struct MaxLengthBraceRowLayout {
@@ -23,14 +19,22 @@ pub(crate) struct MaxLengthBraceRowLayout {
     pub(crate) attaches_lisp_closer: bool,
 }
 
-pub(crate) fn postprocess_brace_style(output: String, options: &FormatOptions) -> String {
+/// `run_in_list_braces` are the output lines holding a list's lone brace
+/// that the row closing the list runs into.
+pub(crate) fn postprocess_brace_style(
+    output: String,
+    options: &FormatOptions,
+    run_in_list_braces: &[usize],
+) -> String {
     match options.brace_style {
         BraceStyle::Pico => {
-            let run_in = run_in_horstmann_opening_braces(&output, options);
-            attach_lisp_closing_braces(&run_in, options.line_break())
+            let run_in = run_in_horstmann_opening_braces(&output, options, run_in_list_braces);
+            attach_lisp_closing_braces(&run_in, options)
         }
-        BraceStyle::Lisp => attach_lisp_closing_braces(&output, options.line_break()),
-        BraceStyle::Horstmann => run_in_horstmann_opening_braces(&output, options),
+        BraceStyle::Lisp => attach_lisp_closing_braces(&output, options),
+        BraceStyle::Horstmann => {
+            run_in_horstmann_opening_braces(&output, options, run_in_list_braces)
+        }
         _ => output,
     }
 }
@@ -102,43 +106,31 @@ impl FormatEngine<'_> {
             if next_line.trimmed().is_empty() || self.output[index].trimmed() != "{" {
                 continue;
             }
-            let next_line = self.output.remove(index + 1);
             // The tab pass leaves the fill before a comment alone, so it is
-            // written as the finished output indents.
+            // written as the finished output indents, in spaces when tabs
+            // are converted.
             let next_text = next_line.trimmed_start();
-            let fill = if next_text.starts_with("//") || next_text.starts_with("/*") {
-                horstmann_run_in_fill(&self.output[index], &next_line, &self.output_options())
-            } else {
-                horstmann_run_in_fill(&self.output[index], &next_line, self.options)
-            };
-            let merged = format!(
-                "{}{}{}",
-                self.output[index],
-                fill,
-                next_line.trimmed_start()
-            );
-            self.output.set(index, merged);
+            let fill =
+                if next_text.starts_with("/*") && !runs_list_rows_in(self.options.brace_style) {
+                    // A style that breaks braces keeps the gap the source left.
+                    self.output
+                        .line_tokens(index)
+                        .and_then(|span| self.tree.tokens.get(span.first + 1))
+                        .map_or_else(String::new, |token| match token {
+                            Token::Whitespace(gap) => gap.to_string(),
+                            _ => String::new(),
+                        })
+                } else if (next_text.starts_with("//") || next_text.starts_with("/*"))
+                    && !self.options.convert_tabs
+                {
+                    horstmann_run_in_fill(&self.output[index], next_line, &self.output_options())
+                } else {
+                    horstmann_run_in_fill(&self.output[index], next_line, self.options)
+                };
+            // The merged line holds the row's tokens, so later passes find
+            // the statement the row starts there.
+            self.output.join_into(index, index + 1, &fill);
         }
-    }
-
-    pub(crate) fn replayed_lisp_attached_suffix_indent_spaces(&self) -> Option<usize> {
-        if self.options.max_code_length.is_none()
-            || !matches!(
-                self.options.brace_style,
-                BraceStyle::Pico | BraceStyle::Lisp
-            )
-            || !self
-                .output
-                .last_line_outside_comment()
-                .is_some_and(|previous| {
-                    let code = self.output.code_trimmed_of(previous);
-                    code.trimmed_start().starts_with('}') && code.ends_with(',')
-                })
-        {
-            return None;
-        }
-        let spaces = self.layout.indentation.indent() * self.options.indent_width;
-        (spaces == self.token_input.input_source_indent).then_some(spaces)
     }
 
     pub(crate) fn max_length_brace_row_layout(
@@ -231,143 +223,6 @@ impl FormatEngine<'_> {
             attaches_lisp_closer,
         }
     }
-
-    pub(crate) fn try_emit_whitesmith_lambda_close(&mut self, line: &LineView<'_>) -> bool {
-        let line_trimmed = line.trimmed();
-        if !(matches!(
-            self.options.brace_style,
-            BraceStyle::Whitesmith | BraceStyle::Vtk
-        ) && line_trimmed == "};"
-            && self
-                .output
-                .scoped()
-                .iter()
-                .rev()
-                .take(4)
-                .any(|line| is_lambda_body_header(line.trimmed_end())))
-        {
-            return false;
-        }
-        let base = self
-            .layout
-            .indentation
-            .line_indent(LineKind::Normal, self.options);
-        let indent = if self.options.brace_style == BraceStyle::Vtk && base == 0 {
-            base
-        } else {
-            base + 1
-        };
-        self.push_output_line(line_trimmed, indent);
-        true
-    }
-
-    pub(crate) fn try_split_lambda_body_header(&mut self, line: &LineView<'_>) -> bool {
-        if !matches!(
-            self.options.brace_style,
-            BraceStyle::Allman
-                | BraceStyle::Whitesmith
-                | BraceStyle::Vtk
-                | BraceStyle::Gnu
-                | BraceStyle::Horstmann
-        ) {
-            return false;
-        }
-        let Some(open) = line.rfind('{') else {
-            return false;
-        };
-        // A body that closes on the line was kept whole; splitting the
-        // header off would drop it.
-        if !is_lambda_body_header(line[..open].trimmed_end())
-            || line[open + 1..].contains('}')
-            || self.pending_brace_stands_in_brace_list()
-        {
-            return false;
-        }
-        self.finish_line_text(line[..open].trimmed_end());
-        if matches!(
-            self.options.brace_style,
-            BraceStyle::Whitesmith | BraceStyle::Vtk
-        ) {
-            let base = self
-                .layout
-                .indentation
-                .line_indent(LineKind::Normal, self.options);
-            self.push_output_line("{", base + 1);
-        } else {
-            self.finish_line_text("{");
-        }
-        true
-    }
-
-    /// Whether the `{` ending the pending line stands among a brace list's
-    /// elements, which keep their braces on their rows.
-    fn pending_brace_stands_in_brace_list(&self) -> bool {
-        let groups = &self.tree.groups;
-        self.output
-            .pending_tokens()
-            .and_then(|span| self.tree.previous_code_token(span.last + 1))
-            .filter(|&brace| matches!(self.tree.tokens[brace], Token::Symbol('{')))
-            .and_then(|brace| groups.enclosing(brace))
-            .is_some_and(|list| {
-                matches!(
-                    self.tree.blocks.kind(list),
-                    Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
-                )
-            })
-    }
-
-    pub(crate) fn try_split_operator_body(&mut self, line: &LineView<'_>) -> bool {
-        if !matches!(
-            self.options.brace_style,
-            BraceStyle::Allman
-                | BraceStyle::Vtk
-                | BraceStyle::Gnu
-                | BraceStyle::Whitesmith
-                | BraceStyle::Horstmann
-        ) {
-            return false;
-        }
-        let Some(open) = line.rfind('{') else {
-            return false;
-        };
-        let Some(close) = line.rfind('}') else {
-            return false;
-        };
-        if !(open < close
-            && line[..open].contains("operator")
-            && line[..open].trimmed_end().ends_with(')'))
-        {
-            return false;
-        }
-        let head = line[..open].trimmed_end();
-        let body = line[open + 1..close].trimmed();
-        let base = self
-            .layout
-            .indentation
-            .line_indent(LineKind::Normal, self.options);
-        if self.options.brace_style == BraceStyle::Horstmann {
-            self.push_output_line(head, base);
-            if !body.is_empty() {
-                self.push_output_line(&format!("{{   {body}"), base);
-            } else {
-                self.push_output_line("{", base);
-            }
-            self.push_output_line("}", base);
-            return true;
-        }
-        let brace_indent = if self.options.brace_style == BraceStyle::Whitesmith {
-            base + 1
-        } else {
-            base
-        };
-        self.push_output_line(head, base);
-        self.push_output_line("{", brace_indent);
-        if !body.is_empty() {
-            self.push_output_line(body, base + 1);
-        }
-        self.push_output_line("}", brace_indent);
-        true
-    }
 }
 
 fn split_output_lines<'a>(output: &'a str, line_break: &str) -> Vec<&'a str> {
@@ -404,7 +259,8 @@ fn raw_literal_lines(output: &str, line_break: &str) -> Vec<bool> {
     raw_lines
 }
 
-fn attach_lisp_closing_braces(output: &str, line_break: &str) -> String {
+fn attach_lisp_closing_braces(output: &str, options: &FormatOptions) -> String {
+    let line_break = options.line_break();
     let raw_lines = raw_literal_lines(output, line_break);
     let mut lines: Vec<String> = Vec::new();
     // The columns rows of a paren a joined closer's line opens move by, and
@@ -448,13 +304,19 @@ fn attach_lisp_closing_braces(output: &str, line_break: &str) -> String {
             // astyle measures a paren the line leaves open from the joined
             // line's text at the closer's level.
             let (_, opens) = line_paren_imbalance(trimmed);
-            // A paren that ends the line takes an indent, not its column.
-            if opens.last().is_some_and(|&column| {
-                !trimmed[column + 1..trailing_comment_split_limit(trimmed).max(column + 1)]
-                    .trim()
-                    .is_empty()
-            }) {
-                paren_shift = Some((previous.trimmed_start().len(), opens.len()));
+            // A paren that ends the line takes an indent, not its column,
+            // as every paren does when parens indent.
+            if !options.indent_after_parens
+                && opens.last().is_some_and(|&column| {
+                    !trimmed[column + 1..trailing_comment_split_limit(trimmed).max(column + 1)]
+                        .trim()
+                        .is_empty()
+                })
+            {
+                let tab_width = options.tab_width.max(1);
+                let shift = visual_width_from(previous, 0, tab_width)
+                    - leading_visual_width(previous, tab_width);
+                paren_shift = Some((shift, opens.len()));
             }
             // The brace moves up a column and its comment follows it.
             let code = trimmed[..trailing_comment_split_limit(trimmed)].trimmed_end();
@@ -480,8 +342,22 @@ fn attach_lisp_closing_braces(output: &str, line_break: &str) -> String {
     finish_postprocessed_lines(lines, line_break, output.ends_with(line_break))
 }
 
-fn run_in_horstmann_opening_braces(output: &str, options: &FormatOptions) -> String {
+fn run_in_horstmann_opening_braces(
+    output: &str,
+    options: &FormatOptions,
+    run_in_list_braces: &[usize],
+) -> String {
     let line_break = options.line_break();
+    // The gap before a row closing its list on the brace's line is no
+    // indentation, which converted tabs leave in spaces.
+    let list_fill_options = (options.convert_tabs
+        && options.indent_style != IndentStyle::Spaces
+        && !run_in_list_braces.is_empty())
+    .then(|| {
+        let mut spaced = options.clone();
+        spaced.indent_style = IndentStyle::Spaces;
+        spaced
+    });
     let raw_lines = raw_literal_lines(output, line_break);
     let mut lines = Vec::new();
     let input = split_output_lines(output, line_break);
@@ -513,8 +389,8 @@ fn run_in_horstmann_opening_braces(output: &str, options: &FormatOptions) -> Str
                         && !run_in_next_line_is_access_label(brace, next, options)
                 })
         };
-        // A brace leading a row runs into the block comment after it.
-        if let Some(comment) = brace_led_block_comment(line)
+        // A brace leading a row runs into the comment after it.
+        if let Some(comment) = brace_led_comment(line)
             && !raw_lines[index]
         {
             let brace = &line[..line.len() - line.trimmed_start().len() + 1];
@@ -533,12 +409,16 @@ fn run_in_horstmann_opening_braces(output: &str, options: &FormatOptions) -> Str
             let mut at = index + 1;
             loop {
                 let next = input[at];
-                let fill = horstmann_run_in_fill(&brace, next, options);
+                let fill_options = list_fill_options
+                    .as_ref()
+                    .filter(|_| run_in_list_braces.binary_search(&(at - 1)).is_ok())
+                    .unwrap_or(options);
+                let fill = horstmann_run_in_fill(&brace, next, fill_options);
                 let next = next.trimmed_start().to_string();
                 joined.push_str(&fill);
-                // A nested brace runs into its block comment as a brace
+                // A nested brace runs into its comment as a brace
                 // leading the row does.
-                if let Some(comment) = brace_led_block_comment(&next)
+                if let Some(comment) = brace_led_comment(&next)
                     && !raw_lines[at]
                 {
                     let column = visual_width_from(&joined, 0, options.tab_width.max(1));
@@ -570,16 +450,18 @@ fn run_in_horstmann_opening_braces(output: &str, options: &FormatOptions) -> Str
     finish_postprocessed_lines(lines, line_break, output.ends_with(line_break))
 }
 
-/// The block comment after the `{` that leads `line`, when the comment is
-/// all that follows the brace or runs past the line.
-fn brace_led_block_comment(line: &str) -> Option<&str> {
+/// The comment after the `{` that leads `line`: a line comment, or a block
+/// comment that is all that follows the brace or runs past the line.
+fn brace_led_comment(line: &str) -> Option<&str> {
     line.trimmed_start()
         .strip_prefix('{')
         .filter(|rest| rest.starts_with_any(b" \t"))
         .map(str::trim_start)
         .filter(|rest| {
-            rest.starts_with("/*")
-                && (rest.ends_with("*/") && rest.matches("*/").count() == 1 || !rest.contains("*/"))
+            rest.starts_with("//")
+                || rest.starts_with("/*")
+                    && (rest.ends_with("*/") && rest.matches("*/").count() == 1
+                        || !rest.contains("*/"))
         })
 }
 

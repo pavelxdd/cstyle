@@ -11,10 +11,6 @@ use crate::source::lex::{is_word_char, trailing_word};
 pub(crate) struct CompoundLiteralState {
     pub(crate) forced_break_depths: Vec<usize>,
     pub(crate) just_closed: bool,
-    pub(crate) after_comma: bool,
-    pub(crate) arg_indent_spaces: Option<usize>,
-    pub(crate) arg_paren_depth: Option<usize>,
-    pub(crate) arg_brace_depth: Option<usize>,
 }
 
 impl FormatEngine<'_> {
@@ -27,10 +23,19 @@ impl FormatEngine<'_> {
             return false;
         };
         self.multiline_literal_parens.get_or_init(|| {
-            groups
+            // Only the parens around a compound literal can hold one.
+            let mut holds = vec![false; groups.len()];
+            for literal in groups
                 .ids()
-                .map(|id| self.group_holds_multiline_compound_literal(id))
-                .collect()
+                .filter(|&id| self.tree.blocks.kind(id) == Some(BlockKind::CompoundLiteral))
+            {
+                if let Some(parent) = groups.get(literal).parent
+                    && !holds[parent.index()]
+                {
+                    holds[parent.index()] = self.group_holds_multiline_compound_literal(parent);
+                }
+            }
+            holds
         })[parens.index()]
     }
 
@@ -84,6 +89,83 @@ impl FormatEngine<'_> {
             .then_some(open)
     }
 
+    /// The `(` of the cast before the compound literal braces opened at
+    /// `brace`. A name or a closing delimiter before the parens makes them
+    /// a call's or a header's, not a cast.
+    pub(crate) fn compound_literal_cast(&self, brace: usize) -> Option<usize> {
+        let groups = &self.tree.groups;
+        let literal = groups.opened_at(brace)?;
+        if self.tree.blocks.kind(literal) != Some(BlockKind::CompoundLiteral) {
+            return None;
+        }
+        let cast = groups
+            .get(groups.closed_at(self.tree.previous_code_token(brace)?)?)
+            .open;
+        let follows_name = self.tree.previous_code_token(cast).is_some_and(|before| {
+            matches!(
+                &self.tree.tokens[before],
+                Token::Word(_) | Token::Symbol(')' | ']')
+            )
+        });
+        (!follows_name).then_some(cast)
+    }
+
+    /// Whether the token at `index` stands inside parens. A row it leads
+    /// stands as any argument row, a compound literal opening there or not.
+    pub(crate) fn token_in_parens(&self, index: usize) -> bool {
+        let groups = &self.tree.groups;
+        groups
+            .enclosing(index)
+            .is_some_and(|group| groups.get(group).delimiter == Delimiter::Paren)
+    }
+
+    /// Whether VTK keeps the braces of the outer list `group` flush with
+    /// its declaration: at file scope, in a namespace or in a class. In code
+    /// or an `extern "C"` block they stand indented.
+    pub(crate) fn vtk_flush_scope(&self, group: GroupId) -> bool {
+        self.tree.groups.get(group).parent.is_none_or(|parent| {
+            matches!(
+                self.tree.blocks.kind(parent),
+                Some(BlockKind::Namespace | BlockKind::Aggregate)
+            )
+        })
+    }
+
+    /// Whether the token at `index` stands in a control header's parens, as
+    /// a range-for's list does, or in a call among them: what it opens
+    /// continues the header.
+    pub(crate) fn token_in_header_parens(&self, index: usize) -> bool {
+        self.header_word_of_parens_holding(index).is_some()
+    }
+
+    /// Whether the token at `index` stands in a `for` header's parens.
+    pub(crate) fn token_in_for_header(&self, index: usize) -> bool {
+        self.header_word_of_parens_holding(index).is_some_and(
+            |word| matches!(&self.tree.tokens[word], Token::Word(word) if word == "for"),
+        )
+    }
+
+    /// The header word whose parens hold the token at `index`, through any
+    /// parens or brackets nested in them.
+    fn header_word_of_parens_holding(&self, index: usize) -> Option<usize> {
+        let groups = &self.tree.groups;
+        let mut enclosing = groups.enclosing(index);
+        while let Some(group) = enclosing {
+            let group = groups.get(group);
+            if group.delimiter == Delimiter::Brace {
+                return None;
+            }
+            if group.delimiter == Delimiter::Paren
+                && let Some(before) = self.tree.previous_code_token(group.open)
+                && matches!(&self.tree.tokens[before], Token::Word(word) if language::is_header(word))
+            {
+                return Some(before);
+            }
+            enclosing = group.parent;
+        }
+        None
+    }
+
     /// The `(` that ends its line and opens the parens holding the token at
     /// `index`, when they hold a compound literal spanning lines. The
     /// arguments of such a call stand a level past the line of its `(`,
@@ -129,7 +211,8 @@ pub(crate) fn line_ends_compound_literal_cast(line: &str) -> bool {
 }
 
 /// Whether `text` ends with the arguments of a named template, the `<` that
-/// opens them right after the name.
+/// opens them right after the name, or with a lambda's template parameters
+/// after its captures.
 fn ends_with_template_arguments(text: &str) -> bool {
     let bytes = text.as_bytes();
     let mut depth = 0usize;
@@ -139,7 +222,10 @@ fn ends_with_template_arguments(text: &str) -> bool {
             b'<' => {
                 depth -= 1;
                 if depth == 0 {
-                    return text[..index].chars().next_back().is_some_and(is_word_char);
+                    return text[..index]
+                        .chars()
+                        .next_back()
+                        .is_some_and(|ch| is_word_char(ch) || ch == ']');
                 }
             }
             b';' | b'{' | b'}' => return false,

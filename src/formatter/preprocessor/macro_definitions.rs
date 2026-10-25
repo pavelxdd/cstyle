@@ -1,6 +1,8 @@
 use crate::config::{BraceStyle, FormatOptions, MinConditionalIndent};
+use crate::formatter::constructs::labels;
 use crate::formatter::continuation::{min_conditional_indent_spaces, operator_chains};
 use crate::formatter::engine::FormatEngine;
+use crate::formatter::syntax::{assignment_declarator_offset, declaration_head_declarator_offset};
 use crate::formatter::text::columns::{leading_visual_width, visual_column_at, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
@@ -30,6 +32,7 @@ struct DefineBodyLineInfo {
     leading_close: bool,
     is_case_label: bool,
     ends_semicolon: bool,
+    ends_comma: bool,
     /// The closing `;` ends the statement rather than a clause of a
     /// `for` header whose parens stay open.
     semicolon_ends_statement: bool,
@@ -208,6 +211,7 @@ fn scan_define_body_line(content: &str) -> DefineBodyLineInfo {
         leading_close: content.trimmed_start().starts_with('}'),
         is_case_label: is_define_case_label(content),
         ends_semicolon,
+        ends_comma: last_code == Some(','),
         semicolon_ends_statement,
         paren_balance,
         is_header,
@@ -269,44 +273,264 @@ fn strip_define_backslash(line: &str) -> (&str, bool) {
 }
 
 fn define_replacement_text(first_line: &str) -> &str {
-    let (body, _) = strip_define_backslash(first_line);
-    let trimmed = body.trimmed_start();
-    let rest = match trimmed.strip_prefix('#') {
-        Some(after_pound) => after_pound.trimmed_start(),
-        None => return "",
+    let Some(after_name) = define_text_after_name(first_line) else {
+        return "";
     };
+    let after_params = if after_name.starts_with('(') {
+        &after_name[define_parameters_end(after_name).unwrap_or(after_name.len())..]
+    } else {
+        after_name
+    };
+    after_params.trimmed_start()
+}
+
+/// The text of the `#define` on `first_line` past its name, up to a
+/// continuing backslash.
+fn define_text_after_name(first_line: &str) -> Option<&str> {
+    let (body, _) = strip_define_backslash(first_line);
+    let rest = body.trimmed_start().strip_prefix('#')?.trimmed_start();
     let directive_end = rest
         .find(|ch: char| !is_identifier_continue(ch))
         .unwrap_or(rest.len());
     if &rest[..directive_end] != "define" {
-        return "";
+        return None;
     }
     let after_directive = rest[directive_end..].trimmed_start();
     let name_end = after_directive
         .find(|ch: char| !is_identifier_continue(ch))
         .unwrap_or(after_directive.len());
-    let after_name = &after_directive[name_end..];
-    let after_params = if after_name.starts_with('(') {
-        let mut depth = 0usize;
-        let mut end = after_name.len();
-        for (index, ch) in after_name.char_indices() {
+    Some(&after_directive[name_end..])
+}
+
+/// The end of the parameter list `after_name` opens, when it closes there.
+fn define_parameters_end(after_name: &str) -> Option<usize> {
+    let mut depth = 0usize;
+    for (index, ch) in after_name.char_indices() {
+        match ch {
+            '(' => depth += 1,
+            ')' => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return Some(index + 1);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Whether the parameter list of the `#define` on `first_line` goes on
+/// past the line.
+fn define_parameters_continue(first_line: &str) -> bool {
+    define_text_after_name(first_line).is_some_and(|after_name| {
+        after_name.starts_with('(') && define_parameters_end(after_name).is_none()
+    })
+}
+
+/// The rows of a define as astyle reads them: a brace that opens no block,
+/// as one opening a list after `=` or `,`, reads as a paren, and the rows
+/// after it align past it as past any paren. Comments and literals stay
+/// as they are.
+fn define_rows_reading_list_braces_as_parens(
+    first: &str,
+    body_parts: &[&str],
+) -> (String, Vec<String>) {
+    let (first_body, _) = strip_define_backslash(first);
+    let replacement_start = first_body.len() - define_replacement_text(first).len();
+    // Whether each open brace opens a block.
+    let mut braces: Vec<bool> = Vec::new();
+    // The continuation and paren depth each open block brace saved.
+    let mut blocks: Vec<(bool, usize)> = Vec::new();
+    let mut paren_continuations: Vec<bool> = Vec::new();
+    let mut paren_depth = 0usize;
+    let mut questions = 0usize;
+    // Whether an assignment, a paren or a literal continues the statement.
+    let mut continuation = false;
+    let mut class_header = false;
+    // The define's name or parameters stand before its replacement.
+    let mut previous = Some(')');
+    let mut in_comment = false;
+    let mut rows = Vec::with_capacity(body_parts.len() + 1);
+    for (row_index, row) in std::iter::once(first)
+        .chain(body_parts.iter().copied())
+        .enumerate()
+    {
+        let (body, _) = strip_define_backslash(row);
+        let chars: Vec<char> = body.chars().collect();
+        let mut read: Vec<char> = row.chars().collect();
+        let mut index = if row_index == 0 {
+            body[..replacement_start].chars().count()
+        } else {
+            0
+        };
+        let mut quote = None;
+        let mut escaped = false;
+        while let Some(&ch) = chars.get(index) {
+            let next = chars.get(index + 1).copied();
+            if in_comment {
+                if ch == '*' && next == Some('/') {
+                    in_comment = false;
+                    index += 1;
+                }
+                index += 1;
+                continue;
+            }
+            if quote.is_some() {
+                advance_quoted_literal(ch, &mut quote, &mut escaped);
+                if quote.is_none() {
+                    continuation = true;
+                    previous = Some(ch);
+                }
+                index += 1;
+                continue;
+            }
+            if ch == '/' && next == Some('/') {
+                break;
+            }
+            if ch == '/' && next == Some('*') {
+                in_comment = true;
+                index += 2;
+                continue;
+            }
+            if ch == '"' || (ch == '\'' && !is_digit_separator(&chars, index)) {
+                quote = Some(ch);
+                index += 1;
+                continue;
+            }
+            if is_identifier_start(ch) {
+                let start = index;
+                while chars
+                    .get(index)
+                    .is_some_and(|&ch| is_identifier_continue(ch))
+                {
+                    index += 1;
+                }
+                let word: String = chars[start..index].iter().collect();
+                match word.as_str() {
+                    "struct" | "class" if paren_depth == 0 => class_header = true,
+                    "return" => continuation = true,
+                    _ => {}
+                }
+                previous = chars.get(index - 1).copied();
+                continue;
+            }
             match ch {
-                '(' => depth += 1,
-                ')' => {
-                    depth -= 1;
-                    if depth == 0 {
-                        end = index + 1;
-                        break;
+                '(' | '[' => {
+                    if ch == '(' {
+                        class_header = false;
+                    }
+                    if paren_depth == 0 {
+                        paren_continuations.push(continuation);
+                        continuation = true;
+                    }
+                    paren_depth += 1;
+                }
+                ')' | ']' => {
+                    paren_depth = paren_depth.saturating_sub(1);
+                    if paren_depth == 0
+                        && let Some(saved) = paren_continuations.pop()
+                    {
+                        continuation = saved;
                     }
                 }
+                '=' if next != Some('=') => {
+                    let before = index.checked_sub(1).map(|before| chars[before]);
+                    let shift = matches!(before, Some('<' | '>'))
+                        && index >= 2
+                        && Some(chars[index - 2]) == before;
+                    if shift || !matches!(before, Some('=' | '!' | '<' | '>')) {
+                        continuation = true;
+                    }
+                }
+                ';' if paren_depth == 0 => {
+                    continuation = false;
+                    class_header = false;
+                }
+                '?' => questions += 1,
+                ':' if next == Some(':') || index > 0 && chars[index - 1] == ':' => {}
+                ':' if questions > 0 => questions -= 1,
+                // A label's colon ends it as a `;` would, so a brace after
+                // it opens a block.
+                ':' if paren_depth == 0 && !class_header => {
+                    continuation = false;
+                    previous = Some(';');
+                    index += 1;
+                    continue;
+                }
+                '{' => {
+                    let next_code = chars[index + 1..]
+                        .iter()
+                        .find(|ch| !ch.is_whitespace())
+                        .copied();
+                    let opens_block = previous == Some('{') && braces.last() == Some(&true)
+                        || matches!(previous, Some('}' | ')' | ';' | '('))
+                        || previous.is_some_and(|ch| is_identifier_continue(ch) || ch == '.')
+                        || next_code == Some('{')
+                        || class_header
+                        || !continuation && !braces.contains(&true);
+                    braces.push(opens_block);
+                    if opens_block {
+                        blocks.push((continuation, paren_depth));
+                        paren_depth = 0;
+                        continuation = false;
+                        class_header = false;
+                    } else {
+                        paren_depth += 1;
+                        read[index] = '(';
+                    }
+                }
+                '}' => match braces.pop() {
+                    Some(true) => {
+                        (continuation, paren_depth) = blocks.pop().unwrap_or_default();
+                        class_header = false;
+                    }
+                    Some(false) => {
+                        paren_depth = paren_depth.saturating_sub(1);
+                        read[index] = ')';
+                    }
+                    None => {}
+                },
                 _ => {}
             }
+            if !ch.is_whitespace() {
+                previous = Some(ch);
+            }
+            index += 1;
         }
-        &after_name[end..]
-    } else {
-        after_name
-    };
-    after_params.trimmed_start()
+        rows.push(read.into_iter().collect());
+    }
+    let read_body = rows.split_off(1);
+    (rows.pop().unwrap_or_default(), read_body)
+}
+
+struct DefineClassBody {
+    depth: usize,
+    labeled: bool,
+    opened_by_class: bool,
+}
+
+/// Opens the class body a row's head opens, once its frame is pushed, and
+/// drops the bodies the row closed.
+fn track_define_class_bodies(bodies: &mut Vec<DefineClassBody>, frames: &[DefineFrame], row: &str) {
+    bodies.retain(|body| body.depth <= frames.len());
+    if frames.last() != Some(&DefineFrame::Brace)
+        || bodies.last().is_some_and(|body| body.depth == frames.len())
+    {
+        return;
+    }
+    let head = after_leading_comments(row);
+    let head = head
+        .strip_prefix("typedef")
+        .map_or(head, Trimmed::trimmed_start);
+    let keyword = leading_identifier(head);
+    if matches!(keyword, "class" | "struct" | "union") && row.trimmed_end().ends_with('{') {
+        bodies.push(DefineClassBody {
+            depth: frames.len(),
+            labeled: false,
+            opened_by_class: keyword == "class",
+        });
+    }
 }
 
 fn is_define_header_frame(frame: DefineFrame) -> bool {
@@ -523,11 +747,20 @@ fn define_assignment_align_column(line: &str, tab_width: usize) -> Option<usize>
     None
 }
 
+/// Whether the paren read at `index` of `read` is a list brace of
+/// `source` an assignment opens, whose rows astyle aligns past it at any
+/// column.
+fn assigned_list_brace(read: &[char], source: &[char], index: usize) -> bool {
+    source.get(index) == Some(&'{')
+        && read[..index].iter().rev().find(|ch| !ch.is_whitespace()) == Some(&'=')
+}
+
 /// The column the rows after a statement row with an open paren align at:
 /// the first character after the last open paren, a continuing backslash
 /// included, but at least the minimum conditional indent within a header.
 fn define_row_paren_continuation(
     line: &str,
+    source: &str,
     level_spaces: usize,
     options: &FormatOptions,
 ) -> Option<usize> {
@@ -541,6 +774,9 @@ fn define_row_paren_continuation(
         .map_or(open + 1, |offset| open + 1 + offset);
     let row_indent = leading_visual_width(line, options.tab_width);
     let mut column = visual_column_at(&full, next, options.tab_width);
+    if assigned_list_brace(&full, &source.chars().collect::<Vec<_>>(), open) {
+        return Some(column);
+    }
     let min = min_conditional_indent_spaces(options);
     if is_define_header_keyword(line) && column < level_spaces + min {
         column = row_indent + min;
@@ -616,6 +852,7 @@ fn define_row_anchor(anchors: &[(usize, usize)], row: &str) -> Option<usize> {
 /// included.
 fn update_define_expression_paren_anchors(
     line: &str,
+    source: &str,
     anchors: &mut Vec<(usize, usize)>,
     level_spaces: usize,
     extra: usize,
@@ -638,6 +875,7 @@ fn update_define_expression_paren_anchors(
     let (body, _) = strip_define_backslash(line);
     let chars: Vec<char> = body.chars().collect();
     let full: Vec<char> = line.trimmed_end().chars().collect();
+    let source: Vec<char> = source.chars().collect();
     // astyle aligns at the first character after the paren or the
     // assignment, a continuing backslash included.
     let register = |anchors: &Vec<(usize, usize)>, index: usize| {
@@ -646,6 +884,11 @@ fn update_define_expression_paren_anchors(
             .iter()
             .position(|ch| !ch.is_whitespace())
             .map(|offset| index + 1 + offset);
+        let limit = if assigned_list_brace(&full, &source, index) {
+            usize::MAX
+        } else {
+            limit
+        };
         match next {
             Some(next) if !options.indent_after_parens => {
                 let align = visual_column_at(&full, next, tab_width).saturating_sub(extra);
@@ -782,8 +1025,8 @@ impl FormatEngine<'_> {
         };
         let define_base = self.preprocessor_base_level();
         let define_prefix = self.options.indent_prefix(define_base);
-        let first_line = format!("{define_prefix}{}", first.trimmed_start());
-        self.adjust_and_publish_line(first_line.clone());
+        let source_first_line = format!("{define_prefix}{}", first.trimmed_start());
+        self.adjust_and_publish_line(source_first_line.clone());
 
         // astyle indents no body past a `#define` whose parameter list
         // continues on the next line.
@@ -795,21 +1038,40 @@ impl FormatEngine<'_> {
             } else {
                 1
             };
-        if let Some(spaces) =
-            define_expression_continuation_spaces(first.trimmed_start(), self.options.tab_width)
-                .map(|spaces| spaces + define_base * self.options.indent_width)
-            && define_body_is_expression_continuation(body_parts)
+        let (read_first, read_body) = define_rows_reading_list_braces_as_parens(first, body_parts);
+        let read_body: Vec<&str> = read_body.iter().map(String::as_str).collect();
+        let first_line = format!("{define_prefix}{}", read_first.trimmed_start());
+        if let Some(spaces) = define_expression_continuation_spaces(
+            read_first.trimmed_start(),
+            self.options.tab_width,
+        )
+        .map(|spaces| spaces + define_base * self.options.indent_width)
+            && define_body_is_expression_continuation(&read_body)
         {
-            self.push_define_rows_aligned_to_header(&first_line, body_parts, body_level, spaces);
+            self.push_define_rows_aligned_to_header(
+                &first_line,
+                &source_first_line,
+                &read_body,
+                body_parts,
+                body_level,
+                spaces,
+            );
             return;
         }
 
-        if define_body_is_expression_continuation(body_parts) {
-            self.push_define_expression_rows(body_parts, body_level);
+        if define_body_is_expression_continuation(&read_body) {
+            self.push_define_expression_rows(&read_body, body_parts, body_level);
             return;
         }
 
-        self.push_define_statement_rows(first, &first_line, body_parts, body_level);
+        self.push_define_statement_rows(
+            first,
+            &read_first,
+            &first_line,
+            &read_body,
+            body_parts,
+            body_level,
+        );
     }
 
     /// Lays out an expression body whose rows align to the expression that starts
@@ -817,7 +1079,9 @@ impl FormatEngine<'_> {
     fn push_define_rows_aligned_to_header(
         &mut self,
         first_line: &str,
+        source_first_line: &str,
         body_parts: &[&str],
+        source_parts: &[&str],
         body_level: usize,
         spaces: usize,
     ) {
@@ -826,6 +1090,7 @@ impl FormatEngine<'_> {
         let mut extra = 0;
         if update_define_expression_paren_anchors(
             first_line,
+            source_first_line,
             &mut paren_anchors,
             level_spaces,
             extra,
@@ -836,25 +1101,47 @@ impl FormatEngine<'_> {
         let mut line_spaces = paren_anchors
             .last()
             .map_or(spaces, |&(_, align)| align + extra);
+        // The parameters the `#define` line leaves open, which its rows
+        // continue; the replacement after a row closing them alone starts
+        // at the body's level.
+        let mut open_parameters = define_text_after_name(source_first_line)
+            .filter(|_| define_parameters_continue(source_first_line))
+            .map_or(0, |after_name| open_parens_after(0, after_name));
+        let mut replacement_starts = false;
         let mut previous_line = None;
         for (index, part) in body_parts.iter().enumerate() {
             if index > 0
                 && let Some(previous) = previous_line.as_deref()
             {
                 let current = strip_define_backslash(part).0.trimmed_start();
-                line_spaces = if let Some(anchor) = define_row_anchor(&paren_anchors, current) {
+                line_spaces = if replacement_starts {
+                    body_level * self.options.indent_width
+                } else if let Some(anchor) = define_row_anchor(&paren_anchors, current) {
                     anchor + extra
                 } else {
                     next_define_expression_indent(previous, spaces, self.options)
                 };
             }
+            replacement_starts = false;
+            if open_parameters > 0 {
+                let content = strip_define_backslash(part).0.trimmed_start();
+                let tail = parameters_tail(open_parameters, content);
+                if tail.len() < content.len() {
+                    open_parameters = 0;
+                    replacement_starts = tail.is_empty();
+                } else {
+                    open_parameters = open_parens_after(open_parameters, content);
+                }
+            }
             let prefix = self
                 .options
                 .continuation_indent_prefix(body_level, line_spaces);
             let line = format!("{prefix}{}", part.trimmed_start());
-            self.adjust_and_publish_line(line.clone());
+            let source_line = format!("{prefix}{}", source_parts[index].trimmed_start());
+            self.adjust_and_publish_line(source_line.clone());
             if update_define_expression_paren_anchors(
                 &line,
+                &source_line,
                 &mut paren_anchors,
                 level_spaces,
                 extra,
@@ -866,7 +1153,12 @@ impl FormatEngine<'_> {
         }
     }
 
-    fn push_define_expression_rows(&mut self, body_parts: &[&str], body_level: usize) {
+    fn push_define_expression_rows(
+        &mut self,
+        body_parts: &[&str],
+        source_parts: &[&str],
+        body_level: usize,
+    ) {
         let base_spaces = body_level * self.options.indent_width;
         let mut paren_anchors = Vec::new();
         let mut line_spaces = base_spaces;
@@ -884,9 +1176,11 @@ impl FormatEngine<'_> {
                 .options
                 .continuation_indent_prefix(body_level, line_spaces);
             let line = format!("{prefix}{}", part.trimmed_start());
-            self.adjust_and_publish_line(line.clone());
+            let source_line = format!("{prefix}{}", source_parts[index].trimmed_start());
+            self.adjust_and_publish_line(source_line.clone());
             update_define_expression_paren_anchors(
                 &line,
+                &source_line,
                 &mut paren_anchors,
                 base_spaces,
                 0,
@@ -914,13 +1208,19 @@ impl FormatEngine<'_> {
     fn push_define_statement_rows(
         &mut self,
         first: &str,
+        read_first: &str,
         first_line: &str,
         body_parts: &[&str],
+        source_parts: &[&str],
         body_level: usize,
     ) {
         let base_level = body_level;
         let mut frames: Vec<DefineFrame> = Vec::new();
-        let first_replacement = define_replacement_text(first);
+        // The class bodies open around the rows: the frame depth of each
+        // body, whether an access label stood in it, and whether `class`
+        // opened it.
+        let mut class_bodies: Vec<DefineClassBody> = Vec::new();
+        let first_replacement = define_replacement_text(read_first);
         if !first_replacement.is_empty() {
             let info = scan_define_body_line(first_replacement);
             let starts_with_assignment = first_replacement.starts_with('=')
@@ -931,11 +1231,15 @@ impl FormatEngine<'_> {
                 first_replacement.starts_with('{'),
                 starts_with_assignment,
             );
+            track_define_class_bodies(&mut class_bodies, &frames, first_replacement);
         }
         let first_indent = leading_visual_width(first_line, self.options.tab_width);
         // The column rows continued at before a paren opened, which they
         // resume once it closes.
         let mut column_before_parens = None;
+        // The column of a designator run into its list's brace, with the
+        // depth of that brace's frame: the list's rows stand there.
+        let mut run_in_designators: Vec<(usize, usize)> = Vec::new();
         let mut continuation_column =
             define_expression_continuation_spaces(first_line, self.options.tab_width)
                 // Parens indenting after them indent from the line.
@@ -972,6 +1276,7 @@ impl FormatEngine<'_> {
         let mut comment_structural_level = base_level;
         for (part_index, part) in body_parts.iter().enumerate() {
             let display = part.trimmed_start();
+            let source_display = source_parts[part_index].trimmed_start();
             let (body, had_backslash) = strip_define_backslash(part);
             let content = body.trimmed_start();
 
@@ -990,7 +1295,7 @@ impl FormatEngine<'_> {
                             as usize
                     };
                     format!(
-                        "{}{display}",
+                        "{}{source_display}",
                         self.options
                             .continuation_indent_prefix(comment_structural_level, column)
                     )
@@ -1116,6 +1421,34 @@ impl FormatEngine<'_> {
             } else {
                 structural_level
             };
+            // A class's access labels and members stand as in code: a label
+            // a level out from the members, or at them where the style
+            // indents class bodies, which sets the members a level past.
+            let class_body = class_bodies
+                .last_mut()
+                .filter(|body| body.depth == frames.len() && !info.leading_close);
+            let indents_class_bodies = self.options.indent_classes
+                || matches!(
+                    self.options.brace_style,
+                    BraceStyle::Whitesmith | BraceStyle::Ratliff
+                );
+            let mut label_half_indent = 0;
+            let structural_level = match class_body {
+                Some(body) if labels::is_access_label(content, &self.options.access_labels) => {
+                    body.labeled = true;
+                    if self.options.indent_modifiers && !indents_class_bodies {
+                        label_half_indent = self.options.indent_width / 2;
+                    }
+                    (structural_level + usize::from(indents_class_bodies)).saturating_sub(1)
+                }
+                Some(body) => {
+                    structural_level
+                        + usize::from(
+                            indents_class_bodies && (body.opened_by_class || body.labeled),
+                        )
+                }
+                None => structural_level,
+            };
 
             let is_structural = info.opens > 0 || info.closes > 0 || info.leading_close;
             let continued_parameter_opens_body = continuation_column.is_some()
@@ -1152,11 +1485,13 @@ impl FormatEngine<'_> {
             let prefix_structural_level = structural_level.saturating_sub(continuation_levels);
             let structural_prefix = self.options.continuation_indent_prefix(
                 prefix_structural_level,
-                structural_level * self.options.indent_width,
+                structural_level * self.options.indent_width + label_half_indent,
             );
             let keep_source_indent = self.options.min_conditional_indent
                 == MinConditionalIndent::Zero
                 && source_indent > 0
+                // Only a row no continuation anchors keeps its column.
+                && continuation_column.is_none()
                 && (content.starts_with('?')
                     || (content.starts_with(':') && !content.starts_with("::")));
             // A row led by `)` stands where its paren saved.
@@ -1188,7 +1523,8 @@ impl FormatEngine<'_> {
                 structural_prefix
             };
             let emitted = format!("{prefix}{content}");
-            self.adjust_and_publish_line(format!("{prefix}{display}"));
+            let source_row = format!("{prefix}{source_display}");
+            self.adjust_and_publish_line(source_row.clone());
 
             let (ends_in_comment, open_column) =
                 define_block_comment_state(content, false, self.options.tab_width);
@@ -1208,6 +1544,10 @@ impl FormatEngine<'_> {
                 opens_header_block,
                 starts_with_assignment,
             );
+            track_define_class_bodies(&mut class_bodies, &frames, content);
+            // A list a row closes takes its run-in column with it.
+            let open_depth = frames.len() + usize::from(!info.leading_close);
+            run_in_designators.retain(|&(depth, _)| depth < open_depth);
             let parens_before = open_parens;
             open_parens = open_parens_after(open_parens, content);
             if open_parens > 0 {
@@ -1216,6 +1556,7 @@ impl FormatEngine<'_> {
                 let depth = paren_anchors.len();
                 update_define_expression_paren_anchors(
                     &row,
+                    &source_row,
                     &mut paren_anchors,
                     level_spaces,
                     0,
@@ -1246,17 +1587,30 @@ impl FormatEngine<'_> {
                 emitted.find('{').map(|column| {
                     visual_width_from(&emitted[..column + 1], 0, self.options.tab_width) + 1
                 })
-            } else if let Some(column) =
-                define_run_in_designated_initializer_column(&emitted, self.options.tab_width)
+            } else if info.opens > info.closes
+                && let Some(column) =
+                    define_run_in_designated_initializer_column(&emitted, self.options.tab_width)
             {
+                // A list run in past its brace and left open lays its rows
+                // at its first designator.
+                run_in_designators.push((frames.len(), column));
                 Some(column)
-            } else if is_structural {
+            } else if is_structural
+                // A designator whose value is a list closed on its row ends
+                // its element as any other.
+                && !(info.opens == info.closes
+                    && !info.leading_close
+                    && define_complete_designated_initializer_row(content))
+            {
                 None
             } else if info.ends_semicolon && !line_open_paren {
-                // Inside the parentheses of a `for` header the next row keeps
-                // their column.
+                // Inside parens, as of a `for` header, the next row stands at
+                // the innermost one left open.
                 if continuation_column.is_some() && open_parens > 0 {
-                    continuation_column
+                    paren_anchors
+                        .last()
+                        .map(|&(_, align)| align)
+                        .or(continuation_column)
                 } else {
                     None
                 }
@@ -1265,6 +1619,7 @@ impl FormatEngine<'_> {
             } else if line_open_paren {
                 define_row_paren_continuation(
                     &format!("{prefix}{display}"),
+                    &source_row,
                     structural_level * self.options.indent_width,
                     self.options,
                 )
@@ -1278,17 +1633,42 @@ impl FormatEngine<'_> {
                 column_before_parens.take()
             } else if let Some(&(_, align)) = paren_anchors.last() {
                 Some(align)
+            } else if info.ends_comma
+                && open_parens <= 0
+                && frames.last().copied() != Some(DefineFrame::Brace)
+            {
+                // A comma at the statement's level parts operands, whose
+                // rows stand at the statement, or declarators, whose rows
+                // stand at the first, as in a function.
+                continuation_column.or_else(|| {
+                    let text = content.trimmed_start();
+                    assignment_declarator_offset(text)
+                        .or_else(|| {
+                            text.split_once(',')
+                                .filter(|(head, _)| !head.contains('='))
+                                .and_then(|(head, _)| {
+                                    declaration_head_declarator_offset(head.trimmed_end())
+                                })
+                        })
+                        .map(|offset| {
+                            leading_visual_width(
+                                &format!("{prefix}{display}"),
+                                self.options.tab_width,
+                            ) + offset
+                        })
+                })
             } else if continuation_column.is_some()
                 && !(define_complete_designated_initializer_row(content)
                     && frames.last().copied() == Some(DefineFrame::Brace))
             {
                 continuation_column
-            } else if define_complete_designated_initializer_row(content)
-                // astyle reads a brace opening the replacement as a block,
-                // whose assignments each register past the last.
-                && frames.last().copied() != Some(DefineFrame::Brace)
-            {
-                None
+            } else if define_complete_designated_initializer_row(content) {
+                // A designator row ends its element: the next one stands at
+                // the list's rows, as outside a macro.
+                run_in_designators
+                    .last()
+                    .filter(|&&(depth, _)| depth == frames.len())
+                    .map(|&(_, column)| column)
             } else {
                 // An assignment registers the column after it, a continuing
                 // backslash included.

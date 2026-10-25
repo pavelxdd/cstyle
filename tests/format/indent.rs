@@ -960,18 +960,60 @@ fn assignment_logical_chain_preserves_tabbed_rhs_alignment() {
 }
 
 #[test]
-fn google_indent_classes_composes_with_indent_modifiers() {
-    let mut options = FormatOptions::default();
-    apply_command_line_args(
-        &mut options,
-        &["--style=google".to_string(), "--indent-classes".to_string()],
-    )
-    .expect("valid options");
+fn explicit_indent_classes_overrides_the_modifier_indent_google_implies() {
+    // The style implies indent-modifiers and nothing more, so an explicit
+    // indent-classes takes over as it does from an explicit
+    // indent-modifiers, whichever comes first.
+    for args in [
+        ["--style=google", "--indent-classes"],
+        ["--indent-classes", "--style=google"],
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &args.map(String::from)).expect("valid options");
+        assert_eq!(
+            format_exact("class Item{public:int value;};\n", &options),
+            fixture!("class Item {", "    public:", "        int value;", "};",),
+        );
+    }
+}
 
-    // Explicit class and modifier indentation levels remain additive.
+#[test]
+fn a_struct_head_calling_a_function_in_its_template_arguments_opens_a_class_body() {
+    let source = fixture!(
+        "template <typename E>",
+        "struct Item<E, enable_if_t<is_ready<E>()>> {",
+        " private:",
+        "  int value;",
+        "};",
+    );
+
+    let mut options = FormatOptions::default();
+    options.indent_classes = true;
     assert_eq!(
-        format_exact("class Item{public:int value;};\n", &options),
-        fixture!("class Item {", "    public:", "        int value;", "};",),
+        format_exact(source, &options),
+        fixture!(
+            "template <typename E>",
+            "struct Item<E, enable_if_t<is_ready<E>()>> {",
+            "    private:",
+            "        int value;",
+            "};",
+        ),
+    );
+
+    // Same class body as with `is_ready<E>::value` or a base clause in the head.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=whitesmith".to_string()])
+        .expect("valid options");
+    assert_eq!(
+        format_exact(source, &options),
+        fixture!(
+            "template <typename E>",
+            "struct Item<E, enable_if_t<is_ready<E>()>>",
+            "    {",
+            "    private:",
+            "        int value;",
+            "    };",
+        ),
     );
 }
 
@@ -1519,19 +1561,13 @@ fn later_spaces_indent_replaces_force_tab_x_state() {
 }
 
 #[test]
-fn converts_leading_tabs_when_requested() {
+fn convert_tabs_leaves_a_disabled_region_as_written() {
     let mut options = FormatOptions::default();
     options.convert_tabs = true;
     options.tab_width = 2;
-    let actual = format_with(
-        fixture!("// *INDENT-OFF*", "\t\treturn;", "// *INDENT-ON*",),
-        &options,
-    );
+    let source = fixture!("// *INDENT-OFF*", "\t\treturn;", "// *INDENT-ON*",);
 
-    assert_eq!(
-        actual,
-        fixture!("// *INDENT-OFF*", "    return;", "// *INDENT-ON*",)
-    );
+    assert_eq!(format_with(source, &options), source);
 }
 
 #[test]
@@ -1990,40 +2026,40 @@ fn return_parenthesized_ternary_colon_branch_keeps_value_indent() {
 }
 
 #[test]
-fn return_ternary_after_split_template_function_parameter_stays_at_body_indent() {
+fn return_ternary_after_split_template_function_parameter_aligns_to_the_value() {
     assert_eq!(
         format_exact(
             "template <typename T>\nFIXED auto apply(Result dst, T value, const rules& r,\n                 context_id ctx = {}) -> Result {\n  return check(value)\n      ? apply_value(dst, value, r)\n      : apply_other(dst, value, r, ctx);\n}\n",
             &FormatOptions::default(),
         ),
-        "template <typename T>\nFIXED auto apply(Result dst, T value, const rules& r,\ncontext_id ctx = {}) -> Result {\n    return check(value)\n    ? apply_value(dst, value, r)\n    : apply_other(dst, value, r, ctx);\n}\n",
+        "template <typename T>\nFIXED auto apply(Result dst, T value, const rules& r,\n                 context_id ctx = {}) -> Result {\n    return check(value)\n           ? apply_value(dst, value, r)\n           : apply_other(dst, value, r, ctx);\n}\n",
     );
 }
 
 #[test]
-fn return_logical_after_split_template_function_parameter_stays_at_body_indent() {
+fn return_logical_after_split_template_function_parameter_aligns_to_the_value() {
     assert_eq!(
         format_exact(
             "template <typename T>\nFIXED auto apply(Result dst, T value, const rules& r = {},\n                 context_id = {}) -> Result {\n  return r.type() != none &&\n         r.type() != string\n      ? apply_value(dst, value, r)\n      : apply_bytes(dst, value ? \"true\" : \"false\", r);\n}\n",
             &FormatOptions::default(),
         ),
-        "template <typename T>\nFIXED auto apply(Result dst, T value, const rules& r = {},\ncontext_id = {}) -> Result {\n    return r.type() != none &&\n    r.type() != string\n    ? apply_value(dst, value, r)\n    : apply_bytes(dst, value ? \"true\" : \"false\", r);\n}\n",
+        "template <typename T>\nFIXED auto apply(Result dst, T value, const rules& r = {},\n                 context_id = {}) -> Result {\n    return r.type() != none &&\n           r.type() != string\n           ? apply_value(dst, value, r)\n           : apply_bytes(dst, value ? \"true\" : \"false\", r);\n}\n",
     );
 }
 
 #[test]
-fn return_ternary_colon_after_split_template_declaration_logical_condition_aligns_to_arm() {
+fn return_ternary_colon_after_split_template_declaration_logical_condition_aligns_to_the_value() {
     assert_eq!(
         format_exact(
             "template <typename T,\n          SELECT_IF(check<T>::value)>\nFIXED auto apply(Result dst, T value, const rules& r = {},\n                 context_id = {}) -> Result {\n  return r.type() != none &&\n                 r.type() != string\n             ? apply_value(dst, value, r)\n             : apply_bytes(dst, value ? \"true\" : \"false\", r);\n}\n",
             &FormatOptions::default(),
         ),
-        "template <typename T,\n          SELECT_IF(check<T>::value)>\nFIXED auto apply(Result dst, T value, const rules& r = {},\ncontext_id = {}) -> Result {\n    return r.type() != none &&\n    r.type() != string\n    ? apply_value(dst, value, r)\n        : apply_bytes(dst, value ? \"true\" : \"false\", r);\n}\n",
+        "template <typename T,\n          SELECT_IF(check<T>::value)>\nFIXED auto apply(Result dst, T value, const rules& r = {},\n                 context_id = {}) -> Result {\n    return r.type() != none &&\n           r.type() != string\n           ? apply_value(dst, value, r)\n           : apply_bytes(dst, value ? \"true\" : \"false\", r);\n}\n",
     );
 }
 
 #[test]
-fn statement_level_ternary_colon_aligns_to_base_indent() {
+fn statement_level_ternary_colon_takes_a_continuation_indent() {
     assert_eq!(
         format_exact(
             fixture!(
@@ -2039,14 +2075,39 @@ fn statement_level_ternary_colon_aligns_to_base_indent() {
             "void f()",
             "{",
             "    condition() ? call1()",
-            "    : call2();",
+            "        : call2();",
             "}",
         )
     );
 }
 
 #[test]
-fn statement_level_ternary_continuation_aligns_to_base_indent() {
+fn statement_level_ternary_colon_after_an_argument_row_takes_a_continuation_indent() {
+    // The arguments' column ends with the paren closing on their row; a
+    // bracket around the paren goes on.
+    let source = fixture!(
+        "static int checks[(VALUE % 2147483629 == 721 &&",
+        "                   VALUE % 2147483647 == 1)",
+        "                  ? 1 : -1];",
+        "void helper()",
+        "{",
+        "    ready ? first(value,",
+        "                  other)",
+        "        : second(value);",
+        "    ready ? first(value,",
+        "                  other) :",
+        "        second(value);",
+        "    is_locked<Item...>() ? helper::write_buffered_values(output,",
+        "            first, second)",
+        "        : helper::write(output, first, second);",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
+}
+
+#[test]
+fn statement_level_ternary_continuation_takes_a_continuation_indent() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=linux".to_owned()]).expect("valid options");
 
@@ -2055,12 +2116,12 @@ fn statement_level_ternary_continuation_aligns_to_base_indent() {
             "void f(void)\n{\n\tflag ? call_a(x, y) :\n\t\tcall_b(x, y);\n}\n",
             &options,
         ),
-        "void f(void)\n{\n    flag ? call_a(x, y) :\n    call_b(x, y);\n}\n",
+        "void f(void)\n{\n    flag ? call_a(x, y) :\n        call_b(x, y);\n}\n",
     );
 }
 
 #[test]
-fn statement_level_ternary_with_multiple_parens_continuation_aligns_to_base_indent() {
+fn statement_level_ternary_with_multiple_parens_continuation_takes_a_continuation_indent() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=linux".to_owned()]).expect("valid options");
 
@@ -2069,7 +2130,7 @@ fn statement_level_ternary_with_multiple_parens_continuation_aligns_to_base_inde
             "void f(void)\n{\n\tcond(a) ? aa(bb(x), cc(y)) :\n\t\tdd(x);\n}\n",
             &options,
         ),
-        "void f(void)\n{\n    cond(a) ? aa(bb(x), cc(y)) :\n    dd(x);\n}\n",
+        "void f(void)\n{\n    cond(a) ? aa(bb(x), cc(y)) :\n        dd(x);\n}\n",
     );
 }
 
@@ -2114,7 +2175,7 @@ fn stroustrup_ternary_colon_continuations_preserve_source_gap() {
             "       const char* src, size_t size)",
             "{",
             "    size < 16 ? alpha<Flag, /*Other=*/true>(dst, src, size)",
-            "         : alpha<Flag, /*Other=*/false>(dst, src, size);",
+            "        : alpha<Flag, /*Other=*/false>(dst, src, size);",
             "}",
         )
     );
@@ -2160,28 +2221,16 @@ fn ternary_value_after_colon_aligns_to_previous_arm_indent() {
 }
 
 #[test]
-fn ternary_with_braced_true_arm_breaks_after_colon() {
-    assert_eq!(
-        format_exact(
-            fixture!(
-                "void f()",
-                "{",
-                "    value = cond ? Item{1} : other;",
-                "    return cond ? Item{1} : other;",
-                "}",
-            ),
-            &FormatOptions::default(),
-        ),
-        fixture!(
-            "void f()",
-            "{",
-            "    value = cond ? Item{1} :",
-            "            other;",
-            "    return cond ? Item{1} :",
-            "           other;",
-            "}",
-        )
+fn ternary_with_braced_true_arm_keeps_its_colon_on_the_line() {
+    let source = fixture!(
+        "void f()",
+        "{",
+        "    value = cond ? Item{1} : other;",
+        "    return cond ? Item{1} : other;",
+        "}",
     );
+
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
 
 #[test]
@@ -2370,14 +2419,14 @@ fn closed_member_call_argument_keeps_previous_line_indent() {
 }
 
 #[test]
-fn qprintable_argument_aligns_to_nested_callee_name() {
+fn argument_after_nested_call_ending_its_row_continues_past_outer_argument() {
     assert_eq!(
         format_exact(
             fixture!(
                 "void f()",
                 "{",
-                "    CHECK_OK(ok, qPrintable(",
-                "        QString(\"message\")",
+                "    CHECK_OK(ok, textOf(",
+                "        Text(\"message\")",
                 "        .arg(value)));",
                 "}",
             ),
@@ -2386,8 +2435,8 @@ fn qprintable_argument_aligns_to_nested_callee_name() {
         fixture!(
             "void f()",
             "{",
-            "    CHECK_OK(ok, qPrintable(",
-            "                 QString(\"message\")",
+            "    CHECK_OK(ok, textOf(",
+            "                 Text(\"message\")",
             "                 .arg(value)));",
             "}",
         )
@@ -2395,14 +2444,14 @@ fn qprintable_argument_aligns_to_nested_callee_name() {
 }
 
 #[test]
-fn qprintable_long_qualified_argument_aligns_to_nested_callee_name() {
+fn qualified_argument_after_nested_call_ending_its_row_continues_past_outer_argument() {
     assert_eq!(
         format_exact(
             fixture!(
                 "void f()",
                 "{",
-                "    CHECK_OK(context.operationReady(), qPrintable(",
-                "        QString::fromSource(\"Could not apply %1: %2\").arg(source, context.errorDetail())));",
+                "    CHECK_OK(context.operationReady(), textOf(",
+                "        Text::fromSource(\"Could not apply %1: %2\").arg(source, context.errorDetail())));",
                 "}",
             ),
             &FormatOptions::default(),
@@ -2410,8 +2459,8 @@ fn qprintable_long_qualified_argument_aligns_to_nested_callee_name() {
         fixture!(
             "void f()",
             "{",
-            "    CHECK_OK(context.operationReady(), qPrintable(",
-            "                 QString::fromSource(\"Could not apply %1: %2\").arg(source, context.errorDetail())));",
+            "    CHECK_OK(context.operationReady(), textOf(",
+            "                 Text::fromSource(\"Could not apply %1: %2\").arg(source, context.errorDetail())));",
             "}",
         )
     );
@@ -3748,7 +3797,7 @@ fn table_macro_rows_do_not_stair_step_after_comma() {
             "\nTABLE_START(SIMULATION, \"item\")\n\t.compat\t= item_compat,\n\t.init     = item_init,\nTABLE_END\n",
             &FormatOptions::default(),
         ),
-        "\nTABLE_START(SIMULATION, \"item\")\n.compat\t= item_compat,\n .init     = item_init,\n TABLE_END\n",
+        "\nTABLE_START(SIMULATION, \"item\")\n.compat\t= item_compat,\n.init     = item_init,\nTABLE_END\n",
     );
 }
 
@@ -4976,8 +5025,8 @@ fn adjacent_string_call_argument_before_stream_keeps_string_indent() {
             "void f()",
             "{",
             "    Table::addRow(\"utf16\")",
-            "            << ByteArray(\"\\xfe\\xff\"",
-            "                         \"\\x00\\xe5\", 4) << value;",
+            "        << ByteArray(\"\\xfe\\xff\"",
+            "                     \"\\x00\\xe5\", 4) << value;",
             "}",
         )
     );
@@ -5039,9 +5088,9 @@ fn adjacent_string_in_line_start_stream_call_keeps_string_column() {
             "void f()",
             "{",
             "    Table::addRow(\"mix\")",
-            "            << TextBox::fromText(\"base\"",
-            "                                 \"tail\")",
-            "            << \"x\";",
+            "        << TextBox::fromText(\"base\"",
+            "                             \"tail\")",
+            "        << \"x\";",
             "}",
         )
     );
@@ -5069,12 +5118,12 @@ fn adjacent_string_in_line_start_stream_call_skips_preprocessor_lines() {
             "void f()",
             "{",
             "    Table::addRow(\"x\")",
-            "            << TextBox(\"entrylist/file,\"",
+            "        << TextBox(\"entrylist/file,\"",
             "#ifndef X",
-            "                       \"entrylist/linktofile.lnk,\"",
+            "                   \"entrylist/linktofile.lnk,\"",
             "#endif",
-            "                       \"entrylist/directory/dummy,\"",
-            "                       \"entrylist/writable\").split(',');",
+            "                   \"entrylist/directory/dummy,\"",
+            "                   \"entrylist/writable\").split(',');",
             "}",
         )
     );
@@ -5115,10 +5164,10 @@ fn call_argument_sibling_after_closed_call_keeps_previous_argument_indent() {
         "            return (type == 0 ? \"std\"",
         "                    : type == 1 ? \"gen\" : \"dst\");",
         "        };",
-        "        qDebug(\"Long name round-tripped %s (%s) to %s (%s) via %s\",",
-        "               zoneName.valueData(), typeName(timeType),",
-        "               match.ianaId.valueData(), typeName(match.timeType),",
-        "               localeName.encode().valueData());",
+        "        notify(\"Value converted %s (%s) to %s (%s) via %s\",",
+        "               itemName.valueData(), typeName(itemType),",
+        "               match.itemId.valueData(), typeName(match.itemType),",
+        "               labelName.encode().valueData());",
         "    });",
         "}",
     );
@@ -5205,13 +5254,13 @@ fn stream_chain_started_in_call_argument_keeps_argument_indent() {
 }
 
 #[test]
-fn stream_chain_line_with_nested_braced_value_keeps_source_indent() {
+fn stream_chain_line_with_nested_braced_value_continues_the_chain() {
     let source = fixture!(
         "void f()",
         "{",
         "    append(\"row\")",
-        "    << Value { { 1 } }",
-        "            << expected;",
+        "        << Value { { 1 } }",
+        "        << expected;",
         "}",
     );
 
@@ -5219,12 +5268,12 @@ fn stream_chain_line_with_nested_braced_value_keeps_source_indent() {
 }
 
 #[test]
-fn stream_chain_after_nested_braced_value_uses_two_indent_levels() {
+fn stream_chain_after_nested_braced_value_aligns_to_the_chain() {
     let source = fixture!(
         "void f()",
         "{",
         "    append(\"row\") << Value { { 1 } }",
-        "            << expected;",
+        "                  << expected;",
         "}",
     );
 
@@ -5232,15 +5281,15 @@ fn stream_chain_after_nested_braced_value_uses_two_indent_levels() {
 }
 
 #[test]
-fn braced_value_stream_continuation_after_stream_head_keeps_base_indent() {
+fn braced_value_stream_continuation_after_stream_head_aligns_to_the_chain() {
     let source = fixture!(
         "void f()",
         "{",
         "    append(\"row\") << name",
-        "    << List{",
-        "        A,",
-        "        B,",
-        "    };",
+        "                  << List{",
+        "                      A,",
+        "                      B,",
+        "                  };",
         "}",
     );
 
@@ -5248,16 +5297,16 @@ fn braced_value_stream_continuation_after_stream_head_keeps_base_indent() {
 }
 
 #[test]
-fn braced_value_stream_continuation_after_indented_stream_head_keeps_base_indent() {
+fn braced_value_stream_continuation_after_indented_stream_head_continues_the_chain() {
     let source = fixture!(
         "void f()",
         "{",
         "    append(\"row\")",
-        "            << name",
-        "    << List{",
-        "        A,",
-        "        B,",
-        "    };",
+        "        << name",
+        "        << List{",
+        "            A,",
+        "            B,",
+        "        };",
         "}",
     );
 
@@ -5292,7 +5341,7 @@ fn braced_stream_value_over_max_keeps_source_item_indent() {
 }
 
 #[test]
-fn member_chain_after_prior_return_statement_does_not_use_return_indent() {
+fn member_chain_after_prior_return_statement_takes_a_continuation_indent() {
     let source = fixture!(
         "class C {",
         "    List values()",
@@ -5304,7 +5353,7 @@ fn member_chain_after_prior_return_statement_does_not_use_return_indent() {
         "    void send()",
         "    {",
         "        object()",
-        "        .call();",
+        "            .call();",
         "    }",
         "};",
     );
@@ -5313,14 +5362,14 @@ fn member_chain_after_prior_return_statement_does_not_use_return_indent() {
 }
 
 #[test]
-fn nested_braced_value_inside_stream_call_keeps_base_indent() {
+fn nested_braced_value_inside_stream_call_stands_as_any_argument() {
     let source = fixture!(
         "void f()",
         "{",
         "    append(\"row\")",
-        "            << wrap(",
-        "    Value { 1, \"foo\", { { \"bar\", 2 } } })",
-        "            << expected;",
+        "        << wrap(",
+        "            Value { 1, \"foo\", { { \"bar\", 2 } } })",
+        "        << expected;",
         "}",
     );
 
@@ -5486,7 +5535,7 @@ fn stream_chain_continues_after_multiline_braced_argument() {
             "void f()\n{\n    Check::append(\"row\")\n        << \"input\"\n        << ValueVector{u\"a\"_v, u\"bc\"_v, u\"d\"_v, u\"e\"_v, u\"\"_v, u\"g\"_v,\n                       u\"hi\"_v, u\"\"_v, u\"\"_v, u\"\"_v, u\"\"_v}\n        << \"output\";\n}\n",
             &FormatOptions::default(),
         ),
-        "void f()\n{\n    Check::append(\"row\")\n            << \"input\"\n            << ValueVector{u\"a\"_v, u\"bc\"_v, u\"d\"_v, u\"e\"_v, u\"\"_v, u\"g\"_v,\n                           u\"hi\"_v, u\"\"_v, u\"\"_v, u\"\"_v, u\"\"_v}\n            << \"output\";\n}\n",
+        "void f()\n{\n    Check::append(\"row\")\n        << \"input\"\n        << ValueVector{u\"a\"_v, u\"bc\"_v, u\"d\"_v, u\"e\"_v, u\"\"_v, u\"g\"_v,\n                       u\"hi\"_v, u\"\"_v, u\"\"_v, u\"\"_v, u\"\"_v}\n        << \"output\";\n}\n",
     );
 }
 
@@ -5714,7 +5763,7 @@ fn comma_led_call_argument_continuation_keeps_tab_split() {
 }
 
 #[test]
-fn leading_stream_operator_chain_off_call_uses_two_levels() {
+fn leading_stream_operator_chain_off_call_takes_one_continuation_indent() {
     let mut options = FormatOptions::default();
     let args = [
         "--style=kr",
@@ -5728,7 +5777,7 @@ fn leading_stream_operator_chain_off_call_uses_two_levels() {
     ]
     .map(str::to_owned);
     apply_command_line_args(&mut options, &args).expect("valid options");
-    let source = "void f()\n{\n\tfor(const ITEMS item: items) {\n\t\tCHECK_EQ(item, state.values[i])\n\t\t        << \"Failed for dataset #\" << i\n\t\t        << \" origin: \" << linenumber;\n\t}\n}\n";
+    let source = "void f()\n{\n\tfor(const ITEMS item: items) {\n\t\tCHECK_EQ(item, state.values[i])\n\t\t    << \"Failed for dataset #\" << i\n\t\t    << \" origin: \" << linenumber;\n\t}\n}\n";
 
     assert_eq!(format_exact(source, &options), source);
 }
@@ -6469,10 +6518,10 @@ fn assignment_stream_chain_continuation_aligns_to_value_start() {
 fn stream_chain_after_inline_multiline_braced_argument_returns_to_stream_column() {
     assert_eq!(
         format_exact(
-            "void f()\n{\n    Suite::addRow(\"Spaces\") << QStringList{ \"   Documents (*.doc)\", \"Everything (*.*)\",\n                                            \"   Stuff (  *.stf   *.tng)\", \"    *.exe\" }\n                                            << \".doc,.stf,.tng,.exe\";\n}\n",
+            "void f()\n{\n    Suite::addRow(\"Spaces\") << StringItems{ \"   Documents (*.doc)\", \"Everything (*.*)\",\n                                            \"   Stuff (  *.stf   *.tng)\", \"    *.exe\" }\n                                            << \".doc,.stf,.tng,.exe\";\n}\n",
             &FormatOptions::default(),
         ),
-        "void f()\n{\n    Suite::addRow(\"Spaces\") << QStringList{ \"   Documents (*.doc)\", \"Everything (*.*)\",\n                                            \"   Stuff (  *.stf   *.tng)\", \"    *.exe\" }\n                            << \".doc,.stf,.tng,.exe\";\n}\n",
+        "void f()\n{\n    Suite::addRow(\"Spaces\") << StringItems{ \"   Documents (*.doc)\", \"Everything (*.*)\",\n                                            \"   Stuff (  *.stf   *.tng)\", \"    *.exe\" }\n                            << \".doc,.stf,.tng,.exe\";\n}\n",
     );
 }
 
@@ -9708,9 +9757,9 @@ fn tab_indent_continuation_of_a_statement_on_its_header_line_tabs_to_the_body_le
             "void f(void)",
             "{",
             "\tif (bp) reason = ok ? \"called\" :",
-            "\t\t                 \"break point\";",
+            "\t\t             \"break point\";",
             "\tif (a) g(1,",
-            "\t\t         2);",
+            "\t\t     2);",
             "}",
         )
     );

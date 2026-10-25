@@ -42,19 +42,6 @@ pub(crate) mod layout;
 mod macro_definitions;
 pub(crate) mod macro_invocations;
 
-pub(crate) fn indent_off_follows_code(tokens: &[Token]) -> bool {
-    let mut seen_code = false;
-    for token in tokens {
-        match token {
-            Token::Whitespace(_) | Token::Newline => {}
-            Token::Comment(_, comment) if comment.contains("*INDENT-OFF*") => return seen_code,
-            Token::Comment(_, _) => {}
-            _ => seen_code = true,
-        }
-    }
-    false
-}
-
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
 pub(crate) struct PreprocessorSplitElseState {
     pub(crate) extra_indent: bool,
@@ -110,7 +97,10 @@ impl PreprocessorSplitElseState {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct PreprocessorBranchState {
     pub(crate) layout: LayoutState,
+    /// The column of the body the first branch's first row stands in,
+    /// unknown when that row closes a block.
     pub(crate) first_body_indent_spaces: Option<usize>,
+    pub(crate) first_body_row_read: bool,
     pub(crate) restore_body_indent: bool,
     preprocessor_split_else: PreprocessorSplitElseState,
     pub(crate) header_paren: HeaderParenState,
@@ -621,7 +611,7 @@ pub(crate) fn is_known_preprocessor_directive(directive: &str) -> bool {
         )
 }
 
-fn is_always_indented_preprocessor_line(line: &str, directive: &str) -> bool {
+pub(crate) fn is_always_indented_preprocessor_line(line: &str, directive: &str) -> bool {
     matches!(directive, "region" | "endregion")
         || (directive == "pragma"
             && preprocessor_directive_argument(line)
@@ -1078,7 +1068,13 @@ impl FormatEngine<'_> {
                 spaces,
             });
         }
-        if self.options.indent_preproc_block && is_conditional_preprocessor(directive) {
+        // Conditionals among a constructor's initializers indent to them.
+        let among_initializers = self.options.indent_preproc_conditional
+            && self.initializer_member_directive_column().is_some();
+        if self.options.indent_preproc_block
+            && is_conditional_preprocessor(directive)
+            && !among_initializers
+        {
             match directive {
                 "if" | "ifdef" | "ifndef" => {
                     // A file scope block opening in parens stands at the
@@ -1247,6 +1243,12 @@ impl FormatEngine<'_> {
                 spaces,
             };
         }
+        if opening && let Some(spaces) = self.initializer_member_directive_column() {
+            return PreprocessorLineIndent::Exact {
+                structural_level: spaces / self.options.indent_width.max(1),
+                spaces,
+            };
+        }
         if opening && let Some(spaces) = self.list_row_directive_column() {
             return PreprocessorLineIndent::Exact {
                 structural_level: spaces / self.options.indent_width.max(1),
@@ -1307,6 +1309,17 @@ impl FormatEngine<'_> {
                     + self.split_else_directive_extra(),
             )
         }
+    }
+
+    /// The column of a constructor's initializers when the active directive
+    /// stands between two of them.
+    fn initializer_member_directive_column(&self) -> Option<usize> {
+        let directive = self.preprocessor.active_directive?;
+        let separator = self.tree.previous_code_token(directive)?;
+        if !self.separates_constructor_initializers(separator) {
+            return None;
+        }
+        self.constructor_initializer_base_indent_spaces()
     }
 
     /// The column, before the line adjuster's case unindent, of the line
@@ -1453,9 +1466,11 @@ impl FormatEngine<'_> {
                 let mut group_block = false;
                 if should_indent_block {
                     // At file scope astyle indents a block's lines by the
-                    // block alone, a statement they continue or not.
+                    // block alone, a statement they continue or not, but for
+                    // a constructor's initializers, which keep their column.
                     let file_scope = self.layout.indentation.indent() == 0;
-                    group_block = file_scope;
+                    group_block =
+                        file_scope && self.initializer_member_directive_column().is_none();
                     self.layout.indentation.enter_block();
                     if file_scope {
                         suspended = self
@@ -1499,7 +1514,19 @@ impl FormatEngine<'_> {
                     .last()
                     .is_some_and(|branch| branch.first_branch_end.is_none())
                 {
-                    let end = Box::new(self.branch_snapshot());
+                    let mut end = Box::new(self.branch_snapshot());
+                    // A statement the first branch ended leaves no
+                    // continuation to the code after `#endif`.
+                    if self
+                        .preprocessor
+                        .active_directive
+                        .and_then(|directive| self.tree.previous_code_token(directive))
+                        .is_some_and(|last| {
+                            matches!(self.tree.tokens[last], Token::Symbol(';' | '}'))
+                        })
+                    {
+                        end.layout.continuation_indent.clear_next_line();
+                    }
                     if let Some(branch) = self.preprocessor.branch_stack.last_mut() {
                         branch.first_branch_end = Some(end);
                     }
@@ -1520,10 +1547,12 @@ impl FormatEngine<'_> {
                     .branch_stack
                     .pop()
                     .and_then(|branch| branch.first_branch_end)
-                    && end.layout.nesting.brace_type_stack.len()
-                        != self.layout.nesting.brace_type_stack.len()
                 {
+                    // Nor does an `else` a later branch split off its body
+                    // reach past `#endif`.
+                    let split_else = end.preprocessor_split_else;
                     self.restore_branch_snapshot(*end);
+                    self.preprocessor.split_else = split_else;
                 }
                 self.layout.indentation.pop_preprocessor_indent();
                 let suspended = self.preprocessor.suspended_continuations.pop().flatten();
@@ -1579,6 +1608,7 @@ impl FormatEngine<'_> {
         PreprocessorBranchState {
             layout: self.layout.clone(),
             first_body_indent_spaces: None,
+            first_body_row_read: false,
             restore_body_indent: false,
             preprocessor_split_else: self.preprocessor.split_else,
             header_paren: self.header_paren.clone(),
@@ -1595,6 +1625,7 @@ impl FormatEngine<'_> {
         let PreprocessorBranchState {
             layout,
             first_body_indent_spaces: _,
+            first_body_row_read: _,
             restore_body_indent: _,
             preprocessor_split_else,
             header_paren,

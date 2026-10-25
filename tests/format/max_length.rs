@@ -1534,7 +1534,7 @@ fn max_code_length_inline_case_statement_keeps_case_body_owner() {
             "void run(int value) {",
             "  switch(value) {",
             "  case 1:resultValue=calculateResult(alphaValue,",
-            "                                       betaValue,gammaValue,deltaValue,epsilonValue);",
+            "                                     betaValue,gammaValue,deltaValue,epsilonValue);",
             "    break;",
             "  default:break; } }",
         ),
@@ -1638,6 +1638,44 @@ fn max_code_length_constructor_lambda_tail_keeps_call_owner() {
             "gammaValue)) {}",
         ),
     );
+}
+
+// A selector broken off the receiver of a nested message stands where a
+// selector row of that message stands: one column past its bracket.
+#[test]
+fn max_code_length_sets_selector_rows_split_off_a_receiver_past_its_bracket() {
+    let source = fixture!(
+        "@implementation Item",
+        "- (int)total {",
+        "    return [[self items] count] + [self.other countWith:1",
+        "                                                   and:2];",
+        "}",
+        "@end",
+    );
+    for (style, head, tail) in [
+        ("kr", "- (int)total\n{", "}"),
+        ("java", "- (int)total {", "}"),
+        ("lisp", "- (int)total {", " }"),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(
+            &mut options,
+            &[
+                format!("--style={style}"),
+                "--max-code-length=50".to_owned(),
+            ],
+        )
+        .expect("valid options");
+        let close = if tail == " }" { "and:2]; }" } else { "and:2];" };
+        let mut expected = format!(
+            "@implementation Item\n{head}\n    return [[self items] count] + [self.other\n                                   countWith:1\n                                   {close}\n"
+        );
+        if tail == "}" {
+            expected.push_str("}\n");
+        }
+        expected.push_str("@end\n");
+        assert_stable_max_length_format(source, &options, &expected);
+    }
 }
 
 #[test]
@@ -2908,15 +2946,15 @@ fn max_code_length_splits_standalone_macro_invocation_rows() {
 }
 
 #[test]
-fn max_code_length_goto_and_member_heads_register_no_continuation() {
+fn max_code_length_goto_registers_no_continuation_and_an_operator_part_continues_the_statement() {
     let mut options = FormatOptions::default();
     let args = ["--style=kr", "--max-code-length=50"].map(str::to_owned);
     apply_command_line_args(&mut options, &args).expect("valid options");
-    let source = "void f()\n{\n    while (abcdefghijklmnopqrstuvwxyz) goto extension_not_found;\n    hotkeys->net_bytes_sampled_commands_selected_slots += total_bytes;\n}\n";
+    let source = "void f()\n{\n    while (abcdefghijklmnopqrstuvwxyz) goto extension_not_found;\n    records->total_bytes_counted_in_the_selected_slots += total_bytes;\n}\n";
 
     assert_eq!(
         format_exact(source, &options),
-        "void f()\n{\n    while (abcdefghijklmnopqrstuvwxyz) goto\n        extension_not_found;\n    hotkeys->net_bytes_sampled_commands_selected_slots\n    += total_bytes;\n}\n",
+        "void f()\n{\n    while (abcdefghijklmnopqrstuvwxyz) goto\n            extension_not_found;\n    records->total_bytes_counted_in_the_selected_slots\n        += total_bytes;\n}\n",
     );
 }
 
@@ -2935,14 +2973,14 @@ fn attached_closing_while_counts_in_the_line_a_run_in_statement_splits() {
 
     assert_eq!(
         format_exact(
-            "void f(void)\n{\n    do {\n        if( p->bFold ) iCode = sqlite3Fts5UnicodeFold(iCode, p->iFoldParam);\n    } while( iCode==0 );\n}\n",
+            "void f(void)\n{\n    do {\n        if( p->folds ) value = fold_code_point_number(value, p->fold_param);\n    } while( value==0 );\n}\n",
             &options,
         ),
         fixture!(
             "void f(void) {",
             "    do {",
-            "        if( p->bFold ) iCode = sqlite3Fts5UnicodeFold(iCode,",
-            "                                   p->iFoldParam); } while( iCode==0 ); }",
+            "        if( p->folds ) value = fold_code_point_number(value,",
+            "                               p->fold_param); } while( value==0 ); }",
         )
     );
 }
@@ -3096,6 +3134,71 @@ fn declarations_split_before_the_name_or_parameters_continue_nothing() {
 }
 
 #[test]
+fn declaration_after_a_linkage_specification_split_before_its_name_continues_nothing() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_owned(), "--max-code-length=60".to_owned()],
+    )
+    .expect("valid options");
+    let source = "extern \"C\" __declspec(dllimport) int __stdcall write_all_values(void*, const void*);\nnamespace outer {\nextern \"C++\" unsigned long int __stdcall read_every_value_now(void*, int);\n}\n";
+    let expected = "extern \"C\" __declspec(dllimport) int __stdcall\nwrite_all_values(void*, const void*);\nnamespace outer\n{\nextern \"C++\" unsigned long int __stdcall\nread_every_value_now(void*, int);\n}\n";
+
+    assert_stable_max_length_format(source, &options, expected);
+}
+
+#[test]
+fn inline_member_initializer_split_after_its_paren_continues_past_the_list() {
+    // The initializer list continues the head a level, and the arguments a
+    // level past it, as on a second run.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_owned(), "--max-code-length=60".to_owned()],
+    )
+    .expect("valid options");
+    let source = "struct Config {\n    Config(detail::buffer_size size) : buffer_size(size.value_of_it) {}\n};\n";
+    let expected = "struct Config {\n    Config(detail::buffer_size size) : buffer_size(\n            size.value_of_it) {}\n};\n";
+
+    assert_stable_max_length_format(source, &options, expected);
+}
+
+#[test]
+fn argument_row_opening_a_lambda_split_in_its_parameters_stays_at_the_statement() {
+    // The row holding the lambda's head stands at the statement whether its
+    // body opens on it or on the row its parameters go on to.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_owned(), "--max-code-length=60".to_owned()],
+    )
+    .expect("valid options");
+    let source = "auto write_values(Iter out, View values) -> Iter {\n  return write_padded<Item, default_align>(\n      out, config, values.size(), [values](reserve_iterator<Iter> it) {\n        return copy<Item>(values.data(), it);\n      });\n}\n";
+    let expected = "auto write_values(Iter out, View values) -> Iter\n{\n    return write_padded<Item, default_align>(\n    out, config, values.size(), [values](reserve_iterator<Iter>\n                                         it) {\n        return copy<Item>(values.data(), it);\n    });\n}\n";
+
+    assert_stable_max_length_format(source, &options, expected);
+}
+
+#[test]
+fn statements_of_a_block_argument_split_wherever_its_brace_stood() {
+    // A brace holding statements among a call's arguments is a block, not a
+    // list, whether it followed the paren or stood on the next line.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_owned(), "--max-code-length=60".to_owned()],
+    )
+    .expect("valid options");
+    let expected = "void helper()\n{\n    CHECK( {\n        if (!ready)\n            throw helper_error(status, \"cannot open the file {}\",\n                               filename);\n    });\n}\n";
+    for source in [
+        "void helper() {\n  CHECK(\n      {\n        if (!ready)\n          throw helper_error(status, \"cannot open the file {}\", filename);\n      });\n}\n",
+        "void helper() {\n  CHECK( {\n        if (!ready)\n          throw helper_error(status, \"cannot open the file {}\", filename);\n      });\n}\n",
+    ] {
+        assert_stable_max_length_format(source, &options, expected);
+    }
+}
+
+#[test]
 fn aggregate_brace_split_from_its_assignment_stands_at_the_statement() {
     let mut options = FormatOptions::default();
     apply_command_line_args(
@@ -3127,4 +3230,536 @@ fn split_call_argument_in_an_extern_c_function_keeps_its_column_on_a_second_run(
     let first = format_exact(input, &options);
 
     assert_eq!(format_exact(&first, &options), first);
+}
+
+#[test]
+fn max_code_length_leaves_a_fitting_line_of_statements_whole() {
+    // astyle parts such a line only when a maximum is set, though it fits.
+    let input = "void f()\n{\n    if (ready) helper(); else run();\ndone: if (ready) {\n        value = 0;\n    }\n}\n";
+    for style in ["--style=kr", "--style=allman"] {
+        let mut options = FormatOptions::default();
+        let args = [
+            style.to_string(),
+            "--keep-one-line-statements".to_string(),
+            "--max-code-length=50".to_string(),
+        ];
+        apply_command_line_args(&mut options, &args).expect("valid options");
+        let mut without = FormatOptions::default();
+        apply_command_line_args(&mut without, &args[..2]).expect("valid options");
+        assert_eq!(
+            format_exact(input, &options),
+            format_exact(input, &without),
+            "{style}"
+        );
+    }
+}
+
+#[test]
+fn max_code_length_sets_a_row_split_after_a_function_head_at_the_head() {
+    // As a row the source broke there stands, so the split is stable.
+    let input = "template <typename T>\n[[nodiscard]] constexpr auto sum(std::span<const T> values) noexcept -> T\n{\n    return 0;\n}\nclass Item\n{\n    [[nodiscard]] constexpr auto sum(std::span<const int> values) noexcept -> int;\n};\n";
+    for (limit, expected) in [
+        (
+            "--max-code-length=60",
+            "template <typename T>\n[[nodiscard]] constexpr auto sum(std::span<const T> values)\nnoexcept -> T\n{\n    return 0;\n}\nclass Item\n{\n    [[nodiscard]] constexpr auto sum(std::span<const int>\n                                     values) noexcept -> int;\n};\n",
+        ),
+        (
+            "--max-code-length=70",
+            "template <typename T>\n[[nodiscard]] constexpr auto sum(std::span<const T> values) noexcept\n-> T\n{\n    return 0;\n}\nclass Item\n{\n    [[nodiscard]] constexpr auto sum(std::span<const int> values) noexcept\n    -> int;\n};\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[limit.to_string()]).expect("valid options");
+        let first = format_exact(input, &options);
+        assert_eq!(first, expected, "{limit}");
+        assert_eq!(format_exact(&first, &options), first, "{limit}");
+    }
+}
+
+#[test]
+fn max_code_length_continues_a_constructor_initializer_split_past_its_parameters() {
+    // The initializers past the parameters continue the head; only a
+    // qualifier or a trailing return type stands at it.
+    let input = "class Options {\n  public:\n    Options() : option_(None), match_limit_(0), stack_limit_(0), report_errors_(true) {}\n};\n";
+    let expected = "class Options {\n  public:\n    Options() : option_(None), match_limit_(0), stack_limit_(0),\n        report_errors_(true) {}\n};\n";
+    let mut options = FormatOptions::default();
+    let args = [
+        "--style=google",
+        "--max-code-length=80",
+        "--break-after-logical",
+    ]
+    .map(str::to_string);
+    apply_command_line_args(&mut options, &args).expect("valid options");
+    assert_eq!(format_exact(input, &options), expected);
+}
+
+#[test]
+fn max_code_length_pico_keeps_a_run_in_do_block_row_at_its_column_when_its_closing_line_splits() {
+    // Splitting the row past its `while` moves none of its text: the row
+    // stands where it stands whole, and the condition continues past its
+    // paren.
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Pico;
+    let source = fixture!(
+        "void f()",
+        "{",
+        "    do {",
+        "        value++;",
+        "    } /* again */ while (value < count);",
+        "}",
+    );
+    let whole = format_exact(source, &options);
+    assert_eq!(
+        whole,
+        fixture!(
+            "void f()",
+            "{   do",
+            "    {   value++; } /* again */ while (value < count); }",
+        )
+    );
+    options.max_code_length = Some(50);
+    assert_stable_max_length_format(
+        source,
+        &options,
+        fixture!(
+            "void f()",
+            "{   do",
+            "    {   value++; } /* again */ while (value <",
+            "                                      count); }",
+        ),
+    );
+}
+
+#[test]
+fn max_code_length_starts_a_statement_split_off_after_a_semicolon_at_its_level() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=kr".to_owned(),
+            "--keep-one-line-statements".to_owned(),
+            "--max-code-length=60".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "void f()\n{\n    result = helper(first, second); value = compute(first, second);\n    result = helper(first, second); return compute(first, second);\n    if (ready) result = helper(first); value = compute(first, second);\n    result = helper(first, second); if (ready) value = compute(first);\n    for (index = 0, total = 0; index < count; index++, total += index)\n        helper(index);\n}\n",
+        &options,
+        "void f()\n{\n    result = helper(first, second);\n    value = compute(first, second);\n    result = helper(first, second);\n    return compute(first, second);\n    if (ready) result = helper(first);\n    value = compute(first, second);\n    result = helper(first, second);\n    if (ready) value = compute(first);\n    for (index = 0, total = 0; index < count;\n            index++, total += index)\n        helper(index);\n}\n",
+    );
+}
+
+#[test]
+fn max_code_length_keeps_a_header_after_a_statement_on_a_line_that_fits() {
+    // Only a line past the limit splits; one-line statements keep the rest.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=kr".to_owned(),
+            "--keep-one-line-statements".to_owned(),
+            "--max-code-length=60".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let input = "void f()\n{\n    value = 1; if (ready) value = 0;\n    value = 1; while (ready) {\n        value = 0;\n    }\n    value = 1; value = 2;\n}\n";
+    assert_stable_max_length_format(input, &options, input);
+}
+
+#[test]
+fn max_code_length_starts_a_statement_split_off_a_body_or_label_line_where_statements_stand() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=kr".to_owned(),
+            "--keep-one-line-statements".to_owned(),
+            "--max-code-length=60".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "void f()\n{\n    x();\n    result = helper(first, second); value = compute(first, second); other = third(first);\n    if (ready)\n        result = helper(first, second); value = compute(first, second);\n    while (ready) {\n        result = helper(first, second); value = compute(first, second);\n    }\n    switch (kind) {\n    case 1: result = helper(first, second); value = compute(first, second);\n        break;\n    case 2: {\n        result = helper(first, second); value = compute(first, second);\n    }\n    }\n    for (index = 0; index < count; index++) result = helper(first, second); value = compute(first, second);\n}\n",
+        &options,
+        "void f()\n{\n    x();\n    result = helper(first, second);\n    value = compute(first, second); other = third(first);\n    if (ready)\n        result = helper(first, second);\n    value = compute(first, second);\n    while (ready) {\n        result = helper(first, second);\n        value = compute(first, second);\n    }\n    switch (kind) {\n    case 1: result = helper(first, second);\n        value = compute(first, second);\n        break;\n    case 2: {\n        result = helper(first, second);\n        value = compute(first, second);\n    }\n    }\n    for (index = 0; index < count;\n            index++) result = helper(first, second);\n    value = compute(first, second);\n}\n",
+    );
+}
+
+#[test]
+fn max_code_length_registers_no_assignment_a_kept_block_before_the_split_closed() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=kr".to_owned(),
+            "--keep-one-line-statements".to_owned(),
+            "--keep-one-line-blocks".to_owned(),
+            "--max-code-length=70".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "void f()\n{\n    do { result = helper(first, second); } while (compute(first, second) > limit);\n    x();\n}\n",
+        &options,
+        "void f()\n{\n    do { result = helper(first, second); } while (compute(first,\n            second) > limit);\n    x();\n}\n",
+    );
+}
+
+#[test]
+fn a_line_a_comment_leads_splits_its_code_with_the_continuation_of_any_line() {
+    let source = "void f()\n{\n    /* note */ result = (unsigned long)(value) << 8 | (unsigned long)other;\n    /* note */ total = compute(first_value, helper(second_value, third_value));\n}\n";
+    for (args, expected) in [
+        (
+            &["--style=stroustrup", "--max-code-length=50"][..],
+            "void f()\n{\n    /* note */ result = (unsigned long)(\n                            value) << 8 | (unsigned long)other;\n    /* note */ total = compute(first_value,\n                               helper(second_value, third_value));\n}\n",
+        ),
+        (
+            &["--max-code-length=60"][..],
+            "void f()\n{\n    /* note */ result = (unsigned long)(value) << 8 |\n                        (unsigned long)other;\n    /* note */ total = compute(first_value, helper(second_value,\n                               third_value));\n}\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        let args: Vec<String> = args.iter().map(|arg| arg.to_string()).collect();
+        apply_command_line_args(&mut options, &args).expect("valid options");
+        assert_stable_max_length_format(source, &options, expected);
+    }
+}
+
+#[test]
+fn an_argument_row_a_comment_leads_splits_at_the_column_of_its_arguments() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_owned(), "--max-code-length=60".to_owned()],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "void f()\n{\n    handle = open_item(path, ACCESS_READ, SHARE_READ,\n                       /*attributes=*/nullptr, OPEN_EXISTING, NORMAL_ITEM, nullptr);\n}\n",
+        &options,
+        "void f()\n{\n    handle = open_item(path, ACCESS_READ, SHARE_READ,\n                       /*attributes=*/nullptr, OPEN_EXISTING, NORMAL_ITEM,\n                       nullptr);\n}\n",
+    );
+}
+
+#[test]
+fn max_code_length_aligns_a_stream_row_at_the_first_shift_past_a_closed_call() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "void f()\n{\n    CHECK_TRUE(result != NULL) << \" \" << items[i].value << \" \" << status.text();\n    REPORT_ITEM() << \"a message too long to share its row with the call\";\n    helper(first) << second_value << third_value << fourth_value_name;\n    item.call(x).log() << second_value << third_value << fourth_value;\n}\n",
+        &options,
+        "void f()\n{\n    CHECK_TRUE(result != NULL) << \" \" << items[i].value << \" \"\n                               << status.text();\n    REPORT_ITEM() <<\n                  \"a message too long to share its row with the call\";\n    helper(first) << second_value << third_value <<\n                  fourth_value_name;\n    item.call(x).log() << second_value << third_value <<\n                       fourth_value;\n}\n",
+    );
+}
+
+#[test]
+fn max_code_length_aligns_a_stream_row_at_the_shift_after_a_braceless_header() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "void f()\n{\n    if (ready) REPORT(ERROR) << value.name << \" on \" << value.text << \": want \";\n    if (ready)\n        helper();\n    else stream << first_value << second_value << third_value << fourth_one;\n}\n",
+        &options,
+        "void f()\n{\n    if (ready) REPORT(ERROR) << value.name << \" on \" <<\n                             value.text << \": want \";\n    if (ready)\n        helper();\n    else stream << first_value << second_value << third_value <<\n                fourth_one;\n}\n",
+    );
+}
+
+#[test]
+fn max_code_length_splits_a_templated_declaration_as_its_reformat_lays_it_out() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "template <typename Char, typename T> auto check_every_listed_item() -> bool\n{\n    return true;\n}\ntemplate <typename Char, typename... T> void check_every_listed_value()\n{\n}\ntemplate <typename T, typename Enable = void> struct numeric_traits_value;\ntemplate <typename Char, typename T> static inline Item first_listed_value;\n",
+        &options,
+        "template <typename Char, typename T> auto\ncheck_every_listed_item() -> bool\n{\n    return true;\n}\ntemplate <typename Char, typename... T> void\ncheck_every_listed_value()\n{\n}\ntemplate <typename T, typename Enable = void> struct\n    numeric_traits_value;\ntemplate <typename Char, typename T> static inline Item\nfirst_listed_value;\n",
+    );
+}
+
+#[test]
+fn max_code_length_aligns_a_colon_led_row_s_split_at_its_first_element() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "Item::Item(const State& state, Value* f)\n    : state_(state), target_(f), file_opened_flag_(true), env_(env) {\n}\nItem::Item(const State& state, Value* f)\n    :state_(state), target_(f), file_opened_flag_(true), env_(env) {\n}\nItem::Item(const State& state, Value* f)\n    :   state_(state), target_(f), file_opened_flag_(true), env_(env) {\n}\nclass Item\n    : public FirstBaseClass, public SecondBaseClass, public ThirdBase {\n};\n",
+        &options,
+        "Item::Item(const State& state, Value* f)\n    : state_(state), target_(f), file_opened_flag_(true),\n      env_(env)\n{\n}\nItem::Item(const State& state, Value* f)\n    :state_(state), target_(f), file_opened_flag_(true),\n     env_(env)\n{\n}\nItem::Item(const State& state, Value* f)\n    :   state_(state), target_(f), file_opened_flag_(true),\n        env_(env)\n{\n}\nclass Item\n    : public FirstBaseClass, public SecondBaseClass,\n      public ThirdBase\n{\n};\n",
+    );
+}
+
+#[test]
+fn max_code_length_splits_a_specialization_s_qualifiers_off_at_its_head() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "template <> constexpr auto digit_count<native_value>() noexcept -> int\n{\n    return 38;\n}\n",
+        &options,
+        "template <> constexpr auto digit_count<native_value>()\nnoexcept -> int\n{\n    return 38;\n}\n",
+    );
+}
+
+#[test]
+fn max_code_length_continues_a_braceless_header_s_statement_past_its_body_level() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "void f()\n{\n    if (condition) throw std::runtime_error(\"the limit was reached\");\n    if (condition) delete first_item_value_name_and_more_names_here;\n    else delete first_item_value_name_and_more_names_here_too_long;\n}\n",
+        &options,
+        "void f()\n{\n    if (condition) throw\n            std::runtime_error(\"the limit was reached\");\n    if (condition) delete\n            first_item_value_name_and_more_names_here;\n    else delete\n            first_item_value_name_and_more_names_here_too_long;\n}\n",
+    );
+}
+
+#[test]
+fn max_code_length_splits_an_assignment_on_a_condition_s_last_row_from_that_row() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_eq!(
+        format_exact(
+            "void f()\n{\n    while (ready) {\n        if (state.load_truncated_value || state.corrupt_tail_max_size_value) valid_end_offset = position(fp);\n    }\n}\n",
+            &options,
+        ),
+        "void f()\n{\n    while (ready) {\n        if (state.load_truncated_value\n                || state.corrupt_tail_max_size_value) valid_end_offset =\n                        position(fp);\n    }\n}\n",
+    );
+}
+
+#[test]
+fn max_code_length_continues_parts_after_an_anchored_part_from_its_column() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "template <typename T>\nstruct has_value<T, enable_if_t<sizeof(std::check(T())) != 0>> : std::true_type {};\n",
+        &options,
+        "template <typename T>\nstruct has_value<T,\n                 enable_if_t<sizeof(std::check(T())) != 0>> :\n    std::true_type {};\n",
+    );
+}
+
+#[test]
+fn max_code_length_continues_a_stream_row_after_a_split_from_the_row_it_follows() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "void helper()\n{\n    if (value != item.value) {\n        LOG_INFO(ERROR) << item.name << \" value:\\n\" << \"got \" << value << \"\\n\"\n                        << \"want \" << item.value;\n    }\n}\n",
+        &options,
+        "void helper()\n{\n    if (value != item.value) {\n        LOG_INFO(ERROR) << item.name << \" value:\\n\" << \"got \" <<\n                        value << \"\\n\"\n                        << \"want \" << item.value;\n    }\n}\n",
+    );
+}
+
+#[test]
+fn max_code_length_splits_a_declarator_list_in_a_namespace_or_linkage_block_at_its_name() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    let rows = "Handler FirstValue, SecondValue, ThirdValue, FourthValue, FifthValue,\n    SixthValue, SeventhValue, EighthValue, NinthValue, TenthValue,\n    EleventhValue, TwelfthValue, ThirteenthValue, FourteenthValue;\n";
+    let split = "Handler FirstValue, SecondValue, ThirdValue, FourthValue,\n        FifthValue,\n        SixthValue, SeventhValue, EighthValue, NinthValue,\n        TenthValue,\n        EleventhValue, TwelfthValue, ThirteenthValue,\n        FourteenthValue;\n";
+    assert_stable_max_length_format(
+        &format!("namespace demo {{\n\n{rows}\n}}\n"),
+        &options,
+        &format!("namespace demo\n{{\n\n{split}\n}}\n"),
+    );
+    let indented = split.replace('\n', "\n    ").trim_end().to_string();
+    assert_stable_max_length_format(
+        &format!("extern \"C\" {{\n\n{rows}\n}}\n"),
+        &options,
+        &format!("extern \"C\" {{\n\n    {indented}\n\n}}\n"),
+    );
+}
+
+#[test]
+fn max_code_length_keeps_a_reference_declarator_with_its_type() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "auto helper(T&& value, Context& context_value_name_longer) -> int;\nauto helper(const T&& value, Context& context_value_name_l) -> int;\nauto helper(T &&value, Context& context_value_name_longer) -> int;\nauto helper(Format<T...> format, T&&... values_name) -> Result;\nstruct Item {\n    ITEM_CONSTEXPR auto format(Range&& range, Context& ctx) const;\n};\nbool result = first_value_is_long && second_value_is_long_xx;\n",
+        &options,
+        "auto helper(T&& value,\n            Context& context_value_name_longer) -> int;\nauto helper(const T&& value,\n            Context& context_value_name_l) -> int;\nauto helper(T &&value,\n            Context& context_value_name_longer) -> int;\nauto helper(Format<T...> format,\n            T&&... values_name) -> Result;\nstruct Item {\n    ITEM_CONSTEXPR auto format(Range&& range,\n                               Context& ctx) const;\n};\nbool result = first_value_is_long\n              && second_value_is_long_xx;\n",
+    );
+}
+
+#[test]
+fn max_code_length_continues_a_specifier_after_a_function_s_parameters() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "class Walker {\npublic:\n    NumCapturesWalker& operator=(const NumCapturesWalker&) = delete;\n    virtual NumCapturesWalker& helper(const NumCapturesWalker&) = 0;\n    virtual NumCapturesWalker& helper(const NumCapturesWalker&) const = 0;\n};\n",
+        &options,
+        "class Walker\n{\npublic:\n    NumCapturesWalker& operator=(const NumCapturesWalker&) =\n        delete;\n    virtual NumCapturesWalker& helper(const NumCapturesWalker&)\n        = 0;\n    virtual NumCapturesWalker& helper(const NumCapturesWalker&)\n    const = 0;\n};\n",
+    );
+}
+
+#[test]
+fn max_code_length_reads_no_assignment_in_an_operator_name() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "NumCapturesWalker& NumCapturesWalker::operator=(const Walker&) = default;\n",
+        &options,
+        "NumCapturesWalker& NumCapturesWalker::operator=\n(const Walker&) = default;\n",
+    );
+}
+
+#[test]
+fn max_code_length_splits_a_declaration_before_its_name_past_template_arguments() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "static inline std::map<std::string, int>* empty_named_groups() {\n    return value;\n}\n",
+        &options,
+        "static inline std::map<std::string, int>*\nempty_named_groups()\n{\n    return value;\n}\n",
+    );
+}
+
+#[test]
+fn max_code_length_keeps_a_new_call_argument_row_in_a_lambda_body_at_its_paren() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    let source = "void helper()\n{\n    if (ready) {\n        call_once(flag, [](Prog* prog) {\n            prog->dfa_longest_ = new DFA(prog, kLongestMatch,\n                                         prog->dfa_mem_ / 2);\n        }, this);\n    }\n}\n";
+    assert_stable_max_length_format(source, &options, source);
+}
+
+#[test]
+fn max_code_length_splits_a_stream_call_argument_in_a_lambda_body_as_in_a_function_body() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    let source = "void helper() {\n  call(flag, [](const Item* it) {\n    if (it->value == NULL) {\n      if (it->ready())\n        report(failure) << \"Failed to compile value '\" << brief(*it->pattern_)\n                        << \"'\";\n      next();\n    }\n  }, this);\n}\n";
+    let expected = "void helper()\n{\n    call(flag, [](const Item* it) {\n        if (it->value == NULL) {\n            if (it->ready())\n                report(failure) << \"Failed to compile value '\" << brief(\n                                    *it->pattern_)\n                                << \"'\";\n            next();\n        }\n    }, this);\n}\n";
+    assert_stable_max_length_format(source, &options, expected);
+}
+
+#[test]
+fn max_code_length_splits_a_comment_led_argument_row_at_its_own_column() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    let source = "void helper()\n{\n    {\n        Handle handle = ::OpenItem(\n            name.c_str(), desired_access, share_mode,\n            /*attributes=*/nullptr, OPEN_EXISTING, ITEM_ATTRIBUTE_NORMAL,\n            /*template_item=*/nullptr);\n    }\n}\n";
+    let expected = "void helper()\n{\n    {\n        Handle handle = ::OpenItem(\n                            name.c_str(), desired_access, share_mode,\n                            /*attributes=*/nullptr, OPEN_EXISTING,\n                            ITEM_ATTRIBUTE_NORMAL,\n                            /*template_item=*/nullptr);\n    }\n}\n";
+    assert_stable_max_length_format(source, &options, expected);
+}
+
+#[test]
+fn max_code_length_continues_a_subscript_past_the_maximum_at_the_paren_around_it() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    let source = "void helper()\n{\n    {\n        uint32_t sum = checksum::Value(&buffer_.items_[header_offset + 6], 1 + len);\n    }\n}\n";
+    let expected = "void helper()\n{\n    {\n        uint32_t sum = checksum::Value(&buffer_.items_[header_offset\n                                       + 6], 1 + len);\n    }\n}\n";
+    assert_stable_max_length_format(source, &options, expected);
+}
+
+#[test]
+fn max_code_length_continues_a_stream_operand_split_before_its_parens_at_the_chain() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    let source = "void helper()\n{\n    LOG_ITEM(INFO) << \"Memory at \" << reinterpret_cast<void*>(v);\n}\n";
+    let expected = "void helper()\n{\n    LOG_ITEM(INFO) << \"Memory at \" << reinterpret_cast<void*>\n                   (v);\n}\n";
+    assert_stable_max_length_format(source, &options, expected);
+}
+
+#[test]
+fn max_code_length_parts_of_a_body_run_in_after_a_header_stand_as_its_source_rows() {
+    // A label split off its `goto` on a condition's last row continues
+    // past the body from that row; a word after a cast ending the head
+    // starts the body anew, as a row the source breaks there does.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "void f(void)\n{\n    if (ready) {\n        if (value == 0 && !advance(&item)) goto cleanup; /* Last item and no more work. */\n        if (mode > PASSIVE_MODE_SETTING) (void)enable_blocking(handle);\n    }\n}\n",
+        &options,
+        "void f(void)\n{\n    if (ready) {\n        if (value == 0\n                && !advance(&item)) goto\n                        cleanup; /* Last item and no more work. */\n        if (mode > PASSIVE_MODE_SETTING) (void)enable_blocking(\n                handle);\n    }\n}\n",
+    );
+    assert_stable_max_length_format(
+        "void f(void)\n{\n    if (ready) {\n        if (mode > PASSIVE_SETTING) (void)enable_blocking_mode_for_all(handle);\n    }\n}\n",
+        &options,
+        "void f(void)\n{\n    if (ready) {\n        if (mode > PASSIVE_SETTING) (void)\n            enable_blocking_mode_for_all(handle);\n    }\n}\n",
+    );
+}
+
+#[test]
+fn max_code_length_argument_rows_after_a_split_off_call_holding_a_closed_list_stand_together() {
+    // A row holding a list closed on it continues the call as the rows
+    // after it do, wherever the split left the call.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "class Item {\n    template <size_t... Is>\n    static auto check(index_sequence<Is...>) -> decltype(all_true(\n        index_sequence<Is...>{},\n        integer_sequence<bool,\n                         (is_convertible<typename std::tuple_element<Is, T>::type,\n                                         C>::value)...>{}));\n};\n",
+        &options,
+        "class Item\n{\n    template <size_t... Is>\n    static auto check(index_sequence<Is...>) -> decltype(\n        all_true(\n            index_sequence<Is...>{},\n            integer_sequence<bool,\n                             (is_convertible<typename std::tuple_element<Is, T>::type,\n                                     C>::value)...>{}));\n};\n",
+    );
 }

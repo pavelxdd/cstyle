@@ -154,28 +154,6 @@ pub(crate) struct ElseBodyLayout {
 }
 
 impl FormatEngine<'_> {
-    pub(crate) fn ready_non_paren_header_indent_spaces(
-        &self,
-        line: &LineView<'_>,
-    ) -> Option<usize> {
-        let line_start = line.trimmed_start();
-        if !["for ", "while ", "switch "]
-            .iter()
-            .any(|header| line_start.starts_with(header))
-            || line_start.contains('(')
-        {
-            return None;
-        }
-        let previous_index = (0..self.output.len())
-            .rev()
-            .find(|&index| !self.output.trimmed(index).is_empty())?;
-        let previous_spaces = self
-            .output
-            .lead_width(previous_index, self.options.tab_width);
-        (previous_spaces > leading_visual_width(line, self.options.tab_width))
-            .then_some(previous_spaces)
-    }
-
     pub(crate) fn maximum_length_conditional_continuation_floor(
         &self,
         line: &str,
@@ -292,27 +270,20 @@ impl FormatEngine<'_> {
             .rposition(|line| !line.trimmed().is_empty())?;
         let before = &self.output[before_index];
         let before_trimmed = self.output.code_body(before_index);
+        // The output columns a case unindent moved stand past it again, as
+        // the unindent moves this line too.
+        let unindent = self.case_unindent_spaces();
         if before_trimmed == "else"
             || before_trimmed.ends_with("} else")
             || before_trimmed.ends_with("}else")
         {
             return Some(
-                leading_visual_width(before, self.options.tab_width) + self.options.indent_width,
+                leading_visual_width(before, self.options.tab_width)
+                    + self.options.indent_width
+                    + unindent,
             );
         }
-        // A code line led by `*` holds tokens; a comment line holds none.
-        // An indented preprocessor block indents its body past the comment.
-        let block_indent = if self.preprocessor.indented_block_stack.last() == Some(&true) {
-            self.options.indent_width
-        } else {
-            0
-        };
-        (is_comment_line(before.trimmed_start()) && self.output.line_tokens(before_index).is_none())
-            .then(|| {
-                self.output
-                    .comment_indent_width(before_index, self.options.tab_width)
-                    + block_indent
-            })
+        None
     }
 
     pub(crate) fn active_split_else_open_header_brace_indent_spaces(
@@ -1238,6 +1209,19 @@ impl FormatEngine<'_> {
     }
 
     fn record_header_frame(&mut self, word: &str) {
+        // The `if` of an `else` kept after a statement on its line stands
+        // with the `else`, not with the statement.
+        let else_after_statement_indent = (word == "if")
+            .then(|| self.current.trimmed_end().strip_suffix("else"))
+            .flatten()
+            .filter(|before| self.output.code_of(before).trimmed_end().ends_with(';'))
+            .and_then(|_| {
+                self.layout
+                    .frame_stack
+                    .active_header()
+                    .filter(|frame| frame.header == "else")
+                    .map(|frame| frame.line_indent_spaces)
+            });
         let attached_closing_indent =
             (word == "else" && self.current.trimmed_start().starts_with('}')).then(|| {
                 let closed = self.layout.frame_stack.last_closed_brace();
@@ -1316,7 +1300,7 @@ impl FormatEngine<'_> {
                 .current
                 .trimmed()
                 .strip_prefix('}')
-                .is_some_and(|rest| rest.trimmed().is_empty()))
+                .is_some_and(|rest| after_leading_comments(rest).is_empty()))
         .then(|| self.layout.indentation.indent() * self.options.indent_width);
         let starts_output_line = self.token_input.token_begins_source_line
             || (self.current_is_blank() && self.previous_was_newline);
@@ -1380,7 +1364,8 @@ impl FormatEngine<'_> {
             && !self.current_is_blank()
             && after_leading_comments(&self.current).trimmed().is_empty())
         .then(|| self.continuation_base_indent() * self.options.indent_width);
-        let line_indent_spaces = comment_led_label_indent
+        let line_indent_spaces = else_after_statement_indent
+            .or(comment_led_label_indent)
             .or(attached_closing_indent)
             .or(closed_if_indent)
             .or(open_if_indent)
@@ -1428,13 +1413,7 @@ impl FormatEngine<'_> {
             .current
             .trimmed_end()
             .ends_with('@')
-            .then_some(match word {
-                "autoreleasepool" => Some("autoreleasepool"),
-                "try" => Some("@try"),
-                "catch" => Some("@catch"),
-                "finally" => Some("@finally"),
-                _ => None,
-            })
+            .then(|| language::objc_statement_header(word))
             .flatten();
         let header = if let Some(header) = objc_header {
             Some(header)
@@ -1458,8 +1437,18 @@ impl FormatEngine<'_> {
         if let Some(header) = header {
             self.observe_block_spacing_header(header);
         }
-        if (language::BLOCK_WORDS.contains(&word) || language::PRE_BLOCK_WORDS.contains(&word))
+        // An Objective-C class's instance variables stand in a block of the
+        // class after its interface, extension or implementation head alike.
+        if matches!(word, "interface" | "implementation")
+            && self.layout.command_state.previous_non_ws_char == Some('@')
             && self.layout.nesting.paren_depth == 0
+        {
+            self.layout.command_state.pending_block_word = Some(format!("@{word}"));
+        } else if (language::BLOCK_WORDS.contains(&word)
+            || language::PRE_BLOCK_WORDS.contains(&word))
+            && self.layout.nesting.paren_depth == 0
+            // A `class` among template parameters opens no block.
+            && self.layout.line_state.template_angle_depth == 0
             && self.block_word_is_recognized(word, next)
             && !(matches!(word, "class" | "struct")
                 && self.layout.command_state.pending_block_word.as_deref() == Some("enum"))
@@ -1477,13 +1466,20 @@ impl FormatEngine<'_> {
         if word == "if" {
             // Comments leading the line hold no code before the header.
             let before = after_leading_comments(current).trimmed();
-            let before = before.strip_prefix('}').map_or(before, str::trim_start);
-            // A statement or a label may precede it on its line.
+            let before = before
+                .strip_prefix('}')
+                .map_or(before, after_leading_comments);
+            // A statement, a label or a macro may precede it on its line.
             let follows_statement = before.ends_with(';')
                 || before.ends_with(':')
                     && !before.ends_with("::")
                     && self.layout.nesting.paren_depth == 0
-                    && !self.layout.nesting.has_question_in_current_brace();
+                    && !self.layout.nesting.has_question_in_current_brace()
+                || self.layout.nesting.paren_depth == 0
+                    && before
+                        .chars()
+                        .next_back()
+                        .is_some_and(|ch| ch == ')' || ch == '_' || ch.is_alphanumeric());
             if !(before.is_empty()
                 || before == "else"
                 || follows_statement
@@ -1653,12 +1649,14 @@ impl FormatEngine<'_> {
         interrupted_header_context: impl FnOnce() -> bool,
     ) -> Option<usize> {
         let line_start = line.trimmed_start();
-        // A block given to a braceless header stands at that header.
+        // A block given to a braceless header stands at that header, as one
+        // a label opens does: its brace is none of the body's rows.
         let header_body_block = line_start.starts_with('{')
-            && self
+            && (self
                 .output
                 .last_line_outside_comment()
-                .is_some_and(|previous| line_is_control_body_header(previous.trimmed_start()));
+                .is_some_and(|previous| line_is_control_body_header(previous.trimmed_start()))
+                || self.pending_line_opens_label_block());
         if header_body_block
             || line_kind != LineKind::Normal
             || line_start.starts_with_any(b"#}:)")
@@ -1691,6 +1689,21 @@ impl FormatEngine<'_> {
             multiline_header_body = true;
         }
         (target > current || multiline_header_body && current > target).then_some(target)
+    }
+
+    /// Whether the line being laid out starts with the brace of a block a
+    /// label before it opens.
+    fn pending_line_opens_label_block(&self) -> bool {
+        self.output.pending_tokens().is_some_and(|span| {
+            matches!(self.tree.tokens[span.first], Token::Symbol('{'))
+                && self
+                    .tree
+                    .previous_code_token(span.first)
+                    .is_some_and(|colon| {
+                        matches!(self.tree.tokens[colon], Token::Symbol(':'))
+                            && self.tree.statements.starts_block_statement(span.first)
+                    })
+        })
     }
 
     pub(crate) fn split_else_condition_body_indent_spaces(
@@ -2221,10 +2234,39 @@ impl FormatEngine<'_> {
                 .output
                 .current_closing_brace_open(self.options.tab_width)
             && open_spaces > output_spaces
+            && !self.closing_brace_opens_after_statement()
         {
             result = Some(open_spaces);
         }
         (result != current_spaces).then_some(result?)
+    }
+
+    /// Whether the line holding the `{` that the pending line's leading `}`
+    /// closes starts with a statement before the brace's header: its indent
+    /// is that statement's.
+    fn closing_brace_opens_after_statement(&self) -> bool {
+        let groups = &self.tree.groups;
+        let Some(open) = self
+            .output
+            .pending_tokens()
+            .and_then(|span| groups.closed_at(span.first))
+            .map(|group| groups.get(group).open)
+        else {
+            return false;
+        };
+        let Some(first) = self
+            .output
+            .line_with_token(open)
+            .and_then(|line| self.output.line_tokens(line))
+            .map(|span| span.first)
+        else {
+            return false;
+        };
+        let scope = groups.enclosing(open);
+        (first..open).any(|index| {
+            matches!(self.tree.tokens[index], Token::Symbol(';'))
+                && groups.enclosing(index) == scope
+        })
     }
 
     pub(crate) fn closing_header_body_brace_indent_spaces(
@@ -2353,7 +2395,7 @@ pub(crate) fn is_attachable_closing_header(word: &str) -> bool {
     matches!(
         word,
         "else" | "catch" | "@catch" | "@finally" | "__finally" | "__except"
-    ) || word.ends_with("CATCH")
+    )
 }
 
 fn header_word_is(line: &str, word: &str) -> bool {

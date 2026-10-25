@@ -237,9 +237,24 @@ impl NestingState {
 
     fn push_continuation_column(&mut self, spaces: usize) {
         let index = self.continuation_indent_spaces_stack.len();
-        self.continuation_column_origins
-            .retain(|&(origin, _)| origin < index);
+        // The origins stand in the order of their columns, so those of
+        // columns gone from the stack end the list.
+        while self
+            .continuation_column_origins
+            .last()
+            .is_some_and(|&(origin, _)| origin >= index)
+        {
+            self.continuation_column_origins.pop();
+        }
         self.continuation_indent_spaces_stack.push(spaces);
+    }
+
+    /// The column the innermost paren registered for its rows, if any.
+    pub(crate) fn current_paren_continuation_column(&self) -> Option<usize> {
+        let checkpoint = *self.continuation_indent_checkpoint_stack.last()?;
+        (self.continuation_indent_spaces_stack.len() > checkpoint)
+            .then(|| self.continuation_indent_spaces_stack.last().copied())
+            .flatten()
     }
 
     pub(crate) fn restore_continuation_checkpoint(&mut self) {
@@ -265,6 +280,22 @@ impl NestingState {
         self.continuation_indent_spaces_stack.truncate(target_size);
     }
 
+    /// Drops the continuations an argument of the template arguments whose
+    /// angle registered column `angle` holds, as the comma ending it does,
+    /// when no paren opened since; whether it did.
+    pub(crate) fn trim_to_template_argument_continuation(&mut self, angle: usize) -> bool {
+        if self
+            .continuation_indent_checkpoint_stack
+            .last()
+            .is_some_and(|&checkpoint| angle < checkpoint)
+            || angle >= self.continuation_indent_spaces_stack.len()
+        {
+            return false;
+        }
+        self.continuation_indent_spaces_stack.truncate(angle + 1);
+        true
+    }
+
     /// Drops the continuations an element of the innermost brace list
     /// registered, as the comma ending it at the list's own depth does.
     pub(crate) fn trim_to_brace_element_continuation(&mut self) {
@@ -276,16 +307,47 @@ impl NestingState {
         }
     }
 
+    pub(crate) fn continuation_count(&self) -> usize {
+        self.continuation_indent_spaces_stack.len()
+    }
+
+    pub(crate) fn truncate_continuations(&mut self, count: usize) {
+        self.continuation_indent_spaces_stack.truncate(count);
+    }
+
+    /// Registers `spaces` again for the innermost paren when nothing of it
+    /// stands on the stack, as after a list inside it dropped its columns.
+    pub(crate) fn restore_paren_continuation(&mut self, spaces: usize) {
+        if self.paren_depth > 0
+            && self.continuation_indent_checkpoint_stack.last().copied()
+                == Some(self.continuation_indent_spaces_stack.len())
+        {
+            self.push_continuation_column(spaces);
+        }
+    }
+
+    /// Moves the column the innermost paren registered to `spaces`, where
+    /// its first argument came to stand.
+    pub(crate) fn lead_paren_continuation_with(&mut self, spaces: usize) {
+        if let Some(&checkpoint) = self.continuation_indent_checkpoint_stack.last()
+            && self.continuation_indent_spaces_stack.len() == checkpoint + 1
+        {
+            self.continuation_indent_spaces_stack[checkpoint] = spaces;
+            self.continuation_column_origins
+                .retain(|&(origin, _)| origin != checkpoint);
+        }
+    }
+
     pub(crate) fn current_continuation_indent_spaces(&self) -> Option<usize> {
-        // A brace list's elements continue nothing of the expression
-        // around it.
-        if matches!(
-            self.brace_type_stack.last(),
-            Some(BraceType::Array | BraceType::CompoundLiteral)
-        ) && self
-            .brace_scope_depth_stack
+        // A brace list's elements, and a block's statements, continue
+        // nothing of the expression around it.
+        if self
+            .brace_type_stack
             .last()
-            .is_some_and(|depth| self.continuation_indent_spaces_stack.len() <= depth.continuations)
+            .is_some_and(|brace| !matches!(brace, BraceType::Initializer | BraceType::DeferArray))
+            && self.brace_scope_depth_stack.last().is_some_and(|depth| {
+                self.continuation_indent_spaces_stack.len() <= depth.continuations
+            })
         {
             return None;
         }
@@ -355,6 +417,9 @@ impl NestingState {
                 .truncate(depth.parens);
             self.continuation_indent_spaces_stack.truncate(target_cont);
         }
+        // What the brace's rows registered ends with them.
+        self.continuation_indent_spaces_stack
+            .truncate(depth.continuations);
         if self.question_depth > depth.questions {
             recovery.questions = self.question_depth - depth.questions;
             self.question_depth = depth.questions;
@@ -381,6 +446,19 @@ impl NestingState {
     }
 }
 
+/// An open template angle: how many continuation columns stood registered
+/// before it, the ones after them ending with it.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) struct OpenTemplateAngle {
+    pub(crate) continuations: usize,
+    /// Where a row its closer leads stands, when its rows continue past the
+    /// column it registered: at the line it opened on, as a paren's closer
+    /// does.
+    pub(crate) closer_spaces: Option<usize>,
+    /// Whether it stands in a template head, whose rows are its own.
+    pub(crate) in_head: bool,
+}
+
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
 pub(crate) struct LineState {
     pub(crate) passed_semicolon: bool,
@@ -389,15 +467,14 @@ pub(crate) struct LineState {
     pub(crate) is_one_line_block: bool,
     pub(crate) column1_line_comment: bool,
     pub(crate) has_literal_quote: bool,
-    pub(crate) indent_off_follows_code: bool,
     pub(crate) operator_padding_disabled: bool,
     pub(crate) in_class_initializer: bool,
     pub(crate) trailing_comment_columns: std::collections::VecDeque<usize>,
-    pub(crate) has_nested_designated_init_brace: bool,
     pub(crate) ternary_colon: bool,
     /// Whether the line's last colon gives a bit-field width.
     pub(crate) bit_field_colon: bool,
     pub(crate) template_angle_depth: usize,
+    pub(crate) template_angle_continuations: Vec<OpenTemplateAngle>,
     /// The `;` of each statement on the line braces were added around.
     pub(crate) added_block_semicolons: Vec<usize>,
 }

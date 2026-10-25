@@ -21,7 +21,8 @@ use crate::formatter::syntax::language::{
     is_unpad_kept_type_word,
 };
 use crate::formatter::syntax::{
-    assignment_declarator_offset, scoped_name_is_constructor, signature_ends_with_parameter_list,
+    assignment_declarator_offset, continues_expression, scoped_name_is_constructor,
+    signature_ends_with_parameter_list,
 };
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
@@ -138,15 +139,16 @@ impl FormatEngine<'_> {
             ']' => self.push_close_bracket(),
             ';' => {
                 let added_brace_follows = self.added_brace_follows(token_index);
-                let following_while_suffix = self
-                    .options
-                    .attach_closing_while
-                    .then(|| closer_width_after_semicolon(&self.tree.tokens, token_index, true).1)
-                    .flatten();
+                let following_closer_suffix = closer_width_after_semicolon(
+                    &self.tree.tokens,
+                    token_index,
+                    self.options.attach_closing_while,
+                )
+                .1;
                 self.push_semicolon(
                     next,
                     following_closer_width,
-                    following_while_suffix,
+                    following_closer_suffix,
                     added_brace_follows,
                 );
             }
@@ -163,14 +165,43 @@ impl FormatEngine<'_> {
                 self.previous_was_newline = false;
             }
             '@' => {
-                let attached_closing_header = match next {
-                    Some(Token::Word(word)) if matches!(word.as_str(), "catch" | "finally") => {
-                        self.try_attach_leading_closing_header(&format!("@{word}"))
+                let objc_header = match next {
+                    Some(Token::Word(word)) => language::objc_statement_header(word),
+                    _ => None,
+                };
+                if objc_header.is_some_and(|header| {
+                    self.closing_header_leaves_one_line_block(
+                        header,
+                        self.layout.command_state.previous_non_ws_char,
+                    )
+                }) {
+                    self.finish_line();
+                }
+                let attached_closing_header = match objc_header {
+                    Some(header @ ("@catch" | "@finally")) => {
+                        self.try_attach_leading_closing_header(header)
                     }
                     _ => false,
                 };
+                // A selector colon padded after keeps its gap before a
+                // literal as before any argument.
+                let after_padded_selector = self.layout.objc.message_active
+                    && self.current.trimmed_end().ends_with(':')
+                    && matches!(
+                        self.options.pad_method_colon,
+                        ObjCColonPad::All | ObjCColonPad::After
+                    );
                 if !attached_closing_header {
-                    if self.current.trimmed_end().ends_with('}')
+                    if self.layout.previous == PreviousToken::OpenParen
+                        && self.options.pad_parens_inside
+                    {
+                        self.pad_inside_paren_space();
+                    } else if self.layout.previous == PreviousToken::OpenParen
+                        && self.options.unpad_parens
+                    {
+                        self.trim_current_end_horizontal_space();
+                    } else if self.current.trimmed_end().ends_with('}')
+                        || after_padded_selector
                         || (self.options.pad_operators
                             && self.layout.previous == PreviousToken::Operator)
                     {
@@ -180,9 +211,6 @@ impl FormatEngine<'_> {
                     }
                 }
                 self.current.push('@');
-                if matches!(next, Some(Token::Symbol('{'))) {
-                    self.ensure_space();
-                }
                 self.layout.command_state.observe_char('@');
                 self.layout.previous = PreviousToken::Other;
                 self.previous_was_newline = false;
@@ -192,7 +220,10 @@ impl FormatEngine<'_> {
                     self.emit_source_space();
                 }
                 self.current.push('\\');
-                self.layout.command_state.observe_char('\\');
+                // A line splice joins its line to the next as a blank does.
+                if !matches!(next, Some(Token::Newline) | None) {
+                    self.layout.command_state.observe_char('\\');
+                }
                 self.layout.previous = PreviousToken::Other;
                 self.previous_was_newline = false;
             }
@@ -206,12 +237,19 @@ impl FormatEngine<'_> {
     }
 
     fn push_dot(&mut self, next: Option<&Token>) {
+        self.continue_statement_at_row_lead(".");
         let keeps_padded_space = ((self.layout.previous == PreviousToken::Comma
             && (self.options.pad_commas || self.options.pad_operators))
             || (self.layout.previous == PreviousToken::Operator && self.options.pad_operators))
             && self.token_input.previous_input_whitespace.is_none()
             && self.current.ends_with(' ');
-        if !self.current.ends_with('.')
+        let spaces_declarator_group = std::mem::take(&mut self.pointer_run.spaces_declarator_group);
+        // A pack's `...` stands as the name of an aligned declarator.
+        if std::mem::take(&mut self.pointer_run.attaches_declarator_group) {
+            self.trim_current_end();
+        } else if spaces_declarator_group && self.current.ends_with_any(b" \t") {
+            // The gap moved past a type's star stays before the pack.
+        } else if !self.current.ends_with('.')
             && self.layout.previous == PreviousToken::OpenParen
             && self.options.pad_parens_inside
         {
@@ -318,6 +356,8 @@ impl FormatEngine<'_> {
                 self.trim_current_end();
             }
         }
+        let attaches_declarator_group =
+            std::mem::take(&mut self.pointer_run.attaches_declarator_group);
         let next_is_close = matches!(next, Some(Token::Symbol(')')));
         // The method prefix options set the gap before a return type.
         let prefix_sets_gap = handled_objc_return_paren && self.options.unpad_method_prefix;
@@ -344,7 +384,14 @@ impl FormatEngine<'_> {
                 && !self.layout.line_state.operator_padding_disabled)
                 || (self.options.pad_header
                     && (is_header(self.options, word)
+                        && !matches!(
+                            word,
+                            "try" | "__try" | "__finally" | "do" | "else" | "default"
+                        )
                         || matches!(word, "return" | "new" | "delete")
+                        || word == "synchronized"
+                            && self.layout.command_state.current_header.as_deref()
+                                == Some("@synchronized")
                         || word == "throw" && !self.throw_is_exception_specification()))
                 || outside_pad;
             if force_space {
@@ -370,10 +417,18 @@ impl FormatEngine<'_> {
             }
         } else if !outside_pad
             && self.layout.previous == PreviousToken::Operator
-            && self.options.pointer_align == PointerAlign::Name
-            && self.current.trimmed_end().ends_with_any(b"*^")
+            && self
+                .current
+                .trimmed_end()
+                .chars()
+                .next_back()
+                .is_some_and(|last| {
+                    matches!(last, '*' | '^' | '&')
+                        && resolved_pointer_align(self.options, last.encode_utf8(&mut [0; 4]))
+                            == PointerAlign::Name
+                })
             && !self.follows_binary_operator()
-            && self.looks_like_pointer_declaration_context()
+            && (attaches_declarator_group || self.looks_like_pointer_declaration_context())
             && !self.active_token_in_brackets()
         {
             if !self.function_pointer_parameter_keeps_space_before_name_group() {
@@ -450,6 +505,7 @@ impl FormatEngine<'_> {
                 self.current.push_str(&" ".repeat(spaces));
                 self.current_is_preindented = true;
             } else if self.layout.nesting.paren_depth == 0
+                && self.in_constructor_initializer()
                 && let Some(spaces) =
                     constructor_initializer_name_indent_from_line(self.options, previous)
             {
@@ -645,17 +701,40 @@ impl FormatEngine<'_> {
                         .map_or("", |(name, _)| name.trimmed()),
                 )
             });
-        if self.layout.compound_literal.arg_paren_depth == Some(self.layout.nesting.paren_depth) {
-            self.layout.compound_literal.arg_indent_spaces = None;
-            self.layout.compound_literal.arg_paren_depth = None;
-            self.layout.compound_literal.arg_brace_depth = None;
-            self.layout.compound_literal.after_comma = false;
+        // A logical chain inside the parens ends with them.
+        if let Some(close) = self.current.active_token()
+            && let Some(group) = self.tree.groups.closed_at(close)
+            && self
+                .layout
+                .frame_stack
+                .last_logical_token()
+                .is_some_and(|token| token > self.tree.groups.get(group).open)
+        {
+            self.layout.continuation_indent.logical_chain_indent_spaces = None;
         }
+        let closed_column = self
+            .layout
+            .frame_stack
+            .active_delimiter()
+            .filter(|frame| frame.opener_output_line < self.output.len())
+            .and_then(|_| self.layout.nesting.current_paren_continuation_column());
         self.layout.nesting.exit_paren();
         self.layout.frame_stack.pop_delimiter(self.output.len());
+        if let Some(column) = closed_column {
+            self.layout
+                .frame_stack
+                .record_line_closed_paren_column(column);
+        }
         self.layout.indentation.exit_paren();
+        // An operator no statement starts with continues the call's value.
+        let continued = self
+            .current
+            .active_token()
+            .and_then(|close| next_code_token(&self.tree.tokens, close + 1))
+            .is_some_and(|next| continues_expression(&self.tree.tokens[next]));
         if self.layout.nesting.paren_depth == 0
             && !matches!(next, Some(Token::Symbol(';')))
+            && !continued
             && let Some(spaces) = closes_semicolonless_macro_call_indent
         {
             self.layout
@@ -738,17 +817,22 @@ impl FormatEngine<'_> {
             };
         let declarator_alignment =
             declarator_operator.map(|operator| resolved_pointer_align(self.options, operator));
-        let opens_attribute = matches!(next, Some(Token::Symbol('[')));
+        let opens_attribute =
+            matches!(next, Some(Token::Symbol('['))) && self.bracket_opens_attribute();
         let opens_structured_binding =
             declarator_operator == Some("&") && trailing_word(declarator_prefix) == "auto";
+        let attaches_declarator_group =
+            std::mem::take(&mut self.pointer_run.attaches_declarator_group);
         let attaches_to_name_side = declarator_alignment == Some(PointerAlign::Name)
-            && (opens_attribute || opens_structured_binding);
-        let keeps_aligned_declarator_gap = (opens_attribute || opens_structured_binding)
-            && matches!(
-                declarator_alignment,
-                Some(PointerAlign::Type | PointerAlign::Middle)
-            )
-            && self.current.ends_with_any(b" \t");
+            && (opens_attribute || opens_structured_binding || attaches_declarator_group);
+        let spaces_declarator_group = std::mem::take(&mut self.pointer_run.spaces_declarator_group);
+        let keeps_aligned_declarator_gap =
+            (opens_attribute || opens_structured_binding || spaces_declarator_group)
+                && matches!(
+                    declarator_alignment,
+                    Some(PointerAlign::Type | PointerAlign::Middle)
+                )
+                && self.current.ends_with_any(b" \t");
         let keeps_padded_comma_gap = self.layout.previous == PreviousToken::Comma
             && (self.options.pad_commas || self.options.pad_operators)
             && self.token_input.previous_input_whitespace.is_none()
@@ -792,6 +876,7 @@ impl FormatEngine<'_> {
                 role: bracket_role,
                 parent_objc_message_align,
                 opens_after_selector,
+                continuations: self.layout.nesting.continuation_count(),
             });
         }
         if bracket_role != BracketRole::Other {
@@ -808,14 +893,33 @@ impl FormatEngine<'_> {
             && self.current.trimmed().is_empty()
     }
 
+    /// Whether the `[` being pushed opens an attribute, `[[...]]`, rather
+    /// than a message whose receiver is a message, `[[a b] c]`.
+    fn bracket_opens_attribute(&self) -> bool {
+        let groups = &self.tree.groups;
+        let tokens = &self.tree.tokens;
+        self.current
+            .active_token()
+            .and_then(|open| groups.opened_at(open))
+            .and_then(|outer| {
+                let outer = groups.get(outer);
+                let inner = groups.opened_at(next_code_token(tokens, outer.open + 1)?)?;
+                let inner_close = groups.get(inner).close?;
+                Some(next_code_token(tokens, inner_close + 1) == outer.close)
+            })
+            .unwrap_or(true)
+    }
+
     fn bracket_opens_objc_message(&self) -> bool {
         if self.current.trimmed_end().ends_with("return") {
             return true;
         }
+        // A name, a literal or a closed bracket or paren before it takes a
+        // subscript.
         match self.layout.command_state.previous_non_ws_char {
             None => true,
             Some(')') if self.options.mode == Mode::ObjC => true,
-            Some(ch) => !is_word_char(ch) && ch != ']' && ch != ')',
+            Some(ch) => !is_word_char(ch) && !matches!(ch, ']' | ')' | '"' | '\''),
         }
     }
 
@@ -866,6 +970,11 @@ impl FormatEngine<'_> {
             && self.current.contains(':')
             && !self.current.trimmed_start().starts_with('[');
         if !closes_operator_name {
+            if let Some(frame) = self.layout.frame_stack.active_bracket() {
+                self.layout
+                    .nesting
+                    .truncate_continuations(frame.continuations);
+            }
             self.layout.indentation.exit_bracket();
             self.layout.frame_stack.pop_bracket();
         }
@@ -948,7 +1057,7 @@ impl FormatEngine<'_> {
         &mut self,
         next: Option<&Token>,
         following_closer_width: usize,
-        following_while_suffix: Option<String>,
+        following_closer_suffix: Option<String>,
         added_brace_follows: bool,
     ) {
         let run_in_closers = matches!(
@@ -962,7 +1071,7 @@ impl FormatEngine<'_> {
         };
         self.max_length_line.set_suffix_width(suffix_width);
         self.max_length_line
-            .set_while_suffix(following_while_suffix.filter(|_| run_in_closers));
+            .set_closer_suffix(following_closer_suffix.filter(|_| run_in_closers));
         let closed_lambda_header_indent = self
             .current
             .trimmed_end()
@@ -1095,6 +1204,7 @@ impl FormatEngine<'_> {
                     && (self.options.break_one_line_statements
                         || !self.layout.line_state.is_multi_statement_line))
             {
+                self.join_closer_comment_to_statement_row();
                 self.finish_line();
                 self.observe_block_spacing_semicolon();
             } else if !matches!(next, Some(Token::Symbol(';' | ')' | '}'))) {
@@ -1181,26 +1291,19 @@ impl FormatEngine<'_> {
         }
         self.current.push(',');
         self.layout.command_state.observe_char(',');
-        if after_compound_literal {
-            let indent = self.current_line_indent_spaces();
-            self.layout.nesting.clear_continuation_indents();
-            self.layout.compound_literal.after_comma = true;
-            self.layout.compound_literal.arg_indent_spaces = Some(indent);
-            self.layout.compound_literal.arg_paren_depth = Some(self.layout.nesting.paren_depth);
-            self.layout.compound_literal.arg_brace_depth =
-                Some(self.layout.nesting.brace_header_stack.len());
-        } else if self.layout.compound_literal.arg_indent_spaces.is_some()
-            && self.layout.compound_literal.arg_paren_depth == Some(self.layout.nesting.paren_depth)
-            && self.layout.compound_literal.arg_brace_depth
-                == Some(self.layout.nesting.brace_header_stack.len())
-        {
-            self.layout.nesting.clear_continuation_indents();
-            self.layout.compound_literal.after_comma = true;
-        } else if self.innermost_brace_is_brace_list()
+        if self.innermost_brace_is_brace_list()
             && self.layout.nesting.current_brace_paren_depth()
                 == Some(self.layout.nesting.paren_depth)
         {
             self.layout.nesting.trim_to_brace_element_continuation();
+        } else if self.layout.line_state.template_angle_depth > 0
+            && let Some(angle) = self.layout.line_state.template_angle_continuations.last()
+            && angle.closer_spaces.is_some()
+            && self
+                .layout
+                .nesting
+                .trim_to_template_argument_continuation(angle.continuations)
+        {
         } else if self.layout.indentation.statement_depth() > 0
             || self.layout.nesting.paren_depth > 0
         {
@@ -1244,24 +1347,6 @@ impl FormatEngine<'_> {
         }
         self.layout.previous = PreviousToken::Comma;
         self.previous_was_newline = false;
-        let in_objc_dictionary_literal = self.output.recent_scoped_at_brace_line(64)
-            && self
-                .output
-                .scoped()
-                .iter()
-                .rev()
-                .take(64)
-                .take_while(|line| !line.trimmed_end().ends_with(';'))
-                .any(|line| line.contains_from_first_byte("@ {"));
-        if in_objc_dictionary_literal {
-            let spaces = self.current_line_indent_spaces();
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
-            if !matches!(next, Some(Token::Newline) | None) {
-                self.finish_line();
-                self.previous_was_newline = true;
-            }
-        }
     }
 
     fn comma_role_for_current_separator(&self, after_compound_literal: bool) -> CommaRole {
@@ -1273,13 +1358,7 @@ impl FormatEngine<'_> {
         {
             return CommaRole::CallArgument;
         }
-        if after_compound_literal
-            || (self.layout.compound_literal.arg_indent_spaces.is_some()
-                && self.layout.compound_literal.arg_paren_depth
-                    == Some(self.layout.nesting.paren_depth)
-                && self.layout.compound_literal.arg_brace_depth
-                    == Some(self.layout.nesting.brace_header_stack.len()))
-        {
+        if after_compound_literal {
             return CommaRole::CompoundLiteralArgument;
         }
         if self.in_initializer_brace()
@@ -1338,7 +1417,6 @@ impl FormatEngine<'_> {
                 .or_else(|| Some(self.current_line_indent_spaces())),
             CommaRole::InitializerSibling | CommaRole::CompoundLiteralArgument => self
                 .current_inline_array_column()
-                .or(self.layout.compound_literal.arg_indent_spaces)
                 .or_else(|| Some(self.current_line_indent_spaces())),
             CommaRole::Other => None,
         }
@@ -1440,17 +1518,6 @@ impl FormatEngine<'_> {
             self.layout.in_class_base_clause = true;
             self.layout.split_class_export_pending_base = false;
         }
-        let break_after_ternary_colon = is_ternary
-            && !matches!(
-                next,
-                Some(Token::Newline) | Some(Token::Comment(_, _)) | None
-            )
-            && (self.current.last_question().is_some_and(|index| {
-                self.current
-                    .last_open_brace()
-                    .is_some_and(|brace| brace > index)
-            }) || (self.current.trimmed_end().ends_with('}')
-                && self.layout.nesting.last_closed_brace_type.is_some()));
         let colon_output_column = self
             .current_visual_width()
             .max(self.token_input.token_source_line_indent);
@@ -1503,58 +1570,13 @@ impl FormatEngine<'_> {
         }
         self.layout.previous = PreviousToken::Other;
         self.previous_was_newline = false;
-        let in_objc_dictionary_literal = self.current.holds_dictionary_opener()
-            || self.output.recent_scoped_at_brace_line(64)
-                && self
-                    .output
-                    .scoped()
-                    .iter()
-                    .rev()
-                    .take(64)
-                    .take_while(|line| !line.trimmed_end().ends_with(';'))
-                    .any(|line| line.contains_from_first_byte("@ {"));
-        if in_objc_dictionary_literal
-            && !self.one_line_block_mode
-            && !is_objc_colon
-            && !matches!(next, Some(Token::Newline) | None)
-        {
-            let spaces = if self.current.holds_dictionary_opener() {
-                self.layout
-                    .previous_pre_adjust_line
-                    .as_ref()
-                    .filter(|previous| previous.trimmed_end().ends_with('='))
-                    .map(|previous| {
-                        leading_visual_width(previous, self.options.tab_width)
-                            + self.options.indent_width * 2
-                    })
-                    .unwrap_or_else(|| {
-                        self.current_line_indent_spaces() + self.options.indent_width
-                    })
-            } else {
-                self.layout
-                    .previous_pre_adjust_line
-                    .as_ref()
-                    .filter(|previous| previous.trimmed_end().ends_with(','))
-                    .map(|previous| leading_visual_width(previous, self.options.tab_width))
-                    .unwrap_or_else(|| self.current_line_indent_spaces())
-            };
-            self.finish_line();
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = Some(spaces);
-            self.previous_was_newline = true;
-        } else if function_try_initializer
+        if function_try_initializer
             && self.options.break_one_line_statements
             && !matches!(next, Some(Token::Newline | Token::Comment(_, _)) | None)
         {
             self.finish_line();
             self.layout.continuation_indent.next_line_indent = Some(self.statement_level() + 1);
             self.layout.continuation_indent.next_line_indent_spaces = None;
-            self.previous_was_newline = true;
-        } else if break_after_ternary_colon {
-            let spaces = self.ternary_colon_break_indent_spaces();
-            self.finish_line();
-            self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces = spaces;
             self.previous_was_newline = true;
         } else if is_label {
             let breaks_statement =
@@ -1706,6 +1728,7 @@ impl FormatEngine<'_> {
             && !is_objc_colon
             && !in_delimiters
             && !is_bit_field
+            && !is_class_initializer
             && !is_class_base
             && !is_enum_underlying_type
             && !is_range_for
@@ -1790,22 +1813,6 @@ impl FormatEngine<'_> {
             objc_method_definition: is_objc_method_def_colon,
             role: colon_role,
         }
-    }
-
-    fn ternary_colon_break_indent_spaces(&self) -> Option<usize> {
-        let line = self.current.as_str();
-        let trimmed = line.trimmed_start();
-        let leading = self.current_line_indent_spaces();
-        if trimmed.starts_with("return ") {
-            return Some(leading + "return ".len());
-        }
-        let (operator_index, operator) = find_assignment_operator(line)?;
-        let mut end = operator_index + operator.len();
-        let bytes = line.as_bytes();
-        while end < bytes.len() && matches!(bytes[end], b' ' | b'\t') {
-            end += 1;
-        }
-        Some(leading + visual_width_from(&line[..end], 0, self.options.tab_width))
     }
 
     fn is_asm_operand_colon(&self) -> bool {
@@ -2033,11 +2040,7 @@ impl FormatEngine<'_> {
                 if !rest.starts_with(char::is_whitespace) {
                     return None;
                 }
-                if self.recent_base_trailing_return_function_header() {
-                    lead
-                } else {
-                    lead + "return".len() + (rest.len() - rest.trimmed_start().len())
-                }
+                lead + "return".len() + (rest.len() - rest.trimmed_start().len())
             }
             TernaryOwnerRole::Assignment => {
                 let (operator_index, operator) = find_assignment_operator(code)?;
@@ -2053,6 +2056,7 @@ impl FormatEngine<'_> {
     }
 
     fn push_question(&mut self, next: Option<&Token>) {
+        self.continue_statement_at_row_lead("?");
         let pad_off =
             !self.options.pad_operators || self.layout.line_state.operator_padding_disabled;
         let should_pad = !pad_off && !self.is_in_case_label_expression();

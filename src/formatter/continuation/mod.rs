@@ -10,18 +10,23 @@ use crate::formatter::constructs::class_declarations::code_opens_class_base_clau
 use crate::formatter::constructs::headers::is_header;
 use crate::formatter::constructs::return_types::is_return_type_line;
 use crate::formatter::constructs::switch_cases::find_case_colon;
+use crate::formatter::constructs::template_declarations::after_template_head;
 use crate::formatter::continuation::max_length::lambda_parameter_continuation_indent;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::output::buffer::OutputBuffer;
-use crate::formatter::state::frame::{BraceSemanticKind, ColonRole, LogicalOperator};
+use crate::formatter::state::frame::{
+    BraceSemanticKind, BracketFrame, BracketRole, ColonRole, LogicalOperator,
+};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
+use crate::formatter::structure::blocks::{BlockKind, is_code_token, next_code_token};
 use crate::formatter::structure::functions::FunctionHead;
-use crate::formatter::structure::groups::Delimiter;
+use crate::formatter::structure::groups::{Delimiter, GroupId};
 use crate::formatter::syntax::language::{is_leading_continuation_operator, is_macro_like_word};
 use crate::formatter::syntax::{
     assignment_declarator_offset, function_head_has_assignment, function_name_start, language,
+    signature_ends_with_parameter_list,
 };
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
@@ -55,6 +60,9 @@ pub(crate) struct ContinuationIndentState {
     /// body.
     pub(crate) next_input_line_follows_lambda_body: bool,
     pub(crate) input_line_follows_lambda_body: bool,
+    /// The column the engine gives the input line when it goes on with
+    /// template arguments an angle on a line before it opened.
+    pub(crate) input_line_template_arguments_spaces: Option<usize>,
 }
 
 impl ContinuationIndentState {
@@ -105,8 +113,11 @@ fn declaration_comma_continuation_column(line: &str) -> usize {
     while column < comma && is_word_char(chars[column]) {
         column += 1;
     }
-    // A bit-field's colon parts no type from the declarator it ends.
-    if chars[column] == ':' && chars.get(column + 1) != Some(&':') {
+    // A bit-field's colon parts no type from the declarator it ends, nor
+    // does an operator applied to the word or a member it accesses.
+    if chars[column] == ':' && chars.get(column + 1) != Some(&':')
+        || matches!(chars[column], '+' | '-' | '.' | '[')
+    {
         return 0;
     }
     column += 1;
@@ -307,8 +318,16 @@ impl FormatEngine<'_> {
         let top = walk.top();
         let &(column, line_indent, _) = walk.node(top)?;
         let opener_indent = column + 1;
-        let base = self.continuation_base_indent() * self.options.indent_width;
-        if opener_indent < self.options.max_continuation_indent {
+        let statement_indent = if start < len {
+            leading_visual_width(&self.output[start], self.options.tab_width)
+        } else {
+            0
+        };
+        let base =
+            statement_indent.max(self.continuation_base_indent() * self.options.indent_width);
+        let fits =
+            |spaces: usize| spaces.saturating_sub(base) < self.options.max_continuation_indent;
+        if fits(opener_indent) {
             return Some(opener_indent);
         }
         if line_indent > base {
@@ -317,7 +336,7 @@ impl FormatEngine<'_> {
         std::iter::successors(Some(walk.below(top)), |&node| Some(walk.below(node)))
             .map_while(|node| walk.node(node))
             .map(|(column, _, _)| column + 1)
-            .find(|spaces| *spaces < self.options.max_continuation_indent)
+            .find(|&spaces| fits(spaces))
             .or(Some(base + self.options.indent_width * 2))
     }
 
@@ -356,6 +375,22 @@ impl FormatEngine<'_> {
         let trimmed = self.current.trimmed_end();
         (trimmed.ends_with('<') && !trimmed.ends_with("<<"))
             || (trimmed.ends_with('>') && !trimmed.ends_with(">>") && !trimmed.ends_with("->"))
+            // A `>>` closing template angles ends a type as a `>` does.
+            || trimmed.ends_with(">>") && self.previous_was_template_close
+    }
+
+    /// Whether the line ends a function's head, the body's brace the code
+    /// after it: a declarator ending it continues no expression.
+    fn current_ends_function_head(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        self.next_line.leads_with_open_brace
+            && self
+                .current
+                .tokens()
+                .and_then(|span| next_code_token(tokens, span.last + 1))
+                .filter(|&brace| matches!(tokens[brace], Token::Symbol('{')))
+                .and_then(|brace| self.tree.groups.opened_at(brace))
+                .is_some_and(|body| self.tree.blocks.kind(body) == Some(BlockKind::FunctionBody))
     }
 
     fn current_ends_with_pointer_declarator(&self) -> bool {
@@ -383,6 +418,10 @@ impl FormatEngine<'_> {
         }
         if self.template_continuation_closes_on_line(trimmed) {
             return false;
+        }
+        // Template arguments left open go on as a paren's arguments do.
+        if self.open_template_arguments_indent_spaces().is_some() {
+            return true;
         }
         let code_before_trailing_comment = self.current_code_before_trailing_comment();
         let line_comment_limit = line_comment_split_limit(trimmed);
@@ -438,6 +477,7 @@ impl FormatEngine<'_> {
                 && !bare_leading_operator_line
                 && !self.line_ends_with_bare_angle_operator()
                 && !self.current_ends_with_pointer_declarator()
+                && !self.current_ends_function_head()
                 && !trimmed.ends_with("->")
                 && (self.layout.indentation.statement_depth() != 0 || !trimmed.ends_with("::")))
             || (matches!(self.layout.previous, PreviousToken::Comma)
@@ -496,18 +536,25 @@ impl FormatEngine<'_> {
         } else {
             base_spaces
         };
-        Some(self.apply_min_conditional_indent(base_spaces, base_spaces + open + 1))
+        // Parens that indent after them continue a level past the header.
+        if self.options.indent_after_parens {
+            return Some(
+                base_spaces + self.options.continuation_indent * self.options.indent_width,
+            );
+        }
+        let pad = for_header_paren_pad(line, open);
+        Some(self.apply_min_conditional_indent(base_spaces, base_spaces + open + 1 + pad))
     }
 
     /// The continuation of the `for` header an output line starts.
     pub(crate) fn output_for_header_continuation_spaces(&self, line: &str) -> Option<usize> {
         let (base_spaces, open) = for_header_paren(line)?;
         let base_spaces = leading_visual_width(line, self.options.tab_width).max(base_spaces);
-        let spaces = base_spaces + open + 1;
         Some(if self.options.indent_after_parens {
-            spaces
+            base_spaces + self.options.continuation_indent * self.options.indent_width
         } else {
-            spaces.max(base_spaces + min_conditional_indent_spaces(self.options))
+            (base_spaces + open + 1 + for_header_paren_pad(line, open))
+                .max(base_spaces + min_conditional_indent_spaces(self.options))
         })
     }
 
@@ -711,11 +758,14 @@ impl FormatEngine<'_> {
         {
             spaces = spaces_for_enum;
         }
+        // Template angles ending the line register as a paren does.
+        let trailing_template_angle = !has_next && self.current.trimmed_end().ends_with('<');
         let over_max =
             spaces.saturating_sub(statement_base_spaces) > self.options.max_continuation_indent;
-        let capped_over_max = (has_next || trailing_open_paren || trailing_assignment)
-            && over_max
-            && inline_brace_call_indent.is_none();
+        let capped_over_max =
+            (has_next || trailing_open_paren || trailing_template_angle || trailing_assignment)
+                && over_max
+                && inline_brace_call_indent.is_none();
         let aligned = spaces;
         if capped_over_max {
             let fallback = line_indent_spaces + self.options.indent_width * 2;
@@ -846,7 +896,50 @@ impl FormatEngine<'_> {
             && !self.innermost_init_block_brace()
             && !self.in_aggregate_declaration_brace()
             && (self.layout.command_state.current_header.is_none()
-                || self.layout.indentation.statement_depth() != 0)
+                || self.layout.indentation.statement_depth() != 0
+                || self.header_body_runs_in())
+    }
+
+    /// Whether the statement under the line's header has begun on the line,
+    /// past the header's keyword or condition.
+    fn header_body_runs_in(&self) -> bool {
+        let Some(header) = self.layout.command_state.current_header.as_deref() else {
+            return false;
+        };
+        let tokens = &self.tree.tokens;
+        let Some(last) = self
+            .current
+            .tokens()
+            .filter(|span| span.last < tokens.len())
+            .and_then(|span| {
+                self.tree
+                    .previous_code_token(span.last + 1)
+                    .filter(|&last| last >= span.first)
+            })
+        else {
+            return false;
+        };
+        match header {
+            "else" | "do" => !matches!(&tokens[last], Token::Word(word) if word == header),
+            "if" | "while" | "for" | "switch" => {
+                self.header_paren.depth.is_none()
+                    && !self.incomplete_control_header()
+                    && !(matches!(tokens[last], Token::Symbol(')'))
+                        && self
+                            .tree
+                            .groups
+                            .closed_at(last)
+                            .and_then(|group| {
+                                self.tree
+                                    .previous_code_token(self.tree.groups.get(group).open)
+                            })
+                            .is_some_and(|keyword| {
+                                matches!(&tokens[keyword], Token::Word(word)
+                                    if word == header || matches!(word.as_str(), "constexpr" | "consteval"))
+                            }))
+            }
+            _ => false,
+        }
     }
 
     pub(crate) fn current_ends_base_clause_colon(&self) -> bool {
@@ -861,22 +954,23 @@ impl FormatEngine<'_> {
         if before.is_empty() || before.ends_with(':') || before.contains('?') {
             return false;
         }
-        if before.ends_with(')') {
-            return true;
-        }
-        let statement = crate::formatter::text::line_scan::statement_tail(before).trimmed_start();
-        statement
-            .split(|ch: char| !is_identifier_continue(ch))
-            .any(|word| matches!(word, "class" | "struct" | "union" | "interface"))
+        // Qualifiers after the parameters still end a constructor's head, and
+        // a class head may end on a row of its own.
+        signature_ends_with_parameter_list(before)
+            || code_opens_class_base_clause(before)
+            || self.split_class_head_ends_with(before)
     }
 
     fn class_base_clause_indent_spaces(&self) -> usize {
         let current_code = &self.current[..self.current_trailing_comment_split_limit()];
         if self.current_opens_class_base_clause()
             || code_opens_class_base_clause(current_code.trimmed_end())
-            || self.current_ends_base_clause_colon()
         {
             return self.current_line_indent_spaces() + self.options.indent_width;
+        }
+        // A head split over rows is continued from the row it starts on.
+        if self.current_ends_base_clause_colon() {
+            return (self.continuation_base_indent() + 1) * self.options.indent_width;
         }
         for scan_index in self.output.scoped_range().rev() {
             let line = &self.output[scan_index];
@@ -907,6 +1001,9 @@ impl FormatEngine<'_> {
     /// that a lambda's body spanning lines has passed: those stand at the
     /// statement, as the body's closer does.
     pub(crate) fn continues_arguments_after_lambda_body(&self) -> bool {
+        if self.continues_arguments_after_block_argument() {
+            return true;
+        }
         let Some(lambda) = self.layout.frame_stack.last_lambda_body() else {
             return false;
         };
@@ -940,6 +1037,66 @@ impl FormatEngine<'_> {
             && comma
                 .and_then(|comma| groups.enclosing(comma))
                 .is_some_and(|group| groups.get(group).delimiter == Delimiter::Paren)
+    }
+
+    /// Whether the braces of `block` hold statements, which a `;` at their
+    /// own level ends, other than a lambda's body.
+    pub(crate) fn brace_holds_statements(&self, block: GroupId) -> bool {
+        self.tree.groups.get(block).close.is_some_and(|close| {
+            self.statement_group_closes()
+                .binary_search(&(close as u32))
+                .is_ok()
+        })
+    }
+
+    /// Whether the line ends with a `,` among a call's arguments after a
+    /// block that spans lines closed somewhere in the call: the rest of the
+    /// statement stands at it, as after a lambda's body.
+    pub(crate) fn continues_arguments_after_block_argument(&self) -> bool {
+        self.current
+            .tokens()
+            .and_then(|span| self.tree.previous_code_token(span.last + 1))
+            .is_some_and(|comma| self.block_argument_before(comma))
+    }
+
+    /// Whether `comma` separates a call's arguments after a block among
+    /// them that spans rows or leads one; a block run in mid-row leaves the
+    /// arguments their column.
+    pub(crate) fn block_argument_before(&self, comma: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        if !matches!(tokens[comma], Token::Symbol(',')) {
+            return false;
+        }
+        let Some(call) = groups
+            .enclosing(comma)
+            .filter(|&group| groups.get(group).delimiter == Delimiter::Paren)
+        else {
+            return false;
+        };
+        let current = self.current.tokens();
+        let line_of = |index: usize| {
+            self.output.line_with_token(index).or_else(|| {
+                current
+                    .filter(|span| (span.first..=span.last).contains(&index))
+                    .map(|_| self.output.len())
+            })
+        };
+        let leads_row = |open: usize| match self.output.line_with_token(open) {
+            Some(line) => self
+                .output
+                .line_tokens(line)
+                .is_some_and(|span| span.first == open),
+            None => current.is_some_and(|span| span.first == open),
+        };
+        self.statement_group_closes_within(groups.get(call).open, comma)
+            .any(|index| {
+                matches!(tokens[index], Token::Symbol('}'))
+                    && groups.closed_at(index).is_some_and(|block| {
+                        let open = groups.get(block).open;
+                        line_of(open) != line_of(index) || leads_row(open)
+                    })
+            })
     }
 
     pub(crate) fn next_continuation_indent(&self) -> ContinuationIndent {
@@ -1027,14 +1184,9 @@ impl FormatEngine<'_> {
         {
             return ContinuationIndent::Spaces(self.current_line_indent_spaces());
         }
-        if self.options.max_code_length.is_some()
-            && self.options.indent_after_parens
-            && self.current_is_conditional_header_continuation()
-        {
-            return ContinuationIndent::Spaces(
-                (self.continuation_base_indent() + self.options.continuation_indent)
-                    * self.options.indent_width,
-            );
+        // Template arguments hold their rows, a base's among them.
+        if let Some(spaces) = self.open_template_arguments_indent_spaces() {
+            return ContinuationIndent::Spaces(spaces);
         }
         if self.layout.in_class_base_clause {
             return ContinuationIndent::Spaces(self.class_base_clause_indent_spaces());
@@ -1123,10 +1275,14 @@ impl FormatEngine<'_> {
                 && self.open_paren_column_of(line).is_none()
                 && !self.current_is_conditional_header_continuation()
             {
+                // With nothing anchoring the arm, it stands a continuation in.
                 let spaces = self
                     .assignment_continuation_indent_spaces()
                     .or_else(|| self.return_continuation_indent_spaces())
-                    .unwrap_or_else(|| self.statement_line_indent_spaces());
+                    .unwrap_or_else(|| {
+                        self.statement_line_indent_spaces()
+                            + self.options.continuation_indent * self.options.indent_width
+                    });
                 return ContinuationIndent::Spaces(spaces);
             }
         }
@@ -1161,6 +1317,12 @@ impl FormatEngine<'_> {
             }
         }
 
+        if let Some(spaces) = self.open_subscript_indent_spaces() {
+            return ContinuationIndent::Spaces(spaces);
+        }
+        if let Some(spaces) = self.enclosing_bracket_indent_spaces() {
+            return ContinuationIndent::Spaces(spaces);
+        }
         if !self.options.indent_after_parens
             && self.layout.frame_stack.active_delimiter().is_some()
             && let Some(spaces) = self.layout.nesting.current_continuation_indent_spaces()
@@ -1175,7 +1337,11 @@ impl FormatEngine<'_> {
             if let Some(spaces) = self.logical_chain_head_indent_spaces() {
                 return ContinuationIndent::Spaces(spaces);
             }
-            if let Some(spaces) = self.layout.continuation_indent.next_line_indent_spaces {
+            // A statement run in on a row continuing a header's condition
+            // goes on past its body, not at the condition's row.
+            if let Some(spaces) = self.layout.continuation_indent.next_line_indent_spaces
+                && !self.current_runs_body_in_after_condition()
+            {
                 return ContinuationIndent::Spaces(spaces);
             }
         }
@@ -1186,39 +1352,6 @@ impl FormatEngine<'_> {
             if let Some(spaces) = self.stream_operator_indent_spaces() {
                 return ContinuationIndent::Spaces(spaces);
             }
-        }
-
-        // A subscript left open aligns the next line past its bracket, as
-        // astyle counts brackets as parentheses.
-        if !self.options.indent_after_parens
-            && let line = self.current.trimmed_end()
-            && let Some(open) = self.open_paren_column_of(line)
-            && line[open..].starts_with('[')
-            // An Objective-C message aligns its own way.
-            && self.layout.frame_stack.bracket_depth() > 0
-            && !self.layout.objc.message_active
-            && line[..open]
-                .chars()
-                .next_back()
-                .is_some_and(|ch| ch == ']' || ch == '_' || ch.is_alphanumeric())
-        {
-            let indent = self.current_line_indent_spaces();
-            let lead = self.current.len() - self.current.trimmed_start().len();
-            let column = indent
-                + visual_width_from(
-                    &self.current[lead..open + 1],
-                    indent,
-                    self.options.tab_width,
-                );
-            // Past the maximum it continues two levels in, as a paren does.
-            let statement_base = self.continuation_base_indent() * self.options.indent_width;
-            return ContinuationIndent::Spaces(
-                if column.saturating_sub(statement_base) > self.options.max_continuation_indent {
-                    statement_base + 2 * self.options.indent_width
-                } else {
-                    column
-                },
-            );
         }
         if (!self.in_initializer_brace() || self.innermost_brace_is_brace_list())
             && !self.innermost_init_block_brace()
@@ -1242,9 +1375,11 @@ impl FormatEngine<'_> {
                 return ContinuationIndent::Spaces(spaces);
             }
             // An enumerator's pending column, set by a comment before it, is
-            // the line's own: its value continues past its `=`.
+            // the line's own: its value continues past its `=`. A column
+            // a paren the line closed set ends with it.
             if let Some(spaces) = self.layout.continuation_indent.next_line_indent_spaces
                 && !self.in_enum_declaration_brace()
+                && !self.layout.frame_stack.line_closed_paren_column(spaces)
             {
                 return ContinuationIndent::Spaces(spaces);
             }
@@ -1289,6 +1424,15 @@ impl FormatEngine<'_> {
         }
         if self.in_initializer_brace() || self.innermost_init_block_brace() {
             return ContinuationIndent::Level(base_indent);
+        }
+        // A statement run in after headers continues past their body on
+        // the row it starts on.
+        let headers = self.current_run_in_header_levels();
+        if headers > 0 {
+            return ContinuationIndent::Spaces(
+                self.current_line_indent_spaces()
+                    + (headers + self.options.continuation_indent) * self.options.indent_width,
+            );
         }
         let max_level = self.options.max_continuation_indent / self.options.indent_width.max(1);
         let indent =
@@ -1604,7 +1748,52 @@ impl FormatEngine<'_> {
             (operator, frame.operator),
             ("&&", LogicalOperator::And) | ("||", LogicalOperator::Or)
         );
-        (matches_operator && frame.operator_starts_output_line).then_some(frame.line_indent_spaces)
+        // A chain inside parens closed since goes on with none outside them.
+        let same_level = frame
+            .operator_token
+            .zip(self.current.active_token())
+            .is_none_or(|(chained, current)| {
+                self.tree.groups.enclosing(chained) == self.tree.groups.enclosing(current)
+            });
+        (matches_operator && frame.operator_starts_output_line && same_level)
+            .then_some(frame.line_indent_spaces)
+    }
+
+    /// How many levels the headers whose bodies run in before it on the
+    /// current line indent the statement the line ends in.
+    pub(crate) fn current_run_in_header_levels(&self) -> usize {
+        self.current
+            .tokens()
+            .and_then(|span| {
+                self.run_in_headers_from(span.first, span.last, |index| {
+                    (span.first..=span.last).contains(&index)
+                })
+            })
+            .map_or(0, |(levels, _)| levels)
+    }
+
+    /// Whether the current row goes on with a header's condition from a row
+    /// before and runs the header's body in after the condition closes.
+    fn current_runs_body_in_after_condition(&self) -> bool {
+        self.current.tokens().is_some_and(|span| {
+            self.condition_closing_on_row(span.first, span.last + 1, &|index| {
+                (span.first..=span.last).contains(&index)
+            })
+            .is_some_and(|close| close < span.last)
+        })
+    }
+
+    /// The indent of the row after a comma ending the line when the line
+    /// runs its statement in after headers: a statement there declares
+    /// nothing, and the row stands at their body.
+    fn run_in_statement_comma_indent_spaces(&self) -> Option<usize> {
+        let headers = self.current_run_in_header_levels();
+        (headers > 0
+            && matches!(
+                self.layout.nesting.brace_type_stack.last(),
+                Some(BraceType::Command | BraceType::Definition)
+            ))
+        .then(|| self.current_line_indent_spaces() + headers * self.options.indent_width)
     }
 
     fn declaration_continuation_indent_spaces(&self) -> Option<usize> {
@@ -1621,16 +1810,18 @@ impl FormatEngine<'_> {
         if !line.ends_with(',') || line.contains('=') {
             return None;
         }
+        if let Some(spaces) = self.run_in_statement_comma_indent_spaces() {
+            return Some(spaces);
+        }
         if let Some(paren) = line.find('(') {
             let before_paren = line[..paren].trimmed_end();
             if !before_paren.contains(char::is_whitespace) {
-                // A call or a cast leading a statement declares nothing:
-                // astyle continues nothing past its comma.
-                let leads_statement = before_paren
-                    .trimmed_start()
-                    .chars()
-                    .all(is_identifier_continue)
-                    && !is_header(self.options, before_paren.trimmed_start())
+                // A call or a cast leading a statement, a member's call
+                // too, declares nothing: the row after its comma stands at
+                // the statement.
+                let leads_statement = before_paren.trimmed_start().chars().all(|ch| {
+                    is_identifier_continue(ch) || matches!(ch, '.' | '-' | '>' | ':' | '[' | ']')
+                }) && !is_header(self.options, before_paren.trimmed_start())
                     && self.open_paren_column_of(line).is_none()
                     && matches!(
                         self.layout.nesting.brace_type_stack.last(),
@@ -1674,14 +1865,17 @@ impl FormatEngine<'_> {
                         .contains(char::is_whitespace)
                 })
             {
+                // A row the row before continues at its column, or one
+                // standing with it, holds the column for the next.
                 let previous_prefix = leading_visual_width(previous, self.options.tab_width);
-                if previous_prefix
-                    + declaration_comma_continuation_width(
-                        previous_code.trimmed_start(),
-                        previous_prefix,
-                        self.options.tab_width,
-                    )
-                    == prefix_len
+                if previous_prefix == prefix_len
+                    || previous_prefix
+                        + declaration_comma_continuation_width(
+                            previous_code.trimmed_start(),
+                            previous_prefix,
+                            self.options.tab_width,
+                        )
+                        == prefix_len
                 {
                     return Some(prefix_len);
                 }
@@ -1695,6 +1889,31 @@ impl FormatEngine<'_> {
                     self.options.tab_width,
                 ),
         )
+    }
+
+    /// The column a line ending among template arguments continues at: every
+    /// row of them stands at the column their angle registered, as the rows
+    /// of a paren's arguments do.
+    pub(crate) fn open_template_arguments_indent_spaces(&self) -> Option<usize> {
+        let angle = *self.layout.line_state.template_angle_continuations.last()?;
+        // So do the parens among them, past the angle's own column.
+        (self.layout.line_state.template_angle_depth > 0
+            && angle.closer_spaces.is_some()
+            && self.layout.nesting.continuation_count() > angle.continuations)
+            .then(|| self.layout.nesting.current_continuation_indent_spaces())
+            .flatten()
+    }
+
+    /// Whether the statement under way stands among template arguments
+    /// whose angle registered the column its rows count from.
+    pub(crate) fn within_template_arguments(&self) -> bool {
+        self.layout.line_state.template_angle_depth > 0
+            && self
+                .layout
+                .line_state
+                .template_angle_continuations
+                .iter()
+                .any(|angle| angle.closer_spaces.is_some())
     }
 
     /// Whether the `,` ending the current line follows, at its own level,
@@ -1762,6 +1981,7 @@ impl FormatEngine<'_> {
             return None;
         }
         if self.next_line.leads_with_class_base
+            || self.next_line.code_leads_with_open_brace
             || !splits_aggregate_declaration_name(self.current_code_before_trailing_comment())
         {
             return None;
@@ -1789,8 +2009,15 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn enum_member_missing_comma_indent_spaces(&self, previous: &str) -> Option<usize> {
-        // The member before is assigned.
-        if !previous.contains('=') {
+        // The member before is assigned, and the row stands in the body.
+        if !previous.contains('=')
+            || !self.output.pending_tokens().is_some_and(|span| {
+                self.tree
+                    .groups
+                    .enclosing(span.first)
+                    .is_some_and(|group| self.tree.groups.get(group).delimiter == Delimiter::Brace)
+            })
+        {
             return None;
         }
         let previous_content = previous.trimmed_start();
@@ -1851,6 +2078,147 @@ impl FormatEngine<'_> {
         )
     }
 
+    /// The column a bracket an earlier row left open holds the next row at
+    /// once the parens opened in it close: at the content past the bracket,
+    /// as the rows its own row continues stand.
+    fn enclosing_bracket_indent_spaces(&self) -> Option<usize> {
+        if self.options.indent_after_parens || self.layout.objc.message_active {
+            return None;
+        }
+        let bracket = self.layout.frame_stack.active_bracket()?;
+        if bracket.role != BracketRole::Other || bracket.opener_output_line >= self.output.len() {
+            return None;
+        }
+        // The line ends in the bracket, past parens opened in it that close
+        // on the line.
+        let span = self.current.tokens()?;
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let last = (span.first..=span.last)
+            .rev()
+            .find(|&index| is_code_token(&tokens[index]))?;
+        let group = groups.enclosing(last)?;
+        let closes_parens_in_it = (span.first..=span.last).any(|index| {
+            matches!(tokens[index], Token::Symbol(')'))
+                && groups
+                    .closed_at(index)
+                    .is_some_and(|paren| groups.get(paren).parent == Some(group))
+        });
+        if groups.get(group).delimiter != Delimiter::Bracket
+            || groups.get(group).open >= span.first
+            || !closes_parens_in_it
+        {
+            return None;
+        }
+        // The bracket's columns are output columns, which a case block
+        // unindents.
+        let unindent = self.case_unindent_spaces();
+        let after = bracket.opener_output_column + 1;
+        let column = after + self.bracket_content_gap(bracket, after) + unindent;
+        // Past the maximum it continues two levels past its row, as a paren
+        // does, and no nearer than the column the parens around it hold.
+        let statement_base = self.continuation_base_indent() * self.options.indent_width;
+        if column.saturating_sub(statement_base) <= self.options.max_continuation_indent {
+            return Some(column);
+        }
+        let capped = bracket.line_indent_spaces + 2 * self.options.indent_width + unindent;
+        Some(
+            self.layout
+                .nesting
+                .current_continuation_indent_spaces()
+                .map_or(capped, |around| capped.max(around)),
+        )
+    }
+
+    /// The width of the blanks between a bracket and the code after it on
+    /// its output line, from `after`, the column past the bracket.
+    fn bracket_content_gap(&self, bracket: &BracketFrame, after: usize) -> usize {
+        let Some(line) = self.output.get(bracket.opener_output_line) else {
+            return 0;
+        };
+        let code = line.trim_start_matches([' ', '\t']);
+        let offset = bracket
+            .opener_output_column
+            .saturating_sub(bracket.line_indent_spaces);
+        let Some(rest) = code
+            .char_indices()
+            .nth(offset)
+            .and_then(|(at, _)| code[at..].strip_prefix('['))
+        else {
+            return 0;
+        };
+        let content = rest.trim_start_matches([' ', '\t']);
+        if content.is_empty() {
+            return 0;
+        }
+        visual_width_from(
+            &rest[..rest.len() - content.len()],
+            after,
+            self.options.tab_width,
+        )
+    }
+
+    /// The column a subscript the line leaves open holds the next row at:
+    /// past its bracket, as astyle counts brackets as parentheses, whatever
+    /// parens stand around it.
+    fn open_subscript_indent_spaces(&self) -> Option<usize> {
+        if self.options.indent_after_parens
+            // An Objective-C message aligns its own way.
+            || self.layout.frame_stack.bracket_depth() == 0
+            || self.layout.objc.message_active
+        {
+            return None;
+        }
+        let line = self.current.trimmed_end();
+        let open = self.open_paren_column_of(line)?;
+        // A name, a subscript, a literal, a call or a parenthesized
+        // expression take the subscript; a cast's parens send a message.
+        if !line[open..].starts_with('[')
+            || !line[..open]
+                .chars()
+                .next_back()
+                .is_some_and(|ch| matches!(ch, ']' | '_' | '"' | '\'') || ch.is_alphanumeric())
+                && !parens_before_hold_an_operand(&line[..open])
+        {
+            return None;
+        }
+        let indent = self.current_line_indent_spaces();
+        let lead = self.current.len() - self.current.trimmed_start().len();
+        let column = indent
+            + visual_width_from(
+                &self.current[lead..open + 1],
+                indent,
+                self.options.tab_width,
+            );
+        // Past the maximum it continues two levels past its row, as a paren
+        // does, and no nearer than the column the parens around it hold.
+        let statement_base = self.continuation_base_indent() * self.options.indent_width;
+        if column.saturating_sub(statement_base) <= self.options.max_continuation_indent {
+            return Some(column);
+        }
+        // A subscript around it on the row holds it at its first element
+        // instead, as parens around it do.
+        if let [.., outer, inner] = unmatched_open_paren_columns(line)[..]
+            && inner == open
+            && line[outer..].starts_with('[')
+        {
+            let after = outer + 1;
+            let content = after + (line[after..].len() - line[after..].trimmed_start().len());
+            let column = indent
+                + visual_width_from(&self.current[lead..content], indent, self.options.tab_width);
+            if column.saturating_sub(statement_base) <= self.options.max_continuation_indent {
+                return Some(column);
+            }
+        }
+        let capped = indent + 2 * self.options.indent_width;
+        Some(
+            self.layout
+                .nesting
+                .current_continuation_indent_spaces()
+                .map_or(capped, |around| capped.max(around)),
+        )
+    }
+
     pub(crate) fn array_bound_operator_continuation_indent_spaces(&self) -> Option<usize> {
         let line = self.current.trimmed_end();
         if !head_ends_binary_operator(line) {
@@ -1869,19 +2237,24 @@ impl FormatEngine<'_> {
                 .unwrap_or_else(|| self.current_line_indent_spaces() + continuation);
             return Some(previous + continuation);
         }
-        // Past the maximum it continues at the value an assignment gives,
-        // else two levels in, as a paren does.
-        if column > self.options.max_continuation_indent {
-            let lead = self.current_line_indent_spaces();
+        // Past the maximum, measured as a subscript left open measures it, it
+        // continues at the value an assignment gives, else two levels past
+        // its row, and no nearer than the column the parens around it hold.
+        let lead = self.current_line_indent_spaces();
+        let statement_base = self.continuation_base_indent() * self.options.indent_width;
+        if (lead + column).saturating_sub(statement_base) > self.options.max_continuation_indent {
+            let capped = self
+                .assignment_continuation_indent_spaces()
+                .filter(|&value| value.saturating_sub(lead) <= self.options.max_continuation_indent)
+                .unwrap_or(lead + 2 * self.options.indent_width);
             return Some(
-                self.assignment_continuation_indent_spaces()
-                    .filter(|&value| {
-                        value.saturating_sub(lead) <= self.options.max_continuation_indent
-                    })
-                    .unwrap_or(lead + 2 * self.options.indent_width),
+                self.layout
+                    .nesting
+                    .current_continuation_indent_spaces()
+                    .map_or(capped, |around| capped.max(around)),
             );
         }
-        Some(self.current_line_indent_spaces() + column)
+        Some(lead + column)
     }
 
     fn parameter_default_operator_continuation_indent_spaces(&self) -> Option<usize> {
@@ -1909,12 +2282,40 @@ impl FormatEngine<'_> {
         Some(base + value_offset)
     }
 
+    /// Whether the line holds an assignment outside template angles; the
+    /// `=` of a default template argument assigns nothing the line goes on
+    /// with.
+    fn current_assigns_outside_template_angles(&self) -> bool {
+        let Some(span) = self.current.tokens() else {
+            return true;
+        };
+        let tokens = &self.tree.tokens;
+        let mut depth = 0usize;
+        (span.first..=span.last.min(tokens.len().saturating_sub(1))).any(|index| {
+            match &tokens[index] {
+                Token::Operator(operator) if operator == "<" && self.template_opener_at(index) => {
+                    depth += 1;
+                }
+                Token::Operator(operator)
+                    if depth > 0 && matches!(operator.as_str(), ">" | ">>") =>
+                {
+                    depth = depth.saturating_sub(operator.len());
+                }
+                Token::Operator(operator) if depth == 0 => {
+                    return language::is_assignment_operator(operator);
+                }
+                _ => {}
+            }
+            false
+        })
+    }
+
     pub(crate) fn assignment_continuation_indent_spaces(&self) -> Option<usize> {
         if self.in_initializer_brace() {
             return None;
         }
         // Every assignment operator holds `=`.
-        if !self.current.holds_equals() {
+        if !self.current.holds_equals() || !self.current_assigns_outside_template_angles() {
             return None;
         }
         let code = self.current_code_before_trailing_comment();
@@ -1934,6 +2335,7 @@ impl FormatEngine<'_> {
             || value.starts_with(':') && !value.starts_with("::")
             || code.ends_with('}') && rest.contains(';')
             || unmatched_open_paren_column(&code[..operator_start]).is_none()
+                && rest.contains(';')
                 && has_top_level_char(rest, ';')
         {
             return None;
@@ -2064,38 +2466,98 @@ impl FormatEngine<'_> {
         {
             return None;
         }
+        // A subscript the line leaves open holds the next row past its
+        // bracket.
+        if self.layout.frame_stack.bracket_depth() > 0 && !self.layout.objc.message_active {
+            return None;
+        }
         let stream = self.layout.frame_stack.active_stream()?;
         (stream.operator_output_line == self.output.len()).then_some(stream.chain_anchor_column)
     }
 
     pub(crate) fn previous_stream_chain_indent_spaces(&self) -> Option<usize> {
         let previous_line = self.output.len().checked_sub(1)?;
-        let stream = self
-            .layout
-            .frame_stack
+        // A row holding no shift continues the chain of the row with the
+        // last one, from that row's first.
+        let frames = &self.layout.frame_stack;
+        let stream = frames
             .first_stream_on_output_line(previous_line)
             .or_else(|| {
-                self.layout
-                    .frame_stack
-                    .stream_before_output_line(self.output.len())
+                let last = frames.stream_before_output_line(self.output.len())?;
+                frames
+                    .first_stream_on_output_line(last.operator_output_line)
+                    .or(Some(last))
             })?;
         let base = self.continuation_base_indent() * self.options.indent_width;
-        if stream.line_contains_nested_brace {
-            return Some(base + self.options.indent_width * 2);
+        // The output columns a case unindent moved stand past it again, as
+        // the unindent moves this row too.
+        let unindent = self.case_unindent_spaces();
+        if stream.operator_output_line == previous_line
+            && stream.line_has_positive_paren_delta
+            && let Some(spaces) = self.stream_row_after_closed_parens_indent(previous_line, base)
+        {
+            return Some(spaces + unindent);
         }
+        // A chain on a row of a header's condition runs in after the
+        // condition closes there, at the header's body.
+        let runs_in_after_condition = self.output.line_tokens(previous_line).is_some_and(|span| {
+            self.condition_closing_on_row(span.first, span.last + 1, &|index| {
+                self.output.line_with_token(index) == Some(previous_line)
+            })
+            .is_some()
+        });
         if stream.line_indent_spaces > base
             && stream.operator_output_column != stream.line_indent_spaces
+            && !runs_in_after_condition
         {
-            return Some(stream.line_indent_spaces);
+            return Some(stream.line_indent_spaces + unindent);
         }
         if let Some(spaces) = stream.assignment_value_start_column {
-            return Some(spaces);
+            return Some(spaces + unindent);
         }
         if stream.operator_output_column.saturating_sub(base) > self.options.max_continuation_indent
         {
             return Some(base + self.options.indent_width * 2);
         }
-        Some(stream.operator_output_column)
+        Some(stream.operator_output_column + unindent)
+    }
+
+    /// The column of a stream row after output line `previous_line`, which
+    /// closed parens opened on rows before it and so ended the continuation
+    /// it stood in: the argument column of a paren or bracket still open
+    /// from an earlier row, or else the chain's first operator outside
+    /// parens, or the value of an assignment before it.
+    fn stream_row_after_closed_parens_indent(
+        &self,
+        previous_line: usize,
+        base: usize,
+    ) -> Option<usize> {
+        let groups = &self.tree.groups;
+        let enclosing = groups.enclosing(self.output.pending_tokens()?.first);
+        if let Some(group) = enclosing.map(|group| groups.get(group))
+            && group.delimiter != Delimiter::Brace
+        {
+            let open_line = self
+                .output
+                .line_with_token(group.open)
+                .filter(|&line| line < previous_line)?;
+            let operand = next_code_token(&self.tree.tokens, group.open + 1)
+                .filter(|&operand| self.output.line_with_token(operand) == Some(open_line))?;
+            return self.token_column(operand).filter(|column| {
+                column.saturating_sub(base) <= self.options.max_continuation_indent
+            });
+        }
+        let head = self
+            .layout
+            .frame_stack
+            .first_stream_with_token(|token| groups.enclosing(token) == enclosing)?;
+        if let Some(spaces) = head.assignment_value_start_column {
+            return Some(spaces);
+        }
+        if head.operator_output_column.saturating_sub(base) > self.options.max_continuation_indent {
+            return Some(base + self.options.indent_width * 2);
+        }
+        Some(head.operator_output_column)
     }
 
     /// The level of a statement line here, with a case body's extra level
@@ -2148,6 +2610,17 @@ impl FormatEngine<'_> {
         {
             return false;
         }
+        // A chain inside parens the line closes ends with them.
+        if self.current.tokens().is_some_and(|span| {
+            let groups = &self.tree.groups;
+            groups.enclosing(span.first).is_some_and(|group| {
+                let group = groups.get(group);
+                group.delimiter != Delimiter::Brace
+                    && group.close.is_some_and(|close| close <= span.last)
+            })
+        }) {
+            return false;
+        }
         starts_with_chain_operator(trimmed)
     }
 
@@ -2194,6 +2667,12 @@ fn for_header_paren(line: &str) -> Option<(usize, usize)> {
         return None;
     }
     Some((line.len() - trimmed.len(), trimmed.find('(')?))
+}
+
+/// The spaces a pad sets right inside the `for` header's paren on `line`.
+fn for_header_paren_pad(line: &str, open: usize) -> usize {
+    let after = &line.trimmed_start()[open + 1..];
+    after.len() - after.trim_start_matches(' ').len()
 }
 
 fn is_nested_template_type(type_prefix: &str) -> bool {
@@ -2342,26 +2821,95 @@ pub(crate) fn min_conditional_indent_spaces(options: &FormatOptions) -> usize {
     }
 }
 
-/// Whether `line` names a struct or union type its declarators continue on
-/// the next line after, as `static const struct Item`.
+/// Whether `line` names a struct, union or class type its declarators or
+/// head continue on the next line after, as `static const struct Item`.
 pub(crate) fn splits_aggregate_declaration_name(line: &str) -> bool {
-    // A comment leading the type leaves the declaration it leads.
-    let line = after_leading_comments(line);
-    if line.trimmed_start().starts_with_any(b"/*")
-        || ["//", "/*", "*/"]
-            .iter()
-            .any(|marker| line.contains(marker))
-        || line.ends_with_any(b";{}=")
-        || line.contains_any_byte(b"([)],")
+    // A comment leading the type leaves the declaration it leads, and a
+    // template head the declaration it introduces.
+    let line = after_template_head(after_leading_comments(line));
+    if line.ends_with_any(b";{}=")
+        || line.trimmed_start().starts_with_any(b"/*")
+        || line.as_bytes().contains(&b'/')
+            && ["//", "/*", "*/"]
+                .iter()
+                .any(|marker| line.contains(marker))
     {
         return false;
     }
-    let words = line
+    // A class key among template parameters names no type of its own.
+    let in_angles = |at: usize| {
+        let before = &line[..at];
+        before.matches('<').count() > before.matches('>').count()
+    };
+    let Some(key) = line
         .split(|ch: char| !is_identifier_continue(ch))
-        .filter(|word| !word.is_empty())
-        .collect::<Vec<_>>();
-    words
-        .iter()
-        .position(|word| matches!(*word, "struct" | "union"))
-        .is_some_and(|aggregate| words.len() > aggregate + 1)
+        .filter(|word| matches!(*word, "struct" | "union" | "class"))
+        .map(|word| word.as_ptr() as usize - line.as_ptr() as usize)
+        .find(|&at| !in_angles(at))
+    else {
+        return false;
+    };
+    // Specifiers before the key may hold groups of their own; the type
+    // after it holds none.
+    !line[key..].contains_any_byte(b"([)],") && closes_its_groups(&line[..key])
+}
+
+/// Whether `text` closes every paren and bracket it opens, with no comma
+/// outside them.
+fn closes_its_groups(text: &str) -> bool {
+    let mut depth = 0usize;
+    for byte in text.bytes() {
+        match byte {
+            b'(' | b'[' => depth += 1,
+            b')' | b']' => {
+                let Some(outer) = depth.checked_sub(1) else {
+                    return false;
+                };
+                depth = outer;
+            }
+            b',' if depth == 0 => return false,
+            _ => {}
+        }
+    }
+    depth == 0
+}
+
+/// Whether `text` ends with parens that hold an operand rather than name a
+/// type: a call's, or ones holding an expression past a lone name or type.
+fn parens_before_hold_an_operand(text: &str) -> bool {
+    let text = text.trimmed_end();
+    let Some(inner_end) = text.len().checked_sub(1).filter(|_| text.ends_with(')')) else {
+        return false;
+    };
+    let mut depth = 0usize;
+    let Some(open) = text[..inner_end]
+        .char_indices()
+        .rev()
+        .find_map(|(index, ch)| {
+            match ch {
+                ')' | ']' => depth += 1,
+                '(' | '[' if depth == 0 => return Some(index),
+                '(' | '[' => depth -= 1,
+                _ => {}
+            }
+            None
+        })
+    else {
+        return false;
+    };
+    if !text[open..].starts_with('(') {
+        return false;
+    }
+    if text[..open]
+        .trimmed_end()
+        .ends_with(|ch: char| ch == '_' || ch == ')' || ch.is_alphanumeric())
+    {
+        return true;
+    }
+    let inner = text[open + 1..inner_end].trimmed();
+    let inner = inner.trim_end_matches(['*', '&', ' ']);
+    inner.contains("->")
+        || inner
+            .bytes()
+            .any(|byte| b"([.+-/%<>=!|^?,*&".contains(&byte))
 }

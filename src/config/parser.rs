@@ -777,7 +777,7 @@ fn apply_min_conditional_indent(
     value: &str,
     options: &mut FormatOptions,
 ) -> Result<(), ConfigError> {
-    options.min_conditional_indent = match value {
+    let value = match value {
         "0" => MinConditionalIndent::Zero,
         "1" => MinConditionalIndent::One,
         "2" => MinConditionalIndent::Two,
@@ -789,6 +789,7 @@ fn apply_min_conditional_indent(
             ));
         }
     };
+    options.set_explicit_min_conditional_indent(value);
     Ok(())
 }
 
@@ -1287,16 +1288,13 @@ mod tests {
     }
 
     #[test]
-    fn linux_style_overrides_explicit_conditional_indent_regardless_of_order() {
+    fn explicit_conditional_indent_overrides_the_linux_default_regardless_of_order() {
         for source in [
             "min-conditional-indent=2\nstyle=linux\n",
             "style=linux\nmin-conditional-indent=2\n",
         ] {
             let options = parse_config(source);
-            assert_eq!(
-                options.min_conditional_indent,
-                MinConditionalIndent::OneHalf
-            );
+            assert_eq!(options.min_conditional_indent, MinConditionalIndent::Two);
         }
     }
 

@@ -194,6 +194,7 @@ pub struct FormatOptions {
     pub non_paren_headers: Vec<String>,
     tab_width_explicit: bool,
     keep_one_line_blocks_explicit: bool,
+    min_conditional_indent_explicit: bool,
     active_style: Option<StylePreset>,
     style_base: Option<StyleFields>,
 }
@@ -285,6 +286,7 @@ impl Default for FormatOptions {
             non_paren_headers: Vec::new(),
             tab_width_explicit: false,
             keep_one_line_blocks_explicit: false,
+            min_conditional_indent_explicit: false,
             active_style: None,
             style_base: None,
         }
@@ -341,10 +343,16 @@ impl FormatOptions {
 
     pub fn set_min_conditional_indent(&mut self, value: MinConditionalIndent) {
         let style = self.remove_active_style();
-        self.min_conditional_indent = value;
+        self.set_explicit_min_conditional_indent(value);
         if let Some(style) = style {
             self.apply_style_preset(style);
         }
+    }
+
+    /// An explicit minimum replaces the one a style implies.
+    pub(super) fn set_explicit_min_conditional_indent(&mut self, value: MinConditionalIndent) {
+        self.min_conditional_indent = value;
+        self.min_conditional_indent_explicit = true;
     }
 
     pub(super) fn remove_active_style(&mut self) -> Option<StylePreset> {
@@ -378,7 +386,9 @@ impl FormatOptions {
                 self.brace_style = BraceStyle::OneTrueBrace;
                 self.attach_struct = true;
                 self.attach_enum = true;
-                self.min_conditional_indent = MinConditionalIndent::OneHalf;
+                if !self.min_conditional_indent_explicit {
+                    self.min_conditional_indent = MinConditionalIndent::OneHalf;
+                }
             }
             StylePreset::Mozilla => {
                 self.brace_style = BraceStyle::OneTrueBrace;

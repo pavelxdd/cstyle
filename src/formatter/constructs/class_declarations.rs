@@ -21,6 +21,19 @@ pub(crate) fn has_base_access_token(tokens: &[Token]) -> bool {
 }
 
 pub(crate) fn is_split_export_head(line: &str) -> bool {
+    let head = line.trim_start();
+    if !["class", "struct", "union", "interface"]
+        .iter()
+        .any(|kind| {
+            head.strip_prefix(kind).is_some_and(|rest| {
+                rest.chars()
+                    .next()
+                    .is_none_or(|ch| !is_identifier_continue(ch))
+            })
+        })
+    {
+        return false;
+    }
     if line
         .chars()
         .any(|ch| !is_identifier_continue(ch) && !ch.is_whitespace())
@@ -99,12 +112,14 @@ impl FormatEngine<'_> {
         if self.current_opens_class_base_clause() {
             return true;
         }
-        if self.layout.nesting.has_question_in_current_brace()
-            || !self.current[..self.current_trailing_comment_split_limit()]
-                .trimmed()
-                .is_empty()
-        {
+        if self.layout.nesting.has_question_in_current_brace() {
             return false;
+        }
+        if !self.current[..self.current_trailing_comment_split_limit()]
+            .trimmed()
+            .is_empty()
+        {
+            return self.current_ends_split_class_head();
         }
         // Comment lines and directives before the colon leave the head.
         let Some(line) = self.output.scoped().iter().rev().find(|line| {
@@ -117,6 +132,78 @@ impl FormatEngine<'_> {
         };
         let code = &self.output.code_of(line);
         code_opens_class_base_clause(code.trimmed_end())
+    }
+
+    /// The class key of the class head that ends right before the token
+    /// `end`, outside the template angles the head holds.
+    pub(crate) fn class_head_key_before(&self, end: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let mut cursor = end;
+        // The angles the walk is inside, counted back from the head's end.
+        let mut depth = 0usize;
+        loop {
+            let index = self.tree.previous_code_token(cursor)?;
+            if let Some(group) = groups.closed_at(index) {
+                cursor = groups.get(group).open;
+                continue;
+            }
+            match &tokens[index] {
+                Token::Symbol(';' | '{' | '}') => return None,
+                // A conditional's arms continue no class head.
+                Token::Symbol('?') if depth == 0 => return None,
+                _ if groups.opened_at(index).is_some() => return None,
+                Token::Operator(operator) if operator == ">" && self.closes_template_at(index) => {
+                    depth += 1;
+                }
+                Token::Operator(operator) if operator == ">>" && self.closes_template_at(index) => {
+                    depth += 2;
+                }
+                Token::Operator(operator) if operator == "<" && self.template_opener_at(index) => {
+                    depth = depth.saturating_sub(1);
+                }
+                Token::Word(word)
+                    if depth == 0
+                        && matches!(word.as_str(), "class" | "struct" | "union" | "interface") =>
+                {
+                    return Some(index);
+                }
+                _ => {}
+            }
+            cursor = index;
+        }
+    }
+
+    /// Whether the current line ends a class head that the rows before it
+    /// open, as template arguments split across rows leave one.
+    pub(crate) fn current_ends_split_class_head(&self) -> bool {
+        self.split_class_head_ends_with(self.current_code_before_trailing_comment().trimmed())
+    }
+
+    /// Whether `code`, the current row's code up to where the head would
+    /// end, ends a class head that the rows before it open.
+    pub(crate) fn split_class_head_ends_with(&self, code: &str) -> bool {
+        let mut head = vec![code];
+        let range = self.output.scoped_range();
+        for index in range.clone().rev().take(16) {
+            let trimmed = self.output.trimmed(index);
+            if trimmed.is_empty()
+                || is_bare_comment_line(trimmed)
+                || self.output.comment_start_index(index) != index
+                || self.output.is_directive_line(index)
+            {
+                continue;
+            }
+            let code = self.output.code_before_comment_trimmed(index).trimmed();
+            if code.ends_with_any(b";{}:") {
+                break;
+            }
+            head.push(code);
+        }
+        head.len() > 1 && {
+            head.reverse();
+            code_opens_class_base_clause(&head.join(" "))
+        }
     }
 
     pub(crate) fn try_join_class_base_line(&mut self, line: &LineView<'_>) -> bool {
@@ -304,10 +391,11 @@ pub(crate) fn code_opens_class_base_clause(before: &str) -> bool {
     if signature_ends_with_parameter_list(before) {
         return false;
     }
+    // An enumeration's base continues its head as a class's bases do.
     let statement = crate::formatter::text::line_scan::statement_tail(before).trimmed_start();
     statement
         .split(|ch: char| !is_identifier_continue(ch))
-        .any(|word| matches!(word, "class" | "struct" | "union" | "interface"))
+        .any(|word| matches!(word, "class" | "struct" | "union" | "interface" | "enum"))
 }
 
 pub(crate) fn template_base_colon_indent_spaces(

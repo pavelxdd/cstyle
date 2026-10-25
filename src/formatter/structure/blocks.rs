@@ -3,7 +3,9 @@
 
 use crate::formatter::lexer::Token;
 use crate::formatter::structure::groups::{Delimiter, GroupId, Groups};
-use crate::formatter::syntax::language::is_non_type_keyword;
+use crate::formatter::syntax::language::{
+    is_assignment_operator, is_non_type_keyword, objc_statement_header,
+};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum BlockKind {
@@ -53,6 +55,17 @@ pub(crate) struct Blocks {
 
 impl Blocks {
     pub(crate) fn build(tokens: &[Token], groups: &Groups) -> Self {
+        Self::build_within(tokens, groups, None)
+    }
+
+    /// Classifies the brace groups of `tokens`, a brace group known to be of
+    /// `root` kind standing first among them when `root` is given, as when
+    /// the tokens are a block taken out of its context.
+    pub(crate) fn build_within(
+        tokens: &[Token],
+        groups: &Groups,
+        mut root: Option<BlockKind>,
+    ) -> Self {
         let mut blocks = Self {
             kinds: vec![None; groups.len()],
             owners: vec![None; groups.len()],
@@ -62,7 +75,10 @@ impl Blocks {
         for id in groups.ids() {
             let group = groups.get(id);
             if group.delimiter == Delimiter::Brace {
-                let kind = classify(tokens, groups, &blocks, id);
+                let kind = match root.take_if(|_| group.parent.is_none()) {
+                    Some(kind) => kind,
+                    None => classify(tokens, groups, &blocks, id),
+                };
                 blocks.kinds[id.index()] = Some(kind);
                 let head = statement_head(tokens, groups, group.open);
                 // The statement after a label owns its block; a block right
@@ -123,12 +139,16 @@ impl Blocks {
     }
 }
 
-/// Whether a token carries code, as opposed to layout, comments, and
-/// directives.
+/// Whether a token carries code, as opposed to layout (blanks and line
+/// splices), comments, and directives.
 pub(crate) fn is_code_token(token: &Token) -> bool {
     !matches!(
         token,
-        Token::Whitespace(_) | Token::Newline | Token::Comment(_, _) | Token::Preprocessor(_)
+        Token::Whitespace(_)
+            | Token::Newline
+            | Token::Comment(_, _)
+            | Token::Preprocessor(_)
+            | Token::Symbol('\\')
     )
 }
 
@@ -142,8 +162,54 @@ pub(crate) fn previous_code_token(tokens: &[Token], before: usize) -> Option<usi
         .find(|&index| is_code_token(&tokens[index]))
 }
 
+/// Whether the brace group `group` closes right before a `)`, as a
+/// statement expression's `({ ... })` does.
+pub(crate) fn closes_before_paren(tokens: &[Token], groups: &Groups, group: GroupId) -> bool {
+    groups.get(group).close.is_some_and(|close| {
+        next_code_token(tokens, close + 1)
+            .is_some_and(|after| matches!(tokens[after], Token::Symbol(')')))
+    })
+}
+
+/// The first token of the header that `owner` names: an Objective-C
+/// keyword's `@`.
+pub(crate) fn header_start(tokens: &[Token], owner: usize) -> usize {
+    let objc = owner > 0
+        && matches!(tokens[owner - 1], Token::Symbol('@'))
+        && matches!(&tokens[owner], Token::Word(word) if objc_statement_header(word).is_some());
+    if objc { owner - 1 } else { owner }
+}
+
 pub(crate) fn next_code_token(tokens: &[Token], start: usize) -> Option<usize> {
     (start..tokens.len()).find(|&index| is_code_token(&tokens[index]))
+}
+
+/// A look forward for the first token from a start that a test admits,
+/// kept to read on from: a start among the tokens it passed has the same
+/// answer, and one before them reads on only to them. Each look holds to
+/// one test over one token sequence.
+#[derive(Default)]
+pub(crate) struct TokenLook(std::cell::Cell<Option<(usize, Option<usize>)>>);
+
+impl TokenLook {
+    pub(crate) fn find(
+        &self,
+        tokens: &[Token],
+        start: usize,
+        matches: impl Fn(&Token) -> bool,
+    ) -> Option<usize> {
+        let found = match self.0.get() {
+            Some((from, found)) if from <= start && start <= found.unwrap_or(tokens.len()) => {
+                return found;
+            }
+            Some((from, found)) if start < from => (start..from)
+                .find(|&index| matches(&tokens[index]))
+                .or(found),
+            _ => (start..tokens.len()).find(|&index| matches(&tokens[index])),
+        };
+        self.0.set(Some((start, found)));
+        found
+    }
 }
 
 fn word_at(tokens: &[Token], index: usize) -> Option<&str> {
@@ -183,6 +249,14 @@ fn classify(tokens: &[Token], groups: &Groups, blocks: &Blocks, id: GroupId) -> 
     let Some(previous) = previous else {
         return BlockKind::Block;
     };
+    // The body after a member's braced initializer ending a constructor's
+    // initializers is the constructor's.
+    if BlockKind::is_declaration_scope(parent_block)
+        && let Some(value) = groups.closed_at(previous)
+        && braces_member_initializer(tokens, groups, groups.get(value).open)
+    {
+        return BlockKind::FunctionBody;
+    }
     let head = statement_head(tokens, groups, group.open);
     // Inside parentheses or brackets a brace belongs to an expression.
     if parent.is_some_and(|parent| groups.get(parent).delimiter != Delimiter::Brace) {
@@ -198,6 +272,8 @@ fn classify(tokens: &[Token], groups: &Groups, blocks: &Blocks, id: GroupId) -> 
     }
     match &tokens[previous] {
         Token::Operator(operator) if operator == "=" => return BlockKind::Initializer,
+        // An Objective-C dictionary literal, `@{ key : value }`.
+        Token::Symbol('@') => return BlockKind::Initializer,
         Token::Word(word) if word == "return" => return BlockKind::Initializer,
         Token::Word(word)
             if matches!(
@@ -220,6 +296,9 @@ fn classify(tokens: &[Token], groups: &Groups, blocks: &Blocks, id: GroupId) -> 
     if parent.is_some_and(|parent| groups.get(parent).delimiter != Delimiter::Brace) {
         return BlockKind::Initializer;
     }
+    if braces_member_initializer(tokens, groups, group.open) {
+        return BlockKind::Initializer;
+    }
     match &tokens[previous] {
         Token::Symbol(';' | '{' | '}') | Token::Operator(_) if !head_has_code(&head) => {
             if BlockKind::is_declaration_scope(parent_block) {
@@ -236,8 +315,14 @@ fn classify(tokens: &[Token], groups: &Groups, blocks: &Blocks, id: GroupId) -> 
         }
         // A template type's value, as `std::vector<int>{ 1, 2 };`.
         Token::Operator(operator)
-            if operator == ">" && closing_is_followed_by_terminator(tokens, group.close) =>
+            if operator == ">"
+                && (closing_is_followed_by_terminator(tokens, group.close)
+                    || braces_value_in_expression(tokens, &head, group.close)) =>
         {
+            BlockKind::Initializer
+        }
+        // A type's braces within an expression hold its value.
+        Token::Word(_) if braces_value_in_expression(tokens, &head, group.close) => {
             BlockKind::Initializer
         }
         // A statement-like macro such as `SEH_TRY {`.
@@ -323,6 +408,7 @@ fn has_lambda_capture(tokens: &[Token], groups: &Groups, head: &[usize]) -> bool
     let specifier = |index: usize| is_lambda_specifier(&tokens[index]);
     head.iter().enumerate().any(|(position, &index)| {
         matches!(tokens[index], Token::Symbol('['))
+            && !names_operator(tokens, index)
             && groups
                 .opened_at(index)
                 .and_then(|id| groups.get(id).close)
@@ -334,6 +420,23 @@ fn has_lambda_capture(tokens: &[Token], groups: &Groups, head: &[usize]) -> bool
         .iter()
         .rposition(|&index| matches!(tokens[index], Token::Symbol('[')))
         .is_some_and(|capture| head[capture + 1..].iter().all(|&index| specifier(index)))
+}
+
+/// Whether the bracket at `open` names an operator, as `operator[]` or
+/// `operator new[]` do.
+fn names_operator(tokens: &[Token], open: usize) -> bool {
+    let word = |index: Option<usize>, words: &[&str]| {
+        index.is_some_and(
+            |index| matches!(&tokens[index], Token::Word(word) if words.contains(&word.as_str())),
+        )
+    };
+    let before = previous_code_token(tokens, open);
+    word(before, &["operator"])
+        || word(before, &["new", "delete"])
+            && word(
+                before.and_then(|before| previous_code_token(tokens, before)),
+                &["operator"],
+            )
 }
 
 /// The code token before the template parameter list that the `>` at
@@ -408,16 +511,15 @@ fn classify_in_expression(
     }
 }
 
-/// Whether the brace right after the `(` at `paren`, on its line, ends a
-/// statement with `;` at its own level: a brace on the next line is a
-/// macro's block argument.
+/// Whether the brace right after the `(` at `paren`, on its line or the
+/// next, ends a statement with `;` at its own level.
 fn holds_statement(tokens: &[Token], groups: &Groups, paren: usize) -> bool {
     let Some(open) = next_code_token(tokens, paren + 1) else {
         return false;
     };
     if tokens[paren + 1..open]
         .iter()
-        .any(|token| !matches!(token, Token::Whitespace(_)))
+        .any(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
     {
         return false;
     }
@@ -452,9 +554,22 @@ fn classify_after_paren(
             BlockKind::Control
         }
         Token::Word(word) if is_value_keyword(word) => BlockKind::CompoundLiteral,
+        // The `=` of `operator=` names the function; any other assigns a
+        // literal.
         Token::Word(_) | Token::Symbol('>') | Token::Operator(_)
             if BlockKind::is_declaration_scope(parent_block)
-                && !matches!(&tokens[before], Token::Operator(operator) if operator == "=") =>
+                && (!matches!(&tokens[before], Token::Operator(operator) if operator == "=")
+                    || previous_code_token(tokens, before).is_some_and(
+                        |name| matches!(&tokens[name], Token::Word(word) if word == "operator"),
+                    )) =>
+        {
+            BlockKind::FunctionBody
+        }
+        Token::Symbol(']')
+            if BlockKind::is_declaration_scope(parent_block)
+                && groups
+                    .closed_at(before)
+                    .is_some_and(|brackets| names_operator(tokens, groups.get(brackets).open)) =>
         {
             BlockKind::FunctionBody
         }
@@ -541,13 +656,14 @@ fn statement_head(tokens: &[Token], groups: &Groups, open: usize) -> Vec<usize> 
     head
 }
 
-/// Whether only whitespace stands before `index` on its source line.
+/// Whether only whitespace and comments stand before `index` on its source
+/// line.
 fn begins_line(tokens: &[Token], index: usize) -> bool {
     tokens[..index]
         .iter()
         .rev()
         .take_while(|token| !matches!(token, Token::Newline))
-        .all(|token| matches!(token, Token::Whitespace(_)))
+        .all(|token| matches!(token, Token::Whitespace(_) | Token::Comment(..)))
 }
 
 /// The `)` of a parameter list followed only by function suffixes such as
@@ -594,6 +710,71 @@ fn is_function_suffix_word(word: &str) -> bool {
     )
 }
 
+/// Whether the brace opened at `open` holds the value of a member that a
+/// constructor's initializers start with or reach after a `,`.
+fn braces_member_initializer(tokens: &[Token], groups: &Groups, open: usize) -> bool {
+    let Some(member) = previous_code_token(tokens, open) else {
+        return false;
+    };
+    if !matches!(tokens[member], Token::Word(_)) {
+        return false;
+    }
+    let level = groups.enclosing(open);
+    let mut index = member;
+    while let Some(before) = previous_code_token(tokens, index) {
+        if groups.enclosing(before) != level {
+            return false;
+        }
+        if let Some(group) = groups.closed_at(before) {
+            let value = groups.get(group).open;
+            // Only another member's braced value stands among the members.
+            if groups.get(group).delimiter == Delimiter::Brace
+                && !braces_member_initializer(tokens, groups, value)
+            {
+                return false;
+            }
+            index = value;
+            continue;
+        }
+        match &tokens[before] {
+            Token::Symbol(':') => {
+                return previous_code_token(tokens, before).is_some_and(|params| {
+                    matches!(tokens[params], Token::Symbol(')'))
+                        && groups.closed_at(params).is_some()
+                        || word_at(tokens, params).is_some_and(is_function_suffix_word)
+                });
+            }
+            Token::Symbol(';' | '{' | '}') => return false,
+            _ => index = before,
+        }
+    }
+    false
+}
+
+/// Whether a brace after a word holds a value within an expression: its
+/// statement returns or throws one, or assigns or chooses it, or the value
+/// is used past its closing brace.
+fn braces_value_in_expression(tokens: &[Token], head: &[usize], close: Option<usize>) -> bool {
+    head.first()
+        .and_then(|&first| word_at(tokens, first))
+        .is_some_and(|word| matches!(word, "return" | "throw" | "co_return" | "co_yield"))
+        || head.iter().any(|&index| match &tokens[index] {
+            Token::Operator(operator) => is_assignment_operator(operator),
+            token => matches!(token, Token::Symbol('?')),
+        })
+        || close.is_some_and(|close| {
+            next_code_token(tokens, close + 1).is_some_and(|next| match &tokens[next] {
+                Token::Operator(operator) => matches!(operator.as_str(), "." | "->" | "?"),
+                // A call or subscript on the closer's line applies to the
+                // value; a line after a block may open with a cast.
+                Token::Symbol('(' | '[') => !tokens[close + 1..next]
+                    .iter()
+                    .any(|token| matches!(token, Token::Newline)),
+                token => matches!(token, Token::Symbol('.' | '?')),
+            })
+        })
+}
+
 fn head_has_code(head: &[usize]) -> bool {
     !head.is_empty()
 }
@@ -610,6 +791,13 @@ fn classify_head(tokens: &[Token], head: &[usize]) -> Option<BlockKind> {
                 return Some(BlockKind::ExternC);
             }
             Some("struct" | "union" | "enum" | "class" | "interface") => {
+                return Some(BlockKind::Aggregate);
+            }
+            Some("implementation")
+                if position
+                    .checked_sub(1)
+                    .is_some_and(|before| matches!(tokens[head[before]], Token::Symbol('@'))) =>
+            {
                 return Some(BlockKind::Aggregate);
             }
             _ => {}
@@ -655,6 +843,42 @@ mod tests {
     }
 
     #[test]
+    fn classifies_an_assignment_operator_s_body_as_a_function_body() {
+        assert_eq!(
+            kinds(
+                "void run() {\n  struct Item {\n    auto operator=(char) -> Item& {\n      return *this;\n    }\n    Item& operator=(int) {\n      return *this;\n    }\n  };\n}\n"
+            ),
+            [FunctionBody, Aggregate, FunctionBody, FunctionBody]
+        );
+    }
+
+    #[test]
+    fn classifies_a_type_s_braces_before_a_call_or_member_as_its_value() {
+        assert_eq!(
+            kinds(
+                "void f()\n{\n    Item{}(v);\n    Item{1}.run();\n    Item{}->go();\n    Item{}[0];\n    std::hash<T>{}(v);\n    SEH_TRY {\n    }\n    (void)value;\n}\n"
+            ),
+            [
+                FunctionBody,
+                Initializer,
+                Initializer,
+                Initializer,
+                Initializer,
+                Initializer,
+                Control
+            ]
+        );
+    }
+
+    #[test]
+    fn classifies_an_objc_dictionary_literal_as_a_list() {
+        assert_eq!(
+            kinds("void f()\n{\n    id map = @{ @\"a\" : @1 };\n    use(@{});\n}\n"),
+            [FunctionBody, Initializer, Initializer]
+        );
+    }
+
+    #[test]
     fn classifies_function_bodies_and_control_blocks() {
         assert_eq!(
             kinds(
@@ -671,6 +895,16 @@ mod tests {
         assert_eq!(
             kinds("static int foreach (lua_State *L)\n{\n    foreach (x) {\n    }\n}\n"),
             [FunctionBody, Control]
+        );
+    }
+
+    #[test]
+    fn classifies_a_type_s_braces_within_an_expression_as_its_value() {
+        assert_eq!(
+            kinds(
+                "void f() {\n    x = c ? Item{1} : g;\n    x = Item{1} + 1;\n    return Item{1}.value;\n    SEH_TRY {\n    }\n}\n"
+            ),
+            [FunctionBody, Initializer, Initializer, Initializer, Control]
         );
     }
 
@@ -719,6 +953,16 @@ mod tests {
                 "void f() {\n    auto add = []<typename T>(T a, T b) {\n    };\n    call([]<class T>(T a) {\n    });\n}\n"
             ),
             [FunctionBody, Lambda, Lambda]
+        );
+    }
+
+    #[test]
+    fn classifies_a_subscript_operator_body_as_a_function_body() {
+        assert_eq!(
+            kinds(
+                "class C {\n    int& operator[](int pos) const {\n    }\n    void* operator new[](size_t size) {\n    }\n};\n"
+            ),
+            [Aggregate, FunctionBody, FunctionBody]
         );
     }
 }

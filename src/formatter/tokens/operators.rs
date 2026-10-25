@@ -1,9 +1,9 @@
 use crate::config::{PointerAlign, ReferenceAlign};
 use crate::formatter::constructs::headers::is_header;
 use crate::formatter::engine::{FormatEngine, TokenPushContext};
-use crate::formatter::lexer::Token;
+use crate::formatter::lexer::{CommentKind, Token};
 use crate::formatter::state::frame::{LogicalFrame, LogicalOperator, StreamFrame};
-use crate::formatter::state::{BraceType, PreviousToken};
+use crate::formatter::state::{BraceType, OpenTemplateAngle, PreviousToken};
 use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::structure::blocks::next_code_token;
 use crate::formatter::structure::groups::Delimiter;
@@ -15,7 +15,9 @@ use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     ContainsAnyByte, has_unclosed_delimiter_after, last_unmatched_open_delimiter,
 };
-use crate::formatter::text::line_scan::{has_hash_outside_literals, trailing_comment_split_limit};
+use crate::formatter::text::line_scan::{
+    has_hash_outside_literals, has_top_level_char, trailing_comment_split_limit,
+};
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::pointers::{is_pointer_declaration_segment, resolved_pointer_align};
 use crate::source::lex::{is_identifier_continue, is_word_char, trailing_word};
@@ -57,6 +59,42 @@ pub(crate) fn starts_with_word_operator(text: &str) -> bool {
 pub(crate) fn leads_keyword_colon(tail: &str) -> bool {
     let tail = tail.trim_start_matches([' ', '\t']);
     tail.starts_with(':') && !tail.starts_with("::")
+}
+
+/// Whether `operator` leading a row continues the statement before it: a
+/// binary operator no statement starts with, or a member access.
+pub(crate) fn leads_statement_continuation(operator: &str) -> bool {
+    matches!(
+        operator,
+        "&&" | "||"
+            | "<<"
+            | ">>"
+            | "=="
+            | "!="
+            | "<="
+            | ">="
+            | "<=>"
+            | "<"
+            | ">"
+            | "/"
+            | "%"
+            | "|"
+            | "^"
+            | "+"
+            | "-"
+            | "->"
+            | "->*"
+            | "+="
+            | "-="
+            | "*="
+            | "/="
+            | "%="
+            | "&="
+            | "|="
+            | "^="
+            | "<<="
+            | ">>="
+    )
 }
 
 pub(crate) fn starts_with_chain_operator(line: &str) -> bool {
@@ -305,13 +343,14 @@ pub(crate) fn trailing_binary_operator_column(head: &str) -> Option<usize> {
 /// once a bracket closed earlier on the line.
 pub(crate) fn array_bound_operator_column(head: &str) -> Option<usize> {
     let open = crate::formatter::text::line_scan::unmatched_open_bracket_column(head)?;
-    // A subscript, after a name or a closed bracket or paren, continues
-    // past its bracket; only a message send aligns under its operator.
+    // A subscript, after a name, a literal or a closed bracket or paren,
+    // continues past its bracket; only a message send aligns under its
+    // operator.
     let subscript = head[..open]
         .trimmed_end()
         .chars()
         .next_back()
-        .is_some_and(|ch| is_identifier_continue(ch) || matches!(ch, '.' | ']' | ')'));
+        .is_some_and(|ch| is_identifier_continue(ch) || matches!(ch, '.' | ']' | ')' | '"' | '\''));
     if subscript || head[..open].contains(']') {
         let after = &head[open + 1..];
         return Some(open + 1 + after.len() - after.trimmed_start().len());
@@ -398,6 +437,8 @@ impl FormatEngine<'_> {
             token_index,
             ..
         } = context;
+        // An alias's own type keeps its stars as written; those of its
+        // parameters and before a declarator group are declarators.
         if matches!(operator, "*" | "&" | "&&" | "^")
             && self
                 .current
@@ -406,6 +447,8 @@ impl FormatEngine<'_> {
                 .strip_prefix("using ")
                 .is_some_and(|alias| alias.contains('='))
             && self.layout.line_state.template_angle_depth == 0
+            && self.layout.nesting.paren_depth == 0
+            && !self.pointer_run.group_follows_run
         {
             if self.layout.previous == PreviousToken::OpenParen && self.options.pad_parens_inside {
                 self.pad_inside_paren_space();
@@ -698,8 +741,29 @@ impl FormatEngine<'_> {
                 .continuation_indent
                 .set_next_line_spaces(stream.chain_anchor_column);
         }
-        if matches!(operator, "<<" | ">>")
-            && self.current.trimmed().is_empty()
+        if leads_statement_continuation(operator) {
+            self.continue_statement_at_row_lead(operator);
+        }
+    }
+
+    /// Sets the column of a row `lead`, an operator or a member access,
+    /// starts when it continues the statement before it past nothing that
+    /// registered a column.
+    pub(crate) fn continue_statement_at_row_lead(&mut self, lead: &str) {
+        // Only a block holds statements: rows of a list are its elements,
+        // and rows at declaration scope follow declarations or macros.
+        let in_statement_block = matches!(
+            self.layout.nesting.brace_type_stack.last(),
+            Some(BraceType::Command | BraceType::Definition)
+        );
+        // An Objective-C method's `-` or `+` starts a declaration, and a
+        // trailing return type goes on with a function's head.
+        let starts_method = matches!(lead, "-" | "+") && self.active_token_starts_declaration();
+        let trailing_return = lead == "->" && self.active_token_follows_parameters();
+        if self.current.trimmed().is_empty()
+            && in_statement_block
+            && !starts_method
+            && !trailing_return
             && self.layout.continuation_indent.next_line_indent.is_none()
             && self
                 .layout
@@ -720,10 +784,81 @@ impl FormatEngine<'_> {
                         .is_none()
                 })
         {
-            let spaces = self.continuation_base_indent() * self.options.indent_width
-                + 2 * self.options.indent_width;
+            // A row after an operand of the statement's chain goes on with
+            // the chain; one nothing anchors stands a continuation past the
+            // statement.
+            let spaces = matches!(lead, "<<" | ">>")
+                .then(|| {
+                    self.layout
+                        .frame_stack
+                        .active_stream()
+                        .and_then(|_| self.previous_stream_chain_indent_spaces())
+                })
+                .flatten()
+                .unwrap_or_else(|| self.statement_continuation_indent_spaces());
             self.layout.continuation_indent.set_next_line_spaces(spaces);
         }
+    }
+
+    /// Whether the token being pushed follows a parameter list, past only
+    /// the qualifiers a function or lambda head takes after it.
+    fn active_token_follows_parameters(&self) -> bool {
+        let tree = &self.tree;
+        let Some(mut index) = self.current.active_token() else {
+            return false;
+        };
+        while let Some(before) = tree.previous_code_token(index) {
+            match &tree.tokens[before] {
+                Token::Symbol(')') => {
+                    let Some(group) = tree.groups.closed_at(before) else {
+                        return false;
+                    };
+                    let open = tree.groups.get(group).open;
+                    let opener = tree
+                        .previous_code_token(open)
+                        .map(|token| &tree.tokens[token]);
+                    if tree.functions.is_parameter_list(group)
+                        || matches!(opener, Some(Token::Symbol(']')))
+                    {
+                        return true;
+                    }
+                    // A qualifier's own parens, as `noexcept(...)`.
+                    if !matches!(opener, Some(Token::Word(word)) if matches!(word.as_str(), "noexcept" | "throw"))
+                    {
+                        return false;
+                    }
+                    index = open;
+                }
+                Token::Word(word)
+                    if matches!(
+                        word.as_str(),
+                        "const"
+                            | "volatile"
+                            | "noexcept"
+                            | "throw"
+                            | "mutable"
+                            | "constexpr"
+                            | "consteval"
+                            | "override"
+                            | "final"
+                    ) =>
+                {
+                    index = before;
+                }
+                Token::Operator(operator) if matches!(operator.as_str(), "&" | "&&") => {
+                    index = before;
+                }
+                _ => return false,
+            }
+        }
+        false
+    }
+
+    /// The column of a row continuing the statement past nothing that
+    /// registered a column: a continuation indent past the statement.
+    pub(crate) fn statement_continuation_indent_spaces(&self) -> usize {
+        (self.continuation_base_indent() + self.options.continuation_indent)
+            * self.options.indent_width
     }
 
     fn try_push_operator_special_case(
@@ -736,6 +871,10 @@ impl FormatEngine<'_> {
             && matches!(operator, "*" | "&" | "^")
         {
             self.pointer_run.skip_adjacent_pointer_operators -= 1;
+            // The run's text, pushed with its first operator, holds this one.
+            if let Some(index) = self.current.active_token() {
+                self.current.record_token_range(index, index);
+            }
             if resolved_pointer_align(self.options, operator) == PointerAlign::None
                 && self.pointer_run.skip_adjacent_pointer_operators == 0
             {
@@ -745,16 +884,66 @@ impl FormatEngine<'_> {
         }
         match template_angle {
             TemplateAngle::Open => {
+                if self.layout.line_state.template_angle_depth == 0 {
+                    self.layout.line_state.template_angle_continuations.clear();
+                }
+                // A template head's parameters keep the head's own rows.
+                let in_head = trailing_word(self.current.trimmed_end()) == "template"
+                    || self
+                        .layout
+                        .line_state
+                        .template_angle_continuations
+                        .last()
+                        .is_some_and(|angle| angle.in_head);
                 self.emit_source_space();
                 self.current.push('<');
                 self.layout.line_state.template_angle_depth += 1;
+                // Its arguments on rows below continue past it, as a paren's.
+                let registers = !in_head && !self.template_continuation_active();
+                let ends_line = matches!(
+                    next,
+                    None | Some(Token::Newline | Token::Comment(CommentKind::Line, _))
+                );
+                let closer_spaces = registers.then(|| {
+                    self.layout
+                        .nesting
+                        .current_continuation_indent_spaces()
+                        .unwrap_or_else(|| self.current_line_indent_spaces())
+                });
                 self.emit_trailing_source_space();
+                if registers {
+                    self.register_current_continuation_indent(if ends_line { None } else { next });
+                }
+                // The column it registered ends with it.
+                let continuations = self
+                    .layout
+                    .nesting
+                    .continuation_count()
+                    .saturating_sub(usize::from(registers));
+                self.layout
+                    .line_state
+                    .template_angle_continuations
+                    .push(OpenTemplateAngle {
+                        continuations,
+                        closer_spaces,
+                        in_head,
+                    });
                 self.layout.command_state.observe_text(operator);
                 self.layout.previous = PreviousToken::Operator;
                 self.previous_was_newline = false;
                 return true;
             }
             TemplateAngle::Close(count) => {
+                if self.current.trimmed().is_empty()
+                    && let Some(spaces) = self
+                        .layout
+                        .line_state
+                        .template_angle_continuations
+                        .last()
+                        .and_then(|angle| angle.closer_spaces)
+                {
+                    self.layout.continuation_indent.set_next_line_spaces(spaces);
+                }
                 if self.options.close_templates && self.current.trimmed_end().ends_with('>') {
                     self.trim_current_end();
                 } else {
@@ -766,6 +955,20 @@ impl FormatEngine<'_> {
                     .line_state
                     .template_angle_depth
                     .saturating_sub(count);
+                let mut outermost = None;
+                for _ in 0..count {
+                    outermost = self
+                        .layout
+                        .line_state
+                        .template_angle_continuations
+                        .pop()
+                        .or(outermost);
+                }
+                if let Some(angle) = outermost {
+                    self.layout
+                        .nesting
+                        .truncate_continuations(angle.continuations);
+                }
                 self.emit_trailing_source_space();
                 self.layout.command_state.observe_text(operator);
                 self.layout.previous = PreviousToken::Operator;
@@ -878,6 +1081,8 @@ impl FormatEngine<'_> {
         operator_role: OperatorRole,
         split_rvalue_reference: bool,
     ) {
+        // An operator a function's name spells assigns nothing.
+        let names_operator = trailing_word(&self.current) == language::OPERATOR;
         match operator {
             "::" => {
                 if self.layout.previous == PreviousToken::OpenParen
@@ -981,7 +1186,7 @@ impl FormatEngine<'_> {
                 self.current.push_str(operator);
                 self.emit_trailing_source_space();
             }
-            _ if trailing_word(&self.current) == language::OPERATOR => {
+            _ if names_operator => {
                 self.emit_source_space();
                 self.current.push_str(operator);
                 self.emit_trailing_source_space();
@@ -1000,7 +1205,8 @@ impl FormatEngine<'_> {
             "*" if matches!(
                 self.layout.previous,
                 PreviousToken::Word | PreviousToken::Literal | PreviousToken::CloseBracket
-            ) && self.active_token_in_brackets() =>
+            ) && self.active_token_in_brackets()
+                && !self.adjacent_stars_follow_operand(next, next_is_adjacent) =>
             {
                 self.push_binary_operator(operator);
             }
@@ -1049,8 +1255,10 @@ impl FormatEngine<'_> {
                     self.push_binary_operator(operator);
                 }
             }
-            "*" if operator_role != OperatorRole::PointerDeclarator
-                && self.layout.nesting.paren_depth > 0
+            "*" if !matches!(
+                operator_role,
+                OperatorRole::PointerDeclarator | OperatorRole::UnaryOperator
+            ) && self.layout.nesting.paren_depth > 0
                 && matches!(next, Some(Token::Word(_)))
                 && (self.current_paren_is_expression_context()
                     && !self.current_paren_context_is_declaration()
@@ -1178,7 +1386,8 @@ impl FormatEngine<'_> {
                             == Some(&BraceType::Command))
                     && self.current_paren_context_is_declaration()
                     && self.looks_like_pointer_declaration_context()
-                    && matches!(next, Some(Token::Word(_)) | Some(Token::Symbol(')' | ','))) =>
+                    && (matches!(next, Some(Token::Word(_)) | Some(Token::Symbol(')' | ',')))
+                        || matches!(next, Some(Token::Symbol('.'))) && self.declares_pack()) =>
             {
                 self.push_pointer_or_reference(operator, next, next_is_adjacent);
             }
@@ -1242,6 +1451,16 @@ impl FormatEngine<'_> {
                 self.current.push_str(operator);
                 self.ensure_space();
             }
+            "&" if (self.current_ends_cast() || self.current_ends_pointer_cast())
+                && !matches!(next, Some(Token::Symbol('(')))
+                && self.layout.nesting.paren_depth == 0
+                && matches!(
+                    self.layout.nesting.brace_type_stack.last(),
+                    Some(BraceType::Array | BraceType::Initializer | BraceType::DeferArray)
+                ) =>
+            {
+                self.push_pointer_or_reference(operator, next, next_is_adjacent);
+            }
             "&" | "*" if self.current_ends_pointer_cast() => self.push_unary_prefix(operator),
             "&" if self.current_ends_cast()
                 && !matches!(next, Some(Token::Symbol('(')))
@@ -1297,7 +1516,7 @@ impl FormatEngine<'_> {
                 && (split_rvalue_reference
                     || (!self.current_paren_is_expression_context()
                         || trailing_word(&self.current) == language::AUTO
-                        || self.current.trimmed_end().ends_with('*')
+                        || self.current.trimmed_end().ends_with(['*', '>'])
                         || self.current_in_cast_type_group()
                         || self.current_in_parenthesized_type_operand()
                         || self.current_paren_context_is_declaration()
@@ -1386,7 +1605,10 @@ impl FormatEngine<'_> {
                 self.emit_trailing_source_space();
             }
         }
-        if language::is_assignment_operator(operator) && !self.in_aggregate_declaration_brace() {
+        if language::is_assignment_operator(operator)
+            && !names_operator
+            && !self.in_aggregate_declaration_brace()
+        {
             let rhs_next = if self.comments.next_comment_ends_line {
                 None
             } else {
@@ -1410,6 +1632,31 @@ impl FormatEngine<'_> {
             || !self.current.trimmed_end().ends_with(')')
             || !self.current.trimmed_start().starts_with('(')
         {
+            return false;
+        }
+        // Parentheses holding an expression cast nothing: the star after them
+        // multiplies.
+        let tokens = &self.tree.tokens;
+        let holds_expression = self
+            .current
+            .active_token()
+            .and_then(|star| self.tree.previous_code_token(star))
+            .and_then(|close| self.tree.groups.closed_at(close))
+            .is_some_and(|group| {
+                let group = self.tree.groups.get(group);
+                group.close.is_some_and(|close| {
+                    tokens[group.open + 1..close]
+                        .iter()
+                        .any(|token| match token {
+                            Token::Operator(operator) => {
+                                !matches!(operator.as_str(), "*" | "&" | "::")
+                            }
+                            Token::Number(_) | Token::StringLiteral(_) => true,
+                            _ => false,
+                        })
+                })
+            });
+        if holds_expression {
             return false;
         }
         for line in self.output.scoped().iter().rev().take(8) {
@@ -1534,11 +1781,20 @@ impl FormatEngine<'_> {
     }
 
     fn line_start_sign_is_unary(&self, next: Option<&Token>) -> bool {
-        if !matches!(
-            next,
-            Some(Token::Word(_) | Token::Number(_) | Token::Symbol('('))
-        ) {
+        let prefixes_operand = match next {
+            Some(Token::Word(_) | Token::Number(_) | Token::Symbol('(')) => true,
+            // A dereference, address, negation or increment after it.
+            Some(Token::Operator(operator)) => {
+                matches!(operator.as_str(), "*" | "&" | "!" | "~" | "++" | "--")
+            }
+            _ => false,
+        };
+        if !prefixes_operand {
             return false;
+        }
+        // As after a cast on its own row.
+        if self.is_cast_unary_sign(next) {
+            return true;
         }
         self.output
             .scoped()
@@ -1548,7 +1804,7 @@ impl FormatEngine<'_> {
             .find(|line| !self.output.code_of(line).trimmed().is_empty())
             .is_some_and(|previous| {
                 let code = self.output.code_trimmed_of(previous);
-                code.ends_with_any(b"([{,=?:")
+                code.ends_with_any(b"([{,=?:<>!")
                     || head_ends_binary_operator(code)
                     || code.trimmed_start().starts_with("return ")
             })
@@ -1698,6 +1954,7 @@ impl FormatEngine<'_> {
         };
         self.layout.frame_stack.push_logical(LogicalFrame {
             operator: logical_operator,
+            operator_token: self.current.active_token(),
             operator_output_column,
             operator_output_line: self.output.len(),
             line_indent_spaces,
@@ -1721,9 +1978,12 @@ impl FormatEngine<'_> {
             .active_stream()
             .map(|frame| frame.chain_anchor_column)
             .unwrap_or(operator_output_column);
+        // An assignment a `;` on the line ended leaves the chain to the
+        // statement after it.
         let assignment_value_start_column = self
             .current
             .first_assignment()
+            .filter(|&(assignment, _)| !has_top_level_char(&self.current[assignment..], ';'))
             .map(|(assignment, assignment_operator)| {
                 self.current[assignment + assignment_operator.len()..]
                     .char_indices()
@@ -1738,11 +1998,11 @@ impl FormatEngine<'_> {
             });
         let after_multiline_braced_operand = self.stream_line_follows_multiline_braced_operand();
         self.layout.frame_stack.push_stream(StreamFrame {
+            operator_token: self.current.active_token(),
             operator_output_column,
             operator_output_line: self.output.len(),
             line_indent_spaces,
             operator_ends_output_line: false,
-            line_contains_nested_brace: false,
             line_has_unmatched_open_paren: false,
             line_ends_with_close_paren: false,
             line_has_positive_paren_delta: false,

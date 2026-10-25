@@ -56,6 +56,8 @@ impl DisabledFormattingSnapshot {
 /// main engine resumes from.
 pub(crate) struct DisabledFormattingState<'a> {
     shadow: Box<FormatEngine<'a>>,
+    /// Whether formatting resumes once the current line ends.
+    enables_after_line: bool,
 }
 
 impl<'a> DisabledFormattingState<'a> {
@@ -64,7 +66,16 @@ impl<'a> DisabledFormattingState<'a> {
         DisabledFormattingSnapshot::capture(engine).apply_to(&mut shadow);
         Self {
             shadow: Box::new(shadow),
+            enables_after_line: false,
         }
+    }
+
+    pub(crate) fn enable_after_line(&mut self) {
+        self.enables_after_line = true;
+    }
+
+    pub(crate) fn enables_after_line(&self) -> bool {
+        self.enables_after_line
     }
 
     pub(crate) fn restore(self, engine: &mut FormatEngine<'a>) {

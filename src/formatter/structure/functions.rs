@@ -239,6 +239,11 @@ fn function_head(
         Some((outer, _)) => groups.get(outer).parent,
         None => group.parent,
     };
+    if declarator.is_none()
+        && let Some(call) = scope.filter(|&scope| groups.get(scope).delimiter == Delimiter::Paren)
+    {
+        return macro_argument_parameter_list(tokens, groups, blocks, head_ends, call, params);
+    }
     if scope.is_some_and(|scope| groups.get(scope).delimiter != Delimiter::Brace)
         || !BlockKind::is_declaration_scope(scope.and_then(|scope| blocks.kind(scope)))
     {
@@ -246,11 +251,7 @@ fn function_head(
     }
     // `int init\n#endif\n(sqlite3 *db)`: a directive may separate the name
     // from its parameter list.
-    let mut before_params = previous_code_token(tokens, group.open)?;
-    // An escaped newline may part the name from its parameter list.
-    if matches!(tokens[before_params], Token::Symbol('\\')) {
-        before_params = previous_code_token(tokens, before_params)?;
-    }
+    let before_params = previous_code_token(tokens, group.open)?;
     // `int (lua_gettop) (lua_State *L)` keeps the name in parentheses.
     let (name, parenthesized_name) =
         if let Some(operator) = operator_function_name(tokens, groups, before_params) {
@@ -260,6 +261,14 @@ fn function_head(
                 return macro_head_parameter_list(tokens, groups, blocks, head_ends, id, params);
             };
             (word, Some(groups.get(id).open))
+        } else if is_operator(tokens, before_params, ">")
+            && let Some(name) = template_arguments_start(tokens, before_params)
+                .and_then(|open| previous_code_token(tokens, open))
+                .filter(|&name| is_word(tokens, name))
+        {
+            // An explicit specialization names its template arguments, as
+            // `size<Item>(void)`.
+            (name, None)
         } else {
             (before_params, None)
         };
@@ -290,11 +299,12 @@ fn function_head(
         HeadEnd::Found(body) => body,
         HeadEnd::Unterminated => return Some(HeadMatch::ParameterList),
     };
+    // A function-try-block's `try` block is the function's body.
     if body.is_some_and(|body| {
         !matches!(
             blocks.kind(body),
             Some(BlockKind::FunctionBody | BlockKind::Unknown)
-        )
+        ) && !is_try_body(tokens, groups, body)
     }) {
         return None;
     }
@@ -307,8 +317,16 @@ fn function_head(
     }))
 }
 
-/// `MACRO(type, name)(params) {`: a macro call standing for a function's
-/// name and return type, whose parameter list opens its body.
+/// Whether the brace group `body` is the block of a `try`, as a
+/// function-try-block's body is.
+fn is_try_body(tokens: &[Token], groups: &Groups, body: GroupId) -> bool {
+    previous_code_token(tokens, groups.get(body).open)
+        .is_some_and(|word| matches!(&tokens[word], Token::Word(word) if word == "try"))
+}
+
+/// `MACRO(type, name)(params) {` or `MACRO(type, name)(params);`: a macro
+/// call standing for a function's name and return type, whose parameter list
+/// opens its body or ends its declaration.
 fn macro_head_parameter_list(
     tokens: &[Token],
     groups: &Groups,
@@ -318,10 +336,52 @@ fn macro_head_parameter_list(
     params: GroupId,
 ) -> Option<HeadMatch> {
     let macro_name = previous_code_token(tokens, groups.get(call).open)?;
-    if !matches!(&tokens[macro_name], Token::Word(word) if !is_non_type_keyword(word)) {
+    // `BOOL (WINAPI *callback)(params);` declares a function pointer.
+    if !matches!(&tokens[macro_name], Token::Word(word) if !is_non_type_keyword(word))
+        || pointer_declarator_before(tokens, groups, params) == Some(call)
+    {
         return None;
     }
     match head_end(tokens, groups, head_ends, params, params)? {
+        HeadEnd::Found(Some(body)) if blocks.kind(body) == Some(BlockKind::FunctionBody) => {
+            Some(HeadMatch::ParameterList)
+        }
+        HeadEnd::Found(None) => Some(HeadMatch::ParameterList),
+        _ => None,
+    }
+}
+
+/// `MACRO(type, name, (params)) {`: a macro call standing for a function's
+/// head, whose last argument lists the parameters of the body after it.
+fn macro_argument_parameter_list(
+    tokens: &[Token],
+    groups: &Groups,
+    blocks: &Blocks,
+    head_ends: &mut HeadEndWalks,
+    call: GroupId,
+    params: GroupId,
+) -> Option<HeadMatch> {
+    let call_group = groups.get(call);
+    let params_group = groups.get(params);
+    if next_code_token(tokens, params_group.close? + 1)? != call_group.close?
+        || !matches!(
+            tokens[previous_code_token(tokens, params_group.open)?],
+            Token::Symbol(',')
+        )
+    {
+        return None;
+    }
+    let scope = call_group.parent;
+    if scope.is_some_and(|scope| groups.get(scope).delimiter != Delimiter::Brace)
+        || !BlockKind::is_declaration_scope(scope.and_then(|scope| blocks.kind(scope)))
+    {
+        return None;
+    }
+    let macro_name = previous_code_token(tokens, call_group.open)?;
+    if !matches!(&tokens[macro_name], Token::Word(word) if !is_non_type_keyword(word)) {
+        return None;
+    }
+    match head_end(tokens, groups, head_ends, call, call)? {
         HeadEnd::Found(Some(body)) if blocks.kind(body) == Some(BlockKind::FunctionBody) => {
             Some(HeadMatch::ParameterList)
         }
@@ -413,6 +473,11 @@ fn return_type_start(
         }
         match &tokens[previous] {
             Token::Symbol(';' | '{' | '}' | ':') => break,
+            // `template<class T> requires C<T>`: the clause leads the head.
+            Token::Word(word) if word == "requires" => {
+                return requires_constraint_end(tokens, groups, previous)
+                    .filter(|&end| end <= name_start);
+            }
             Token::Word(word) if is_non_type_keyword(word) || is_header(word) => return None,
             // A word above an empty line, such as a macro left without a
             // semicolon, ends what came before.
@@ -484,6 +549,60 @@ fn return_type_start(
         }
     }
     Some(start)
+}
+
+/// The first code token after the constraint of the `requires` at
+/// `keyword`: words with their template arguments or parenthesized
+/// expressions, joined by `&&` or `||`.
+fn requires_constraint_end(tokens: &[Token], groups: &Groups, keyword: usize) -> Option<usize> {
+    let mut index = next_code_token(tokens, keyword + 1)?;
+    loop {
+        index = match &tokens[index] {
+            Token::Symbol('(') => groups.get(groups.opened_at(index)?).close?,
+            Token::Word(_) => {
+                let mut end = index;
+                while let Some(next) = next_code_token(tokens, end + 1) {
+                    end = match &tokens[next] {
+                        Token::Operator(operator) if operator == "::" => {
+                            next_code_token(tokens, next + 1)?
+                        }
+                        Token::Operator(operator) if operator == "<" => {
+                            template_arguments_end(tokens, next)?
+                        }
+                        _ => break,
+                    };
+                }
+                end
+            }
+            _ => return None,
+        };
+        let next = next_code_token(tokens, index + 1)?;
+        match &tokens[next] {
+            Token::Operator(operator) if matches!(operator.as_str(), "&&" | "||") => {
+                index = next_code_token(tokens, next + 1)?;
+            }
+            _ => return Some(next),
+        }
+    }
+}
+
+/// The `>` closing the template arguments opened by the `<` at `open`.
+fn template_arguments_end(tokens: &[Token], open: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    for (index, token) in tokens.iter().enumerate().skip(open) {
+        match token {
+            Token::Operator(operator) if operator == "<" => depth += 1,
+            Token::Operator(operator) if operator == ">" || operator == ">>" => {
+                depth = depth.saturating_sub(if operator == ">>" { 2 } else { 1 });
+                if depth == 0 {
+                    return Some(index);
+                }
+            }
+            Token::Symbol(';' | '{' | '}') => return None,
+            _ => {}
+        }
+    }
+    None
 }
 
 /// For `void (*f(args))(void)`: the group `(*f(args))` and the parameter
@@ -631,33 +750,41 @@ enum HeadEnd {
     Unterminated,
 }
 
-/// How the head whose parameter list is `params` and whose declarator ends
-/// with the paren group `last_params` ends; `None` when the tokens after the
-/// declarator show that it is not a function head.
 /// Where walks past the parameter lists of heads reached the first token
 /// that ends a head or changes how the walk reads on: by the token a walk
-/// stood at, the level it walked and the token it reached. Heads follow
-/// each other as calls of a macro list do, so their walks share their
-/// tails.
+/// stood at and whether it passed conditionals. Heads follow each other as
+/// calls of a macro list do, so their walks share their tails.
 #[derive(Default)]
 struct HeadEndWalks {
-    reached: IndexMap<usize, (Option<GroupId>, usize)>,
+    reached: IndexMap<(usize, bool), HeadWalk>,
+}
+
+#[derive(Clone, Copy)]
+struct HeadWalk {
+    level: Option<GroupId>,
+    reached: usize,
+    /// The first `->` the walk passed.
+    arrow: Option<usize>,
 }
 
 /// Whether a walk past a parameter list at `level`, before any `;` or `:`,
 /// goes on past the token `next` it stands before at `index`: a word, an
-/// operator, or the call of an attribute or macro word.
+/// operator, or the call of an attribute or macro word, after conditionals
+/// that only close or open when `pass_conditionals`.
 fn head_walk_passes(
     tokens: &[Token],
     groups: &Groups,
     level: Option<GroupId>,
+    pass_conditionals: bool,
     index: usize,
     next: usize,
 ) -> bool {
-    !tokens[index..next]
-        .iter()
-        .any(|token| matches!(token, Token::Preprocessor(_)))
-        && groups.enclosing(next) == level
+    tokens[index..next].iter().all(|token| match token {
+        Token::Preprocessor(directive) => {
+            pass_conditionals && closes_or_opens_conditional(&directive.text)
+        }
+        _ => true,
+    }) && groups.enclosing(next) == level
         && !matches!(tokens[next], Token::Symbol(':' | '{' | ';' | '}' | ','))
         && (tokens[next] != Token::Symbol('(')
             || previous_head_token(tokens, next).is_some_and(
@@ -665,17 +792,71 @@ fn head_walk_passes(
             ))
 }
 
+fn closes_or_opens_conditional(directive: &str) -> bool {
+    preprocessor_directive(directive)
+        .is_some_and(|name| matches!(name, "endif" | "if" | "ifdef" | "ifndef"))
+}
+
+/// Walks on from `start` past the tokens [`head_walk_passes`] admits.
+fn walk_head_tail(
+    tokens: &[Token],
+    groups: &Groups,
+    walks: &mut HeadEndWalks,
+    level: Option<GroupId>,
+    pass_conditionals: bool,
+    start: usize,
+) -> Option<HeadWalk> {
+    let mut index = start;
+    let mut passed = Vec::new();
+    let tail = loop {
+        if let Some(&walk) = walks.reached.get(&(index, pass_conditionals))
+            && walk.level == level
+        {
+            break walk;
+        }
+        match next_code_token(tokens, index) {
+            Some(next)
+                if head_walk_passes(tokens, groups, level, pass_conditionals, index, next) =>
+            {
+                passed.push((index, next));
+                index = match groups.opened_at(next) {
+                    Some(id) => groups.get(id).close? + 1,
+                    None => next + 1,
+                };
+            }
+            _ => {
+                break HeadWalk {
+                    level,
+                    reached: index,
+                    arrow: None,
+                };
+            }
+        }
+    };
+    let mut walk = tail;
+    for &(from, next) in passed.iter().rev() {
+        if is_operator(tokens, next, "->") {
+            walk.arrow = Some(next);
+        }
+        walks.reached.insert((from, pass_conditionals), walk);
+    }
+    Some(walk)
+}
+
 /// The depth of template angles open at `end` in a trailing return type
-/// that a `->` at `level` starts between `start` and `end`.
+/// that a `->` at `level` starts: `arrow`, or one between `start` and `end`.
 fn trailing_return_angle_depth(
     tokens: &[Token],
     groups: &Groups,
     level: Option<GroupId>,
+    arrow: Option<usize>,
     start: usize,
     end: usize,
 ) -> Option<usize> {
-    let arrow = (start..end)
-        .find(|&index| is_operator(tokens, index, "->") && groups.enclosing(index) == level)?;
+    let arrow = arrow.or_else(|| {
+        (start..end)
+            .find(|&index| is_operator(tokens, index, "->") && groups.enclosing(index) == level)
+    })?;
     Some((arrow + 1..end).fold(0usize, |depth, index| {
         if groups.enclosing(index) != level {
             return depth;
@@ -689,6 +870,9 @@ fn trailing_return_angle_depth(
     }))
 }
 
+/// How the head whose parameter list is `params` and whose declarator ends
+/// with the paren group `last_params` ends; `None` when the tokens after the
+/// declarator show that it is not a function head.
 fn head_end(
     tokens: &[Token],
     groups: &Groups,
@@ -698,29 +882,18 @@ fn head_end(
 ) -> Option<HeadEnd> {
     let group = groups.get(last_params);
     let level = group.parent;
-    let mut index = group.close? + 1;
+    let knr_parameters = is_identifier_list(tokens, groups, params);
     // The walk reads tokens that pass the same way from wherever it starts,
     // until a `;` or `:` changes how it reads on.
-    if let Some(&(walked, reached)) = walks.reached.get(&index)
-        && walked == level
-    {
-        index = reached;
-    } else {
-        let mut passed = Vec::new();
-        while let Some(next) = next_code_token(tokens, index)
-            && head_walk_passes(tokens, groups, level, index, next)
-        {
-            passed.push(index);
-            index = match groups.opened_at(next) {
-                Some(id) => groups.get(id).close? + 1,
-                None => next + 1,
-            };
-        }
-        for start in passed {
-            walks.reached.insert(start, (level, index));
-        }
-    }
-    let knr_parameters = is_identifier_list(tokens, groups, params);
+    let walk = walk_head_tail(
+        tokens,
+        groups,
+        walks,
+        level,
+        knr_parameters,
+        group.close? + 1,
+    )?;
+    let mut index = walk.reached;
     let mut constructor_initializers = false;
     // The first `;` after an identifier list may end a declaration or start
     // K&R parameter declarations; when the tokens after it are no K&R
@@ -738,8 +911,7 @@ fn head_end(
             .any(|token| matches!(token, Token::Preprocessor(_)))
         {
             let closes_conditionals = tokens[index..next].iter().all(|token| match token {
-                Token::Preprocessor(directive) => preprocessor_directive(&directive.text)
-                    .is_some_and(|name| matches!(name, "endif" | "if" | "ifdef" | "ifndef")),
+                Token::Preprocessor(directive) => closes_or_opens_conditional(&directive.text),
                 _ => true,
             });
             if closes_conditionals
@@ -749,8 +921,11 @@ fn head_end(
             {
                 return Some(HeadEnd::Found(groups.opened_at(next)));
             }
-            // Parameter declarations go on past such conditionals.
-            if !(closes_conditionals && (knr_semicolon.is_some() || knr_parameters)) {
+            // Parameter declarations and constructor initializers go on
+            // past such conditionals.
+            if !(closes_conditionals
+                && (knr_semicolon.is_some() || knr_parameters || constructor_initializers))
+            {
                 return unterminated(knr_semicolon);
             }
         }
@@ -769,9 +944,11 @@ fn head_end(
                     .and_then(|before| groups.closed_at(before))
                     .is_some());
         // A trailing return type holds groups, as `decltype(x)`, and the
-        // commas of its template arguments.
+        // commas of its template arguments; constructor initializers follow
+        // none.
         if matches!(tokens[next], Token::Symbol('(' | ','))
-            && trailing_return_angle_depth(tokens, groups, level, group.close? + 1, next)
+            && !constructor_initializers
+            && trailing_return_angle_depth(tokens, groups, level, walk.arrow, walk.reached, next)
                 .is_some_and(|depth| depth > 0 || tokens[next] == Token::Symbol('('))
         {
             index = match groups.opened_at(next) {
@@ -800,6 +977,11 @@ fn head_end(
         }
         match &tokens[next] {
             Token::Symbol(':') => constructor_initializers = true,
+            // A member's braced initializer comes before the body.
+            Token::Symbol('{')
+                if constructor_initializers
+                    && previous_head_token(tokens, next)
+                        .is_some_and(|member| is_word(tokens, member)) => {}
             Token::Symbol('{') => return Some(HeadEnd::Found(groups.opened_at(next))),
             Token::Symbol(';') => {
                 // `f(a) int a; char *b; {`: declarations between the
@@ -823,7 +1005,9 @@ fn head_end(
             Token::Operator(operator) if operator == "=" && knr_semicolon.is_some() => {
                 return unterminated(knr_semicolon);
             }
-            Token::Symbol(',') if knr_semicolon.is_none() => return Some(HeadEnd::Found(None)),
+            Token::Symbol(',') if knr_semicolon.is_none() && !constructor_initializers => {
+                return Some(HeadEnd::Found(None));
+            }
             _ => {}
         }
         index = match groups.opened_at(next) {

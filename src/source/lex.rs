@@ -1,5 +1,11 @@
+/// Whether `ch` parts C tokens: ASCII blanks alone do; any other blank is
+/// text.
+pub fn is_blank(ch: char) -> bool {
+    matches!(ch, ' ' | '\t' | '\n' | '\x0b' | '\x0c' | '\r')
+}
+
 pub fn is_identifier_start(ch: char) -> bool {
-    matches!(ch, '_' | '$') || ch.is_ascii_alphabetic() || (!ch.is_ascii() && !ch.is_whitespace())
+    matches!(ch, '_' | '$') || ch.is_ascii_alphabetic() || !ch.is_ascii()
 }
 
 pub fn is_identifier_continue(ch: char) -> bool {

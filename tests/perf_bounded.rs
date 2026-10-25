@@ -423,6 +423,13 @@ fn runs_that_each_line_looked_across_stay_bounded() {
     allman.set_style(cstyle::config::StylePreset::Allman);
     let mut capped = FormatOptions::default();
     capped.max_code_length = Some(100);
+    let mut kr = FormatOptions::default();
+    kr.set_style(cstyle::config::StylePreset::Kr);
+    let mut whitesmith = FormatOptions::default();
+    whitesmith.set_style(cstyle::config::StylePreset::Whitesmith);
+    let mut lisp = FormatOptions::default();
+    lisp.set_style(cstyle::config::StylePreset::Lisp);
+    lisp.indent_width = 2;
     let blocks = |block: &dyn Fn(usize) -> String| {
         format!(
             "void f(void)\n{{\n{}}}\n",
@@ -433,6 +440,13 @@ fn runs_that_each_line_looked_across_stay_bounded() {
         (
             "a run of blank lines",
             format!("int a;\n{}int b;\n", "\n".repeat(n * 4)),
+            FormatOptions::default(),
+        ),
+        (
+            "a run of directives",
+            (0..n)
+                .map(|i| format!("#define M{i} {i}\n"))
+                .collect::<String>(),
             FormatOptions::default(),
         ),
         (
@@ -514,6 +528,169 @@ fn runs_that_each_line_looked_across_stay_bounded() {
                     .collect::<String>()
             ),
             capped.clone(),
+        ),
+        (
+            "a braceless else-if chain",
+            format!(
+                "void f() {{\n{}        y();\n}}\n",
+                (0..n / 4)
+                    .map(|i| format!("    if (a{i})\n        x();\n    else\n"))
+                    .collect::<String>()
+            ),
+            kr.clone(),
+        ),
+        (
+            "an else-if chain of blocks",
+            format!(
+                "void f()\n{{\n    if (a) {{\n        x();\n    }}{} else {{\n        y();\n    }}\n}}\n",
+                (0..n / 4)
+                    .map(|i| format!(" else if (a{i}) {{\n        x();\n    }}"))
+                    .collect::<String>()
+            ),
+            allman.clone(),
+        ),
+        (
+            "an else-if chain past nested blocks",
+            format!(
+                "void f() {{\n    if (a)\n        x();\n{}    else\n        y();\n}}\n",
+                (0..n / 4)
+                    .map(|i| format!("    else if (a{i}) {{\n        if (b) {{ z(); }}\n    }}\n"))
+                    .collect::<String>()
+            ),
+            kr.clone(),
+        ),
+        (
+            "functions each with nested braceless headers and a conditional",
+            (0..n / 6)
+                .map(|i| {
+                    format!(
+                        "void f{i}(void)\n{{\n    if (a)\n        if (b)\n            x();\n#if FEATURE\n    y();\n#endif\n}}\n"
+                    )
+                })
+                .collect::<String>(),
+            FormatOptions::default(),
+        ),
+        (
+            "brace lists each followed by a conditional",
+            (0..n / 2)
+                .map(|i| {
+                    format!(
+                        "static int t{i}[][2] = {{\n    {{\n        1, 2\n    }},\n}};\n#if FEATURE\nint v{i};\n#endif\n"
+                    )
+                })
+                .collect::<String>(),
+            FormatOptions::default(),
+        ),
+        (
+            "macro calls without semicolons around a conditional",
+            format!(
+                "{}#ifdef FEATURE\n{}#endif\n",
+                (0..n / 2)
+                    .map(|i| format!("DECLARE (name{i})\n"))
+                    .collect::<String>(),
+                (0..n / 2)
+                    .map(|i| format!("DECLARE (other{i})\n"))
+                    .collect::<String>()
+            ),
+            FormatOptions::default(),
+        ),
+        (
+            "enums each with a comment after a member",
+            (0..n / 4)
+                .map(|i| {
+                    format!(
+                        "enum kind{i} {{\n    FIRST = 1,\n    /* note */\n    SECOND = 2,\n}};\n"
+                    )
+                })
+                .collect::<String>(),
+            FormatOptions::default(),
+        ),
+        (
+            "a run of line comments in a body",
+            format!(
+                "void f() {{\n{}    x();\n}}\n",
+                (0..n).map(|i| format!("    // c{i}\n")).collect::<String>()
+            ),
+            FormatOptions::default(),
+        ),
+        (
+            "a run of block comment rows in a body",
+            format!(
+                "void f() {{\n{}    x();\n}}\n",
+                (0..n)
+                    .map(|i| format!("    /* c{i} */\n"))
+                    .collect::<String>()
+            ),
+            FormatOptions::default(),
+        ),
+        (
+            "a block comment of many rows",
+            format!(
+                "void f() {{\n    /*\n{}     */\n    x();\n}}\n",
+                (0..n).map(|i| format!("     * c{i}\n")).collect::<String>()
+            ),
+            FormatOptions::default(),
+        ),
+        (
+            "an asm statement of many string rows",
+            format!(
+                "void f() {{\n    asm volatile(\n{}    );\n}}\n",
+                (0..n)
+                    .map(|i| format!("        \"mov r{i}, r{i}\\n\"\n"))
+                    .collect::<String>()
+            ),
+            FormatOptions::default(),
+        ),
+        (
+            "rows of a long conditional chain",
+            format!(
+                "int x = a\n{};\n",
+                (0..n / 2)
+                    .map(|i| format!("        ? b{i}\n        : c{i} "))
+                    .collect::<String>()
+            ),
+            whitesmith.clone(),
+        ),
+        (
+            "closers a line each joining deep blocks",
+            format!(
+                "void f() {{\n{}x();\n{}}}\n",
+                "{\n".repeat(n / 12),
+                "}\n".repeat(n / 12)
+            ),
+            lisp.clone(),
+        ),
+        (
+            "a long argument list a row each",
+            format!(
+                "void f() {{\n    call({});\n}}\n",
+                (0..n)
+                    .map(|i| format!("a{i}"))
+                    .collect::<Vec<_>>()
+                    .join(",\n         ")
+            ),
+            FormatOptions::default(),
+        ),
+        (
+            "a long parameter list a row each",
+            format!(
+                "void f({})\n{{\n}}\n",
+                (0..n)
+                    .map(|i| format!("int a{i}"))
+                    .collect::<Vec<_>>()
+                    .join(",\n       ")
+            ),
+            FormatOptions::default(),
+        ),
+        (
+            "conditional arms a row each",
+            format!(
+                "int value = first\n{};\n",
+                (0..n / 4)
+                    .map(|i| format!("    ? item{i}\n    : other{i}\n"))
+                    .collect::<String>()
+            ),
+            allman.clone(),
         ),
     ] {
         let start = Instant::now();

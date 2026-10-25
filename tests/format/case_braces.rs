@@ -56,6 +56,16 @@ fn default_label_attached_brace_closes_at_case_column() {
     );
 }
 
+// A comment after a case block's closer leaves the closer at its brace,
+// whichever kind of comment it is.
+#[test]
+fn case_block_closer_with_a_trailing_comment_stands_at_its_brace() {
+    let input = "void f(int c)\n{\n  switch (c) {\n    case 1: {\n      x();\n    }  /* fall */\n    case 2: {\n      x();\n    }  // fall\n    default:\n      y();\n  }\n}\n";
+    let expected = "void f(int c)\n{\n    switch (c) {\n    case 1: {\n        x();\n    }  /* fall */\n    case 2: {\n        x();\n    }  // fall\n    default:\n        y();\n    }\n}\n";
+    assert_eq!(format_exact(input, &FormatOptions::default()), expected);
+    assert_eq!(format_exact(expected, &FormatOptions::default()), expected);
+}
+
 #[test]
 fn attached_case_brace_keeps_trailing_block_comment_gap() {
     let actual = format_exact(

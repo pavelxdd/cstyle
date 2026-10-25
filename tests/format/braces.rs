@@ -2021,6 +2021,24 @@ fn back_to_back_blocks_nest_one_level() {
 }
 
 #[test]
+fn back_to_back_blocks_leading_their_line_nest_one_level_in_the_default_style() {
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    {{{{",
+        "        code;",
+        "        more(1);",
+        "    };};};}",
+        "    {{",
+        "        code;",
+        "    }}",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
+}
+
+#[test]
 fn back_to_back_blocks_close_together_past_empty_statements() {
     let source = fixture!(
         "void f(void)",
@@ -2584,4 +2602,42 @@ fn a_one_line_bare_block_after_a_directive_breaks_as_anywhere() {
         ),
         "void f()\n{\n#ifdef FEATURE\n    {\n        value=0;\n    }\n#endif\n    run();\n}\n",
     );
+}
+
+#[test]
+fn kr_macro_function_head_in_a_namespace_or_linkage_block_breaks_its_brace_like_a_function() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=kr".to_owned()]).expect("valid options");
+    let namespace = fixture!("namespace demo", "{", "FOO", "{", "    int a;", "}", "}",);
+    let linkage = fixture!(
+        "extern \"C\" {",
+        "    FOO",
+        "    {",
+        "        int a;",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(namespace, &options), namespace);
+    assert_eq!(format_exact(linkage, &options), linkage);
+}
+
+#[test]
+fn breaking_styles_break_a_list_brace_on_the_first_line_as_on_any_line() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=allman".to_owned()]).expect("valid options");
+    let source = "int values[] = {\n1, 2,\n};\nint more[] = {\n3, 4,\n};\n";
+    let expected = fixture!(
+        "int values[] =",
+        "{",
+        "    1, 2,",
+        "};",
+        "int more[] =",
+        "{",
+        "    3, 4,",
+        "};",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
 }

@@ -312,6 +312,47 @@ fn pad_method_colon_after_pads_only_after_objc_colons() {
 }
 
 #[test]
+fn pad_method_colon_leaves_dictionary_colons_in_a_message_and_pads_later_selectors() {
+    // A dictionary literal's colons are no selector's, in a message or
+    // out of one, and the selectors after the literal pad as any do.
+    let source = fixture!(
+        "- (void)run",
+        "{",
+        "    NSDictionary *d = @{@\"a\":@1};",
+        "    [self setItems:@{@\"k\":value} forKey:@\"x\"];",
+        "}",
+    );
+    for (pad, expected) in [
+        (
+            ObjCColonPad::After,
+            fixture!(
+                "- (void)run",
+                "{",
+                "    NSDictionary *d = @{@\"a\":@1};",
+                "    [self setItems: @{@\"k\":value} forKey: @\"x\"];",
+                "}",
+            ),
+        ),
+        (
+            ObjCColonPad::All,
+            fixture!(
+                "- (void)run",
+                "{",
+                "    NSDictionary *d = @{@\"a\":@1};",
+                "    [self setItems : @{@\"k\":value} forKey : @\"x\"];",
+                "}",
+            ),
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        options.pad_method_colon = pad;
+        let actual = format_exact(source, &options);
+        assert_eq!(actual, expected);
+        assert_eq!(format_exact(&actual, &options), expected);
+    }
+}
+
+#[test]
 fn pad_method_colon_before_pads_only_before_objc_colons() {
     let mut options = FormatOptions::default();
     options.pad_method_colon = ObjCColonPad::Before;
@@ -539,9 +580,9 @@ fn keeps_single_line_objc_collection_literals_inline() {
         ),
         fixture!(
             "void f(void) {",
-            "    d = @ {key: value};",
+            "    d = @{key: value};",
             "    a = @[one, two];",
-            "    b = @ {};",
+            "    b = @{};",
             "    c = @[];",
             "}"
         )
@@ -657,7 +698,7 @@ fn aligns_method_colon_across_multiline_objc_message_send() {
 }
 
 #[test]
-fn flushes_multiline_bare_key_dictionary_keys_as_labels() {
+fn multiline_dictionary_rows_with_bare_keys_stay_list_rows() {
     let options = FormatOptions::default();
 
     assert_eq!(
@@ -674,11 +715,9 @@ fn flushes_multiline_bare_key_dictionary_keys_as_labels() {
         ),
         fixture!(
             "void f(void) {",
-            "    d = @ {",
-            "akey :",
-            "        value,",
-            "bkey :",
-            "        other,",
+            "    d = @{",
+            "        akey : value,",
+            "        bkey : other,",
             "    };",
             "}"
         )
@@ -722,8 +761,8 @@ fn keeps_nested_objc_collection_literals_inline() {
         ),
         fixture!(
             "void f(void) {",
-            "    q = @[@ {a: b}, @ {c: d}];",
-            "    r = @ {k: @[x, y]};",
+            "    q = @[@{a: b}, @{c: d}];",
+            "    r = @{k: @[x, y]};",
             "}"
         )
     );
@@ -856,7 +895,7 @@ fn objc_dictionary_in_one_method_does_not_break_following_method_message() {
     let mut options = FormatOptions::default();
     options.mode = Mode::ObjC;
     let source = "+ (id)alpha {\n    return [Helper makeWithDomain:Domain\n                             code:code\n                         userInfo:@{ Key: [value stringByAppendingString:@\".\"] }];\n}\n+ (id)beta {\n    id result = source ?: [Builder buildWithFormat:@\"%@ %@\",\n                           source.domain, @(source.code)];\n}\n";
-    let expected = "+ (id)alpha {\n    return [Helper makeWithDomain:Domain\n                   code:code\n                   userInfo:@ { Key: [value stringByAppendingString:@\".\"] }];\n}\n+ (id)beta {\n    id result = source ?: [Builder buildWithFormat:@\"%@ %@\",\n                                   source.domain, @(source.code)];\n}\n";
+    let expected = "+ (id)alpha {\n    return [Helper makeWithDomain:Domain\n                   code:code\n                   userInfo:@{ Key: [value stringByAppendingString:@\".\"] }];\n}\n+ (id)beta {\n    id result = source ?: [Builder buildWithFormat:@\"%@ %@\",\n                                   source.domain, @(source.code)];\n}\n";
 
     assert_eq!(format_exact(source, &options), expected);
 }
@@ -894,7 +933,7 @@ fn objc_message_dictionary_value_selector_colon_aligns_under_first_selector() {
             "void f(void) {\n    return [Err errorWithDomain:Domain\n            code:code\n            userInfo:@{ Key: [detail stringByAppendingString:@\".\"] }];\n}\n",
             &options,
         ),
-        "void f(void) {\n    return [Err errorWithDomain:Domain\n                           code:code\n                       userInfo:@ { Key: [detail stringByAppendingString:@\".\"] }];\n}\n",
+        "void f(void) {\n    return [Err errorWithDomain:Domain\n                           code:code\n                       userInfo:@{ Key: [detail stringByAppendingString:@\".\"] }];\n}\n",
     );
 }
 
@@ -914,13 +953,13 @@ fn objc_message_continuation_aligns_under_selector_even_when_column_overflows() 
 }
 
 #[test]
-fn objc_dictionary_literal_breaks_value_rows_after_colons() {
+fn objc_dictionary_literal_keeps_each_key_with_its_value() {
     assert_eq!(
         format_exact(
             "- (void)draw {\n    Dictionary *attributes =\n        @{ Name: [Color whiteColor],\n           Font: [Font systemFontOfSize:[Font systemFontSize]] };\n}\n",
             &FormatOptions::default(),
         ),
-        "- (void)draw {\n    Dictionary *attributes =\n        @ { Name:\n            [Color whiteColor],\n            Font:\n            [Font systemFontOfSize:[Font systemFontSize]]\n          };\n}\n",
+        "- (void)draw {\n    Dictionary *attributes =\n        @{ Name: [Color whiteColor],\n           Font: [Font systemFontOfSize:[Font systemFontSize]] };\n}\n",
     );
 }
 
@@ -931,7 +970,7 @@ fn objc_dictionary_literal_after_assignment_keeps_at_brace_spacing() {
             "void f(void) {\n    Dictionary *attributes =\n    @{ Name:\n       [Color whiteColor],\n       Font:\n       [Font systemFont]\n     };\n}\n",
             &FormatOptions::default(),
         ),
-        "void f(void) {\n    Dictionary *attributes =\n        @ { Name:\n            [Color whiteColor],\n            Font:\n            [Font systemFont]\n          };\n}\n",
+        "void f(void) {\n    Dictionary *attributes =\n        @{ Name:\n           [Color whiteColor],\n           Font:\n           [Font systemFont]\n         };\n}\n",
     );
 }
 
@@ -1064,12 +1103,21 @@ fn preprocessor_branch_restores_objective_c_message_state() {
     let args = ["--style=allman", "--pad-oper"].map(str::to_owned);
     apply_command_line_args(&mut options, &args).expect("valid options");
 
+    // After `#endif` the first branch's message goes on, as without the
+    // other branch.
+    let closer = format_exact("void f(){\n[receiver method\n];\n}\n", &options)
+        .lines()
+        .nth(3)
+        .unwrap_or_default()
+        .to_owned();
     assert_eq!(
         format_exact(
             "void f(){\n#if A\n[receiver method\n#else\narray[index\n#endif\n];\n}\n",
             &options,
         ),
-        "void f()\n{\n#if A\n    [receiver method\n#else\n    array[index\n#endif\n         ];\n}\n",
+        format!(
+            "void f()\n{{\n#if A\n    [receiver method\n#else\n    array[index\n#endif\n{closer}\n}}\n"
+        ),
     );
 }
 
@@ -1497,4 +1545,314 @@ fn objc_interface_member_a_comment_leads_stays_at_the_members() {
         ),
         "@interface Item : NSObject\n/* note */ @property (nonatomic) int value;\n@end\n",
     );
+}
+
+#[test]
+fn conditionals_in_an_interface_without_ivars_stand_with_its_declarations() {
+    // A conditional stands at the level of the declarations around it,
+    // whether or not an ivar block opens the interface.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_owned(), "--indent-preproc-cond".to_owned()],
+    )
+    .expect("valid options");
+    let input = "@interface Item : NSObject\n#ifdef FEATURE\n@property (nonatomic) int value;\n#endif\n- (void)update:(int)value;\n@end\n";
+    assert_eq!(format_exact(input, &options), input);
+    let with_ivars = "@interface Item : NSObject\n{\n    int value;\n}\n#ifdef FEATURE\n@property (nonatomic) int value;\n#endif\n- (void)update:(int)value;\n@end\n";
+    assert_eq!(format_exact(with_ivars, &options), with_ivars);
+}
+
+#[test]
+fn objc_message_continuation_aligns_under_its_first_selector_after_return_too() {
+    // A returned message's rows stand under its first selector, as they do
+    // after an assignment, an operator or in a call.
+    let source = "void f(void) {\n    result = [helper alpha:a\n                     beta:b];\n    return [helper alpha:a\n                   beta:b];\n    return 1 + [helper alpha:a\n                       beta:b];\n    call([helper alpha:a\n                 beta:b]);\n}\n";
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
+}
+
+#[test]
+fn a_nested_message_after_a_logical_or_bitwise_operator_keeps_its_space() {
+    // `[[a b] c]` sends to a message's result; only `[[...]]` closing
+    // together is an attribute a declarator takes.
+    let input = "void f()\n{\n    if (a && [[b c] d]) go();\n    x = a & [[b c] d];\n}\nvoid g(int && [[maybe_unused]] x, int * [[maybe_unused]] y);\n";
+    let expected = "void f()\n{\n    if (a && [[b c] d]) go();\n    x = a & [[b c] d];\n}\nvoid g(int &&[[maybe_unused]] x, int *[[maybe_unused]] y);\n";
+    for option in ["--align-pointer=name", "--align-reference=name"] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(
+            &mut options,
+            &["--style=kr".to_string(), option.to_string()],
+        )
+        .expect("valid options");
+        let expected = if option == "--align-reference=name" {
+            expected.replace("int *[[", "int * [[")
+        } else {
+            expected.to_string()
+        };
+        assert_eq!(format_exact(input, &options), expected);
+        assert_eq!(format_exact(&expected, &options), expected);
+    }
+}
+
+#[test]
+fn a_multiline_dictionary_literal_is_a_list_after_its_at() {
+    // `@{` stays together in every style, and its rows stand as a list's,
+    // each key with its value.
+    let input = "void f()\n{\n    NSDictionary *map = @{\n        @\"a\" : @1,\n        @\"b\" : @2\n    };\n}\n";
+    for (style, expected) in [
+        ("--style=kr", input.to_string()),
+        (
+            "--style=allman",
+            input.to_string(),
+        ),
+        (
+            "--style=whitesmith",
+            "void f()\n    {\n    NSDictionary *map = @{\n        @\"a\" : @1,\n        @\"b\" : @2\n        };\n    }\n".to_string(),
+        ),
+        (
+            "--style=lisp",
+            "void f() {\n    NSDictionary *map = @{\n        @\"a\" : @1,\n        @\"b\" : @2 }; }\n".to_string(),
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_string()]).expect("valid options");
+        assert_eq!(format_exact(input, &options), expected, "{style}");
+        assert_eq!(format_exact(&expected, &options), expected, "{style}");
+    }
+}
+
+#[test]
+fn pad_paren_pads_inside_before_an_objc_literal() {
+    let input = "void f()\n{\n    NSLog(@\"%d\", value);\n    use(@[ @1 ], @{ @\"a\" : @1 });\n}\n";
+    let expected =
+        "void f()\n{\n    NSLog ( @\"%d\", value );\n    use ( @[ @1 ], @{ @\"a\" : @1 } );\n}\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--pad-paren".to_string()],
+    )
+    .expect("valid options");
+    assert_eq!(format_exact(input, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn instance_variable_braces_of_an_interface_and_an_implementation_follow_the_class_rule() {
+    // Each block holds a class's instance variables: its brace breaks and
+    // attaches as a class's does, wherever the source placed it.
+    let attached = "@interface Item : NSObject {\n    int _value;\n}\n@end\n@interface Item () {\n    int _extra;\n}\n@end\n@implementation Item {\n    int _count;\n}\n@end\n";
+    let broken = "@interface Item : NSObject\n{\n    int _value;\n}\n@end\n@interface Item ()\n{\n    int _extra;\n}\n@end\n@implementation Item\n{\n    int _count;\n}\n@end\n";
+    let lisp = "@interface Item : NSObject {\n    int _value; }\n@end\n@interface Item () {\n    int _extra; }\n@end\n@implementation Item {\n    int _count; }\n@end\n";
+    let ratliff = "@interface Item : NSObject {\n    int _value;\n    }\n@end\n@interface Item () {\n    int _extra;\n    }\n@end\n@implementation Item {\n    int _count;\n    }\n@end\n";
+    for (args, expected) in [
+        (&["--style=kr"][..], broken),
+        (&["--style=linux"], broken),
+        (&["--style=mozilla"], broken),
+        (&["--style=allman"], broken),
+        (&["--style=java"], attached),
+        (&["--style=google"], attached),
+        (&["--style=stroustrup"], attached),
+        (&["--style=webkit"], attached),
+        (&["--style=kr", "--attach-classes"], attached),
+        (&["--style=lisp"], lisp),
+        (&["--style=ratliff"], ratliff),
+    ] {
+        let mut options = FormatOptions::default();
+        let args: Vec<String> = args.iter().map(|arg| (*arg).to_string()).collect();
+        apply_command_line_args(&mut options, &args).expect("valid options");
+        for source in [attached, broken] {
+            assert_eq!(
+                format_exact(source, &options),
+                expected,
+                "{args:?}\n{source}"
+            );
+        }
+    }
+}
+
+#[test]
+fn objc_exception_headers_break_from_closers_as_catch_does() {
+    // `@catch` and `@finally` follow the block before them as `catch` does:
+    // styles that break closing headers break them off its closer too.
+    let input = "void run()\n{\n    @try {\n        call();\n    } @catch (id error) {\n        handle(error);\n    } @finally {\n        finish();\n    }\n}\n";
+    for (style, expected) in [
+        (
+            "--style=allman",
+            "void run()\n{\n    @try\n    {\n        call();\n    }\n    @catch (id error)\n    {\n        handle(error);\n    }\n    @finally\n    {\n        finish();\n    }\n}\n",
+        ),
+        (
+            "--style=stroustrup",
+            "void run()\n{\n    @try {\n        call();\n    }\n    @catch (id error) {\n        handle(error);\n    }\n    @finally {\n        finish();\n    }\n}\n",
+        ),
+        (
+            "--style=gnu",
+            "void run()\n{\n    @try\n        {\n            call();\n        }\n    @catch (id error)\n        {\n            handle(error);\n        }\n    @finally\n        {\n            finish();\n        }\n}\n",
+        ),
+        (
+            "--style=pico",
+            "void run()\n{   @try\n    {   call(); }\n    @catch (id error)\n    {   handle(error); }\n    @finally\n    {   finish(); } }\n",
+        ),
+        ("--style=kr", input),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_string()]).expect("valid options");
+        assert_eq!(format_exact(input, &options), expected, "{style}");
+        assert_eq!(format_exact(expected, &options), expected, "{style}");
+    }
+}
+
+#[test]
+fn break_blocks_pads_objc_exception_and_lock_blocks_as_headers() {
+    let input = "- (void)safe\n{\n    @try {\n        [self risky];\n    } @catch (NSException *e) {\n        NSLog(@\"%@\", e);\n    }\n    @synchronized(self) {\n        _count++;\n    }\n}\n";
+    let expected = "- (void)safe\n{\n    @try {\n        [self risky];\n    } @catch (NSException *e) {\n        NSLog(@\"%@\", e);\n    }\n\n    @synchronized(self) {\n        _count++;\n    }\n}\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--break-blocks".to_string()],
+    )
+    .expect("valid options");
+    assert_eq!(format_exact(input, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn objc_statement_blocks_are_header_blocks_for_break_blocks() {
+    // `@autoreleasepool`, `@try` and `@synchronized` head their blocks as
+    // `try` and `while` do.
+    let input = "- (void)run\n{\n    go();\n    @autoreleasepool {\n        go();\n    }\n    go();\n    @try {\n        go();\n    } @finally {\n        stop();\n    }\n    go();\n    @synchronized(self) {\n        go();\n    }\n    go();\n}\n";
+    let expected = "- (void)run\n{\n    go();\n\n    @autoreleasepool {\n        go();\n    }\n\n    go();\n\n    @try {\n        go();\n    } @finally {\n        stop();\n    }\n\n    go();\n\n    @synchronized(self) {\n        go();\n    }\n\n    go();\n}\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--break-blocks".to_string()],
+    )
+    .expect("valid options");
+    assert_eq!(format_exact(input, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn objc_statement_blocks_indent_their_braces_as_headers_in_gnu() {
+    let input = "- (void)run\n{\n    @autoreleasepool {\n        go();\n    }\n    @synchronized(self) {\n        go();\n    }\n}\n";
+    let expected = "- (void)run\n{\n    @autoreleasepool\n        {\n            go();\n        }\n    @synchronized(self)\n        {\n            go();\n        }\n}\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=gnu".to_string()]).expect("valid options");
+    assert_eq!(format_exact(input, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn pad_header_pads_objc_headers_before_their_parens() {
+    let input = "- (void)run\n{\n    @try {\n        go();\n    } @catch(id error) {\n        stop();\n    }\n    @synchronized(self) {\n        go();\n    }\n}\n";
+    let expected = "- (void)run\n{\n    @try {\n        go();\n    } @catch (id error) {\n        stop();\n    }\n    @synchronized (self) {\n        go();\n    }\n}\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--pad-header".to_string()],
+    )
+    .expect("valid options");
+    assert_eq!(format_exact(input, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn objc_statement_headers_lay_out_as_their_counterparts() {
+    // `@try`, `@catch`, `@finally`, `@synchronized` and `@autoreleasepool`
+    // head their blocks as `try`, `catch`, `__finally`, `while` and `__try`
+    // do, whatever the style and block options.
+    let counterparts = [
+        ("@autoreleasepool", "__try"),
+        ("@synchronized", "while"),
+        ("@try", "try"),
+        ("@catch", "catch"),
+        ("@finally", "__finally"),
+    ];
+    let as_counterparts = |source: &str| {
+        counterparts
+            .iter()
+            .fold(source.to_string(), |text, (objc, other)| {
+                text.replace(objc, other)
+            })
+    };
+    let sources = [
+        "void run()\n{\n    go();\n    @try {\n        call();\n    } @catch (id error) {\n        handle(error);\n    } @finally {\n        finish();\n    }\n    go();\n}\n",
+        "void run()\n{\n    @try { call(); } @catch (id e) { handle(e); }\n    @synchronized(self) { go(); }\n    @autoreleasepool { go(); }\n}\n",
+        "void run()\n{\n    go();\n    @try {\n        call();\n    } /* c */ @catch (id e) {\n        handle(e);\n    }\n    @synchronized(self) {\n        go();\n    }\n}\n",
+        "void run()\n{\n    if (a) {\n        @try {\n            call();\n        }\n        @finally {\n            finish();\n        }\n    }\n    @autoreleasepool {\n        @synchronized(self) {\n            go();\n        }\n    }\n}\n",
+    ];
+    for style in [
+        "kr",
+        "allman",
+        "java",
+        "gnu",
+        "whitesmith",
+        "pico",
+        "lisp",
+        "horstmann",
+        "ratliff",
+        "stroustrup",
+        "banner",
+    ] {
+        for extra in [
+            &[][..],
+            &["--break-blocks"],
+            &["--break-blocks=all"],
+            &["--pad-header"],
+            &["--keep-one-line-blocks"],
+        ] {
+            let mut options = FormatOptions::default();
+            let mut args = vec![format!("--style={style}")];
+            args.extend(extra.iter().map(|arg| (*arg).to_string()));
+            apply_command_line_args(&mut options, &args).expect("valid options");
+            for source in sources {
+                assert_eq!(
+                    as_counterparts(&format_exact(source, &options)),
+                    format_exact(&as_counterparts(source), &options),
+                    "{args:?}\n{source}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn max_code_length_splits_a_long_row_in_an_autoreleasepool_as_in_any_block() {
+    let input = "int main(int argc, char *argv[])\n{\n    @autoreleasepool {\n        return UIApplicationMain(argc, argv, nil, NSStringFromClass(Item));\n    }\n}\n";
+    let expected = "int main(int argc, char *argv[])\n{\n    @autoreleasepool {\n        return UIApplicationMain(argc, argv, nil,\n                                 NSStringFromClass(Item));\n    }\n}\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_eq!(format_exact(input, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn run_in_enum_rows_after_a_macro_head_indent_as_after_an_enum_head() {
+    let input = "typedef NS_ENUM(NSInteger, Mode) {\n    ModeA,\n    ModeB = 2,\n};\nenum Mode {\n    ModeA,\n    ModeB = 2,\n};\n";
+    for (style, expected) in [
+        (
+            "--style=pico",
+            "typedef NS_ENUM(NSInteger, Mode)\n{\tModeA,\n\tModeB = 2, };\nenum Mode\n{\tModeA,\n\tModeB = 2, };\n",
+        ),
+        (
+            "--style=horstmann",
+            "typedef NS_ENUM(NSInteger, Mode)\n{\tModeA,\n\tModeB = 2,\n};\nenum Mode\n{\tModeA,\n\tModeB = 2,\n};\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(
+            &mut options,
+            &[
+                style.to_string(),
+                "--convert-tabs".to_string(),
+                "--indent=tab=4".to_string(),
+            ],
+        )
+        .expect("valid options");
+        assert_eq!(format_exact(input, &options), expected, "{style}");
+        assert_eq!(format_exact(expected, &options), expected, "{style}");
+    }
 }

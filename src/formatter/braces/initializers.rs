@@ -11,7 +11,7 @@ use crate::formatter::preprocessor::is_conditional_preprocessor;
 use crate::formatter::state::frame::{BraceSemanticKind, ParenRole};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
-use crate::formatter::structure::blocks::{BlockKind, next_code_token};
+use crate::formatter::structure::blocks::{BlockKind, is_code_token, next_code_token};
 use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::BraceListRows;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
@@ -28,33 +28,51 @@ pub(crate) struct CompoundLiteralOpeningLayout {
     pub(crate) brace_indent_spaces: usize,
 }
 
-fn line_opens_typed_initializer(line: &str) -> bool {
-    let code = line[..trailing_comment_split_limit(line)].trimmed_end();
-    let Some(open) = code.rfind('{') else {
-        return false;
-    };
-    let before = code[..open].trimmed_end();
-    before.contains('<') && before.ends_with('>')
+/// Whether the last mark before `brace` that is no part of a name, a
+/// separator or a comment is an operator ending in `=`.
+fn brace_follows_assignment(tokens: &[Token], brace: usize) -> bool {
+    tokens[..brace]
+        .iter()
+        .rev()
+        .find(|token| match token {
+            Token::Word(_)
+            | Token::Number(_)
+            | Token::Whitespace(_)
+            | Token::Newline
+            | Token::Comment(..) => false,
+            Token::Symbol(ch) => !matches!(ch, '.' | ',' | ';'),
+            Token::Operator(operator) => operator != ".",
+            _ => true,
+        })
+        .is_some_and(|token| matches!(token, Token::Operator(operator) if operator.ends_with('=')))
 }
 
-/// Whether `line`, a declaration up to its `=`, declares a `struct`, whose
-/// aggregate astyle closes at the statement rather than under its brace.
-fn line_declares_struct(line: &str) -> bool {
-    let head = line.trimmed_end().trim_end_matches('=');
-    let head = head.split(['[', '(']).next().unwrap_or(head);
-    head.split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_')
-        .any(|word| word == "struct")
-}
-
-pub(crate) fn has_nested_designated_init_brace(tokens: &[Token]) -> bool {
-    let mut saw_open = false;
-    let mut saw_designator = false;
-    for token in tokens {
+/// Whether the declaration the `=` before `brace` ends names a `struct`,
+/// `union` or `class` type outside its parentheses and brackets, on any of
+/// its lines: its aggregate counts its levels from the statement, though its
+/// declarator continues it.
+fn statement_declares_aggregate(tokens: &[Token], brace: usize) -> bool {
+    let mut depth = 0usize;
+    for (index, token) in tokens[..brace].iter().enumerate().rev() {
         match token {
-            Token::Whitespace(_) | Token::Newline => {}
-            Token::Symbol('{') if saw_designator => return true,
-            Token::Symbol('{') => saw_open = true,
-            Token::Symbol('.') if saw_open => saw_designator = true,
+            Token::Symbol(')' | ']') => depth += 1,
+            Token::Symbol('(' | '[') if depth > 0 => depth -= 1,
+            Token::Symbol(';' | '{' | '}' | '(' | '[') => return false,
+            // A template's type parameter names no type the declaration has.
+            Token::Word(word)
+                if depth == 0
+                    && matches!(word.as_str(), "struct" | "union" | "class")
+                    && !tokens[..index]
+                        .iter()
+                        .rev()
+                        .find(|token| is_code_token(token))
+                        .is_some_and(|token| {
+                            matches!(token, Token::Operator(operator) if operator == "<")
+                                || matches!(token, Token::Symbol(','))
+                        }) =>
+            {
+                return true;
+            }
             _ => {}
         }
     }
@@ -152,6 +170,20 @@ impl FormatEngine<'_> {
         }
     }
 
+    /// Whether the line being laid out starts among the elements of an
+    /// initializer list.
+    fn pending_line_starts_in_initializer(&self) -> bool {
+        self.output
+            .pending_tokens()
+            .and_then(|span| self.tree.groups.enclosing(span.first))
+            .is_some_and(|group| {
+                matches!(
+                    self.tree.blocks.kind(group),
+                    Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                )
+            })
+    }
+
     pub(crate) fn range_designator_source_indent_spaces(
         &self,
         line: &LineView<'_>,
@@ -159,6 +191,7 @@ impl FormatEngine<'_> {
         let line_start = line.trimmed_start();
         if self.options.min_conditional_indent != MinConditionalIndent::Zero
             || !line_start.starts_with('[')
+            || !self.pending_line_starts_in_initializer()
         {
             return None;
         }
@@ -280,6 +313,23 @@ impl FormatEngine<'_> {
     /// Whether the pending line starts a row of an initializer list whose
     /// elements run in after its brace, and opens a list aligned among
     /// them.
+    /// Whether the pending row is an element row of an initializer list
+    /// whose first element follows its brace on the brace's line.
+    fn pending_row_in_run_in_list(&self) -> bool {
+        let groups = &self.tree.groups;
+        self.output
+            .pending_tokens()
+            .and_then(|span| groups.enclosing(span.first))
+            .is_some_and(|list| {
+                self.tree.blocks.kind(list) == Some(BlockKind::Initializer)
+                    && self
+                        .output
+                        .line_with_token(groups.get(list).open)
+                        .and_then(|line| self.output.line_tokens(line))
+                        .is_some_and(|open_span| open_span.last != groups.get(list).open)
+            })
+    }
+
     fn pending_row_of_run_in_list(&self) -> bool {
         let groups = &self.tree.groups;
         let Some(span) = self.output.pending_tokens() else {
@@ -338,13 +388,13 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        // VTK indents only initializer braces nested in a block.
+        // VTK indents only initializer braces nested in code.
         if self.options.brace_style == BraceStyle::Vtk
             && self
                 .output
                 .pending_tokens()
                 .and_then(|span| self.tree.groups.opened_at(span.first))
-                .is_some_and(|group| self.tree.groups.get(group).parent.is_none())
+                .is_some_and(|group| self.vtk_flush_scope(group))
         {
             return None;
         }
@@ -423,7 +473,7 @@ impl FormatEngine<'_> {
             || self
                 .output
                 .pending_tokens()
-                .is_some_and(|span| self.multiline_literal_argument_parens(span.first).is_some())
+                .is_some_and(|span| self.token_in_parens(span.first))
         {
             return None;
         }
@@ -479,25 +529,6 @@ impl FormatEngine<'_> {
         })
     }
 
-    pub(super) fn open_expanded_init_brace(
-        &mut self,
-        brace_header: Option<String>,
-        brace_type: BraceType,
-        block_indent_extra: usize,
-    ) {
-        self.emit_source_space_or_ensure();
-        self.current.push('{');
-        self.layout.command_state.observe_char('{');
-        self.finish_line();
-        self.layout
-            .nesting
-            .enter_brace(brace_header, brace_type, block_indent_extra);
-        self.layout
-            .indentation
-            .enter_block_with_extra(false, block_indent_extra);
-        self.layout.previous = PreviousToken::Other;
-    }
-
     pub(super) fn open_multiline_attached_initializer_brace(
         &mut self,
         brace_header: Option<String>,
@@ -508,7 +539,20 @@ impl FormatEngine<'_> {
     ) {
         let control_paren_indent = self.control_paren_init_brace_indent_spaces();
         let brace_begins_line = self.current_is_blank();
-        let enclosing_body_column = self.current_inline_array_column();
+        // A list opening at a row's end inside a compound literal counts its
+        // rows from the literal's level, as one inside a list does.
+        let enclosing_body_column = self
+            .inline_array
+            .frames
+            .last()
+            .filter(|frame| frame.depth == self.layout.nesting.brace_header_stack.len())
+            .map(|frame| {
+                if frame.leveled_literal {
+                    frame.brace_column + self.options.indent_width
+                } else {
+                    frame.body_column
+                }
+            });
         let indented_initializer_brace = brace_begins_line
             && control_paren_indent.is_none()
             && enclosing_body_column.is_some()
@@ -516,15 +560,10 @@ impl FormatEngine<'_> {
                 self.options.brace_style,
                 BraceStyle::Whitesmith | BraceStyle::Vtk | BraceStyle::Ratliff
             );
-        let opening_indent = control_paren_indent
+        let mut opening_indent = control_paren_indent
             .or(enclosing_body_column)
             .unwrap_or_else(|| self.current_line_indent_spaces())
             + usize::from(indented_initializer_brace) * self.options.indent_width;
-        let body_indent = if indented_initializer_brace {
-            opening_indent
-        } else {
-            opening_indent + self.options.indent_width
-        };
 
         self.emit_opening_brace_space(brace_type);
         self.current.push('{');
@@ -538,6 +577,20 @@ impl FormatEngine<'_> {
                 .set_next_line_spaces(opening_indent);
         }
         self.finish_line();
+        // The list's rows follow the row its brace ends, where the layout
+        // put it.
+        if control_paren_indent.is_none()
+            && enclosing_body_column.is_none()
+            && !brace_begins_line
+            && let Some(row) = self.output.last()
+        {
+            opening_indent = leading_visual_width(row, self.options.tab_width);
+        }
+        let body_indent = if indented_initializer_brace {
+            opening_indent
+        } else {
+            opening_indent + self.options.indent_width
+        };
         self.update_current_brace_indent_from_last_output_line();
         self.layout
             .nesting
@@ -575,6 +628,7 @@ impl FormatEngine<'_> {
         &mut self,
         brace_header: Option<String>,
         block_indent_extra: usize,
+        trailing_comment: Option<&str>,
     ) {
         let opening_indent = self
             .for_header_continuation_indent_spaces()
@@ -582,6 +636,9 @@ impl FormatEngine<'_> {
         self.emit_source_space_or_ensure();
         self.current.push('{');
         self.layout.command_state.observe_char('{');
+        if let Some(comment) = trailing_comment {
+            self.push_attached_comment_with_source_gap(comment);
+        }
         self.finish_line();
         self.layout
             .nesting
@@ -604,37 +661,7 @@ impl FormatEngine<'_> {
             .continuation_indent
             .set_next_line_spaces(opening_indent + self.options.indent_width);
         self.layout.previous = PreviousToken::Other;
-        self.previous_was_newline = true;
-    }
-
-    pub(super) fn open_range_for_init_brace(
-        &mut self,
-        _brace_header: Option<String>,
-        _brace_type: BraceType,
-        _block_indent_extra: usize,
-    ) {
-        let opening_indent = self
-            .for_header_continuation_indent_spaces()
-            .unwrap_or_else(|| self.current_line_indent_spaces() + self.options.indent_width * 2);
-        self.finish_line();
-        self.layout
-            .continuation_indent
-            .set_next_line_spaces(opening_indent);
-        self.current.push('{');
-        self.layout.command_state.observe_char('{');
-        self.layout.nesting.enter_brace(None, BraceType::Array, 0);
-        self.layout.indentation.enter_block_without_indent(false);
-        self.inline_array.frames.push(InlineArrayFrame {
-            depth: self.layout.nesting.brace_header_stack.len(),
-            body_column: opening_indent + 1,
-            brace_column: opening_indent,
-            output_line: self.output.len(),
-            aggregate_assignment: true,
-            leveled_literal: false,
-            line_lead: None,
-        });
-        self.update_current_brace_indent_columns(opening_indent + 1, opening_indent);
-        self.layout.previous = PreviousToken::Other;
+        // The source's own break after the brace ends the line it opened.
         self.previous_was_newline = false;
     }
 
@@ -665,7 +692,7 @@ impl FormatEngine<'_> {
             .opened_at(token_index)
             .and_then(|group| self.tree.groups.get(group).parent)
             .is_some_and(|parent| self.tree.groups.get(parent).delimiter != Delimiter::Brace);
-        let enclosed = brace_type == BraceType::Array
+        let enclosed = matches!(brace_type, BraceType::Array | BraceType::CompoundLiteral)
             && !in_parens
             && !self
                 .inline_array
@@ -688,16 +715,27 @@ impl FormatEngine<'_> {
             && !self.token_input.token_begins_source_line
             && self.current.trimmed_end().ends_with(',');
         let range_for_header_initializer =
-            double_brace_initializer && self.current.trimmed_start().starts_with("for (");
+            double_brace_initializer && self.token_in_for_header(token_index);
         // Styles running rows in after braces keep the first element there.
         let runs_in = matches!(
             self.options.brace_style,
             BraceStyle::Horstmann | BraceStyle::Pico
         );
+        // The default style runs a source line a brace opens in after that
+        // brace, which keeps a list opened mid-row there whole.
+        let row_runs_in = self.options.brace_style == BraceStyle::None
+            && self.tree.tokens[..token_index]
+                .iter()
+                .rev()
+                .take_while(|token| !matches!(token, Token::Newline))
+                .filter(|token| !matches!(token, Token::Whitespace(_)))
+                .last()
+                .is_some_and(|token| matches!(token, Token::Symbol('{')));
         // A list opened after a comma among the rows of a list that sets
         // them a level in breaks after its brace when it spans rows, as a
         // row's block does.
         let spanning_mid_row_list = run_in_after_comma
+            && !row_runs_in
             && self.enclosing_list_rows_leveled(token_index)
             && self
                 .tree
@@ -743,9 +781,8 @@ impl FormatEngine<'_> {
         // aggregate is.
         let aggregate_assign = self.current.trimmed_end().ends_with('=')
             || brace_type == BraceType::CompoundLiteral && self.layout.nesting.paren_depth == 0;
-        let struct_declaration = !nested
-            && self.current.trimmed_end().ends_with('=')
-            && line_declares_struct(&self.current);
+        let declares_struct = self.current.trimmed_end().ends_with('=')
+            && statement_declares_aggregate(&self.tree.tokens, token_index);
         if self.current_is_lambda_body_header()
             || is_lambda_capture_header(self.current.trimmed_end())
         {
@@ -758,11 +795,11 @@ impl FormatEngine<'_> {
                 }
                 Some('(') => self.emit_source_space(),
                 Some('{') if self.current.ends_with_any(b" \t") => {}
-                Some('@') => self.emit_source_space_or_ensure(),
-                _ if brace_type == BraceType::Initializer
-                    && self.current.trimmed_end().ends_with('>') =>
-                {
-                    self.emit_source_space_or_ensure();
+                Some('@') => self.emit_source_space(),
+                // A compound literal among a list's elements keeps the gap
+                // written before its brace, as any brace there does.
+                _ if self.opens_compound_literal_in_list(brace_type) => {
+                    self.emit_source_space();
                 }
                 _ if aggregate_assign || brace_type == BraceType::CompoundLiteral => {
                     self.emit_source_space_or_ensure();
@@ -773,7 +810,7 @@ impl FormatEngine<'_> {
         self.current.push('{');
         self.layout.command_state.observe_char('{');
         // Parens that indent after them make an enum body run in after its
-        // brace a block level past its line.
+        // brace a continuation past its line.
         let enum_block_level = self.options.indent_after_parens
             && brace_type == BraceType::Enum
             && !nested
@@ -798,9 +835,24 @@ impl FormatEngine<'_> {
         if !break_first {
             self.emit_trailing_source_space();
         }
+        let statement_base = ContinuationIndent::Level(
+            self.layout
+                .indentation
+                .line_indent(LineKind::Normal, self.options)
+                + self.case_body_indent_extra(LineKind::Normal),
+        )
+        .columns(self.options.indent_width);
+        // A declarator on a line after its struct type levels the rows from
+        // the statement, as on the type's line.
+        let rows_base = if nested && declares_struct {
+            base_indent.min(statement_base)
+        } else {
+            base_indent
+        };
         let mut column = if enum_block_level {
-            base_indent + self.options.indent_width
+            base_indent + self.options.continuation_indent * self.options.indent_width
         } else if nested {
+            let base_indent = rows_base;
             if double_brace_initializer {
                 base_indent + self.options.indent_width * 2
             } else {
@@ -830,28 +882,39 @@ impl FormatEngine<'_> {
                     self.options.tab_width,
                 )
         };
-        // A compound literal stands the rows after its brace's line a level
-        // past its statement, where its `}` closes. One among a call's
-        // arguments keeps its rows with them.
+        // A compound literal outside parens closes at its statement, its
+        // rows after the brace's line standing at its elements as any
+        // list's do.
         let leveled_literal = brace_type == BraceType::CompoundLiteral
             && !nested
             && !break_first
             && self.layout.nesting.paren_depth == 0;
-        if leveled_literal {
-            column = base_indent + self.options.indent_width;
-        }
-        let statement_base = ContinuationIndent::Level(
-            self.layout
-                .indentation
-                .line_indent(LineKind::Normal, self.options)
-                + self.case_body_indent_extra(LineKind::Normal),
-        )
-        .columns(self.options.indent_width);
-        if brace_type == BraceType::Initializer
-            && line_opens_typed_initializer(&self.current)
+        // Elements after a brace past the maximum continuation indent stand
+        // two levels past their line, or at the parens or list around them;
+        // an assigned value's list keeps them at its brace.
+        if !nested
             && column.saturating_sub(statement_base) > self.options.max_continuation_indent
+            && next_non_whitespace(&self.tree.tokens, token_index + 1, self.tree.tokens.len())
+                .is_some_and(|next| !matches!(self.tree.tokens[next], Token::Newline))
+            && !brace_follows_assignment(&self.tree.tokens, token_index)
         {
-            column = base_indent + self.options.indent_width * 2;
+            // A stream the statement opens with stands as its parens do.
+            let enclosing = if self.layout.nesting.paren_depth > 0 {
+                self.layout.nesting.current_continuation_indent_spaces()
+            } else {
+                self.layout
+                    .frame_stack
+                    .active_stream()
+                    .filter(|stream| stream.assignment_value_start_column.is_none())
+                    .map(|stream| stream.chain_anchor_column)
+            };
+            column = (base_indent + self.options.indent_width * 2).max(
+                enclosing
+                    .into_iter()
+                    .chain(self.current_inline_array_column())
+                    .max()
+                    .unwrap_or(0),
+            );
         }
         let current_trimmed = self.current.trimmed_start();
         let run_in_nested_brace =
@@ -862,8 +925,6 @@ impl FormatEngine<'_> {
             column
         } else if run_in_nested_brace {
             base_indent + self.options.indent_width
-        } else if struct_declaration {
-            base_indent
         } else if leveled_literal {
             // Ratliff closes it at its rows.
             base_indent
@@ -894,8 +955,8 @@ impl FormatEngine<'_> {
             );
         } else {
             self.update_current_brace_indent_columns(
-                base_indent + self.options.indent_width,
-                base_indent,
+                rows_base + self.options.indent_width,
+                rows_base,
             );
         }
         if break_first {
@@ -993,10 +1054,16 @@ impl FormatEngine<'_> {
             && self.output.get(open_output_len).is_some_and(|line| {
                 line.contains_from_first_byte("{ {") || line.contains_from_first_byte("{{")
             });
-        let range_for_initializer = self.output.get(open_output_len).is_some_and(|line| {
-            let trimmed = line.trimmed_start();
-            trimmed.starts_with("for ") && trimmed.trimmed_end().ends_with('{')
-        });
+        let range_for_initializer = self
+            .current
+            .active_token()
+            .filter(|&close| matches!(self.tree.tokens[close], Token::Symbol('}')))
+            .and_then(|close| self.tree.groups.closed_at(close))
+            .is_some_and(|list| self.token_in_for_header(self.tree.groups.get(list).open))
+            && self
+                .output
+                .get(open_output_len)
+                .is_some_and(|line| line.trimmed_end().ends_with('{'));
         // A compound literal its line opened closes on a line of its own.
         let closing_line_opened_literal = closing_compound_literal
             && (inline_array.is_some_and(|frame| frame.leveled_literal)
@@ -1053,20 +1120,6 @@ impl FormatEngine<'_> {
                 })
             });
         let call_argument_array = call_argument_array_column.is_some();
-        // The list's own brace decides, whatever braces its line opens later.
-        let follows_template_type = self
-            .current
-            .active_token()
-            .filter(|&close| matches!(self.tree.tokens[close], Token::Symbol('}')))
-            .and_then(|close| self.tree.groups.closed_at(close))
-            .and_then(|list| self.tree.previous_code_token(self.tree.groups.get(list).open))
-            .map(|before| matches!(&self.tree.tokens[before], Token::Operator(operator) if operator == ">"));
-        let typed_initializer = matches!(closing_brace_type, Some(BraceType::Initializer))
-            && follows_template_type.unwrap_or_else(|| {
-                self.output
-                    .get(open_output_len)
-                    .is_some_and(|line| line_opens_typed_initializer(line))
-            });
         // A style indenting braces indents the `}` of a compound literal
         // that its line opened.
         let closing_brace_indent = if closing_line_opened_literal
@@ -1107,8 +1160,7 @@ impl FormatEngine<'_> {
                 || closing_enum
                 || enclosed_run_in
                 || range_for_initializer
-                || call_argument_array
-                || typed_initializer);
+                || call_argument_array);
         // A row a closer breaks off below stands among the elements of the
         // list it closes, not those of a list enclosing it.
         let enclosing_list = self
@@ -1133,8 +1185,7 @@ impl FormatEngine<'_> {
                         || closing_enum
                         || enclosed_run_in
                         || range_for_initializer
-                        || call_argument_array
-                        || typed_initializer));
+                        || call_argument_array));
         // A row of a compound literal the closer parts from it below
         // publishes while the literal is open, as one a closer leading its
         // line leaves.
@@ -1212,8 +1263,7 @@ impl FormatEngine<'_> {
                 || closing_enum
                 || enclosed_run_in
                 || range_for_initializer
-                || call_argument_array
-                || typed_initializer)
+                || call_argument_array)
         {
             self.finish_line();
             if let Some(column) = closing_column {
@@ -1318,21 +1368,37 @@ impl FormatEngine<'_> {
         if !joins(line) {
             return None;
         }
+        let tab_width = self.options.tab_width;
+        let gap =
+            |previous: usize| usize::from(!self.output[previous].trimmed_end().ends_with('{'));
+        // A line joining the line asked last goes on from that line's column,
+        // while the lines up to it stand as they were.
+        if let Some((asked, column, version)) = self.lisp_join_column.get()
+            && asked + 1 == line
+            && self
+                .output
+                .lowest_change_since(version)
+                .is_some_and(|lowest| lowest > asked)
+            && joins(asked)
+        {
+            let end = visual_width_from(self.output.trimmed(asked), column, tab_width) + gap(asked);
+            self.lisp_join_column
+                .set(Some((line, end, self.output.version())));
+            return Some(end);
+        }
         let mut start = line;
         while joins(start) {
             start -= 1;
         }
-        let tab_width = self.options.tab_width;
         let mut end = visual_width_from(self.output[start].trimmed_end(), 0, tab_width);
         for index in start + 1..=line {
-            let previous = &self.output[index - 1];
-            if !previous.trimmed_end().ends_with('{') {
-                end += 1;
-            }
+            end += gap(index - 1);
             if index < line {
                 end = visual_width_from(self.output.trimmed(index), end, tab_width);
             }
         }
+        self.lisp_join_column
+            .set(Some((line, end, self.output.version())));
         Some(end)
     }
 
@@ -1341,6 +1407,19 @@ impl FormatEngine<'_> {
             .frames
             .last()
             .filter(|frame| frame.depth == self.layout.nesting.brace_header_stack.len())
+            .map(|frame| frame.body_column)
+    }
+
+    /// The column of the rows of the list the line is in, when they stand a
+    /// level past the column the list closes at rather than past its brace.
+    pub(crate) fn current_leveled_list_row_column(&self) -> Option<usize> {
+        self.inline_array
+            .frames
+            .last()
+            .filter(|frame| {
+                frame.depth == self.layout.nesting.brace_header_stack.len()
+                    && frame.body_column == frame.brace_column + self.options.indent_width
+            })
             .map(|frame| frame.body_column)
     }
 
@@ -1454,6 +1533,89 @@ impl FormatEngine<'_> {
         })
     }
 
+    /// The lead of the row starting the element whose list a `},` closes
+    /// right before the pending line.
+    fn pending_closed_element_row_lead(&self) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let first = self.output.pending_tokens()?.first;
+        let comma = self.tree.previous_code_token(first)?;
+        let close = self.tree.previous_code_token(comma)?;
+        if !matches!(tokens[comma], Token::Symbol(',')) {
+            return None;
+        }
+        let group = groups.closed_at(close)?;
+        let parent = groups.get(group).parent?;
+        let mut start = groups.get(group).open;
+        while let Some(before) = self.tree.previous_code_token(start) {
+            if groups.opened_at(before) == Some(parent)
+                || matches!(tokens[before], Token::Symbol(','))
+                    && groups.enclosing(before) == Some(parent)
+            {
+                break;
+            }
+            start = groups
+                .closed_at(before)
+                .map_or(before, |closed| groups.get(closed).open);
+        }
+        let line = self.output.line_with_token(start)?;
+        Some(self.output.lead_width(line, self.options.tab_width))
+    }
+
+    /// Whether the innermost open brace opens on the pending row.
+    fn pending_row_opens_innermost_brace(&self) -> bool {
+        self.layout
+            .frame_stack
+            .active_brace()
+            .and_then(|frame| frame.open_token)
+            .zip(self.output.pending_tokens())
+            .is_some_and(|(open, span)| (span.first..=span.last).contains(&open))
+    }
+
+    /// The column of the rows of the aggregate a `struct` declaration
+    /// assigns: a level past the statement, as its other rows stand, though
+    /// its declarator continues the statement on a line of its own.
+    fn struct_declaration_rows_spaces(&self) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let span = self.output.pending_tokens()?;
+        let group = groups.get(groups.enclosing(span.first)?);
+        let brace = group.open;
+        let ends_line = tokens[brace + 1..]
+            .iter()
+            .find(|token| !matches!(token, Token::Whitespace(_) | Token::Comment(..)))
+            .is_none_or(|token| matches!(token, Token::Newline));
+        if group.delimiter != Delimiter::Brace || !ends_line {
+            return None;
+        }
+        Some(
+            self.struct_declaration_statement_lead(brace)?
+                + self.options.indent_width
+                + self.case_unindent_spaces(),
+        )
+    }
+
+    /// The lead of the line starting the `struct` declaration whose value
+    /// `brace` opens, though its declarator stands on a later line.
+    pub(crate) fn struct_declaration_statement_lead(&self, brace: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        if !brace_follows_assignment(tokens, brace) || !statement_declares_aggregate(tokens, brace)
+        {
+            return None;
+        }
+        // The statement starts after the one before it and any label.
+        let after = tokens[..brace]
+            .iter()
+            .rposition(|token| matches!(token, Token::Symbol(';' | '{' | '}')))
+            .map_or(0, |index| index + 1);
+        let start = (after..brace)
+            .rev()
+            .find(|&index| self.tree.statements.starts_block_statement(index))
+            .or_else(|| (after..brace).find(|&index| is_code_token(&tokens[index])))?;
+        let line = self.output.line_with_token(start)?;
+        Some(self.output.lead_width(line, self.options.tab_width))
+    }
+
     pub(crate) fn initializer_member_indent_spaces(&self, line: &LineView<'_>) -> Option<usize> {
         if !self.in_initializer_brace() {
             return None;
@@ -1472,12 +1634,23 @@ impl FormatEngine<'_> {
         if designator && has_unmatched_open_brace(line) && self.pending_row_of_run_in_list() {
             return None;
         }
+        // So does any other designator row of a list whose first element
+        // runs in after its brace, whatever rows its value spans.
+        if designator
+            && !has_unmatched_open_brace(line)
+            && self.pending_row_in_run_in_list()
+            && let Some(column) = self.line_start_inline_array_column()
+        {
+            return Some(column);
+        }
         if closing && let Some(spaces) = self.layout.continuation_indent.next_line_indent_spaces {
             return Some(spaces);
         }
-        // A compound literal's fields stand at its elements.
+        // A compound literal's fields stand at its elements; a row opening
+        // one as a value stands in the list around it.
         if designator
             && self.innermost_brace_is_compound_literal()
+            && !self.pending_row_opens_innermost_brace()
             && let Some(column) = self.current_inline_array_column()
         {
             return Some(column);
@@ -1495,8 +1668,11 @@ impl FormatEngine<'_> {
             && let Some(previous) = self.output.last_code_line_in_scope()
             && previous.trimmed_start().starts_with("},")
         {
+            // The row of the element the closer ends sets the column; a
+            // style indenting braces sets the closer apart from it.
             return Some(
-                leading_visual_width(previous, self.options.tab_width)
+                self.pending_closed_element_row_lead()
+                    .unwrap_or_else(|| leading_visual_width(previous, self.options.tab_width))
                     + self.case_unindent_spaces(),
             );
         }
@@ -1514,17 +1690,32 @@ impl FormatEngine<'_> {
             && let Some(previous) = self.output.last()
             && previous.trimmed_end().ends_with('{')
         {
-            if previous.trimmed() == "{"
-                && self
-                    .layout
-                    .frame_stack
-                    .active_brace()
-                    .is_some_and(|frame| self.should_indent_brace_line(frame.brace_type))
-            {
+            // The list holding the row sets it, not a brace the row opens;
+            // VTK sets a list's brace flush at a declaration scope.
+            let list = if self.pending_row_opens_innermost_brace() {
+                self.layout.frame_stack.enclosing_brace()
+            } else {
+                self.layout.frame_stack.active_brace()
+            };
+            let list_brace_indented = list.is_some_and(|frame| {
+                match frame
+                    .open_token
+                    .and_then(|open| self.tree.groups.opened_at(open))
+                {
+                    Some(group) if self.options.brace_style == BraceStyle::Vtk => {
+                        !self.vtk_flush_scope(group)
+                    }
+                    _ => self.should_indent_brace_line(frame.brace_type),
+                }
+            });
+            if previous.trimmed() == "{" && list_brace_indented {
                 return Some(
                     leading_visual_width(previous, self.options.tab_width)
                         + self.case_unindent_spaces(),
                 );
+            }
+            if let Some(spaces) = self.struct_declaration_rows_spaces() {
+                return Some(spaces);
             }
             // Ratliff closes the aggregate a declaration defines at its
             // body; the rows stand a level past the declaration.
@@ -1572,7 +1763,9 @@ impl FormatEngine<'_> {
                     spaces =
                         spaces.max(self.layout.indentation.indent() * self.options.indent_width);
                 }
-                if let Some(index) = self.row_initializer_opener_line() {
+                if let Some(rows) = self.struct_declaration_rows_spaces() {
+                    spaces = spaces.min(rows);
+                } else if let Some(index) = self.row_initializer_opener_line() {
                     let previous = &self.output[index];
                     let code = self.output.code_before_comment(index).trimmed_end();
                     {
@@ -2003,19 +2196,25 @@ pub(crate) struct InlineArrayState {
     pub(crate) frames: Vec<InlineArrayFrame>,
     pub(crate) current_closed_body_column: Option<(usize, bool)>,
     pub(super) aggregate_braces: Vec<bool>,
-    pub(crate) list_rows: BraceListRows,
+    /// Shared with the snapshots taken at conditionals, which never change
+    /// it.
+    pub(crate) list_rows: std::rc::Rc<BraceListRows>,
     /// The line after the last published one, the lists open where it
     /// starts, and the column of the innermost.
     pub(crate) line_start: (usize, usize, Option<usize>),
 }
 
-pub(crate) fn initializer_brace_line_comment_gap(
-    options: &FormatOptions,
-    brace_line: &str,
-) -> String {
-    if options.brace_style != BraceStyle::Horstmann {
-        return "   ".to_string();
-    }
+/// Whether the style runs a list's first row in after a brace leading it.
+pub(crate) fn runs_list_rows_in(style: BraceStyle) -> bool {
+    matches!(
+        style,
+        BraceStyle::None | BraceStyle::Horstmann | BraceStyle::Pico
+    )
+}
+
+/// The fill between a list brace leading its row and a comment run in after
+/// it, which stands where the list's rows do.
+pub(crate) fn initializer_brace_comment_gap(options: &FormatOptions, brace_line: &str) -> String {
     let brace_column = leading_visual_width(brace_line, options.tab_width);
     let target = brace_column + options.indent_width;
     horstmann_run_in_fill(brace_line, &" ".repeat(target), options)

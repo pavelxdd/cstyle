@@ -143,6 +143,7 @@ pub(crate) struct DeclarationFrame {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct LogicalFrame {
     pub(crate) operator: LogicalOperator,
+    pub(crate) operator_token: Option<usize>,
     pub(crate) operator_output_column: usize,
     pub(crate) operator_output_line: usize,
     pub(crate) line_indent_spaces: usize,
@@ -159,13 +160,33 @@ pub(crate) enum LogicalOperator {
     Or,
 }
 
+/// The row a line published as several rows put an operator token on,
+/// with the operator's column and the row's indent.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) struct OperatorRow {
+    pub(crate) token: usize,
+    pub(crate) row: usize,
+    pub(crate) column: usize,
+    pub(crate) indent_spaces: usize,
+}
+
+impl OperatorRow {
+    /// `column`, taken on the unsplit line where the operator stood at
+    /// `operator_column`, on this row, when it falls on the row.
+    fn move_column(self, operator_column: usize, column: usize) -> Option<usize> {
+        (column + self.column)
+            .checked_sub(operator_column)
+            .filter(|&moved| moved >= self.indent_spaces)
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct StreamFrame {
+    pub(crate) operator_token: Option<usize>,
     pub(crate) operator_output_column: usize,
     pub(crate) operator_output_line: usize,
     pub(crate) line_indent_spaces: usize,
     pub(crate) operator_ends_output_line: bool,
-    pub(crate) line_contains_nested_brace: bool,
     pub(crate) line_has_unmatched_open_paren: bool,
     pub(crate) line_ends_with_close_paren: bool,
     pub(crate) line_has_positive_paren_delta: bool,
@@ -236,6 +257,9 @@ pub(crate) struct BracketFrame {
     pub(crate) role: BracketRole,
     pub(crate) parent_objc_message_align: Option<usize>,
     pub(crate) opens_after_selector: bool,
+    /// The continuation columns registered before the bracket; the ones
+    /// inside it end with it.
+    pub(crate) continuations: usize,
 }
 
 impl BracketFrame {
@@ -298,9 +322,14 @@ pub(crate) struct FrameStack {
     /// Whether some stream frame stands on an output line before that of a
     /// frame pushed earlier.
     stream_frames_unordered: bool,
-    constructor_initializer_frame: Option<ConstructorInitializerFrame>,
+    /// The last constructor's initializers and the brace depth of their
+    /// constructor, whose body closing at that depth ends them.
+    constructor_initializer_frame: Option<(ConstructorInitializerFrame, usize)>,
     header_frame: Option<HeaderFrame>,
     braceless_header_frames: Vec<BracelessHeaderFrame>,
+    /// The brace depth each braceless header frame was pushed at; closing
+    /// a block drops the frames inside it.
+    braceless_header_depths: Vec<usize>,
     comment_frame: Option<CommentFrame>,
     declaration_frames: Vec<DeclarationFrame>,
     string_continuation_frames: Vec<StringContinuationFrame>,
@@ -314,6 +343,7 @@ pub(crate) struct FrameStack {
     closed_delimiters_unordered: bool,
     line_closed_delimiter_continuation_indent: Option<usize>,
     line_closed_delimiter_line_indent_spaces: Option<usize>,
+    line_closed_paren_columns: Vec<usize>,
     line_closed_call_logical_operand_indent: Option<(usize, usize)>,
     line_closed_lambda_parameter_list: bool,
     line_closed_brackets: Vec<BracketFrame>,
@@ -442,8 +472,20 @@ impl FrameStack {
         self.line_closed_delimiter_line_indent_spaces
     }
 
+    /// Records `column`, which a paren an earlier line opened set for its
+    /// rows, as closed on the line.
+    pub(crate) fn record_line_closed_paren_column(&mut self, column: usize) {
+        self.line_closed_paren_columns.push(column);
+    }
+
+    /// Whether `column` is one a paren the line closed set for its rows.
+    pub(crate) fn line_closed_paren_column(&self, column: usize) -> bool {
+        self.line_closed_paren_columns.contains(&column)
+    }
+
     pub(crate) fn take_line_closed_delimiter_continuation_indent(&mut self) -> Option<usize> {
         self.line_closed_delimiter_line_indent_spaces = None;
+        self.line_closed_paren_columns.clear();
         self.line_closed_delimiter_continuation_indent.take()
     }
 
@@ -634,6 +676,11 @@ impl FrameStack {
                     .partition_point(|frame| frame.operator_output_line == line)
     }
 
+    /// The operator token of the logical frame pushed last.
+    pub(crate) fn last_logical_token(&self) -> Option<usize> {
+        self.logical_frames.last()?.operator_token
+    }
+
     pub(crate) fn active_logical_on_output_line(&self, line_index: usize) -> Option<&LogicalFrame> {
         self.logical_frames[self.logical_frames_on(line_index)]
             .iter()
@@ -736,11 +783,13 @@ impl FrameStack {
     }
 
     pub(crate) fn push_constructor_initializer(&mut self, frame: ConstructorInitializerFrame) {
-        self.constructor_initializer_frame = Some(frame);
+        self.constructor_initializer_frame = Some((frame, self.brace_frames.len()));
     }
 
     pub(crate) fn active_constructor_initializer(&self) -> Option<&ConstructorInitializerFrame> {
-        self.constructor_initializer_frame.as_ref()
+        self.constructor_initializer_frame
+            .as_ref()
+            .map(|(frame, _)| frame)
     }
 
     pub(crate) fn push_header(&mut self, frame: HeaderFrame) {
@@ -757,10 +806,12 @@ impl FrameStack {
 
     pub(crate) fn push_braceless_header(&mut self, frame: BracelessHeaderFrame) {
         self.braceless_header_frames.push(frame);
+        self.braceless_header_depths.push(self.brace_frames.len());
     }
 
     pub(crate) fn pop_braceless_header(&mut self) {
         self.braceless_header_frames.pop();
+        self.braceless_header_depths.pop();
     }
 
     pub(crate) fn active_braceless_header(&self) -> Option<&BracelessHeaderFrame> {
@@ -774,6 +825,7 @@ impl FrameStack {
             .rposition(|frame| frame.can_match_else)?;
         let indent = self.braceless_header_frames[index].header_indent_spaces;
         self.braceless_header_frames.truncate(index);
+        self.braceless_header_depths.truncate(index);
         Some(indent)
     }
 
@@ -886,7 +938,6 @@ impl FrameStack {
         &mut self,
         line: usize,
         ends_with_stream_operator: bool,
-        contains_nested_brace: bool,
         has_unmatched_open_paren: bool,
         ends_with_close_paren: bool,
         has_positive_paren_delta: bool,
@@ -899,7 +950,6 @@ impl FrameStack {
             .filter(|frame| frame.operator_output_line == line)
         {
             frame.operator_ends_output_line = ends_with_stream_operator;
-            frame.line_contains_nested_brace = contains_nested_brace;
             frame.line_has_unmatched_open_paren = has_unmatched_open_paren;
             frame.line_ends_with_close_paren = ends_with_close_paren;
             frame.line_has_positive_paren_delta = has_positive_paren_delta;
@@ -913,6 +963,16 @@ impl FrameStack {
             .stream_frames_on(line)
             .map_or(self.stream_frames.len(), |range| range.start);
         &self.stream_frames[..end]
+    }
+
+    /// The first stream frame whose operator token `holds` accepts.
+    pub(crate) fn first_stream_with_token(
+        &self,
+        holds: impl Fn(usize) -> bool,
+    ) -> Option<&StreamFrame> {
+        self.stream_frames
+            .iter()
+            .find(|frame| frame.operator_token.is_some_and(&holds))
     }
 
     pub(crate) fn stream_before_output_line(&self, line: usize) -> Option<&StreamFrame> {
@@ -957,6 +1017,105 @@ impl FrameStack {
                 ));
             }
             frame.line_indent_spaces = indent_spaces;
+        }
+    }
+
+    /// The operator tokens of the stream and logical frames on output line
+    /// `line`, in order.
+    pub(crate) fn operator_tokens_on(&self, line: usize) -> Vec<usize> {
+        let streams = self
+            .stream_frames_on(line)
+            .unwrap_or(0..self.stream_frames.len());
+        let mut tokens: Vec<usize> = self.stream_frames[streams]
+            .iter()
+            .filter(|frame| frame.operator_output_line == line)
+            .filter_map(|frame| frame.operator_token)
+            .chain(
+                self.logical_frames[self.logical_frames_on(line)]
+                    .iter()
+                    .filter(|frame| frame.operator_output_line == line)
+                    .filter_map(|frame| frame.operator_token),
+            )
+            .collect();
+        tokens.sort_unstable();
+        tokens
+    }
+
+    /// Moves the stream and logical frames on output line `line` whose
+    /// operators `rows` places on later rows to those rows. A column on
+    /// the operator's row moves with it; one on an earlier row is dropped,
+    /// as the row it is on has no operator of the frame. The rows' line
+    /// context is left to be marked again.
+    pub(crate) fn move_operator_frames_to_rows(&mut self, line: usize, rows: &[OperatorRow]) {
+        let place = |token: Option<usize>| {
+            let token = token?;
+            rows.binary_search_by_key(&token, |row| row.token)
+                .ok()
+                .map(|index| rows[index])
+        };
+        let streams = self
+            .stream_frames_on(line)
+            .unwrap_or(0..self.stream_frames.len());
+        let mut last_row = line;
+        let mut unordered = false;
+        let mut moved_anchor = None;
+        for frame in self.stream_frames[streams]
+            .iter_mut()
+            .filter(|frame| frame.operator_output_line == line)
+        {
+            let Some(place) = place(frame.operator_token) else {
+                unordered |= last_row > line;
+                continue;
+            };
+            unordered |= place.row < last_row;
+            last_row = place.row;
+            let old_column = frame.operator_output_column;
+            if frame.chain_anchor_column == old_column {
+                moved_anchor = Some((old_column, place.column));
+            }
+            if let Some((from, to)) = moved_anchor
+                && frame.chain_anchor_column == from
+            {
+                frame.chain_anchor_column = to;
+            }
+            frame.assignment_value_start_column = frame
+                .assignment_value_start_column
+                .and_then(|column| place.move_column(old_column, column));
+            frame.operator_output_line = place.row;
+            frame.operator_output_column = place.column;
+            frame.line_indent_spaces = place.indent_spaces;
+        }
+        self.stream_frames_unordered |= unordered;
+        let mut last_row = line;
+        let mut unordered = false;
+        let mut dropped_return = false;
+        let logicals = self.logical_frames_on(line);
+        for frame in self.logical_frames[logicals]
+            .iter_mut()
+            .filter(|frame| frame.operator_output_line == line)
+        {
+            let Some(place) = place(frame.operator_token) else {
+                unordered |= last_row > line;
+                continue;
+            };
+            unordered |= place.row < last_row;
+            last_row = place.row;
+            let old_column = frame.operator_output_column;
+            if let Some(column) = frame.return_value_column {
+                frame.return_value_column = place.move_column(old_column, column);
+                dropped_return |= frame.return_value_column.is_none();
+            }
+            frame.operator_output_line = place.row;
+            frame.operator_output_column = place.column;
+            frame.line_indent_spaces = place.indent_spaces;
+            frame.operator_starts_output_line = place.column == place.indent_spaces;
+            frame.line_unmatched_open_paren_column = None;
+        }
+        self.logical_frames_unordered |= unordered;
+        if dropped_return {
+            let frames = &self.logical_frames;
+            self.logical_return_frames
+                .retain(|&index| frames[index].return_value_column.is_some());
         }
     }
 
@@ -1175,8 +1334,22 @@ impl FrameStack {
         let Some(frame) = self.brace_frames.pop() else {
             return;
         };
+        let depth = self.brace_frames.len();
+        let inside = self
+            .braceless_header_depths
+            .partition_point(|&pushed| pushed <= depth);
+        self.braceless_header_frames.truncate(inside);
+        self.braceless_header_depths.truncate(inside);
         if frame.semantic_kind == BraceSemanticKind::Command {
             self.header_frame = None;
+        }
+        if frame.semantic_kind == BraceSemanticKind::Definition
+            && self
+                .constructor_initializer_frame
+                .as_ref()
+                .is_some_and(|&(_, depth)| depth == self.brace_frames.len())
+        {
+            self.constructor_initializer_frame = None;
         }
         self.closed_brace_frames.push(frame);
     }
@@ -1537,11 +1710,11 @@ mod tests {
     fn stream_frame_tracks_operator_anchor_and_line_context() {
         let mut stack = FrameStack::default();
         stack.push_stream(StreamFrame {
+            operator_token: None,
             operator_output_column: 8,
             operator_output_line: 3,
             line_indent_spaces: 4,
             operator_ends_output_line: false,
-            line_contains_nested_brace: false,
             line_has_unmatched_open_paren: false,
             line_ends_with_close_paren: false,
             line_has_positive_paren_delta: false,
@@ -1553,10 +1726,9 @@ mod tests {
         let frame = stack.active_stream().expect("stream");
         assert_eq!(frame.operator_output_column, 8);
         assert_eq!(stack.active_stream_on_output_line(3), Some(frame));
-        stack.mark_stream_line_context(3, true, true, true, false, true);
+        stack.mark_stream_line_context(3, true, true, false, true);
         let frame = stack.active_stream().expect("stream");
         assert!(frame.operator_ends_output_line);
-        assert!(frame.line_contains_nested_brace);
         assert!(frame.line_has_unmatched_open_paren);
         assert!(frame.line_has_positive_paren_delta);
     }

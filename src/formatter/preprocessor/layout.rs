@@ -693,8 +693,12 @@ impl FormatEngine<'_> {
                 emitted_indent_spaces
             };
         if let Some(branch) = self.preprocessor.branch_stack.last_mut() {
-            if branch.first_body_indent_spaces.is_none() {
-                branch.first_body_indent_spaces = Some(body_indent_spaces);
+            if !branch.first_body_row_read {
+                branch.first_body_row_read = true;
+                // A closing brace stands outside the body it ends.
+                if !line.trimmed_start().starts_with('}') {
+                    branch.first_body_indent_spaces = Some(body_indent_spaces);
+                }
             }
             branch.restore_body_indent = false;
         }

@@ -503,7 +503,8 @@ fn attach_return_type_does_not_join_initializer_continuations() {
     assert_eq!(
         actual,
         fixture!(
-            "static const option_t options[] = {",
+            "static const option_t options[] =",
+            "{",
             "    {",
             "        1, MAX_CONNECTIONS, 0, 0,",
             "        offsetof(server_t, max_connections)",
@@ -721,35 +722,35 @@ fn split_function_declaration_open_paren_line_aligns_parameters_to_open_paren() 
 }
 
 #[test]
-fn templated_split_function_parameter_continuation_stays_at_base() {
+fn templated_split_function_parameter_continuation_aligns_to_the_paren() {
     assert_eq!(
         format_exact(
             "template <typename T>\nFIXED auto apply(Result dst, source_view input,\n                 const rules& r = {}) -> Result {\n  return dst;\n}\n",
             &FormatOptions::default(),
         ),
-        "template <typename T>\nFIXED auto apply(Result dst, source_view input,\nconst rules& r = {}) -> Result {\n    return dst;\n}\n",
+        "template <typename T>\nFIXED auto apply(Result dst, source_view input,\n                 const rules& r = {}) -> Result {\n    return dst;\n}\n",
     );
 }
 
 #[test]
-fn constrained_template_split_function_default_parameter_tail_stays_at_base() {
+fn constrained_template_split_function_default_parameter_tail_aligns_to_the_paren() {
     assert_eq!(
         format_exact(
             "template <typename T, typename Result,\n          SELECT_IF(check<T>::value)>\nauto apply(Result dst, const T* value, const rules& r = {},\n           context_id = {}) -> Result {\n  return dst;\n}\n",
             &FormatOptions::default(),
         ),
-        "template <typename T, typename Result,\n          SELECT_IF(check<T>::value)>\nauto apply(Result dst, const T* value, const rules& r = {},\ncontext_id = {}) -> Result {\n    return dst;\n}\n",
+        "template <typename T, typename Result,\n          SELECT_IF(check<T>::value)>\nauto apply(Result dst, const T* value, const rules& r = {},\n           context_id = {}) -> Result {\n    return dst;\n}\n",
     );
 }
 
 #[test]
-fn templated_split_function_default_parameter_tail_after_multiple_rows_stays_at_base() {
+fn templated_split_function_default_parameter_tail_after_multiple_rows_aligns_to_the_paren() {
     assert_eq!(
         format_exact(
             "template <typename T>\nFIXED auto apply_value(Result dst, const T& value,\n                       int span, Kind separator_key,\n                       const rules& r, mode value_mode,\n                       context_id ctx = {}) -> Result {\n  return dst;\n}\n",
             &FormatOptions::default(),
         ),
-        "template <typename T>\nFIXED auto apply_value(Result dst, const T& value,\n                       int span, Kind separator_key,\n                       const rules& r, mode value_mode,\ncontext_id ctx = {}) -> Result {\n    return dst;\n}\n",
+        "template <typename T>\nFIXED auto apply_value(Result dst, const T& value,\n                       int span, Kind separator_key,\n                       const rules& r, mode value_mode,\n                       context_id ctx = {}) -> Result {\n    return dst;\n}\n",
     );
 }
 
@@ -1164,6 +1165,25 @@ fn a_definition_head_before_a_directive_breaks_its_return_type_whatever_declarat
         let mut args = vec!["--style=kr".to_owned(), "--break-return-type".to_owned()];
         args.extend(extra.map(str::to_owned));
         apply_command_line_args(&mut options, &args).expect("valid options");
+        assert_eq!(format_exact(input, &options), expected);
+    }
+}
+
+#[test]
+fn break_return_type_breaks_a_head_a_comment_leads_after_a_statement() {
+    let input = "int value;\n/* note */ int helper (int value) __attribute__ ((pure));\n/* note */ int helper(int value);\n/* note */ void f()\n{\n    value = 1;\n}\n";
+    let expected = "int value;\n/* note */ int\nhelper (int value) __attribute__ ((pure));\n/* note */ int\nhelper(int value);\n/* note */ void\nf()\n{\n    value = 1;\n}\n";
+    for style in ["--style=linux", "--style=kr"] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(
+            &mut options,
+            &[
+                style.to_owned(),
+                "--break-return-type".to_owned(),
+                "--break-return-type-decl".to_owned(),
+            ],
+        )
+        .expect("valid options");
         assert_eq!(format_exact(input, &options), expected);
     }
 }

@@ -25,6 +25,17 @@ fn keeps_class_initializer_braced_values_attached() {
 }
 
 #[test]
+fn members_after_a_qualified_head_ending_in_its_colon_take_one_level() {
+    // Qualifiers between the parameters and the colon leave the members
+    // where they stand after a bare `) :`.
+    let source = "class Item\n{\npublic:\n    Item(int other) :\n        value_(other)\n    {\n    }\n    Item(Item&& other) noexcept :\n        value_(other.value_)\n    {\n    }\n    Item(long other) const :\n        value_(other)\n    {\n    }\n    Item(short other) noexcept(true) :\n        value_(other)\n    {\n    }\n};\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=kr".to_owned()]).expect("valid options");
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
 fn leading_comma_constructor_initializer_keeps_member_indent() {
     let source = fixture!(
         "class C",
@@ -1651,4 +1662,19 @@ fn constructor_initializer_ternary_new_call_keeps_one_line_lambda_argument() {
     let source = "Box::Box()\n    : one(flag\n          ? a\n          : new Box(\n              nullptr,\n              &Box::ready,\n              [this]() -> bool { return call(); },\n              Config{},\n              this))\n    , two(z)\n{\n}\n";
 
     assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn a_paren_row_after_a_name_aligns_under_it_only_in_constructor_initializers() {
+    // A member's initializer paren on its own row stands under the member;
+    // after a ternary arm or a declarator, a paren row continues the
+    // statement as any other row does.
+    let mut options = FormatOptions::default();
+    let args = ["--style=kr"].map(str::to_owned);
+    apply_command_line_args(&mut options, &args).expect("valid options");
+    let source = "Item::Item()\n    : first\n    (value),\n      second\n    (other)\n{\n}\nvoid f()\n{\n    int first = 1\n        , second\n        (value);\n    total = ready ? first\n        : second\n        (value);\n    const auto result =\n        ready\n        ? value.count()\n        : detail::convert<precision>\n          (fraction).count();\n}\n";
+    let expected = "Item::Item()\n    : first\n      (value),\n      second\n      (other)\n{\n}\nvoid f()\n{\n    int first = 1\n                , second\n                (value);\n    total = ready ? first\n            : second\n            (value);\n    const auto result =\n        ready\n        ? value.count()\n        : detail::convert<precision>\n        (fraction).count();\n}\n";
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
 }

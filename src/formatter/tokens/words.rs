@@ -18,6 +18,21 @@ use crate::formatter::tokens::pointers::resolved_pointer_align;
 use crate::source::lex::leading_identifier;
 
 impl FormatEngine<'_> {
+    /// Whether a value stands before the operator before the word being
+    /// pushed, which makes that operator no declarator's.
+    fn star_follows_value(&self) -> bool {
+        self.current
+            .active_token()
+            .and_then(|word| self.tree.previous_code_token(word))
+            .and_then(|operator| self.tree.previous_code_token(operator))
+            .is_some_and(|value| {
+                matches!(
+                    self.tree.tokens[value],
+                    Token::Number(_) | Token::CharLiteral(_) | Token::StringLiteral(_)
+                )
+            })
+    }
+
     pub(crate) fn push_word(&mut self, word: &str, next: Option<&Token>) {
         self.break_line_before_word(word, next);
         let previous_non_ws_char = self.layout.command_state.previous_non_ws_char;
@@ -80,7 +95,6 @@ impl FormatEngine<'_> {
             && self.layout.nesting.paren_depth == 0
             && !self.current_line_has_class_initializer_colon
             && !self.layout.in_class_base_clause
-            && !self.line_colon_ends_class_head()
             && !self.layout.line_state.ternary_colon
             && !self.layout.objc.message_active
             && !after_leading_comments(self.current.trimmed_start()).starts_with("@interface ")
@@ -96,6 +110,7 @@ impl FormatEngine<'_> {
             )
             .is_none()
             && !self.current.trimmed_start().starts_with('#')
+            && !self.line_colon_ends_class_head()
             && after_leading_comments(self.current.trimmed_end().trim_end_matches(':').trimmed_end())
                 .contains(|ch: char| {
                     !(ch.is_ascii_alphanumeric() || ch == '_' || ch.is_whitespace())
@@ -382,37 +397,7 @@ impl FormatEngine<'_> {
         next: Option<&Token>,
         previous_non_ws_char: Option<char>,
     ) {
-        // A comment between the block and its closing header holds them
-        // on one line.
-        if previous_non_ws_char == Some('}')
-            && !self.one_line_block_mode
-            && self.current.active_token().is_some_and(|index| {
-                self.tree.tokens[..index]
-                    .iter()
-                    .rev()
-                    .find(|token| !matches!(token, Token::Whitespace(_)))
-                    .is_some_and(|token| matches!(token, Token::Symbol('}')))
-            })
-            && (self.options.break_one_line_statements
-                || self.options.brace_style == BraceStyle::Pico)
-            // The run-in styles attach a closing `while` even to a block kept
-            // on one line.
-            && !(matches!(
-                self.options.brace_style,
-                BraceStyle::Pico | BraceStyle::Lisp
-            ) && word == "while"
-                && self.options.attach_closing_while)
-            && contains_one_line_block(self.current.trimmed())
-            && (matches!(word, "else" | "catch" | "@catch" | "__finally" | "__except")
-                // An empty block keeps the closing header its style attaches.
-                && !(self.closes_empty_block_before_word()
-                    && self.options.brace_style != BraceStyle::Lisp
-                    && self.attaches_closing_header(word, true))
-                || (word == "while"
-                    && self.layout.nesting.last_closed_brace_header.as_deref() == Some("do")
-                    && !(self.closes_empty_block_before_word()
-                        && self.attaches_closing_while(true))))
-        {
+        if self.closing_header_leaves_one_line_block(word, previous_non_ws_char) {
             self.finish_line();
         }
         let attached_closing_header = self.try_attach_leading_closing_header(word);
@@ -448,6 +433,7 @@ impl FormatEngine<'_> {
         };
         let attaches_after_name_aligned_pointer = self.layout.previous == PreviousToken::Operator
             && current_ends_pointer_operator
+            && !self.star_follows_value()
             && (resolved_pointer_align(self.options, trailing_operator) == PointerAlign::Name
                 || pointer_name_aligns_mixed_declarator)
             && self.current_paren_context_is_declaration()
@@ -540,6 +526,43 @@ impl FormatEngine<'_> {
 
     /// Whether the `}` before the word being pushed closes a block holding
     /// no code.
+    /// Whether a closing header after a block kept on one line starts a
+    /// line of its own; a comment between them holds them on one line.
+    pub(crate) fn closing_header_leaves_one_line_block(
+        &self,
+        word: &str,
+        previous_non_ws_char: Option<char>,
+    ) -> bool {
+        previous_non_ws_char == Some('}')
+            && !self.one_line_block_mode
+            && self.current.active_token().is_some_and(|index| {
+                self.tree.tokens[..index]
+                    .iter()
+                    .rev()
+                    .find(|token| !matches!(token, Token::Whitespace(_)))
+                    .is_some_and(|token| matches!(token, Token::Symbol('}')))
+            })
+            && (self.options.break_one_line_statements
+                || self.options.brace_style == BraceStyle::Pico)
+            // The run-in styles attach a closing `while` even to a block kept
+            // on one line.
+            && !(matches!(
+                self.options.brace_style,
+                BraceStyle::Pico | BraceStyle::Lisp
+            ) && word == "while"
+                && self.options.attach_closing_while)
+            && contains_one_line_block(self.current.trimmed())
+            && (matches!(word, "else" | "catch" | "@catch" | "@finally" | "__finally" | "__except")
+                // An empty block keeps the closing header its style attaches.
+                && !(self.closes_empty_block_before_word()
+                    && self.options.brace_style != BraceStyle::Lisp
+                    && self.attaches_closing_header(word, true))
+                || (word == "while"
+                    && self.layout.nesting.last_closed_brace_header.as_deref() == Some("do")
+                    && !(self.closes_empty_block_before_word()
+                        && self.attaches_closing_while(true))))
+    }
+
     fn closes_empty_block_before_word(&self) -> bool {
         let tokens = &self.tree.tokens;
         self.current

@@ -7,6 +7,7 @@ use crate::formatter::engine::FormatEngine;
 use crate::formatter::output::model::{LineDelimiters, LineLayout, LineReplayLayout};
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
+use crate::formatter::syntax::language::leading_header;
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::{ContainsAnyByte, code_holds_word, preprocessor_directive};
 use crate::formatter::text::line_view::LineView;
@@ -243,7 +244,7 @@ impl FormatEngine<'_> {
             line,
             line_kind,
             || self.line_delimiters(line, &delimiters),
-            is_attachable_closing_header(leading_identifier(line)),
+            is_attachable_closing_header(leading_header(line)),
         ) {
             exact_indent_spaces = Some(spaces);
         }
@@ -386,20 +387,25 @@ impl FormatEngine<'_> {
         if !plain && let Some(spaces) = self.maximum_length_new_call_argument_indent_spaces() {
             exact_indent_spaces = Some(spaces);
         }
+        // A row after a sibling row creating a value stands at that row.
         if !plain
             && self.options.indent_after_parens
-            && let Some(previous) = self.output.last_line_outside_comment()
+            && let Some(previous_index) = self.output.last_line_outside_comment_index()
+            && let previous = &self.output[previous_index]
             && self.output.code_trimmed_of(previous).ends_with(',')
             && code_holds_word(previous, "new")
+            && self
+                .output
+                .line_tokens(previous_index)
+                .zip(self.output.pending_tokens())
+                .is_none_or(|(before, row)| {
+                    self.tree.groups.enclosing(before.first)
+                        == self.tree.groups.enclosing(row.first)
+                })
         {
             exact_indent_spaces = Some(leading_visual_width(previous, self.options.tab_width));
         }
         if !plain {
-            if let Some(spaces) =
-                self.maximum_length_capped_open_paren_argument_indent_spaces(line_kind)
-            {
-                exact_indent_spaces = Some(spaces);
-            }
             if let Some(spaces) = self.maximum_length_logical_header_indent_spaces(line, line_kind)
             {
                 exact_indent_spaces = Some(spaces);
@@ -426,9 +432,6 @@ impl FormatEngine<'_> {
             }
         }
         if let Some(spaces) = replay.inline_body_owner_indent_spaces {
-            exact_indent_spaces = Some(spaces);
-        }
-        if let Some(spaces) = replay.lisp_attached_suffix_indent_spaces {
             exact_indent_spaces = Some(spaces);
         }
         if let Some(spaces) = replay.header_operator_indent_spaces {

@@ -50,24 +50,6 @@ impl FormatEngine<'_> {
             }
             return true;
         }
-        if current.starts_with('{')
-            && let Some(previous) = self.output.last_line_outside_comment()
-            && previous.trimmed_end().ends_with('\\')
-            && !line_opens_backslash_control_body(previous.trimmed_start())
-        {
-            let indent = leading_visual_width(previous, self.options.tab_width);
-            let body = current
-                .trim_start_matches('{')
-                .trimmed()
-                .trim_end_matches('}')
-                .trimmed();
-            let mut parts = Vec::new();
-            if !body.is_empty() {
-                parts.push(body.to_string());
-            }
-            self.backslash_body.parts = Some((parts, indent));
-            return true;
-        }
         let Some(split) = line.find_from_first_byte("\\{") else {
             return false;
         };

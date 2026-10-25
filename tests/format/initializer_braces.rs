@@ -630,10 +630,8 @@ fn allman_range_for_braced_init_keeps_initializer_brace_attached() {
         fixture!(
             "void f()",
             "{",
-            "    for (char c :",
-            "            {'a',",
-            "             'b'",
-            "            })",
+            "    for (char c : {'a',",
+            "                   'b'})",
             "    {",
             "        g(c);",
             "    }",
@@ -671,10 +669,8 @@ fn gnu_range_for_braced_init_keeps_command_body_indent() {
         fixture!(
             "void f()",
             "{",
-            "    for (char c :",
-            "            {'a',",
-            "             'b'",
-            "            })",
+            "    for (char c : {'a',",
+            "                   'b'})",
             "        {",
             "            g(c);",
             "        }",
@@ -701,55 +697,30 @@ fn run_in_braced_initializer_pair_with_multiline_call_stays_run_in() {
 }
 
 #[test]
-fn range_for_braced_initializer_breaks_run_in_list() {
-    assert_eq!(
-        format_exact(
-            fixture!(
-                "void f()",
-                "{",
-                "    for (int value : {10, 8, 16}) {",
-                "        call(value);",
-                "    }",
-                "}",
-            ),
-            &FormatOptions::default(),
-        ),
-        fixture!(
-            "void f()",
-            "{",
-            "    for (int value : {",
-            "                10, 8, 16",
-            "            }) {",
-            "        call(value);",
-            "    }",
-            "}",
-        )
+fn range_for_braced_initializer_keeps_a_one_line_list() {
+    let source = fixture!(
+        "void f()",
+        "{",
+        "    for (int value : {10, 8, 16}) {",
+        "        call(value);",
+        "    }",
+        "}",
     );
+
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
 
 #[test]
 fn range_for_double_brace_initializer_stays_run_in() {
-    assert_eq!(
-        format_exact(
-            fixture!(
-                "void f()",
-                "{",
-                "    for (auto item : std::vector<std::vector<const char *>>{{\"red\", \"r\"}, {\"green\", \"g\"}}) {",
-                "        call();",
-                "    }",
-                "}",
-            ),
-            &FormatOptions::default(),
-        ),
-        fixture!(
-            "void f()",
-            "{",
-            "    for (auto item : std::vector<std::vector<const char *>> {{\"red\", \"r\"}, {\"green\", \"g\"}}) {",
-            "        call();",
-            "    }",
-            "}",
-        )
+    let source = fixture!(
+        "void f()",
+        "{",
+        "    for (auto item : std::vector<std::vector<const char *>>{{\"red\", \"r\"}, {\"green\", \"g\"}}) {",
+        "        call();",
+        "    }",
+        "}",
     );
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
 
 #[test]
@@ -1503,7 +1474,8 @@ fn formats_multiline_arrays_without_comma_continuation_overindent() {
     assert_eq!(
         actual,
         fixture!(
-            "int a[] = {",
+            "int a[] =",
+            "{",
             "    1,",
             "    2",
             "};",
@@ -1529,7 +1501,8 @@ fn formats_multiline_compound_literals_without_comma_continuation_overindent() {
     assert_eq!(
         actual,
         fixture!(
-            "struct S s = (struct S) {",
+            "struct S s = (struct S)",
+            "{",
             "    .x = 1,",
             "    .y = 2 // keep",
             "};",
@@ -2128,7 +2101,7 @@ fn multiline_compound_literal_keeps_run_in_designated_fields() {
             "void f(void)\n{\n  value = (struct Item) { .first = alpha,\n                          .second = beta\n                        };\n}\n",
             &FormatOptions::default(),
         ),
-        "void f(void)\n{\n    value = (struct Item) { .first = alpha,\n        .second = beta\n    };\n}\n",
+        "void f(void)\n{\n    value = (struct Item) { .first = alpha,\n                            .second = beta\n    };\n}\n",
     );
 }
 
@@ -3000,46 +2973,41 @@ fn templated_empty_braced_temporary_callable_stays_inline() {
 }
 
 #[test]
-fn template_braced_initializer_gets_space_before_brace() {
-    assert_eq!(
-        format_exact(
-            "void f()\n{\n    index(List<int>{0, 0}, 0);\n}\n",
-            &FormatOptions::default(),
-        ),
+fn template_braced_initializer_keeps_the_gap_before_its_brace() {
+    for source in [
+        "void f()\n{\n    index(List<int>{0, 0}, 0);\n}\n",
         "void f()\n{\n    index(List<int> {0, 0}, 0);\n}\n",
-    );
+    ] {
+        assert_eq!(format_exact(source, &FormatOptions::default()), source);
+    }
 }
 
 #[test]
-fn return_template_direct_list_initializer_has_space_before_brace() {
-    assert_eq!(
-        format_exact(
-            fixture!(
-                "void f()",
-                "{",
-                "    return std::vector<Item>{first, last};",
-                "}",
-            ),
-            &FormatOptions::default(),
-        ),
-        fixture!(
-            "void f()",
-            "{",
-            "    return std::vector<Item> {first, last};",
-            "}",
-        )
-    );
+fn braced_initializer_at_declaration_scope_keeps_the_gap_before_its_brace() {
+    // As in a function's body, no option sets a gap before a list's brace.
+    for source in [
+        "auto value = Item{};\nauto other = make(Item{1});\nauto check() -> decltype(make(Item{}));\nstruct Holder {\n    auto get() -> decltype(make(Item{}));\n};\n",
+        "auto value = Item {};\nauto other = make(Item {1});\nauto check() -> decltype(make(Item {}));\n",
+    ] {
+        assert_eq!(format_exact(source, &FormatOptions::default()), source);
+    }
 }
 
 #[test]
-fn macro_argument_template_braced_initializer_gets_space_before_brace() {
-    assert_eq!(
-        format_exact(
-            "#define API_TEST(name, expr) expr\nAPI_TEST(path, index(List<int>{0, 0}, 0))\n",
-            &FormatOptions::default(),
-        ),
-        "#define API_TEST(name, expr) expr\nAPI_TEST(path, index(List<int> {0, 0}, 0))\n",
+fn return_template_direct_list_initializer_keeps_the_gap_before_its_brace() {
+    let source = fixture!(
+        "void f()",
+        "{",
+        "    return std::vector<Item>{first, last};",
+        "}",
     );
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
+}
+
+#[test]
+fn macro_argument_template_braced_initializer_keeps_the_gap_before_its_brace() {
+    let source = "#define API_TEST(name, expr) expr\nAPI_TEST(path, index(List<int>{0, 0}, 0))\n";
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
 
 #[test]
@@ -3050,9 +3018,9 @@ fn templated_empty_braced_temporary_last_call_arg_stays_inline() {
 }
 
 #[test]
-fn braced_temporary_call_argument_after_condition_splits_closing_call() {
+fn braced_temporary_call_argument_after_condition_keeps_its_closing_call() {
     let source = "void f() {\n  if (a ||\n      b) {\n    out = write(out,\n                Result<T>{items, items + 1,\n                          static_cast<uint32_t>(v)});\n  }\n}\n";
-    let expected = "void f() {\n    if (a ||\n            b) {\n        out = write(out,\n                    Result<T> {items, items + 1,\n                               static_cast<uint32_t>(v)\n                              });\n    }\n}\n";
+    let expected = "void f() {\n    if (a ||\n            b) {\n        out = write(out,\n                    Result<T>{items, items + 1,\n                              static_cast<uint32_t>(v)});\n    }\n}\n";
 
     assert_eq!(format_exact(source, &FormatOptions::default()), expected,);
 }
@@ -3060,7 +3028,7 @@ fn braced_temporary_call_argument_after_condition_splits_closing_call() {
 #[test]
 fn long_braced_temporary_argument_after_condition_keeps_element_indent() {
     let source = "void f() {\n  if (a ||\n      b) {\n    out = write_escaped_cp(out,\n                           find_escape_result<Char>{v_array, v_array + 1,\n                                                     static_cast<uint32_t>(v)});\n  }\n}\n";
-    let expected = "void f() {\n    if (a ||\n            b) {\n        out = write_escaped_cp(out,\n                               find_escape_result<Char> {v_array, v_array + 1,\n                                       static_cast<uint32_t>(v)\n                                                        });\n    }\n}\n";
+    let expected = "void f() {\n    if (a ||\n            b) {\n        out = write_escaped_cp(out,\n                               find_escape_result<Char>{v_array, v_array + 1,\n                                       static_cast<uint32_t>(v)});\n    }\n}\n";
 
     assert_eq!(format_exact(source, &FormatOptions::default()), expected,);
 }
@@ -3088,6 +3056,49 @@ fn default_array_initializer_expands_adjacent_run_in_first_element_brace_gap() {
         ),
         "int a[][2] =\n{   {1, 2},\n    {3, 4}\n};\n",
     );
+}
+
+#[test]
+fn default_array_initializer_runs_an_open_nested_element_brace_into_its_row() {
+    for source in [
+        "int a[] =\n{{{1}, 2,\n   3}\n};\n",
+        "int a[] =\n{   {{1}, 2,\n        3}\n};\n",
+    ] {
+        assert_eq!(
+            format_exact(source, &FormatOptions::default()),
+            "int a[] =\n{   {   {1}, 2,\n        3\n    }\n};\n",
+        );
+    }
+    assert_eq!(
+        format_exact(
+            "int a[] =\n{{\"a\",\n   3}\n};\n",
+            &FormatOptions::default(),
+        ),
+        "int a[] =\n{   {   \"a\",\n        3\n    }\n};\n",
+    );
+    let cases = [
+        (
+            "void f()\n{\n    int a[] =\n    {{1,\n       3}};\n}\n",
+            "void f()\n{\n    int a[] =\n    {   {   1,\n            3\n        }\n    };\n}\n",
+        ),
+        // A nested brace that ends the line stays beside the brace.
+        (
+            "int a[] =\n{{\n1, 2}};\n",
+            "int a[] =\n{{\n        1, 2\n    }\n};\n",
+        ),
+        (
+            "int a[] =\n{{{\n1, 2}}};\n",
+            "int a[] =\n{   {{\n            1, 2\n        }\n    }\n};\n",
+        ),
+        (
+            "int a[] =\n{     {1, 2},\n {3}};\n",
+            "int a[] =\n{   {1, 2},\n    {3}\n};\n",
+        ),
+    ];
+    for (source, expected) in cases {
+        assert_eq!(format_exact(source, &FormatOptions::default()), expected);
+        assert_eq!(format_exact(expected, &FormatOptions::default()), expected);
+    }
 }
 
 #[test]
@@ -3198,9 +3209,10 @@ fn range_for_braced_init_list_on_own_line_attaches_to_colon_header() {
 #[test]
 fn indented_brace_styles_indent_nested_initializer_braces() {
     let input = "static char values[A][B] = {\n\t/* row */\n\t{1, 2},\n};\n";
-    let expected = "static char values[A][B] = {\n    /* row */\n        {1, 2},\n    };\n";
+    let attached = "static char values[A][B] = {\n    /* row */\n        {1, 2},\n    };\n";
+    let broken = attached.replacen(" = {", " =\n    {", 1);
 
-    for style in ["whitesmith", "ratliff"] {
+    for (style, expected) in [("whitesmith", broken.as_str()), ("ratliff", attached)] {
         let mut options = FormatOptions::default();
         apply_command_line_args(&mut options, &[format!("--style={style}")])
             .expect("valid options");
@@ -3216,7 +3228,8 @@ fn indented_brace_styles_align_nested_initializer_rows_to_inner_brace() {
         (
             "whitesmith",
             fixture!(
-                "static Item items[]= {",
+                "static Item items[]=",
+                "    {",
                 "        {",
                 "        1,",
                 "        2,",
@@ -3227,7 +3240,8 @@ fn indented_brace_styles_align_nested_initializer_rows_to_inner_brace() {
         (
             "vtk",
             fixture!(
-                "static Item items[]= {",
+                "static Item items[]=",
+                "{",
                 "        {",
                 "        1,",
                 "        2,",
@@ -3292,19 +3306,15 @@ fn macro_initializer_keeps_designated_initializer_indent() {
 }
 
 #[test]
-fn default_breaks_nonempty_named_direct_list_in_auto_declaration() {
-    assert_eq!(
-        format_exact("auto value = Type{1};\n", &FormatOptions::default()),
-        fixture!("auto value = Type {", "    1", "};")
-    );
+fn default_keeps_nonempty_named_direct_list_in_auto_declaration() {
+    let source = "auto value = Type{1};\n";
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
 
 #[test]
-fn default_spaces_empty_named_direct_list_in_auto_declaration() {
-    assert_eq!(
-        format_exact("auto value = Type{};\n", &FormatOptions::default()),
-        "auto value = Type {};\n"
-    );
+fn default_keeps_empty_named_direct_list_in_auto_declaration() {
+    let source = "auto value = Type{};\n";
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
 
 #[test]
@@ -3551,10 +3561,45 @@ fn nested_compound_literal_single_element_close_brace_aligns_with_statement() {
 fn braced_string_list_second_element_in_call_aligns_to_call_argument_column() {
     assert_eq!(
         format_exact(
-            "void f()\n{\n    CONFIRM(sample_runner.runCommand(\"cmd\", QStringList{\"/c\",\n                                                        \"echo.>>\" + Path::toNativeSeparators(baseDir + \"/version.inc\")}));\n}\n",
+            "void f()\n{\n    REQUIRE(active_runner.runCommand(\"cmd\", StringItems{\"/c\",\n                                                        \"echo.>>\" + Path::native(baseDir + \"/version.inc\")}));\n}\n",
             &FormatOptions::default(),
         ),
-        "void f()\n{\n    CONFIRM(sample_runner.runCommand(\"cmd\", QStringList{\"/c\",\n                                     \"echo.>>\" + Path::toNativeSeparators(baseDir + \"/version.inc\")}));\n}\n",
+        "void f()\n{\n    REQUIRE(active_runner.runCommand(\"cmd\", StringItems{\"/c\",\n                                     \"echo.>>\" + Path::native(baseDir + \"/version.inc\")}));\n}\n",
+    );
+}
+
+#[test]
+fn list_elements_past_max_continuation_indent_take_the_enclosing_continuation() {
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "void f()",
+                "{",
+                "    runner.runWithLongName(\"command\", \"name\", Items{first,",
+                "                                                    value});",
+                "    runner.runWithLongName(\"command\", \"name\", ns::Items{first,",
+                "                                                        value});",
+                "    CHECK(runner.run(\"cmd\", Items{\"/c\", \"a\", \"bbbbbbbbbbbbbbbbbb\", Inner{\"/c\",",
+                "                                                                         value}}));",
+                "    auto resultingCollection = ItemsCollection{\"first\",",
+                "                                               value};",
+                "}",
+            ),
+            &FormatOptions::default(),
+        ),
+        fixture!(
+            "void f()",
+            "{",
+            "    runner.runWithLongName(\"command\", \"name\", Items{first,",
+            "                           value});",
+            "    runner.runWithLongName(\"command\", \"name\", ns::Items{first,",
+            "                           value});",
+            "    CHECK(runner.run(\"cmd\", Items{\"/c\", \"a\", \"bbbbbbbbbbbbbbbbbb\", Inner{\"/c\",",
+            "                                  value}}));",
+            "    auto resultingCollection = ItemsCollection{\"first\",",
+            "                                               value};",
+            "}",
+        )
     );
 }
 
@@ -3784,7 +3829,8 @@ fn designated_element_after_a_comment_keeps_the_element_column() {
 fn whitesmith_indents_the_closing_brace_of_a_nested_designated_element() {
     let options = options_from_args(&["--style=whitesmith"]);
     let source = fixture!(
-        "static const struct s t[] = {",
+        "static const struct s t[] =",
+        "    {",
         "    [A] = {",
         "        .type = 1,",
         "        },",
@@ -3915,7 +3961,8 @@ fn whitesmith_brace_row_after_a_directive_stands_past_the_plain_rows() {
     apply_command_line_args(&mut options, &["--style=whitesmith".to_owned()])
         .expect("valid options");
     let source = fixture!(
-        "static const struct f table[] = {",
+        "static const struct f table[] =",
+        "    {",
         "    FEATURE(\"a\", NULL, 1),",
         "#ifdef X",
         "    FEATURE(\"b\", NULL, 2),",
@@ -3932,7 +3979,8 @@ fn vtk_last_split_brace_row_after_a_one_line_row_stays_at_the_rows() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=vtk".to_owned()]).expect("valid options");
     let source = fixture!(
-        "static const struct testparams testparams[] = {",
+        "static const struct testparams testparams[] =",
+        "{",
         "    { F_A,  CURLE_OK },",
         "    {",
         "        F_RESUME | F_HTTP416,",
@@ -4307,7 +4355,7 @@ fn indented_brace_styles_close_nested_compound_literals_at_their_fields() {
                 &options
             ),
             format!(
-                "void f()\n{function_brace}{{\n    y = (U) {{\n        .a = (V){{\n            1\n            }}\n        }};\n{function_brace}}}\n"
+                "void f()\n{function_brace}{{\n    y = (U) {{ .a = (V){{\n            1\n            }}\n        }};\n{function_brace}}}\n"
             ),
             "{style}"
         );
@@ -4419,15 +4467,15 @@ fn argument_brace_after_a_line_ending_in_a_comma_is_an_initializer() {
     for (style, expected) in [
         (
             "--style=vtk",
-            "void f(void)\n{\n    g(a,\n        {\n        free(n);\n        });\n    g(a,\n    { 1, 2 });\n}\n",
+            "void f(void)\n{\n    g(a,\n        {\n        free(n);\n        });\n    g(a,\n      { 1, 2 });\n}\n",
         ),
         (
             "--style=kr",
-            "void f(void)\n{\n    g(a, {\n        free(n);\n    });\n    g(a,\n    { 1, 2 });\n}\n",
+            "void f(void)\n{\n    g(a, {\n        free(n);\n    });\n    g(a,\n      { 1, 2 });\n}\n",
         ),
         (
             "--style=whitesmith",
-            "void f(void)\n    {\n    g(a,\n        {\n        free(n);\n        });\n    g(a,\n        { 1, 2 });\n    }\n",
+            "void f(void)\n    {\n    g(a,\n        {\n        free(n);\n        });\n    g(a,\n      { 1, 2 });\n    }\n",
         ),
     ] {
         let mut options = FormatOptions::default();
@@ -4462,4 +4510,99 @@ fn an_initializer_a_directive_splits_from_its_assignment_stays_on_one_line() {
             .expect("valid options");
         assert_eq!(format_exact(input, &options), input, "{style}");
     }
+}
+
+#[test]
+fn a_comment_after_a_list_brace_leading_its_line_opens_the_list_rows() {
+    // A line comment after a brace leading its line, the list open past
+    // it, goes to the list's first row in every style but the run-in ones;
+    // a block comment does where braces attach.
+    let input = "int items[][2] = {\n    { /* c */\n        1, 2 },\n    { // d\n        3, 4 },\n    { /* e\n         f */\n        5, 6 },\n};\nint more[] =\n{ // g\n    7\n};\n";
+    for (style, expected) in [
+        (
+            "--style=java",
+            "int items[][2] = {\n    {\n        /* c */\n        1, 2\n    },\n    {\n        // d\n        3, 4\n    },\n    {\n        /* e\n           f */\n        5, 6\n    },\n};\nint more[] = {\n    // g\n    7\n};\n",
+        ),
+        (
+            "--style=ratliff",
+            "int items[][2] = {\n        {\n        /* c */\n        1, 2\n        },\n        {\n        // d\n        3, 4\n        },\n        {\n        /* e\n           f */\n        5, 6\n        },\n    };\nint more[] = {\n    // g\n    7\n    };\n",
+        ),
+        (
+            "--style=horstmann",
+            "int items[][2] =\n{   {   /* c */\n        1, 2\n    },\n    {   // d\n        3, 4\n    },\n    {   /* e\n           f */\n        5, 6\n    },\n};\nint more[] =\n{   // g\n    7\n};\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_owned()]).expect("valid options");
+        assert_eq!(format_exact(input, &options), expected, "{style}");
+        assert_eq!(format_exact(expected, &options), expected, "{style}");
+    }
+    let input = "int items[][2] = {\n    { /* c */\n        1, 2 },\n    { // d\n        3, 4 },\n};\nint more[] =\n{ // g\n    7\n};\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=kr".to_owned()]).expect("valid options");
+    let expected = "int items[][2] = {\n    { /* c */\n        1, 2\n    },\n    {\n        // d\n        3, 4\n    },\n};\nint more[] = {\n    // g\n    7\n};\n";
+    assert_eq!(format_exact(input, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn attached_list_closer_after_a_directive_in_the_list_is_spaced_as_without_one() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=lisp".to_owned()]).expect("valid options");
+    let expected_rows = |middle: &[&str]| {
+        let mut rows = vec![
+            "static const struct Item items[] = {",
+            "    {3, 4 },",
+            "    {",
+            "        5,",
+        ];
+        rows.extend_from_slice(middle);
+        rows.push("        6 } };");
+        rows.join("\n") + "\n"
+    };
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "static const struct Item items[] = {",
+                "    {3, 4},",
+                "    {5,",
+                "#ifdef X",
+                "     7,",
+                "#endif",
+                "     6}",
+                "};",
+            ),
+            &options,
+        ),
+        expected_rows(&["#ifdef X", "        7,", "#endif"])
+    );
+    assert_eq!(
+        format_exact(
+            fixture!(
+                "static const struct Item items[] = {",
+                "    {3, 4},",
+                "    {5,",
+                "     7,",
+                "     6}",
+                "};",
+            ),
+            &options,
+        ),
+        expected_rows(&["        7,"])
+    );
+}
+
+#[test]
+fn list_closer_after_an_element_split_by_a_conditional_breaks_in_an_else_branch_too() {
+    // The element's closer leaves its row as it does outside a conditional
+    // branch, whatever branch the split element stands in.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=vtk".to_owned()]).expect("valid options");
+    assert_eq!(
+        format_exact(
+            "void f()\n{\n    static const struct Item items[] = {\n#if FEATURE\n        {1, 2}\n#else\n        {3, 4},\n#ifdef FEATURE\n        {5,\n#endif\n         6}\n#endif\n    };\n}\n",
+            &options,
+        ),
+        "void f()\n{\n    static const struct Item items[] =\n        {\n#if FEATURE\n            {1, 2}\n#else\n            {3, 4},\n#ifdef FEATURE\n            {\n            5,\n#endif\n            6\n            }\n#endif\n        };\n}\n"
+    );
 }

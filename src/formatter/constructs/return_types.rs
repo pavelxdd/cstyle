@@ -10,8 +10,8 @@ use crate::formatter::syntax::function_name_start;
 use crate::formatter::syntax::language::{self, is_non_type_keyword, is_type_like_pointer_word};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, find_outside_quotes, line_comment_split_limit,
-    reverse_scan_skips_block_comment, trailing_comment_split_limit,
+    find_outside_quotes, line_comment_split_limit, reverse_scan_skips_block_comment,
+    trailing_comment_split_limit,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
@@ -81,115 +81,6 @@ impl FormatEngine<'_> {
             if close_pending == 0
                 && (code.ends_with(';') || code.ends_with('{') || code.ends_with('}'))
             {
-                return None;
-            }
-        }
-        None
-    }
-
-    fn recent_base_trailing_return_function_header_index(&self) -> Option<usize> {
-        if self.layout.indentation.indent() == 0 {
-            return None;
-        }
-        let mut closed_blocks = 0usize;
-        for index in (0..self.output.len()).rev().take(24) {
-            let code = self.output.code_before_comment(index).trimmed_end();
-            let trimmed = self.output.code_body(index);
-            if trimmed.is_empty() || trimmed.starts_with('#') {
-                continue;
-            }
-            if trimmed.starts_with('}') {
-                closed_blocks += 1;
-            }
-            if code.ends_with('{') {
-                if closed_blocks > 0 {
-                    closed_blocks -= 1;
-                    continue;
-                }
-                if code.contains(") ->") && !trimmed.starts_with("template ") {
-                    return Some(index);
-                }
-                return None;
-            }
-        }
-        None
-    }
-
-    pub(crate) fn recent_base_trailing_return_function_header(&self) -> bool {
-        self.recent_base_trailing_return_function_header_index()
-            .is_some()
-    }
-
-    pub(crate) fn recent_trailing_return_function_after_multiline_template_declaration(
-        &self,
-    ) -> bool {
-        let Some(brace_index) = self.recent_base_trailing_return_function_header_index() else {
-            return false;
-        };
-        let mut signature_start = brace_index;
-        let mut index = brace_index;
-        while index > 0 {
-            index -= 1;
-            let code = self.output.code_before_comment(index).trimmed_end();
-            let trimmed = self.output.code_body(index);
-            if trimmed.is_empty() || trimmed.starts_with('#') {
-                continue;
-            }
-            if trimmed.starts_with("template ")
-                || code.ends_with(';')
-                || code.ends_with('{')
-                || code.ends_with('}')
-            {
-                break;
-            }
-            signature_start = index;
-            if code.contains('(') {
-                break;
-            }
-        }
-        self.output_closes_multiline_template_declaration_before(signature_start)
-    }
-
-    pub(crate) fn trailing_return_function_parameter_tail_indent_spaces(
-        &self,
-        line: &LineView<'_>,
-    ) -> Option<usize> {
-        let current = line.trimmed_start();
-        if !current.ends_with('{') || !current.contains("= {}") || !current.contains(") ->") {
-            return None;
-        }
-        for (previous_index, previous) in self
-            .output
-            .iter()
-            .enumerate()
-            .rev()
-            .filter(|(_, line)| !line.trimmed().is_empty())
-            .take(8)
-        {
-            let previous_code = self
-                .output
-                .code_before_comment(previous_index)
-                .trimmed_end();
-            if let Some(open) = self.open_paren_column_of(previous_code) {
-                let before = previous_code[..open].trimmed_end();
-                let name_start = function_name_start(before)?;
-                let return_type = before[..name_start].trimmed_end();
-                let name = before[name_start..].trimmed_start();
-                let prefixed_return_type = return_type
-                    .split_whitespace()
-                    .any(language::is_macro_like_word)
-                    && is_parameter_return_type_prefix(return_type);
-                if leading_visual_width(previous, self.options.tab_width) == 0
-                    && (prefixed_return_type
-                        || self.output_closes_multiline_template_declaration_before(previous_index))
-                    && !name.is_empty()
-                    && !is_header(self.options, name)
-                {
-                    return Some(0);
-                }
-                return None;
-            }
-            if previous_code.ends_with_any(b";{}") {
                 return None;
             }
         }
@@ -312,15 +203,48 @@ impl FormatEngine<'_> {
                 // not.
                 Token::Word(_) => true,
                 // `template<class T>`
-                Token::Operator(operator) if operator == ">" => {
-                    template_arguments_start(tokens, previous)
-                        .and_then(|open| self.tree.previous_code_token(open))
-                        .is_some_and(
-                            |word| matches!(&tokens[word], Token::Word(word) if word == "template"),
-                        )
+                Token::Operator(operator)
+                    if operator == ">" && self.closes_template_clause(previous) =>
+                {
+                    true
                 }
-                _ => false,
+                // `template<class T> requires C<T>`
+                _ => self.requires_clause_before(head.start),
             })
+    }
+
+    /// Whether the `>` at `close` ends a `template <...>` clause.
+    fn closes_template_clause(&self, close: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        template_arguments_start(tokens, close)
+            .and_then(|open| self.tree.previous_code_token(open))
+            .is_some_and(|word| matches!(&tokens[word], Token::Word(word) if word == "template"))
+    }
+
+    /// Whether a `requires` clause after a template clause ends right before
+    /// `start`. A constraint holds a few tokens, so the walk back is short.
+    fn requires_clause_before(&self, start: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        let mut index = start;
+        for _ in 0..64 {
+            let Some(previous) = self.tree.previous_code_token(index) else {
+                return false;
+            };
+            match &tokens[previous] {
+                Token::Symbol(';' | '{' | '}') => return false,
+                Token::Word(word) if word == "requires" => {
+                    return self
+                        .tree
+                        .previous_code_token(previous)
+                        .is_some_and(|before| {
+                            matches!(&tokens[before], Token::Operator(operator) if operator == ">")
+                                && self.closes_template_clause(before)
+                        });
+                }
+                _ => index = previous,
+            }
+        }
+        false
     }
 
     /// Whether a preprocessor directive splits the parameter list, which
@@ -330,6 +254,22 @@ impl FormatEngine<'_> {
         params
             .close
             .is_some_and(|close| self.tree.has_directive_in(params.open..close))
+    }
+
+    /// Whether a `template <...>` clause starting at `first` ends right
+    /// before `start`, as when a head's template parameters lead its line.
+    fn template_clause_before(&self, first: usize, start: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        matches!(&tokens[first], Token::Word(word) if word == "template")
+            && self
+                .tree
+                .previous_code_token(start)
+                .filter(
+                    |&close| matches!(&tokens[close], Token::Operator(operator) if operator == ">"),
+                )
+                .and_then(|close| template_arguments_start(tokens, close))
+                .and_then(|open| self.tree.previous_code_token(open))
+                == Some(first)
     }
 
     /// Whether the function name line starting at token `first` joins the
@@ -360,7 +300,8 @@ impl FormatEngine<'_> {
                     // the head starts.
                     // A pointer run such as `**` may record only its first
                     // star as the line's last token.
-                    previous.first >= head.start
+                    (previous.first >= head.start
+                        || self.template_clause_before(previous.first, head.start))
                         && self.tree.previous_code_token(head.name_start).is_some_and(
                             |before_name| {
                                 // Comments after the type stay with it.
@@ -401,25 +342,42 @@ impl FormatEngine<'_> {
         let Some(head) = self.tree.functions.named_at(span.first).cloned() else {
             return false;
         };
+        // The joined row holds the tokens of the row the name joins, not of
+        // rows the head started on before it.
+        let first = self
+            .output
+            .len()
+            .checked_sub(1)
+            .and_then(|previous| self.output.line_tokens(previous))
+            .map_or(head.start, |previous| previous.first.max(head.start));
         let previous = self.output.pop().expect("previous line exists");
         let previous_trimmed = previous.trimmed();
         let previous_prefix = &previous[..previous.len() - previous.trimmed_start().len()];
         // A pointer ending the return type joins the name as its alignment
-        // sets it apart.
+        // sets it apart; unaligned, it keeps the side it stands on.
         let separator = match previous_trimmed.as_bytes().last() {
-            Some(&operator @ (b'*' | b'&'))
-                if matches!(
-                    resolved_pointer_align(self.options, if operator == b'&' { "&" } else { "*" }),
-                    PointerAlign::Type | PointerAlign::Middle
-                ) =>
-            {
-                " "
+            Some(&operator @ (b'*' | b'&')) => {
+                match resolved_pointer_align(self.options, if operator == b'&' { "&" } else { "*" })
+                {
+                    PointerAlign::Type | PointerAlign::Middle => " ",
+                    PointerAlign::Name => "",
+                    PointerAlign::None => {
+                        if previous_trimmed
+                            .trim_end_matches(['*', '&'])
+                            .ends_with(char::is_whitespace)
+                        {
+                            ""
+                        } else {
+                            " "
+                        }
+                    }
+                }
             }
-            Some(b'*' | b'&' | b'^') => "",
+            Some(b'^') => "",
             _ => " ",
         };
         self.output.set_pending_tokens(Some(TokenSpan {
-            first: head.start,
+            first,
             last: span.last,
         }));
         let previous_indent = leading_visual_width(&previous, self.options.tab_width);
@@ -488,6 +446,13 @@ impl FormatEngine<'_> {
                                 |previous| matches!(self.tree.tokens[previous], Token::Word(_)),
                             )
                     })
+            })
+            .or_else(|| {
+                // A template's parameters leading the line stand with the
+                // return type after them.
+                (span.first..=span.last)
+                    .find_map(|token| self.tree.functions.starting_at(token))
+                    .filter(|head| self.template_clause_before(span.first, head.start))
             })
             .cloned()
         else {
@@ -608,15 +573,37 @@ impl FormatEngine<'_> {
 /// A line astyle attaches a function name to: words and pointer marks
 /// only, any word naming a type.
 fn is_attachable_return_type_line(line: &str) -> bool {
-    is_return_type_line(line)
-        || !line.is_empty()
-            && line.chars().all(|ch| {
-                is_identifier_continue(ch) || ch.is_whitespace() || matches!(ch, '*' | '&' | ':')
-            })
-            && line
-                .split(|ch: char| !is_identifier_continue(ch))
-                .filter(|part| !part.is_empty())
-                .all(|part| !language::is_non_type_keyword(part))
+    if is_return_type_line(line) {
+        return true;
+    }
+    let Some(names) = outside_template_arguments(line) else {
+        return false;
+    };
+    !names.is_empty()
+        && names.chars().all(|ch| {
+            is_identifier_continue(ch) || ch.is_whitespace() || matches!(ch, '*' | '&' | ':')
+        })
+        && names
+            .split(|ch: char| !is_identifier_continue(ch))
+            .filter(|part| !part.is_empty())
+            .all(|part| !language::is_non_type_keyword(part))
+}
+
+/// `line` without its balanced template arguments, as `Box<Item> *` reads
+/// `Box *`; none when its angles do not balance or a statement ends in it.
+fn outside_template_arguments(line: &str) -> Option<String> {
+    let mut depth = 0usize;
+    let mut outside = String::with_capacity(line.len());
+    for ch in line.chars() {
+        match ch {
+            '{' | '}' | ';' => return None,
+            '<' => depth += 1,
+            '>' => depth = depth.checked_sub(1)?,
+            _ if depth == 0 => outside.push(ch),
+            _ => {}
+        }
+    }
+    (depth == 0).then_some(outside)
 }
 
 pub(crate) fn is_return_type_line(line: &str) -> bool {

@@ -388,3 +388,15 @@ fn swig_percent_blocks_keep_source_shape() {
 
     assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
+
+#[test]
+fn pad_oper_pads_statements_after_an_asm_block_as_any_other() {
+    // The block's instructions end at its brace; the code after it is
+    // padded as code is.
+    let mut options = FormatOptions::default();
+    options.pad_operators = true;
+    let input = "void f(void)\n{\n    int a, b;\n    _asm\n    {\n        mov a, eax\n    }\n    value=a;\n    other=b+1;\n}\n";
+    let expected = "void f(void)\n{\n    int a, b;\n    _asm\n    {\n        mov a, eax\n    }\n    value = a;\n    other = b + 1;\n}\n";
+    assert_eq!(format_exact(input, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}

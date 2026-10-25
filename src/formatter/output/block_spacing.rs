@@ -1,10 +1,15 @@
 use crate::config::{BraceStyle, FormatOptions};
+use crate::formatter::braces::rewrite::token_begins_line;
 use crate::formatter::constructs::assembly::is_asm_block_header;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::lexer::{CommentKind, Token};
+use crate::formatter::lexer::{CommentKind, Token, token_text};
 use crate::formatter::state::BraceType;
 use crate::formatter::structure::blocks::{is_code_token, next_code_token};
-use crate::formatter::text::line_scan::{holds_code_after_leading_comments, is_bare_comment_line};
+use crate::formatter::structure::groups::Delimiter;
+use crate::formatter::syntax::language::{leading_header, objc_statement_header};
+use crate::formatter::text::line_scan::{
+    after_leading_comments, holds_code_after_leading_comments, is_bare_comment_line,
+};
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::leading_identifier;
 
@@ -18,10 +23,14 @@ pub(crate) struct BlockSpacingState {
     /// line unpadded.
     header_follows_statement: bool,
     pending_semicolon: bool,
+    /// A blank due before a comment that follows a line still being laid
+    /// out, which takes none itself.
+    prepend_blank_after_pending: bool,
     pending_one_line_block: bool,
     closed_empty_block: bool,
     pending_closed_empty_block: Option<bool>,
     case_block_before_directive: bool,
+    pending_case_block_before_directive: bool,
     /// Depths of blocks opened right after a header's block closed, which
     /// astyle reads as more of that header.
     header_continued_depths: Vec<usize>,
@@ -46,14 +55,27 @@ impl FormatEngine<'_> {
         if self.previous_block_spacing_line_is_comment_only() {
             return;
         }
-        if word == "while"
-            && self.layout.nesting.last_closed_brace_header.as_deref() == Some("do")
-            && self.layout.command_state.previous_command_char == Some('}')
-        {
+        let (leads_line, previous_command_char) = self.header_lead(word);
+        if word == "while" && self.while_closes_braced_do() {
+            // A `do` the line starts keeps the blank due before it, as an
+            // `if` whose `else` joins its line does.
+            let prepend = self.block_spacing.prepend_blank
+                && leading_identifier(self.current.trimmed_start()) == "do";
             self.clear_block_spacing_blanks();
+            self.block_spacing.prepend_blank = prepend;
             return;
         }
         if is_break_blocks_closing_header(word) {
+            // A block a closing header joins on its opening header's line
+            // ends no chain the next row parts from.
+            if self.layout.command_state.previous_command_char == Some('}')
+                && is_break_blocks_opening_header(
+                    self.options,
+                    leading_header(self.current.trimmed_start()),
+                )
+            {
+                self.block_spacing.pending_one_line_block = false;
+            }
             // A body ending in a trailing block comment keeps its closing
             // header.
             if self.current_is_blank()
@@ -70,16 +92,19 @@ impl FormatEngine<'_> {
                 self.block_spacing.append_blank = false;
             }
             if self.options.break_closing_header_blocks
-                && self.current_is_blank()
-                && self.layout.command_state.previous_command_char == Some('}')
+                && leads_line
+                && previous_command_char == Some('}')
                 && !self.block_spacing.closed_empty_block
             {
                 self.block_spacing.prepend_blank = true;
             }
             return;
         }
-        if !self.current_is_blank()
-            || (self.layout.command_state.previous_command_char == Some('{')
+        // A label after the closer of the case before it parts from nothing.
+        let leads_after_closer =
+            !matches!(word, "case" | "default") && self.current_holds_closer_and_comments();
+        if !(leads_line || leads_after_closer)
+            || (previous_command_char == Some('{')
                 && (!self.preprocessor.last_output_was_preprocessor
                     || self.comment_precedes_directives()))
             || (self.options.brace_style == BraceStyle::Pico
@@ -118,7 +143,15 @@ impl FormatEngine<'_> {
         if self.previous_block_spacing_line_is_comment_only() {
             return;
         }
-        let Some(previous) = self.layout.previous_pre_adjust_line.as_deref() else {
+        // The line before the comment may still be laid out, as a
+        // header awaiting its body.
+        let pending = !self.current_is_blank();
+        let previous = if pending {
+            Some(self.current.as_str())
+        } else {
+            self.layout.previous_pre_adjust_line.as_deref()
+        };
+        let Some(previous) = previous else {
             return;
         };
         let previous = previous.trimmed_start();
@@ -135,7 +168,11 @@ impl FormatEngine<'_> {
         if is_break_blocks_opening_header(self.options, &word)
             || (self.options.break_closing_header_blocks && is_break_blocks_closing_header(&word))
         {
-            self.block_spacing.prepend_blank = true;
+            if pending {
+                self.block_spacing.prepend_blank_after_pending = true;
+            } else {
+                self.block_spacing.prepend_blank = true;
+            }
         }
     }
 
@@ -205,12 +242,11 @@ impl FormatEngine<'_> {
                                 | BraceStyle::Pico
                                 | BraceStyle::Lisp
                         )
-                        && matches!(
-                            tokens[index + 1..]
-                                .iter()
-                                .find(|token| !matches!(token, Token::Whitespace(_))),
-                            Some(Token::Word(word)) if is_break_blocks_closing_header(word)
-                        )
+                        && tokens[index + 1..]
+                            .iter()
+                            .position(|token| !matches!(token, Token::Whitespace(_)))
+                            .and_then(|offset| header_word_at(tokens, index + 1 + offset))
+                            .is_some_and(is_break_blocks_closing_header)
                 }
                 _ => false,
             })
@@ -269,6 +305,7 @@ impl FormatEngine<'_> {
         if !self.options.break_blocks
             || !self.block_spacing.header_expects_body
             || self.layout.nesting.paren_depth > 0
+            || self.brace_in_header_parens()
         {
             return;
         }
@@ -308,6 +345,9 @@ impl FormatEngine<'_> {
         if let Some(empty) = self.block_spacing.pending_closed_empty_block.take() {
             self.block_spacing.closed_empty_block = empty;
         }
+        if std::mem::take(&mut self.block_spacing.pending_case_block_before_directive) {
+            self.block_spacing.case_block_before_directive = true;
+        }
     }
 
     pub(crate) fn observe_block_spacing_one_line_block(
@@ -318,8 +358,36 @@ impl FormatEngine<'_> {
         if !self.options.break_blocks {
             return;
         }
+        // A list inside the header's parens leaves the header to its body.
+        if !matches!(brace_type, BraceType::Command | BraceType::NonStatement)
+            && self.layout.nesting.paren_depth > 0
+        {
+            return;
+        }
         // A block of comments alone is as empty once its line ends.
         self.block_spacing.pending_closed_empty_block = Some(holds_no_code);
+        // A case label's block kept on one line parts from a directive
+        // after it, and from what follows save the break ending the case, as
+        // one spanning rows does.
+        let tokens = &self.tree.tokens;
+        let case_block = self
+            .current
+            .active_token()
+            .filter(|&open| matches!(tokens[open], Token::Symbol('{')))
+            .and_then(|open| self.tree.groups.opened_at(open))
+            .filter(|&group| {
+                self.tree.blocks.owner(group).is_some_and(|owner| {
+                    matches!(&tokens[owner], Token::Word(word) if matches!(word.as_str(), "case" | "default"))
+                })
+            });
+        self.block_spacing.pending_case_block_before_directive = case_block.is_some();
+        let case_block_parts = case_block
+            .and_then(|group| self.tree.groups.get(group).close)
+            .and_then(|close| next_code_token(tokens, close + 1))
+            .is_some_and(|next| {
+                !matches!(&tokens[next], Token::Word(word) if matches!(word.as_str(), "break" | "case" | "default"))
+                    && !matches!(tokens[next], Token::Symbol('}'))
+            });
         // Only a header's block is padded.
         let header_block = self
             .block_spacing
@@ -329,12 +397,13 @@ impl FormatEngine<'_> {
         self.block_spacing.pending_one_line_block =
             matches!(brace_type, BraceType::Command | BraceType::NonStatement)
                 && (header_block && !self.block_spacing.header_follows_statement
-                    || self.brace_continues_header_block());
+                    || self.brace_continues_header_block()
+                    || case_block_parts);
         self.clear_block_spacing_header();
     }
 
     pub(crate) fn observe_block_spacing_open_brace(&mut self) {
-        if self.options.break_blocks {
+        if self.options.break_blocks && !self.brace_in_header_parens() {
             if self.brace_continues_header_block() {
                 let depth = self.layout.nesting.brace_header_stack.len();
                 self.block_spacing.header_continued_depths.push(depth);
@@ -343,15 +412,68 @@ impl FormatEngine<'_> {
         }
     }
 
+    /// The control keyword whose condition the block the `}` being pushed
+    /// closes follows.
+    fn closed_control_block_header(&self) -> Option<String> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let close = self.current.active_token()?;
+        let block = groups.closed_at(close)?;
+        let condition_close = self.tree.previous_code_token(groups.get(block).open)?;
+        let condition = groups.closed_at(condition_close)?;
+        if groups.get(condition).delimiter != Delimiter::Paren {
+            return None;
+        }
+        let keyword = self.tree.previous_code_token(groups.get(condition).open)?;
+        match &tokens[keyword] {
+            Token::Word(word) if matches!(word.as_str(), "if" | "while" | "for" | "switch") => {
+                Some(word.to_string())
+            }
+            _ => None,
+        }
+    }
+
+    /// Whether the block being closed follows a statement in token order,
+    /// across a directive: astyle's formatter reads the tokens in order, so
+    /// no header a conditional's first branch leaves heads it there.
+    fn closes_block_after_statement_across_directive(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        self.current
+            .active_token()
+            .and_then(|close| groups.closed_at(close))
+            .is_some_and(|block| {
+                let open = groups.get(block).open;
+                self.tree.previous_code_token(open).is_some_and(|previous| {
+                    matches!(tokens[previous], Token::Symbol(';' | '}'))
+                        && self.tree.has_directive_in(previous..open)
+                })
+            })
+    }
+
+    /// Whether the token being pushed stands in a header's parens, where it
+    /// takes no part in the header's padding.
+    fn brace_in_header_parens(&self) -> bool {
+        self.current
+            .active_token()
+            .is_some_and(|brace| self.token_in_header_parens(brace))
+    }
+
     /// Whether the brace being pushed opens a block right after a header's
     /// block closed, which astyle reads as more of that header; a directive
     /// or comment between the blocks ends the header.
     fn brace_continues_header_block(&self) -> bool {
         let tokens = &self.tree.tokens;
+        // Comments between them take no part; a directive does.
         let Some((brace, close)) = self.current.active_token().and_then(|brace| {
             tokens[..brace]
                 .iter()
-                .rposition(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
+                .rposition(|token| {
+                    !matches!(
+                        token,
+                        Token::Whitespace(_) | Token::Newline | Token::Comment(..)
+                    )
+                })
                 .map(|close| (brace, close))
         }) else {
             return false;
@@ -361,6 +483,24 @@ impl FormatEngine<'_> {
                 && (is_standard_break_blocks_opening_header(header)
                     || is_break_blocks_closing_header(header))
         };
+        // A comment on rows of its own between the blocks, or one the output
+        // keeps after the header's closer on its row, ends what the header
+        // carries.
+        let own_row_comment = tokens[..brace]
+            .iter()
+            .rposition(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
+            .is_some_and(|before| {
+                matches!(tokens[before], Token::Comment(..)) && token_begins_line(tokens, before)
+            });
+        if own_row_comment
+            || self.output.last_non_empty_index().is_some_and(|index| {
+                let line = &self.output[index];
+                let code = self.output.code_trimmed_of(line).trimmed();
+                code.ends_with('}') && code.len() < line.trimmed().len()
+            })
+        {
+            return false;
+        }
         // Braces added around the statement before the brace close its
         // header's block there.
         if self.comments.added_block_semicolon == Some(close) {
@@ -423,32 +563,65 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn observe_block_spacing_close_brace(&mut self, next: Option<&Token>) {
-        if !self.options.break_blocks {
+        if !self.options.break_blocks || self.brace_in_header_parens() {
             return;
         }
         // A comment or a statement kept after the brace ends its line first;
         // a header there pads as its own.
         // A closing header a block comment keeps on the brace's line still
         // takes the padding before it.
-        let comment_keeps_closing_header = matches!(next, Some(Token::Comment(CommentKind::Block, _)))
-            && self
+        let comment_keeps_closing_header =
+            matches!(next, Some(Token::Comment(CommentKind::Block, _)))
+                && self
+                    .current
+                    .active_token()
+                    .and_then(|brace| next_code_token(&self.tree.tokens, brace + 1))
+                    .and_then(|index| header_word_at(&self.tree.tokens, index))
+                    .is_some_and(is_break_blocks_closing_header);
+        let word_goes_on = |word: &str| {
+            !(is_break_blocks_closing_header(word)
+                || word == "while"
+                || is_break_blocks_opening_header(self.options, word))
+        };
+        // A block comment between the brace and an opening header or a label
+        // on its line leaves that to decide; a closing header there keeps
+        // the padding the comment gives it.
+        let word_after_comment = matches!(next, Some(Token::Comment(CommentKind::Block, _)))
+            .then(|| self.current.active_token())
+            .flatten()
+            .and_then(|brace| {
+                let tokens = &self.tree.tokens;
+                next_code_token(tokens, brace + 1)
+                    .filter(|&index| {
+                        !tokens[brace + 1..index]
+                            .iter()
+                            .any(|token| matches!(token, Token::Newline))
+                    })
+                    .and_then(|index| header_word_at(tokens, index))
+            });
+        let line_goes_on = match next {
+            Some(Token::Word(word)) => word_goes_on(word),
+            Some(Token::Symbol('@')) => self
                 .current
                 .active_token()
                 .and_then(|brace| next_code_token(&self.tree.tokens, brace + 1))
-                .is_some_and(|index| {
-                    matches!(&self.tree.tokens[index], Token::Word(word) if is_break_blocks_closing_header(word))
-                });
-        let line_goes_on = match next {
-            Some(Token::Word(word)) => {
-                !(is_break_blocks_closing_header(word)
-                    || word == "while"
-                    || is_break_blocks_opening_header(self.options, word))
-            }
-            Some(Token::Comment(..)) => true,
+                .and_then(|index| header_word_at(&self.tree.tokens, index))
+                .is_none_or(word_goes_on),
+            Some(Token::Comment(..)) => word_after_comment
+                .is_none_or(|word| !is_break_blocks_opening_header(self.options, word)),
             Some(Token::Symbol(';' | ',' | ')' | '}') | Token::Newline) | None => false,
             Some(_) => true,
         };
-        let closed_header = self.layout.nesting.last_closed_brace_header.as_deref();
+        // A lambda in the header's condition takes the header from its
+        // block; the tree names it all the same.
+        let tree_header = self.closed_control_block_header();
+        let closed_header = self
+            .layout
+            .nesting
+            .last_closed_brace_header
+            .as_deref()
+            .or(tree_header.as_deref())
+            .filter(|_| !self.closes_block_after_statement_across_directive());
         // astyle reads an assembly block as no command block.
         let closed_command_header = self.layout.nesting.last_closed_brace_type
             == Some(BraceType::Command)
@@ -492,6 +665,37 @@ impl FormatEngine<'_> {
         self.clear_block_spacing_header();
     }
 
+    /// Whether the line holds nothing before the header being pushed, and
+    /// the last code character before it: an Objective-C header's `@`
+    /// already stands on its line, after the code before it.
+    fn header_lead(&self, word: &str) -> (bool, Option<char>) {
+        if word.starts_with('@') && self.current.trimmed() == "@" {
+            let before = self
+                .current
+                .active_token()
+                .and_then(|word| self.tree.previous_code_token(word))
+                .and_then(|at| self.tree.previous_code_token(at))
+                .and_then(|index| token_text(&self.tree.tokens[index]).chars().next_back());
+            (true, before)
+        } else {
+            (
+                self.current_is_blank(),
+                self.layout.command_state.previous_command_char,
+            )
+        }
+    }
+
+    /// Whether the line being built holds only a closer and comments after
+    /// it: a header after them leads the line's code.
+    fn current_holds_closer_and_comments(&self) -> bool {
+        self.current
+            .trimmed_start()
+            .strip_prefix('}')
+            .is_some_and(|rest| {
+                !rest.trimmed().is_empty() && after_leading_comments(rest).is_empty()
+            })
+    }
+
     /// Whether the chain the header being pushed belongs to opened after a
     /// statement on its output line, which leaves the line unpadded.
     fn header_chain_follows_statement(&self) -> bool {
@@ -517,6 +721,13 @@ impl FormatEngine<'_> {
             };
             header = owner;
         }
+        // A `while` goes on with the `do` whose braceless body ends before
+        // it.
+        if matches!(&tokens[header], Token::Word(word) if word == "while")
+            && let Some(owner) = self.braceless_do_before(header)
+        {
+            header = owner;
+        }
         let Some(before) = self.tree.previous_code_token(header) else {
             return false;
         };
@@ -535,6 +746,60 @@ impl FormatEngine<'_> {
             }
     }
 
+    /// Whether the `while` being pushed closes the braced body of a `do`
+    /// before it.
+    fn while_closes_braced_do(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        let Some(header) = self
+            .current
+            .active_token()
+            .filter(|&index| matches!(&tokens[index], Token::Word(word) if word == "while"))
+        else {
+            return self.layout.nesting.last_closed_brace_header.as_deref() == Some("do")
+                && self.layout.command_state.previous_command_char == Some('}');
+        };
+        // Braces add-braces gave the body close it as the source's would.
+        let added_braces = self.braceless_do_before(header).is_some()
+            && self.layout.command_state.previous_command_char == Some('}');
+        added_braces
+            || self
+                .tree
+                .previous_code_token(header)
+                .and_then(|close| self.tree.groups.closed_at(close))
+                .and_then(|body| {
+                    self.tree
+                        .previous_code_token(self.tree.groups.get(body).open)
+                })
+                .is_some_and(|before| matches!(&tokens[before], Token::Word(word) if word == "do"))
+    }
+
+    /// The `do` whose braceless body the `while` at `index` follows.
+    fn braceless_do_before(&self, index: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let semicolon = self.tree.previous_code_token(index)?;
+        if !matches!(tokens[semicolon], Token::Symbol(';')) {
+            return None;
+        }
+        let mut cursor = semicolon;
+        while let Some(before) = self.tree.previous_code_token(cursor) {
+            if let Some(closed) = groups.closed_at(before) {
+                cursor = groups.get(closed).open;
+                continue;
+            }
+            match &tokens[before] {
+                Token::Word(word) if word == "do" => {
+                    let body = next_code_token(tokens, before + 1)?;
+                    return (self.tree.statements.braceless_header(body) == Some(before))
+                        .then_some(before);
+                }
+                Token::Symbol(';' | '{' | '}') => return None,
+                _ => cursor = before,
+            }
+        }
+        None
+    }
+
     /// Whether the `}` being pushed closes a block the source kept on one
     /// line after a header that followed a statement on its line: astyle
     /// pads no such block.
@@ -542,12 +807,12 @@ impl FormatEngine<'_> {
         let groups = &self.tree.groups;
         self.current
             .active_token()
-            .and_then(|close| groups.closed_at(close).map(|group| (group, close)))
-            .is_some_and(|(group, close)| {
+            .and_then(|close| groups.closed_at(close))
+            .is_some_and(|group| {
+                // The block stands on one row when its brace is on the line
+                // being built, wherever the source broke it.
                 let open = groups.get(group).open;
-                !self.tree.tokens[open..close]
-                    .iter()
-                    .any(|token| matches!(token, Token::Newline))
+                self.output.line_with_token(open).is_none()
                     && self
                         .tree
                         .blocks
@@ -608,7 +873,7 @@ impl FormatEngine<'_> {
                 .layout
                 .previous_pre_adjust_line
                 .as_deref()
-                .is_some_and(|previous| previous.trimmed() == "}")
+                .is_some_and(|previous| previous.trimmed_end().ends_with('}'))
         {
             self.block_spacing.prepend_blank = false;
             self.block_spacing.append_blank = false;
@@ -616,6 +881,9 @@ impl FormatEngine<'_> {
         }
         let prepend = std::mem::take(&mut self.block_spacing.prepend_blank);
         let append = std::mem::take(&mut self.block_spacing.append_blank);
+        // The comment after this line takes the blank due before it.
+        self.block_spacing.prepend_blank =
+            std::mem::take(&mut self.block_spacing.prepend_blank_after_pending);
         if !prepend && !append {
             return false;
         }
@@ -640,16 +908,13 @@ impl FormatEngine<'_> {
                 .and_then(|span| {
                     next_code_token(tokens, span.first + 1).filter(|&next| next <= span.last)
                 })
-                .and_then(|next| match &tokens[next] {
-                    Token::Word(word) => Some(word.as_str()),
-                    _ => None,
-                })
-                .unwrap_or_else(|| leading_identifier(after.trimmed_start()));
+                .and_then(|next| header_word_at(tokens, next))
+                .unwrap_or_else(|| leading_header(after.trimmed_start()));
             return self.options.break_closing_header_blocks
                 && !self.block_spacing.closed_empty_block
                 && is_break_blocks_closing_header(next);
         }
-        let first = leading_identifier(trimmed);
+        let first = leading_header(trimmed);
         // A body kept on one line with its header ends no block before its
         // closing header.
         !is_break_blocks_closing_header(first)
@@ -663,11 +928,13 @@ impl FormatEngine<'_> {
     }
 
     fn following_break_blocks_header(&self, tokens: &[Token], start: usize) -> Option<String> {
-        // Within a switch the lookahead runs past empty lines.
+        // Within a switch the lookahead runs past empty lines, as it does
+        // while a header's block just closed.
         let stop_on_blank = self.block_spacing.active_header.is_none()
-            && self.layout.line_adjuster.switch_depth() == 0;
+            && self.layout.line_adjuster.switch_depth() == 0
+            && !self.follows_header_block_close(start);
         let mut newline_run = 0usize;
-        for token in &tokens[start.min(tokens.len())..] {
+        for (index, token) in tokens.iter().enumerate().skip(start) {
             match token {
                 Token::Whitespace(_) => {}
                 Token::Newline => {
@@ -677,11 +944,30 @@ impl FormatEngine<'_> {
                     }
                 }
                 Token::Comment(_, _) => newline_run = 0,
-                Token::Word(word) => return Some(word.to_string()),
-                _ => return None,
+                _ => return header_word_at(tokens, index).map(str::to_string),
             }
         }
         None
+    }
+
+    /// Whether the code before `index` is the closer of a header's block,
+    /// with no directive between them.
+    fn follows_header_block_close(&self, index: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        self.tree
+            .previous_code_token(index)
+            .filter(|&close| {
+                matches!(tokens[close], Token::Symbol('}'))
+                    && !self.tree.has_directive_in(close..index)
+            })
+            .and_then(|close| self.tree.groups.closed_at(close))
+            .and_then(|group| self.tree.blocks.owner(group))
+            .is_some_and(|owner| {
+                matches!(&tokens[owner], Token::Word(word)
+                    if !matches!(word.as_str(), "case" | "default")
+                        && (is_break_blocks_opening_header(self.options, word)
+                            || is_break_blocks_closing_header(word)))
+            })
     }
 
     /// Whether the directive lines just output follow a comment-only
@@ -749,6 +1035,19 @@ impl FormatEngine<'_> {
     }
 }
 
+/// The header the code token at `index` names: a word, or an
+/// Objective-C keyword with the `@` before it.
+pub(crate) fn header_word_at(tokens: &[Token], index: usize) -> Option<&str> {
+    match tokens.get(index)? {
+        Token::Word(word) => Some(word),
+        Token::Symbol('@') => match tokens.get(index + 1)? {
+            Token::Word(word) => objc_statement_header(word),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 pub(crate) fn is_break_blocks_closing_header(word: &str) -> bool {
     matches!(
         word,
@@ -759,7 +1058,17 @@ pub(crate) fn is_break_blocks_closing_header(word: &str) -> bool {
 fn is_standard_break_blocks_opening_header(word: &str) -> bool {
     matches!(
         word,
-        "if" | "for" | "while" | "switch" | "do" | "try" | "__try" | "case" | "default"
+        "if" | "for"
+            | "while"
+            | "switch"
+            | "do"
+            | "try"
+            | "__try"
+            | "case"
+            | "default"
+            | "@try"
+            | "@synchronized"
+            | "@autoreleasepool"
     )
 }
 

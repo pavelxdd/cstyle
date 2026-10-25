@@ -1,8 +1,10 @@
 use crate::config::{BraceStyle, FormatOptions, Mode, ObjCColonPad};
 use crate::formatter::continuation::ContinuationIndent;
+use crate::formatter::continuation::max_length::ObjCMessageRows;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, next_non_whitespace, token_text, tokenize};
 use crate::formatter::state::frame::{BracketFrame, BracketRole};
+use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{ContainsAnyByte, after_leading_comments};
@@ -24,26 +26,14 @@ pub(crate) struct ObjCLineState {
     pub(crate) message_align: Option<usize>,
 }
 
-fn line_is_label_style_dictionary_key(line: &str) -> bool {
-    let trimmed = line.trimmed_end();
-    let Some(before) = trimmed.strip_suffix(':') else {
-        return false;
-    };
-    if !before.ends_with(char::is_whitespace) {
-        return false;
-    }
-    let key = before.trimmed_end();
-    !key.is_empty()
-        && key
-            .chars()
-            .all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
-}
-
-fn objc_message_selector_indent_spaces(
+/// The span of the message `frame` opens on `line`: the byte offsets of its
+/// bracket and of the closer the line holds, and the column and offset of
+/// its first selector.
+fn objc_message_rows(
     line: &str,
     frame: &BracketFrame,
     tab_width: usize,
-) -> Option<usize> {
+) -> Option<ObjCMessageRows> {
     let opener_column = frame
         .opener_output_column
         .saturating_sub(frame.line_indent_spaces);
@@ -51,17 +41,30 @@ fn objc_message_selector_indent_spaces(
     // The width of `line[..offset]`, kept as the tokens go by.
     let mut width = 0usize;
     let mut depth = 0usize;
-    let mut in_message = false;
+    let mut rows: Option<ObjCMessageRows> = None;
     for token in tokenize(line) {
         let text = token_text(&token);
-        match token {
-            Token::Symbol('[') if !in_message && width == opener_column => {
-                in_message = true;
+        match (&mut rows, &token) {
+            (None, Token::Symbol('[')) if width == opener_column => {
                 depth = 1;
+                rows = Some(ObjCMessageRows {
+                    open_offset: offset,
+                    close_offset: None,
+                    selector: None,
+                    selector_read: false,
+                    bracket_spaces: frame.opener_output_column + 1,
+                });
             }
-            Token::Symbol('[') if in_message => depth += 1,
-            Token::Symbol(']') if in_message => depth = depth.saturating_sub(1),
-            Token::Symbol(':') if in_message && depth == 1 => {
+            (Some(_), Token::Symbol('[')) => depth += 1,
+            (Some(rows), Token::Symbol(']')) => {
+                depth -= 1;
+                if depth == 0 {
+                    rows.close_offset = Some(offset);
+                    break;
+                }
+            }
+            (Some(rows), Token::Symbol(':')) if depth == 1 && !rows.selector_read => {
+                rows.selector_read = true;
                 let before = line[..offset].trimmed_end();
                 let selector_len = before
                     .chars()
@@ -69,25 +72,25 @@ fn objc_message_selector_indent_spaces(
                     .take_while(|ch| is_identifier_continue(*ch))
                     .map(char::len_utf8)
                     .sum::<usize>();
-                if selector_len == 0 {
-                    return None;
+                if selector_len > 0 {
+                    let selector_start = before.len() - selector_len;
+                    rows.selector = Some((
+                        frame.line_indent_spaces
+                            + visual_width_from(
+                                &line[..selector_start],
+                                frame.line_indent_spaces,
+                                tab_width,
+                            ),
+                        selector_start,
+                    ));
                 }
-                let selector_start = before.len() - selector_len;
-                return Some(
-                    frame.line_indent_spaces
-                        + visual_width_from(
-                            &line[..selector_start],
-                            frame.line_indent_spaces,
-                            tab_width,
-                        ),
-                );
             }
             _ => {}
         }
         width += visual_width_from(&text, width, tab_width);
         offset += text.len();
     }
-    None
+    rows
 }
 
 fn objc_method_colon_position(line: &str) -> Option<usize> {
@@ -219,130 +222,27 @@ impl FormatEngine<'_> {
         })
     }
 
-    pub(crate) fn objc_dictionary_indent_spaces(
-        &self,
-        line: &LineView<'_>,
-        mut current: Option<usize>,
-    ) -> Option<usize> {
-        let line_start = line.trimmed_start();
-        // Only a line holding `@` can open a dictionary literal.
-        let may_hold_dictionary = self.output.may_have_at();
-        if may_hold_dictionary
-            && line_start.starts_with("};")
-            && self.output.recent_scoped_at_brace_line(64)
-            && self
-                .output
-                .scoped()
-                .iter()
-                .rev()
-                .take(64)
-                .take_while(|line| !line.contains_from_first_byte("@interface"))
-                .any(|line| line.contains_from_first_byte("@ {"))
-        {
-            let label_style_dictionary = self
-                .output
-                .scoped()
-                .iter()
-                .rev()
-                .take(64)
-                .take_while(|line| !line.contains_from_first_byte("@ {"))
-                .any(|line| line_is_label_style_dictionary_key(line));
-            current = if label_style_dictionary {
-                self.output
-                    .scoped()
-                    .iter()
-                    .rev()
-                    .take(64)
-                    .find(|line| line.contains_from_first_byte("@ {"))
-                    .map(|opener| leading_visual_width(opener, self.options.tab_width))
-            } else {
-                self.layout
-                    .previous_pre_adjust_line
-                    .as_ref()
-                    .map(|previous| {
-                        leading_visual_width(previous, self.options.tab_width).saturating_sub(2)
-                    })
-            };
-        }
-        if may_hold_dictionary
-            && !line_start.starts_with('}')
-            && !line_is_label_style_dictionary_key(line)
-            && self
-                .output
-                .last_line_outside_comment()
-                .is_some_and(|previous| line_is_label_style_dictionary_key(previous))
-            && self.output.recent_scoped_at_brace_line(64)
-            && let Some(opener) = self
-                .output
-                .scoped()
-                .iter()
-                .rev()
-                .take(64)
-                .find(|line| line.contains_from_first_byte("@ {"))
-        {
-            current = Some(
-                leading_visual_width(opener, self.options.tab_width) + self.options.indent_width,
-            );
-        }
-        if may_hold_dictionary
-            && !line_start.starts_with('}')
-            && !line_is_label_style_dictionary_key(line)
-            && self
-                .layout
-                .previous_pre_adjust_line
-                .as_ref()
-                .is_some_and(|previous| previous.trimmed_end().ends_with(','))
-            && self.output.recent_scoped_at_brace_line(64)
-            && self
-                .output
-                .scoped()
-                .iter()
-                .rev()
-                .take(64)
-                .take_while(|line| !line.trimmed_end().ends_with("};"))
-                .any(|line| line.contains_from_first_byte("@ {"))
-        {
-            current = self
-                .layout
-                .previous_pre_adjust_line
-                .as_ref()
-                .map(|previous| leading_visual_width(previous, self.options.tab_width));
-        }
-        if line_start.starts_with("@ {")
-            && self
-                .layout
-                .previous_pre_adjust_line
-                .as_ref()
-                .is_some_and(|previous| previous.trimmed_end().ends_with('='))
-        {
-            current = self
-                .layout
-                .previous_pre_adjust_line
-                .as_ref()
-                .map(|previous| {
-                    leading_visual_width(previous, self.options.tab_width)
-                        + self.options.indent_width
-                });
-        }
-        current
-    }
-
     pub(crate) fn record_closed_objc_message_indent(
         &mut self,
         line: &LineView<'_>,
         closed_brackets: &[BracketFrame],
     ) {
-        let indent_spaces = closed_brackets
+        // The messages the line closes, and the one it leaves open.
+        let line_index = self.output.len();
+        let open = self
+            .layout
+            .frame_stack
+            .active_bracket()
+            .filter(|frame| frame.opener_output_line == line_index);
+        let messages = closed_brackets
             .iter()
-            .rev()
-            .find(|frame| {
+            .chain(open)
+            .filter(|frame| {
                 frame.role == BracketRole::ObjCMessage && frame.parent_objc_message_align.is_none()
             })
-            .and_then(|frame| {
-                objc_message_selector_indent_spaces(line, frame, self.options.tab_width)
-            });
-        self.max_length_line
-            .set_objc_message_indent_spaces(indent_spaces);
+            .filter_map(|frame| objc_message_rows(line, frame, self.options.tab_width))
+            .collect();
+        self.max_length_line.set_objc_messages(messages);
     }
 
     pub(crate) fn apply_objc_message_alignment(
@@ -678,6 +578,38 @@ impl FormatEngine<'_> {
     pub(crate) fn is_objc_method_prefix(&self, next: Option<&Token>) -> bool {
         matches!(next, Some(Token::Symbol('(')))
             && after_leading_comments(self.current.trimmed()).is_empty()
+            && self.active_token_starts_declaration()
+    }
+
+    /// Whether the token being pushed starts a declaration, as a method's
+    /// `-` or `+` does: in no group but a declaration scope's braces, and
+    /// after a statement's end or an `@` directive's line, not inside an
+    /// expression the line before continues.
+    pub(crate) fn active_token_starts_declaration(&self) -> bool {
+        let tree = &self.tree;
+        let Some(index) = self
+            .current
+            .active_token()
+            .filter(|&index| index < tree.tokens.len())
+        else {
+            return true;
+        };
+        if let Some(group) = tree.groups.enclosing(index)
+            && (tree.groups.get(group).delimiter != Delimiter::Brace
+                || !BlockKind::is_declaration_scope(tree.blocks.kind(group)))
+        {
+            return false;
+        }
+        match tree
+            .previous_code_token(index)
+            .map(|previous| &tree.tokens[previous])
+        {
+            None | Some(Token::Symbol(';' | '{' | '}')) => true,
+            Some(_) => self
+                .output
+                .last_code_line_past_comments_and_directives()
+                .is_some_and(|line| line.trimmed_start().starts_with('@')),
+        }
     }
 
     pub(crate) fn compute_objc_method_colon_align(

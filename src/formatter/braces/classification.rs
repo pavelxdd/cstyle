@@ -19,8 +19,9 @@ use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{is_word_char, trailing_word};
 
 pub(crate) fn line_opens_lambda_block(line: &str) -> bool {
-    // A lambda's head holds its capture list, a block literal's its caret.
-    if !line.contains_any_byte(b"]^") {
+    // A lambda's head holds its capture list, a block literal's its caret,
+    // and the line its body's brace.
+    if !line.contains_any_byte(b"]^") || !line.as_bytes().contains(&b'{') {
         return false;
     }
     // A comment after the brace takes no part in the head.
@@ -30,9 +31,10 @@ pub(crate) fn line_opens_lambda_block(line: &str) -> bool {
     };
     let head = head.trimmed_end();
     is_lambda_body_header(head)
-        || head
-            .rfind('[')
-            .is_some_and(|index| is_lambda_body_header(head[index..].trimmed_start()))
+        || head.rfind('[').is_some_and(|index| {
+            opens_capture_list_after(&head[..index])
+                && is_lambda_body_header(head[index..].trimmed_start())
+        })
         || current_ends_block_literal_header(head)
 }
 
@@ -160,9 +162,12 @@ pub(crate) fn line_opens_lambda_or_capture_only_block(line: &str) -> bool {
 
 fn is_namespace_block_header(line: &str) -> bool {
     let trimmed = line.trimmed();
-    trimmed == "namespace"
-        || trimmed.starts_with("namespace ")
-        || trimmed.starts_with("inline namespace ")
+    // An inline or exported namespace is a namespace all the same.
+    let trimmed = trimmed
+        .strip_prefix("inline ")
+        .or_else(|| trimmed.strip_prefix("export "))
+        .map_or(trimmed, Trimmed::trimmed_start);
+    trimmed == "namespace" || trimmed.starts_with("namespace ")
 }
 
 pub(crate) fn current_ends_block_literal_header(head: &str) -> bool {
@@ -230,8 +235,11 @@ impl FormatEngine<'_> {
             }
             _ => block_word,
         };
+        // A lambda's body brace leading its line or a row of its split
+        // head opens the body all the same.
         let lambda_header = self.current_is_lambda_body_header()
-            || is_lambda_capture_header(self.current.trimmed_end());
+            || is_lambda_capture_header(self.current.trimmed_end())
+            || self.pushed_brace_kind() == Some(BlockKind::Lambda);
         // A lambda in a block or a brace list is an expression's.
         let lambda_in_block_scope = lambda_header
             && matches!(
@@ -251,7 +259,7 @@ impl FormatEngine<'_> {
             .map(|(id, _)| id);
         let header_condition_closed = header.is_some_and(|header| {
             (language::is_non_paren_header(header)
-                || matches!(header, "autoreleasepool" | "@try" | "@finally")
+                || matches!(header, "@autoreleasepool" | "@try" | "@finally")
                 || self.layout.command_state.previous_command_char == Some(')'))
                 && self
                     .layout
@@ -315,6 +323,8 @@ impl FormatEngine<'_> {
         } else if current_namespace_header || previous_namespace_header {
             BraceType::Namespace
         } else if self.layout.command_state.previous_command_char == Some('=')
+            // An Objective-C dictionary literal, `@{ key : value }`.
+            || self.layout.command_state.previous_command_char == Some('@')
             || trailing_word(self.current.trimmed_end()) == language::RETURN
             // A brace below a line its `return` ends lists the value too.
             || self.current_is_blank()
@@ -345,7 +355,10 @@ impl FormatEngine<'_> {
             BraceType::Namespace
         } else if block_word.as_deref() == Some("class") {
             BraceType::Class
-        } else if block_word.as_deref() == Some("interface") {
+        } else if matches!(
+            block_word.as_deref(),
+            Some("interface" | "@interface" | "@implementation")
+        ) {
             BraceType::Interface
         } else if block_word.as_deref() == Some("struct") {
             BraceType::Struct
@@ -388,7 +401,10 @@ impl FormatEngine<'_> {
                 )
         {
             BraceType::Command
-        } else if self.current_ends_definition_header() {
+        } else if self.current_ends_definition_header()
+            // A head a line splice ends stands on the line before the brace.
+            || self.current_is_blank() && self.brace_opens_function_body()
+        {
             BraceType::Definition
         } else if matches!(
             self.layout.command_state.previous_command_char,
@@ -400,8 +416,10 @@ impl FormatEngine<'_> {
             && unmatched_open_paren_column(self.current.trimmed_end()).is_some()
         {
             BraceType::NonStatement
-        } else if self.layout.nesting.brace_type_stack.is_empty()
-            && !self.current.trimmed().is_empty()
+        } else if matches!(
+            self.layout.nesting.brace_type_stack.last(),
+            None | Some(BraceType::Namespace | BraceType::Extern)
+        ) && !self.current.trimmed().is_empty()
             && self.current.trimmed().chars().all(is_word_char)
             && self
                 .output
@@ -409,7 +427,7 @@ impl FormatEngine<'_> {
                 .is_none_or(|previous| {
                     let code = self.output.code_trimmed_of(previous);
                     code.is_empty()
-                        || code.ends_with_any(b";}")
+                        || code.ends_with_any(b";{}")
                         || code.trimmed_start().starts_with('#')
                 })
             && (self.token_input.token_begins_source_line
@@ -419,7 +437,7 @@ impl FormatEngine<'_> {
                     .as_deref()
                     .is_some_and(|whitespace| !whitespace.is_empty()))
         {
-            // A macro standing for a function head at file scope.
+            // A macro standing for a function head at declaration scope.
             BraceType::Definition
         } else if (self.token_input.token_begins_source_line
             || is_macro_like_word(self.current.trimmed()))
@@ -499,7 +517,8 @@ impl FormatEngine<'_> {
             || self.current.last_open_bracket().is_some_and(|index| {
                 let tail = head[index..].trimmed_start();
                 let skipped = head.len() - index - tail.len();
-                tail.as_bytes().contains(&b']')
+                opens_capture_list_after(&head[..index])
+                    && tail.as_bytes().contains(&b']')
                     && is_lambda_body_header_with_arrow(
                         tail,
                         arrow
@@ -609,6 +628,10 @@ impl FormatEngine<'_> {
     }
 
     pub(super) fn current_ends_compound_literal_type(&self) -> bool {
+        // A function's parameters cast nothing, wherever their line starts.
+        if self.pushed_brace_kind() == Some(BlockKind::FunctionBody) {
+            return false;
+        }
         if self.current_is_blank() {
             // A directive's condition casts nothing after it.
             return self.output.last().is_some_and(|last| {
@@ -677,7 +700,14 @@ pub(crate) enum ExternCGuard {
     CplusplusConditional,
     Extern,
     ExternC,
-    InsideBlock,
+    /// Inside the guarded block, opened at the block depth it holds.
+    InsideBlock(usize),
+}
+
+impl ExternCGuard {
+    pub(crate) fn inside_block(self) -> bool {
+        matches!(self, Self::InsideBlock(_))
+    }
 }
 
 pub(super) fn brace_indent_applies(brace_type: BraceType) -> bool {
@@ -755,6 +785,16 @@ impl FormatEngine<'_> {
             self.layout.nesting.brace_type_stack.last(),
             Some(BraceType::Array | BraceType::CompoundLiteral)
         )
+    }
+
+    /// Whether a brace of `brace_type` opens a compound literal among the
+    /// elements of a list.
+    pub(crate) fn opens_compound_literal_in_list(&self, brace_type: BraceType) -> bool {
+        brace_type == BraceType::CompoundLiteral
+            && matches!(
+                self.layout.nesting.brace_type_stack.last(),
+                Some(BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral)
+            )
     }
 
     pub(crate) fn enclosed_in_compound_literal(&self) -> bool {
@@ -847,8 +887,32 @@ pub(super) fn line_ends_lambda_parameter_list(line: &str) -> bool {
     current[..open_pos].trimmed_end().ends_with(']')
 }
 
+/// The code before the `requires` that starts a clause outside any group
+/// at the end of `code`.
+fn before_trailing_requires_clause(code: &str) -> Option<&str> {
+    let mut end = code.len();
+    while let Some(start) = code[..end].rfind("requires") {
+        let before = &code[..start];
+        let after = &code[start + "requires".len()..];
+        if !before.ends_with(is_word_char)
+            && !after.starts_with(is_word_char)
+            && before.matches('(').count() == before.matches(')').count()
+        {
+            return Some(before);
+        }
+        end = start;
+    }
+    None
+}
+
 pub(crate) fn code_ends_definition_header(source: &str) -> bool {
-    let mut rest = source.trimmed_end();
+    let code = source.trimmed_end();
+    // A trailing requires clause constrains the declarator before it.
+    ends_declarator(code) || before_trailing_requires_clause(code).is_some_and(ends_declarator)
+}
+
+fn ends_declarator(code: &str) -> bool {
+    let mut rest = code.trimmed_end();
     loop {
         if rest.ends_with(')') {
             return true;

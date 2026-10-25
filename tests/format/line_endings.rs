@@ -88,3 +88,36 @@ fn form_feed_line_is_preserved_under_options_none() {
         source,
     );
 }
+
+#[test]
+fn an_8_bit_source_measures_a_byte_past_ascii_as_its_utf8_width() {
+    // An 8-bit source is read as Latin-1, and columns count the UTF-8
+    // width of the text read: two for each byte past ASCII.
+    let source = b"void f(void)\n{\n    call(first_value, \"\xe9\xe9\xe9\xe9\xe9\xe9\xe9\xe9\xe9\xe9\xe9\xe9\", second_value);\n}\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--max-code-length=50".to_owned()])
+        .expect("valid options");
+    assert_eq!(
+        format_bytes(source, &options).expect("format bytes"),
+        b"void f(void)\n{\n    call(first_value, \"\xe9\xe9\xe9\xe9\xe9\xe9\xe9\xe9\xe9\xe9\xe9\xe9\",\n         second_value);\n}\n",
+    );
+}
+
+#[test]
+fn blanks_outside_ascii_stay_as_text() {
+    // Only ASCII blanks part C tokens; any other blank is text the
+    // formatter keeps, in UTF-8 and in 8-bit sources alike, and text after
+    // a statement on its line starts one of its own.
+    let source = "void f(void)\n{\n    x = 1;\u{a0}\n    \u{a0}y = 2;\n    w = 3;\u{3000}\n}\n";
+    let expected =
+        "void f(void)\n{\n    x = 1;\n    \u{a0}\n    \u{a0}y = 2;\n    w = 3;\n    \u{3000}\n}\n";
+    assert_eq!(
+        format_bytes(source.as_bytes(), &FormatOptions::default()).expect("format bytes"),
+        expected.as_bytes(),
+    );
+    let source = b"void f(void)\n{\n    x = 1;\xa0\n    \xa0y = 2;\n    z = \x85;\n}\n";
+    assert_eq!(
+        format_bytes(source, &FormatOptions::default()).expect("format bytes"),
+        b"void f(void)\n{\n    x = 1;\n    \xa0\n    \xa0y = 2;\n    z = \x85;\n}\n",
+    );
+}

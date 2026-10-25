@@ -112,9 +112,6 @@ impl FormatEngine<'_> {
             return;
         }
         let spaces = self
-            .return_ternary_colon_after_multiline_template_declaration_indent_spaces(line)
-            .map_or(spaces, |target| spaces.max(target));
-        let spaces = self
             .ternary_operator_tail_indent_spaces(line)
             .unwrap_or(spaces);
         let spaces = self
@@ -283,6 +280,14 @@ impl FormatEngine<'_> {
         format!("{prefix}{}", line.trim_start_matches([' ', '\t']))
     }
 
+    /// Publishes a line as written, which no layout step moves.
+    pub(super) fn publish_verbatim_line(&mut self, line: String) {
+        self.layout.previous_pre_adjust_line = Some(line.clone());
+        let hints = self.output.line_hints(line.trimmed_start());
+        self.published_line_shift = 0;
+        self.output.push_with_hints(line, hints);
+    }
+
     pub(super) fn publish_unadjusted_line(&mut self, line: String) {
         self.layout.previous_pre_adjust_line = Some(line.clone());
         self.publish_ready_line(line);
@@ -298,10 +303,6 @@ impl FormatEngine<'_> {
             None => self.align_isolated_closing_brace_line(&view),
         };
         let view = closing.as_deref().map_or(view, LineView::new);
-        let header = self
-            .ready_non_paren_header_indent_spaces(&view)
-            .map(|spaces| reindented(spaces, &view));
-        let view = header.as_deref().map_or(view, LineView::new);
         let embedded = self
             .ready_embedded_preprocessor_return_indent_spaces(&view)
             .map(|spaces| reindented(spaces, &view));
@@ -315,30 +316,18 @@ impl FormatEngine<'_> {
         } else {
             self.ternary_operator_tail_indent_spaces(&view)
                 .or_else(|| self.assignment_rhs_indent_spaces(&view))
-                .or_else(|| self.trailing_return_function_parameter_tail_indent_spaces(&view))
         };
         let tail = spaces
             .filter(|&spaces| leading_visual_width(&view, self.options.tab_width) != spaces)
             .map(|spaces| reindented(spaces, &view));
         let view = tail.as_deref().map_or(view, LineView::new);
-        let split = self.postprocess_ready_operator_chain_line(output_line_index, &view);
+        self.observe_ready_ternary_colon_line(output_line_index, &view);
         drop(view);
-        self.published_line_shift = 0;
-        if let Some((colon, tail)) = split {
-            self.output.push(colon);
-            self.output.push(tail);
-        } else {
-            let laid_out = leading_visual_width(&line, self.options.tab_width);
-            let line = tail
-                .or(embedded)
-                .or(header)
-                .or(closing)
-                .or(normalized)
-                .unwrap_or(line);
-            self.published_line_shift =
-                leading_visual_width(&line, self.options.tab_width) as isize - laid_out as isize;
-            self.output.push_with_hints(line, output_line_hints);
-        }
+        let laid_out = leading_visual_width(&line, self.options.tab_width);
+        let line = tail.or(embedded).or(closing).or(normalized).unwrap_or(line);
+        self.published_line_shift =
+            leading_visual_width(&line, self.options.tab_width) as isize - laid_out as isize;
+        self.output.push_with_hints(line, output_line_hints);
     }
 
     pub(super) fn deferred_post_emission_layout(

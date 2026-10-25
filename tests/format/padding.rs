@@ -114,6 +114,77 @@ fn pad_operators_keeps_multiplication_padded_after_macro_call() {
     assert_eq!(format_exact(source, &kr_c_options()), source);
 }
 
+// A header that takes no condition has no paren to pad: a paren after it
+// belongs to a name or an expression.
+#[test]
+fn pad_header_leaves_parens_after_headers_without_a_condition() {
+    let source = fixture!(
+        "void f()",
+        "{",
+        "    try(x);",
+        "    value = try(x);",
+        "    do(x);",
+        "    else(x);",
+        "    __try(x);",
+        "    __finally(x);",
+        "    default(x);",
+        "    catch(x);",
+        "}",
+    );
+    let expected = fixture!(
+        "void f()",
+        "{",
+        "    try(x);",
+        "    value = try(x);",
+        "    do(x);",
+        "    else(x);",
+        "    __try(x);",
+        "    __finally(x);",
+        "    default(x);",
+        "    catch (x);",
+        "}",
+    );
+    let options = options_from_args(&["--pad-header"]);
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+    // Nor does a paren after `try` hold a body to break off: it calls.
+    let calls = fixture!(
+        "local int try(char *hex, int err)",
+        "{",
+        "    return 0;",
+        "}",
+        "void f()",
+        "{",
+        "    try(\"a\", 1);",
+        "    value = try(\"a\", 1);",
+        "}",
+    );
+    let options = options_from_args(&["--mode=c", "--pad-header", "--break-one-line-headers"]);
+    assert_eq!(format_exact(calls, &options), calls);
+}
+
+// A number ending in a dot owns the dot, so the star after it multiplies;
+// only a dot after an operand forms the member-pointer operator.
+#[test]
+fn pad_operators_pads_multiplication_after_a_number_ending_in_a_dot() {
+    let source = fixture!(
+        "void helper(void)",
+        "{",
+        "    value = 2.*scale + 1.*other;",
+        "    value = item.*member;",
+        "}",
+    );
+    let expected = fixture!(
+        "void helper(void)",
+        "{",
+        "    value = 2. * scale + 1. * other;",
+        "    value = item.*member;",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &one_true_brace_c_options()), expected);
+}
+
 #[test]
 fn pad_operators_distinguishes_unary_minus_from_alignof_subtraction() {
     let source = fixture!(
@@ -956,7 +1027,8 @@ fn pad_operators_spaces_address_of_after_cast_in_initializer_braces() {
     assert_eq!(
         actual,
         fixture!(
-            "struct Config s = {",
+            "struct Config s =",
+            "{",
             "    .alpha = (uintptr_t) &value,",
             "    .beta = (uintptr_t) &other,",
             "};",
@@ -1426,6 +1498,10 @@ fn pad_operators_keeps_sizeof_pointer_operand_unary() {
     );
 }
 
+// A star after a parenthesized name may follow a cast and stays as written
+// in a call's arguments; after parentheses holding an expression it
+// multiplies, on the call's row or a row after it, with or without an
+// assignment.
 #[test]
 fn pad_operators_keeps_sizeof_attached_in_standalone_call_argument_continuations() {
     let mut options = FormatOptions::default();
@@ -1436,7 +1512,10 @@ fn pad_operators_keeps_sizeof_attached_in_standalone_call_argument_continuations
         fixture!(
             "void f(){",
             "copy(target,",
+            "     (count)*sizeof(item_t *));",
+            "copy(target,",
             "     (count - before)*sizeof(item_t *));",
+            "copy(target, (count - before)*sizeof(item_t *));",
             "buffer = allocate(pool,",
             "                  (count - before)*sizeof(item_t *));",
             "}",
@@ -1450,7 +1529,10 @@ fn pad_operators_keeps_sizeof_attached_in_standalone_call_argument_continuations
             "void f()",
             "{",
             "    copy(target,",
-            "         (count - before)*sizeof(item_t *));",
+            "         (count)*sizeof(item_t *));",
+            "    copy(target,",
+            "         (count - before) * sizeof(item_t *));",
+            "    copy(target, (count - before) * sizeof(item_t *));",
             "    buffer = allocate(pool,",
             "                      (count - before) * sizeof(item_t *));",
             "}",
@@ -2524,6 +2606,10 @@ fn pad_oper_keeps_multiply_after_sizeof_pointer_padded() {
         "\nvoid f(char **argv, int count)\n{\n    copy(argv, sizeof(char *) * count);\n}\n";
 
     assert_eq!(format_exact(source, &options), source);
+    // The size of a pointer type multiplies as the size of any type does.
+    let unpadded = "\nvoid f(char **argv, int count)\n{\n    copy(argv, sizeof(char *)*count, sizeof(char)*count);\n}\n";
+    let padded = "\nvoid f(char **argv, int count)\n{\n    copy(argv, sizeof(char *) * count, sizeof(char) * count);\n}\n";
+    assert_eq!(format_exact(unpadded, &options), padded);
 }
 
 #[test]

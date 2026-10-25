@@ -10,15 +10,22 @@ use super::astyle_stack::literal_closed;
 use crate::config::BraceStyle;
 use crate::formatter::constructs::headers::starts_header_word;
 use crate::formatter::constructs::labels;
-use crate::formatter::continuation::min_conditional_indent_spaces;
+use crate::formatter::continuation::{
+    min_conditional_indent_spaces, splits_aggregate_declaration_name,
+};
 use crate::formatter::engine::FormatEngine;
+use crate::formatter::index_hash::IndexMap;
 use crate::formatter::lexer::{CommentKind, Token, token_text};
 use crate::formatter::output::model::LineLayout;
 use crate::formatter::state::BraceType;
 use crate::formatter::state::indentation::LineKind;
-use crate::formatter::structure::blocks::{BlockKind, is_code_token, next_code_token};
+use crate::formatter::structure::blocks::{
+    BlockKind, closes_before_paren, is_code_token, next_code_token,
+};
 use crate::formatter::structure::groups::{Delimiter, GroupId};
-use crate::formatter::syntax::language::{is_header, is_macro_like_word};
+use crate::formatter::syntax::language::{
+    is_assignment_operator, is_header, is_macro_like_word, is_non_type_keyword,
+};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     ContainsAnyByte, after_leading_comments, has_unmatched_open_brace, preprocessor_directive,
@@ -30,6 +37,10 @@ use crate::formatter::text::trim::Trimmed;
 /// tokens' address, the operator, its group, and the farthest `=` found, or
 /// `None` when the look gave up.
 pub(crate) type OperandAssignLook = (usize, usize, GroupId, Option<Option<usize>>);
+
+/// A walk back over adjacent literals: the literal it set out from, the
+/// group holding them, and the `=` it found.
+pub(crate) type StringAssignWalk = (usize, Option<GroupId>, Option<usize>);
 
 /// The output line a token column walk read: the tokens' address, the
 /// line, the output version, and the line text's address and length.
@@ -50,6 +61,19 @@ pub(crate) struct TokenColumnWalk {
     start: usize,
     end: usize,
     column: usize,
+}
+
+/// The last head found for a chain of `else if`: the token the walk set
+/// out from, the line holding it, the output version then, what the walk
+/// found, and whether it passed an `else` after a block other than its
+/// `if`'s body.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ElseChainHead {
+    from: usize,
+    from_line: usize,
+    version: u64,
+    head: Option<usize>,
+    dangling: bool,
 }
 
 /// What a block's body takes its column from on the output.
@@ -83,6 +107,16 @@ pub(crate) struct MemberDeclaratorLook {
     colon: bool,
 }
 
+/// A row standing at its statement past a lambda body: the tokens'
+/// address, the row's first token and its group, and its indent.
+#[derive(Clone, Copy)]
+pub(crate) struct LambdaOperandRow {
+    address: usize,
+    first: usize,
+    group: Option<GroupId>,
+    spaces: usize,
+}
+
 impl FormatEngine<'_> {
     /// The indent the syntax tree anchors the line starting at `first` to.
     pub(crate) fn tree_anchor_indent(&self, first: usize, line: &str) -> Option<usize> {
@@ -90,7 +124,7 @@ impl FormatEngine<'_> {
         // before it; each runs only where that token is.
         let tokens = &self.tree.tokens;
         let token = &tokens[first];
-        let previous_index = self.tree.previous_code_token(first);
+        let previous_index = self.tree.previous_code_token_in_first_branches(first);
         let previous = previous_index.map(|index| &tokens[index]);
         // Others read the group around the line's start.
         let group = self.tree.groups.enclosing(first);
@@ -98,9 +132,13 @@ impl FormatEngine<'_> {
         let in_parens = delimiter == Some(Delimiter::Paren);
         let in_initializer =
             group.is_some_and(|group| self.tree.blocks.kind(group) == Some(BlockKind::Initializer));
-        // astyle's stack holds nothing for a line that starts a statement.
+        // astyle's stack holds nothing for a line that starts a statement,
+        // and drops what it held for one that opens a lambda's body.
         let continues_stack =
             previous_index.is_some_and(|before| !self.ends_stack_statement(before));
+        if continues_stack && self.pending_line_opens_lambda() {
+            return None;
+        }
         // Rules for a statement's place in its block read statements only.
         let starts_statement = self.tree.statements.starts_block_statement(first);
         let is_word =
@@ -126,9 +164,16 @@ impl FormatEngine<'_> {
         fn when(applies: bool, rule: impl FnOnce() -> Option<usize>) -> Option<usize> {
             if applies { rule() } else { None }
         }
-        when(closes_brace || is_word(token, "else"), || {
-            self.else_matching_if_indent(first)
+        when(self.template_continuation_active(), || {
+            self.template_head_row_indent(first)
         })
+        .or_else(|| {
+            when(closes_brace || is_word(token, "else"), || {
+                self.else_matching_if_indent(first)
+            })
+        })
+        .or_else(|| when(brace, || self.list_brace_in_continuation_row_indent(first)))
+        .or_else(|| when(brace, || self.list_argument_row_indent(first)))
         .or_else(|| when(in_parens, || self.literal_argument_indent(first)))
         .or_else(|| when(in_parens, || self.row_around_kept_lambda_body_indent(first)))
         .or_else(|| {
@@ -140,6 +185,12 @@ impl FormatEngine<'_> {
             when(!in_parens && after_comma, || {
                 self.initializer_after_lambda_initializer_indent(first)
             })
+        })
+        .or_else(|| {
+            when(
+                !brace && matches!(previous, Some(Token::Operator(_))),
+                || self.operand_after_lambda_body_indent(first),
+            )
         })
         .or_else(|| self.braceless_body_indent(first))
         .or_else(|| {
@@ -196,6 +247,7 @@ impl FormatEngine<'_> {
         })
         .or_else(|| when(string, || self.string_concatenation_indent(first)))
         .or_else(|| when(in_parens, || self.stacked_argument_indent(first)))
+        .or_else(|| when(in_parens, || self.lambda_head_argument_indent(first)))
         .or_else(|| {
             when(delimiter == Some(Delimiter::Bracket), || {
                 self.stacked_bracket_row_indent(first)
@@ -248,9 +300,10 @@ impl FormatEngine<'_> {
             )
         })
         .or_else(|| {
-            when(matches!(previous, Some(Token::Operator(_))), || {
-                self.assigned_operand_indent(first)
-            })
+            when(
+                parens_align && matches!(previous, Some(Token::Operator(_))),
+                || self.assigned_operand_indent(first),
+            )
         })
         .or_else(|| {
             when(parens_align && leads_operator, || {
@@ -437,6 +490,27 @@ impl FormatEngine<'_> {
                 when(parens_align, || self.parameter_line_indent(first, previous))
             })
         })
+    }
+
+    /// A code row among template arguments stands at the column their
+    /// statement's stack holds, which rows split before it moved with them,
+    /// or else at `spaces`, the column the engine gave it.
+    pub(crate) fn apply_template_argument_row_layout(
+        &self,
+        line: &LineView<'_>,
+        mut layout: LineLayout,
+        spaces: usize,
+    ) -> LineLayout {
+        if layout.line_kind == LineKind::Normal
+            && let Some(first) = self.output.pending_tokens().map(|span| span.first)
+            && line
+                .trimmed_start()
+                .starts_with(&*token_text(&self.tree.tokens[first]))
+        {
+            layout.exact_indent_spaces =
+                Some(self.template_argument_row_indent(first).unwrap_or(spaces));
+        }
+        layout
     }
 
     pub(crate) fn apply_tree_anchor_layout(
@@ -801,7 +875,7 @@ impl FormatEngine<'_> {
                 .get(group)
                 .parent
                 .is_some_and(|parent| self.tree.blocks.kind(parent) == Some(BlockKind::Initializer))
-            && self.opens_initializer_element(comma)
+            && self.opens_initializer_element(comma, !indented_braces)
             && let Some((lead, levels, _)) = self.brace_ending_row_levels(comma)
         {
             let line = self.output.line_with_token(comma)?;
@@ -813,6 +887,10 @@ impl FormatEngine<'_> {
             } else {
                 lead
             };
+            // Those styles set a row the brace of an element leads a level
+            // past the values, as a brace line apart.
+            let levels = levels
+                + usize::from(indented_braces && matches!(tokens[first], Token::Symbol('{')));
             return Some(lead + levels * self.options.indent_width + self.case_unindent_spaces());
         }
         // A row after the first one a nested list runs into its brace
@@ -986,7 +1064,7 @@ impl FormatEngine<'_> {
             // At file scope only: within a block the rows already stand at
             // the indented brace.
             let file_scope_vtk = self.options.brace_style == BraceStyle::Vtk
-                && groups.get(group).parent.is_none()
+                && self.vtk_flush_scope(group)
                 && self.vtk_array_outer(group).is_some();
             let vtk_levels = |brace_alone: bool| {
                 usize::from(file_scope_vtk && brace_alone) * self.options.indent_width
@@ -1204,7 +1282,8 @@ impl FormatEngine<'_> {
             }
             _ => (groups.enclosing(first)?, false),
         };
-        if !is_aggregate(group) {
+        // A list in a control header's parens continues the header.
+        if !is_aggregate(group) || self.token_in_header_parens(groups.get(group).open) {
             return None;
         }
         let open = groups.get(group).open;
@@ -1248,9 +1327,7 @@ impl FormatEngine<'_> {
     /// Whether VTK keeps the outer braces `outer` of `group` in column one
     /// at file scope.
     fn vtk_flush_outer(&self, group: GroupId, outer: GroupId) -> bool {
-        self.options.brace_style == BraceStyle::Vtk
-            && group == outer
-            && !self.in_code(self.tree.groups.get(group).open)
+        self.options.brace_style == BraceStyle::Vtk && group == outer && self.vtk_flush_scope(group)
     }
 
     /// Whether the row at `first`, an element of `group` in an array laid
@@ -1421,10 +1498,12 @@ impl FormatEngine<'_> {
             self.tree.blocks.kind(group),
             Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
         ) || literal_in_parens
-            || groups
-                .get(group)
-                .parent
-                .is_some_and(|parent| self.tree.blocks.kind(parent) == Some(BlockKind::Initializer))
+            || groups.get(group).parent.is_some_and(|parent| {
+                matches!(
+                    self.tree.blocks.kind(parent),
+                    Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                )
+            })
             || (self.options.brace_style == BraceStyle::Vtk
                 && (!self.in_code(open)
                     // VTK sets a typed brace initializer's rows as a
@@ -1487,7 +1566,7 @@ impl FormatEngine<'_> {
         let open = groups.get(group).open;
         let previous = self.tree.previous_code_token(first)?;
         if self.tree.blocks.kind(group) != Some(BlockKind::Initializer)
-            || groups.get(group).parent.is_some()
+            || !self.vtk_flush_scope(group)
             || self.in_code(open)
             || self.vtk_array_outer(group).is_some()
             || !(previous == open
@@ -1549,6 +1628,23 @@ impl FormatEngine<'_> {
             start = before;
         }
         Some(outer)
+    }
+
+    /// Whether VTK sets the rows of the element brace at `open` a level past
+    /// it, as in an array it lays out unlike blocks.
+    pub(crate) fn vtk_element_rows_past_brace(&self, open: usize) -> bool {
+        let groups = &self.tree.groups;
+        let is_aggregate = |id: GroupId| {
+            matches!(
+                self.tree.blocks.kind(id),
+                Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+            )
+        };
+        groups.opened_at(open).is_some_and(is_aggregate)
+            && groups
+                .enclosing(open)
+                .filter(|&list| is_aggregate(list))
+                .is_some_and(|list| self.vtk_block_like_outer(list).is_none())
     }
 
     /// The outermost initializer around `group` that VTK lays out like
@@ -1680,8 +1776,10 @@ impl FormatEngine<'_> {
         let open = groups.get(group).open;
         self.tree
             .previous_code_token(open)
-            .is_some_and(|before| match tokens[before] {
+            .is_some_and(|before| match &tokens[before] {
                 Token::Symbol('{') => true,
+                // A designator's value list is an element's.
+                Token::Operator(operator) => operator == "=",
                 Token::Symbol(',') => {
                     self.tree
                         .previous_code_token(before)
@@ -1745,7 +1843,7 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        if !at_elements && !self.opens_initializer_element(open) {
+        if !at_elements && !self.opens_initializer_element(open, true) {
             return None;
         }
         let (lead, levels, leading_closers) = self.brace_row_levels_through(open)?;
@@ -1781,11 +1879,27 @@ impl FormatEngine<'_> {
     }
 
     /// Whether the `{` at `open` opens an element of the list around it,
-    /// after its `{` or a `,`.
-    fn opens_initializer_element(&self, open: usize) -> bool {
-        self.tree
-            .previous_code_token(open)
-            .is_some_and(|before| matches!(self.tree.tokens[before], Token::Symbol('{' | ',')))
+    /// after its `{`, a `,` or a designator's `=`, a compound literal's
+    /// cast between when `through_cast`.
+    fn opens_initializer_element(&self, open: usize, through_cast: bool) -> bool {
+        let groups = &self.tree.groups;
+        let before = self.tree.previous_code_token(open).map(|before| {
+            groups
+                .closed_at(before)
+                .filter(|&cast| through_cast && groups.get(cast).delimiter == Delimiter::Paren)
+                .and_then(|cast| self.tree.previous_code_token(groups.get(cast).open))
+                .unwrap_or(before)
+        });
+        before.is_some_and(|before| {
+            matches!(self.tree.tokens[before], Token::Symbol('{' | ','))
+                || matches!(&self.tree.tokens[before], Token::Operator(operator) if operator == "=")
+                    && groups.enclosing(before).is_some_and(|group| {
+                        matches!(
+                            self.tree.blocks.kind(group),
+                            Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                        )
+                    })
+        })
     }
 
     /// For a `{` at `open` that ends a row it does not start: the row's
@@ -1813,12 +1927,34 @@ impl FormatEngine<'_> {
             self.options.brace_style,
             BraceStyle::Horstmann | BraceStyle::Pico
         );
+        // A list whose brace leads the line, or runs into a nested brace or
+        // ends it, sets each brace the line leaves open a level past the
+        // one before, whatever rows follow.
+        let leveled_line = || {
+            let mut opened = Vec::new();
+            for (index, token) in tokens.iter().enumerate().take(open).skip(span.first) {
+                match token {
+                    Token::Symbol('{') => opened.push(index),
+                    Token::Symbol('}') => {
+                        opened.pop();
+                    }
+                    _ => {}
+                }
+            }
+            opened.first().is_some_and(|&outer| {
+                outer == span.first
+                    || next_code_token(tokens, outer + 1).is_none_or(|next| {
+                        matches!(tokens[next], Token::Symbol('{') | Token::Newline)
+                    })
+            })
+        };
         if span.first == open
             || !tokens[open + 1..=span.last.max(open)]
                 .iter()
                 .filter(|&token| is_code_token(token))
                 .take_while(|token| !run_in_row || matches!(token, Token::Symbol('{')))
                 .all(|token| matches!(token, Token::Symbol('{')))
+                && !leveled_line()
         {
             return None;
         }
@@ -1843,7 +1979,22 @@ impl FormatEngine<'_> {
         let lead = if comment_led {
             lead.saturating_sub(leading_closers * self.options.indent_width)
         } else {
-            lead
+            // The braces a declarator after its struct type's line leaves
+            // open count from the statement, as on the type's line.
+            let mut opened = Vec::new();
+            for (index, token) in tokens.iter().enumerate().take(open + 1).skip(span.first) {
+                match token {
+                    Token::Symbol('{') => opened.push(index),
+                    Token::Symbol('}') => {
+                        opened.pop();
+                    }
+                    _ => {}
+                }
+            }
+            opened
+                .first()
+                .and_then(|&outer| self.struct_declaration_statement_lead(outer))
+                .map_or(lead, |statement| statement.min(lead))
         };
         Some((lead, levels.max(0) as usize, leading_closers))
     }
@@ -1893,12 +2044,15 @@ impl FormatEngine<'_> {
         let line = self.output.line_with_token(open)?;
         // A brace attached to the line before after layout closes its way;
         // one a comment leads closes at the line all the same. Ratliff sets
-        // the closer of a statement's list a level in.
+        // the closer of a statement's list a level in, not that of a list
+        // among the parens of another list.
         let outermost = self.tree.groups.get(group).parent.is_none_or(|parent| {
-            !matches!(
-                self.tree.blocks.kind(parent),
-                Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
-            )
+            !self.tree.groups.ancestors(parent).any(|ancestor| {
+                matches!(
+                    self.tree.blocks.kind(ancestor),
+                    Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                )
+            })
         });
         let closer_indent =
             usize::from(self.options.brace_style == BraceStyle::Ratliff && outermost)
@@ -1925,7 +2079,8 @@ impl FormatEngine<'_> {
                 if operator.ends_with('=')
                     && !matches!(operator.as_str(), "==" | "!=" | "<=" | ">="))
         };
-        if matches!(tokens[first], Token::Symbol('{' | '}')) {
+        // A lambda opening its body on the line stands at the statement.
+        if matches!(tokens[first], Token::Symbol('{' | '}')) || self.pending_line_opens_lambda() {
             return None;
         }
         let last = self.tree.previous_code_token(first)?;
@@ -1948,7 +2103,13 @@ impl FormatEngine<'_> {
         }
         let line = self.output.line_with_token(last)?;
         let mut start = next_code_token(tokens, self.output.line_tokens(line)?.first)?;
-        // The statement may run in after its headers.
+        // The statement may run in after its headers, or after a header's
+        // condition the line goes on with.
+        if let Some(close) = self.condition_closing_on_row(start, last, &|index| {
+            self.output.line_with_token(index) == Some(line)
+        }) {
+            start = next_code_token(tokens, close + 1)?;
+        }
         while matches!(&tokens[start], Token::Word(word) if matches!(word.as_str(), "if" | "while" | "for"))
             && let Some(open) = next_code_token(tokens, start + 1)
             && matches!(tokens[open], Token::Symbol('('))
@@ -1979,12 +2140,16 @@ impl FormatEngine<'_> {
         }
         let lead = self.output.lead_width(line, self.options.tab_width);
         let max = self.options.max_continuation_indent;
+        // A statement run in after its headers continues from their body.
+        let body = self.run_in_header_levels(start) * self.options.indent_width;
         let mut stack: Vec<usize> = Vec::new();
         let mut index = start;
         loop {
             match &tokens[index] {
+                // An operator function's name assigns nothing.
                 Token::Word(word)
                     if word == "return"
+                        || word == "operator"
                         || word == "template" && next_code_token(tokens, index + 1).is_some_and(|next| matches!(&tokens[next], Token::Operator(operator) if operator.starts_with('<')))
                         || is_header(word) =>
                 {
@@ -1998,11 +2163,11 @@ impl FormatEngine<'_> {
                 }
                 _ if is_assignment(index) => {
                     let indent = if index == last || self.options.indent_after_parens {
-                        let previous = stack.last().copied().unwrap_or(0);
+                        let previous = stack.last().copied().unwrap_or(body);
                         let indent =
                             self.options.continuation_indent * self.options.indent_width + previous;
                         if indent > max {
-                            2 * self.options.indent_width
+                            body + 2 * self.options.indent_width
                         } else {
                             indent
                         }
@@ -2015,7 +2180,7 @@ impl FormatEngine<'_> {
                         }
                         let mut indent = self.token_column(value)?.checked_sub(lead)?;
                         if indent > max {
-                            indent = 2 * self.options.indent_width;
+                            indent = body + 2 * self.options.indent_width;
                         }
                         indent.max(stack.last().copied().unwrap_or(0))
                     };
@@ -2042,12 +2207,7 @@ impl FormatEngine<'_> {
             }
         }
         let top = stack.last().copied()?;
-        // A statement run in after its header continues a level in.
-        Some(
-            lead + top
-                + self.run_in_header_levels(start) * self.options.indent_width
-                + self.case_unindent_spaces(),
-        )
+        Some(lead + top + self.case_unindent_spaces())
     }
 
     /// The first statement of a case starting a line after its label's
@@ -2319,7 +2479,20 @@ impl FormatEngine<'_> {
         if self.output.line_with_token(element) != Some(line) {
             return None;
         }
-        Some(self.token_column(element)? + self.case_unindent_spaces())
+        // An `=` in the element continues it from the value after it.
+        let separator = (open..first).rev().find(|&index| {
+            index == open
+                || matches!(tokens[index], Token::Symbol(','))
+                    && groups.enclosing(index) == Some(group)
+        })?;
+        let value = (separator + 1..first)
+            .find(|&index| {
+                matches!(&tokens[index], Token::Operator(operator) if operator == "=")
+                    && groups.enclosing(index) == Some(group)
+            })
+            .and_then(|assign| next_code_token(tokens, assign + 1))
+            .filter(|&value| value < first);
+        Some(self.token_column(value.unwrap_or(element))? + self.case_unindent_spaces())
     }
 
     /// A comma starting its line in an initializer stands at the line where
@@ -2494,6 +2667,24 @@ impl FormatEngine<'_> {
                 .closed_at(before)
                 .map_or(before, |group| groups.get(group).open);
         }
+        // A comma in a template's parameters or arguments parts no
+        // declarators.
+        let mut angles = 0usize;
+        for index in start..comma {
+            match &tokens[index] {
+                Token::Operator(operator) if operator == "<" && self.template_opener_at(index) => {
+                    angles += 1;
+                }
+                Token::Operator(operator) if operator == ">" => angles = angles.saturating_sub(1),
+                Token::Operator(operator) if operator == ">>" => {
+                    angles = angles.saturating_sub(2);
+                }
+                _ => {}
+            }
+        }
+        if angles > 0 {
+            return None;
+        }
         // Whether a `:` of the body stands before the `,`, read on from the
         // last look that started where this one does.
         let body_colon = |from: usize, to: usize| {
@@ -2620,7 +2811,8 @@ impl FormatEngine<'_> {
         let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
         let body = groups.enclosing(first)?;
-        let semicolon = self.tree.previous_code_token(first)?;
+        // The member the first branch of a conditional ends goes on after it.
+        let semicolon = self.tree.previous_code_token_in_first_branches(first)?;
         if self.tree.blocks.kind(body) != Some(BlockKind::Aggregate)
             || !matches!(tokens[semicolon], Token::Symbol(';'))
             || groups.enclosing(semicolon) != Some(body)
@@ -2653,7 +2845,7 @@ impl FormatEngine<'_> {
         }
         let open = groups.get(body).open;
         let mut member = semicolon;
-        while let Some(before) = self.tree.previous_code_token(member) {
+        while let Some(before) = self.tree.previous_code_token_in_first_branches(member) {
             // An access label before the member ends it as a `;` does.
             let access_label_colon = matches!(tokens[before], Token::Symbol(':'))
                 && self.tree.previous_code_token(before).is_some_and(|word| {
@@ -2702,8 +2894,20 @@ impl FormatEngine<'_> {
             return None;
         }
         // Rows stand at an indented brace starting its line, and at the
-        // indented closing brace of a struct body before them.
+        // indented closing brace of a struct body before them. VTK sets an
+        // element's brace by the array around it.
         let indented_brace = match &self.tree.tokens[span.first] {
+            Token::Symbol('{')
+                if self.options.brace_style == BraceStyle::Vtk
+                    && groups.enclosing(span.first).is_some_and(|list| {
+                        matches!(
+                            self.tree.blocks.kind(list),
+                            Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                        )
+                    }) =>
+            {
+                self.line_brace_stands_past_body(line)
+            }
             Token::Symbol('{') => self.should_indent_brace_line(BraceType::Initializer),
             Token::Symbol('}') => matches!(
                 self.options.brace_style,
@@ -2781,8 +2985,9 @@ impl FormatEngine<'_> {
                     }
                 })
         };
-        if !(open + 1..=pending.last)
-            .any(|index| matches!(tokens[index], Token::Symbol('{')) && kept_body(index))
+        if !self
+            .lambda_body_braces_within(open, pending.last)
+            .any(kept_body)
         {
             return None;
         }
@@ -2820,6 +3025,60 @@ impl FormatEngine<'_> {
         (self.output.line_tokens(line)?.first == head).then(|| {
             self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces()
         })
+    }
+
+    /// An operand after a row that closes a lambda body, or after an operand
+    /// standing so, stands at its statement:
+    /// astyle's continuation stack holds nothing past the body's brace.
+    #[inline(never)]
+    fn operand_after_lambda_body_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let operator = self.tree.previous_code_token(first)?;
+        let group = groups.enclosing(first);
+        if !matches!(&tokens[operator], Token::Operator(operator) if matches!(
+            operator.as_str(),
+            "+" | "-" | "*" | "/" | "%" | "|" | "&" | "^" | "<<" | ">>" | "&&" | "||"
+                | "==" | "!=" | "<" | ">" | "<=" | ">="
+        )) || groups.enclosing(operator) != group
+        {
+            return None;
+        }
+        let line = self.output.line_with_token(operator)?;
+        let span = self.output.line_tokens(line)?;
+        let address = tokens.as_ptr() as usize;
+        if let Some(row) = self.lambda_operand_cache.get()
+            && (row.address, row.first, row.group) == (address, span.first, group)
+        {
+            self.lambda_operand_cache
+                .set(Some(LambdaOperandRow { first, ..row }));
+            return Some(row.spaces);
+        }
+        let body = (span.first..=span.last.min(operator)).find_map(|index| {
+            matches!(tokens[index], Token::Symbol('}'))
+                .then(|| groups.closed_at(index))
+                .flatten()
+                .filter(|&body| self.tree.blocks.kind(body) == Some(BlockKind::Lambda))
+        })?;
+        let open = groups.get(body).open;
+        let open_line = self.output.line_with_token(open)?;
+        // Parens opened past the body register their own column; a header's
+        // condition keeps its own.
+        if group.is_some_and(|group| groups.get(group).open > open)
+            || self.token_in_header_parens(first)
+        {
+            return None;
+        }
+        let start = self.statement_start_line(open_line);
+        let spaces =
+            self.output.lead_width(start, self.options.tab_width) + self.case_unindent_spaces();
+        self.lambda_operand_cache.set(Some(LambdaOperandRow {
+            address,
+            first,
+            group,
+            spaces,
+        }));
+        Some(spaces)
     }
 
     /// A constructor's initializer after one whose lambda body closes on
@@ -3055,7 +3314,7 @@ impl FormatEngine<'_> {
     /// The first token of the declaration holding the token `from`: past
     /// parens, a struct body it defines and the initializers of declarators
     /// before, and after a label before the statement.
-    fn declaration_start(&self, from: usize) -> usize {
+    pub(super) fn declaration_start(&self, from: usize) -> usize {
         let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
         let mut start = from;
@@ -3114,7 +3373,7 @@ impl FormatEngine<'_> {
     #[inline(never)]
     /// Whether the statement at `start` runs in after the lone block brace
     /// on the line before, as Horstmann and Pico join them.
-    fn runs_in_after_block_brace(&self, start: usize) -> bool {
+    pub(super) fn runs_in_after_block_brace(&self, start: usize) -> bool {
         if !matches!(
             self.options.brace_style,
             BraceStyle::Pico | BraceStyle::Horstmann
@@ -3157,7 +3416,13 @@ impl FormatEngine<'_> {
         if let Some(group) = group
             && !matches!(
                 self.tree.blocks.kind(group),
-                Some(BlockKind::FunctionBody | BlockKind::Control | BlockKind::Block)
+                Some(
+                    BlockKind::FunctionBody
+                        | BlockKind::Control
+                        | BlockKind::Block
+                        | BlockKind::Namespace
+                        | BlockKind::ExternC
+                )
             )
         {
             return None;
@@ -3192,7 +3457,8 @@ impl FormatEngine<'_> {
         }
         self.declarator_start_cache
             .set(Some((address, comma, start)));
-        if matches!(&tokens[start], Token::Word(word) if word == "return" || is_header(word))
+        // A template head's commas part its parameters, not declarators.
+        if matches!(&tokens[start], Token::Word(word) if word == "return" || word == "template" || is_header(word))
             || self.tree.has_directive_in(start..first)
         {
             return None;
@@ -3253,26 +3519,17 @@ impl FormatEngine<'_> {
     }
 
     /// The `=` at the level of the declaration from `start` before
-    /// `line_end` whose registration holds after the line: the last one
-    /// after a `]`, which registers its value, past the first one after a
-    /// name; `None` when a parenthesis comes before any.
+    /// `line_end` whose registration holds after the line: the first one;
+    /// `None` when a parenthesis comes before any.
     fn declaration_assignment(&self, start: usize, line_end: usize) -> Option<Option<usize>> {
         let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
         let mut registering = None;
-        let mut named = false;
         let mut index = start;
         while index < line_end {
             match &tokens[index] {
                 Token::Operator(operator) if operator == "=" => {
-                    let after_bracket = self
-                        .tree
-                        .previous_code_token(index)
-                        .is_some_and(|before| matches!(tokens[before], Token::Symbol(']')));
-                    if after_bracket || !named {
-                        registering = Some(index);
-                        named |= !after_bracket;
-                    }
+                    registering.get_or_insert(index);
                 }
                 Token::Symbol('(') if registering.is_none() => return None,
                 _ => {}
@@ -3287,8 +3544,8 @@ impl FormatEngine<'_> {
     }
 
     /// The column the `=` at `assign` registers for the declarators after
-    /// it: the value after a `]`, else the name it assigns, a level past it
-    /// for a statement run in after a block brace.
+    /// it: the name it assigns, past an array's bounds, a level past it for
+    /// a statement run in after a block brace.
     fn assigned_declarator_column(&self, assign: usize, run_in: bool) -> Option<usize> {
         let tokens = &self.tree.tokens;
         // astyle drops the indent of an `=` whose value starts with `new`.
@@ -3297,13 +3554,20 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let before = self.tree.previous_code_token(assign)?;
-        let (target, run_in_extra) = match &tokens[before] {
-            Token::Symbol(']') => (next_code_token(tokens, assign + 1)?, 0),
-            Token::Word(_) => (before, usize::from(run_in) * self.options.indent_width),
-            _ => return None,
-        };
-        Some(self.token_column(target)? + run_in_extra)
+        let mut before = self.tree.previous_code_token(assign)?;
+        while matches!(tokens[before], Token::Symbol(']')) {
+            let bounds = self.tree.groups.closed_at(before)?;
+            before = self
+                .tree
+                .previous_code_token(self.tree.groups.get(bounds).open)?;
+        }
+        if !matches!(tokens[before], Token::Word(_)) {
+            return None;
+        }
+        Some(
+            self.token_column(dotted_name_start(tokens, before))?
+                + usize::from(run_in) * self.options.indent_width,
+        )
     }
 
     /// Whether the `,` at `comma` belongs to an initializer list in `group`
@@ -3472,7 +3736,7 @@ impl FormatEngine<'_> {
             return None;
         }
         // A lambda opening its body on the line stands as past any comma.
-        if self.pending_line_opens_lambda_body() {
+        if self.pending_line_opens_lambda() {
             return None;
         }
         let comment =
@@ -3600,8 +3864,11 @@ impl FormatEngine<'_> {
         {
             return None;
         }
+        // Operands stand at a value.
+        let value_column =
+            |value: usize| Some(self.token_column(value)? + self.case_unindent_spaces());
         if let Some(value) = self.returned_value_past_comments(first) {
-            return Some(self.token_column(value)? + self.case_unindent_spaces());
+            return value_column(value);
         }
         // After a keyword, the first operand's line lays out the second;
         // only operands after it anchor the next.
@@ -3621,7 +3888,7 @@ impl FormatEngine<'_> {
                     if operator.ends_with('=') && !matches!(operator.as_str(), "==" | "!=" | "<=" | ">="))
                 && groups.enclosing(before) == Some(group)
             {
-                return Some(self.token_column(start?)? + self.case_unindent_spaces());
+                return value_column(start?);
             }
             // So do those of a parenthesized returned value one space past
             // the keyword; the engine lays out the others.
@@ -3631,7 +3898,7 @@ impl FormatEngine<'_> {
                 && matches!(tokens[start], Token::Symbol('('))
                 && matches!(&tokens[before + 1], Token::Whitespace(space) if space == " ")
             {
-                return Some(self.token_column(start)? + self.case_unindent_spaces());
+                return value_column(start);
             }
             if groups.enclosing(before) != Some(group)
                 || matches!(
@@ -3708,20 +3975,28 @@ impl FormatEngine<'_> {
             self.output
                 .line_with_token(self.tree.previous_code_token(assign)?)?
         };
-        // Only a statement's declaration line leads it.
+        // Only a statement's declaration line leads it: one after a
+        // statement or a block, or one standing at the block's level, as
+        // after a macro call without its `;`.
         let start = self.output.line_tokens(statement_line)?.first;
-        if self
-            .tree
-            .previous_code_token(start)
-            .is_some_and(|before| !matches!(tokens[before], Token::Symbol(';' | '{' | '}')))
+        let lead = self
+            .output
+            .lead_width(statement_line, self.options.tab_width)
+            + self.case_unindent_spaces();
+        if lead != self.continuation_base_indent() * self.options.indent_width
+            && self
+                .tree
+                .previous_code_token(start)
+                .is_some_and(|before| !matches!(tokens[before], Token::Symbol(';' | '{' | '}')))
         {
             return None;
         }
-        Some(
-            self.output
-                .lead_width(statement_line, self.options.tab_width)
-                + self.case_unindent_spaces(),
-        )
+        // A style indenting braces indents the brace alone on its line, as
+        // after a `=` ending the statement's line.
+        let brace_indent =
+            usize::from(first == open && self.should_indent_brace_line(BraceType::Initializer))
+                * self.options.indent_width;
+        Some(lead + brace_indent)
     }
 
     /// Whether the line before is a one-line block that adding braces made.
@@ -3840,7 +4115,10 @@ impl FormatEngine<'_> {
         if matches!(tokens[next], Token::Symbol('}')) {
             let groups = &self.tree.groups;
             let group = groups.closed_at(next)?;
-            if self.tree.blocks.kind(group) != Some(BlockKind::Initializer) {
+            if !matches!(
+                self.tree.blocks.kind(group),
+                Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+            ) {
                 return None;
             }
             let line = self
@@ -3875,9 +4153,16 @@ impl FormatEngine<'_> {
     fn leading_assignment_indent(&self, first: usize) -> Option<usize> {
         let groups = &self.tree.groups;
         let tokens = &self.tree.tokens;
+        // An initializer's `{` ending its line continues nothing.
         if !matches!(&tokens[first], Token::Operator(operator) if operator == "=")
-            || next_code_token(tokens, first + 1)
-                .is_some_and(|value| matches!(tokens[value], Token::Symbol('{')))
+            || next_code_token(tokens, first + 1).is_some_and(|value| {
+                matches!(tokens[value], Token::Symbol('{'))
+                    && next_code_token(tokens, value + 1).is_none_or(|next| {
+                        tokens[value + 1..next]
+                            .iter()
+                            .any(|token| matches!(token, Token::Newline))
+                    })
+            })
         {
             return None;
         }
@@ -3903,8 +4188,12 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        // astyle indents it one level whatever the continuation indent.
-        Some(self.output.lead_width(line, self.options.tab_width) + self.options.indent_width)
+        // astyle indents it one level whatever the continuation indent,
+        // past the body of headers run in before the target.
+        Some(
+            self.output.lead_width(line, self.options.tab_width)
+                + (self.run_in_header_levels(target) + 1) * self.options.indent_width,
+        )
     }
 
     /// A line leading with a binary operator in an assignment's value stands
@@ -4027,7 +4316,28 @@ impl FormatEngine<'_> {
         if self.output.line_with_token(assign)? != line {
             return None;
         }
-        Some(self.token_column(value)? + self.case_unindent_spaces())
+        // Past the maximum, measured from the statement's line, the value's
+        // rows stand two levels past the line holding it.
+        let statement = (open + 1..assign)
+            .rev()
+            .find(|&index| {
+                groups.enclosing(index) == Some(group)
+                    && matches!(tokens[index], Token::Symbol(';' | '{' | '}'))
+            })
+            .map_or(open + 1, |end| end + 1);
+        let statement = next_code_token(tokens, statement).filter(|&start| start <= assign)?;
+        let statement_lead = self.output.lead_width(
+            self.output.line_with_token(statement)?,
+            self.options.tab_width,
+        );
+        let column = self.token_column(value)?;
+        let column = if column.saturating_sub(statement_lead) > self.options.max_continuation_indent
+        {
+            self.output.lead_width(line, self.options.tab_width) + 2 * self.options.indent_width
+        } else {
+            column
+        };
+        Some(column + self.case_unindent_spaces())
     }
 
     /// The first token of a returned value whose `&&` or `||` operand at
@@ -4082,60 +4392,54 @@ impl FormatEngine<'_> {
         if group.is_some_and(|group| self.tree.blocks.kind(group) == Some(BlockKind::Initializer)) {
             return None;
         }
+        // Each literal's walk passes the one before it, whose answer holds.
+        let walked = self.string_assign_walk.get();
         let mut index = previous;
         let assign = loop {
-            index = self.tree.previous_code_token(index)?;
+            if let Some((_, _, assign)) =
+                walked.filter(|&(from, within, _)| from == index && within == group)
+            {
+                break assign;
+            }
+            let Some(before) = self.tree.previous_code_token(index) else {
+                break None;
+            };
+            index = before;
             if groups.enclosing(index) != group {
-                return None;
+                break None;
             }
             match &tokens[index] {
-                Token::Operator(operator) if operator == "=" => break index,
+                Token::Operator(operator) if operator == "=" => break Some(index),
                 Token::StringLiteral(_) | Token::Word(_) => {}
-                _ => return None,
+                _ => break None,
             }
         };
-        // The value's line is published: the literal continues it, a level
-        // in when the statement runs in after a header.
+        self.string_assign_walk.set(Some((previous, group, assign)));
+        let assign = assign?;
+        // The value's line is published: the literal continues it. Past the
+        // maximum, measured from the line holding the `=`, it stands two
+        // levels past the statement, at the body of headers run in before
+        // it.
         let value = next_code_token(tokens, assign + 1)?;
-        Some(
-            self.token_column(value)?
-                + self.run_in_header_levels(assign) * self.options.indent_width
-                + self.case_unindent_spaces(),
-        )
+        let column = self.token_column(value)?;
+        let lead = self
+            .output
+            .lead_width(self.output.line_with_token(assign)?, self.options.tab_width);
+        let column = if column.saturating_sub(lead) > self.options.max_continuation_indent {
+            lead + (self.run_in_header_levels(assign) + 2) * self.options.indent_width
+        } else {
+            column
+        };
+        Some(column + self.case_unindent_spaces())
     }
 
-    /// How many control headers, as `if (x)`, precede on its line the
-    /// statement holding the token `index`.
+    /// How many levels the headers whose bodies run in before it on its
+    /// line indent the statement holding the token `index`.
     pub(super) fn run_in_header_levels(&self, index: usize) -> usize {
-        let tokens = &self.tree.tokens;
-        let Some(line) = self.output.line_with_token(index) else {
-            return 0;
-        };
-        let Some(mut cursor) = self
-            .output
-            .line_tokens(line)
-            .and_then(|span| next_code_token(tokens, span.first))
-        else {
-            return 0;
-        };
-        let mut levels = 0;
-        while cursor < index
-            && matches!(&tokens[cursor], Token::Word(word) if matches!(word.as_str(), "if" | "while" | "for"))
-            && let Some(open) = next_code_token(tokens, cursor + 1)
-            && matches!(tokens[open], Token::Symbol('('))
-            && let Some(close) = self
-                .tree
-                .groups
-                .opened_at(open)
-                .and_then(|group| self.tree.groups.get(group).close)
-            && close < index
-            && self.output.line_with_token(close) == Some(line)
-            && let Some(next) = next_code_token(tokens, close + 1)
-        {
-            levels += 1;
-            cursor = next;
-        }
-        levels
+        self.output
+            .line_with_token(index)
+            .and_then(|line| self.run_in_headers(line, index))
+            .map_or(0, |(levels, _)| levels)
     }
 
     /// Whether the code token `first` continues a control condition or a
@@ -4211,14 +4515,19 @@ impl FormatEngine<'_> {
         if self.options.indent_after_parens {
             return self.stacked_argument_indent(first);
         }
-        let content = next_code_token(tokens, open + 1)?;
+        // The arms of a value assigned in the parentheses stand at the value.
+        let assignment = (open + 1..colon).rev().find(|&index| {
+            matches!(&tokens[index], Token::Operator(operator) if is_assignment_operator(operator))
+                && groups.enclosing(index) == Some(group)
+                && (index..colon).any(|arm| matches!(tokens[arm], Token::Symbol('?')))
+        });
+        let content = next_code_token(tokens, assignment.unwrap_or(open) + 1)?;
         let column = self.token_column(content)?;
-        // Parens past the continuation limit leave the arm to the stack.
-        if column
-            > self
-                .output
-                .lead_width(previous_line, self.options.tab_width)
-                + self.options.max_continuation_indent
+        // Parens past the continuation limit, measured from the block as
+        // a paren's rows are, leave the arm to the stack.
+        let block = self.continuation_base_indent() * self.options.indent_width;
+        if (column + self.case_unindent_spaces()).saturating_sub(block)
+            > self.options.max_continuation_indent
         {
             return None;
         }
@@ -4462,20 +4771,35 @@ impl FormatEngine<'_> {
 
     fn return_value_indent(&self, first: usize) -> Option<usize> {
         let keyword = self.tree.previous_code_token(first)?;
-        // A list's brace a style sets at its statement stands as one after
-        // an assignment's `=`.
+        // A list's brace stands as one after an assignment's `=`: at its
+        // statement, or a level in where the style indents it.
+        let opens_list = matches!(self.tree.tokens[first], Token::Symbol('{'));
         if !matches!(&self.tree.tokens[keyword], Token::Word(word) if word == "return")
-            || matches!(self.tree.tokens[first], Token::Symbol('{'))
-                && !self.should_indent_brace_line(BraceType::Array)
+            || opens_list && !self.should_indent_brace_line(BraceType::Array)
         {
             return None;
         }
+        let levels = if opens_list {
+            1
+        } else {
+            self.options.continuation_indent
+        };
         let line = self.line_led_by(keyword)?;
-        (self.output.line_tokens(line)?.last == keyword).then(|| {
+        let span = self.output.line_tokens(line)?;
+        if span.last != keyword {
+            return None;
+        }
+        // A `return` run in after headers stands at their body.
+        let headers = self
+            .run_in_headers_from(span.first, keyword, |index| {
+                (span.first..=span.last).contains(&index)
+            })
+            .map_or(0, |(levels, _)| levels);
+        Some(
             self.output.lead_width(line, self.options.tab_width)
-                + self.options.continuation_indent * self.options.indent_width
-                + self.case_unindent_spaces()
-        })
+                + (levels + headers) * self.options.indent_width
+                + self.case_unindent_spaces(),
+        )
     }
 
     /// Column of the case label before the one at `first` in the same
@@ -4805,9 +5129,10 @@ impl FormatEngine<'_> {
             }
             let start = self.output.comment_start_index(index);
             let opener = self.output.trimmed(start);
+            // A marker that switches formatting keeps its line as written.
             if self.output.line_tokens(start).is_some()
                 || !(opener.starts_with("//") || opener.starts_with("/*"))
-                || opener.contains("*INDENT-")
+                || self.output.is_verbatim(start)
                 || self.comment_runs_into_brace(start)
             {
                 break;
@@ -4881,7 +5206,8 @@ impl FormatEngine<'_> {
     }
 
     /// Whether the line being laid out continues a statement of a block
-    /// at the block's own level, as the value after a trailing `=`.
+    /// at the block's own level, as the value after a trailing `=` or a
+    /// declarator after the line naming its struct, union or class type.
     pub(crate) fn pending_line_continues_statement(&self) -> bool {
         let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
@@ -4899,7 +5225,32 @@ impl FormatEngine<'_> {
         }
         self.tree
             .previous_code_token(first)
-            .is_some_and(|previous| matches!(&tokens[previous], Token::Operator(_)))
+            .is_some_and(|previous| match &tokens[previous] {
+                Token::Operator(_) => true,
+                Token::Word(_) => self.output.line_with_token(previous).is_some_and(|line| {
+                    splits_aggregate_declaration_name(self.output.code_trimmed(line))
+                }),
+                _ => false,
+            })
+    }
+
+    /// Whether the line being laid out continues a statement of the block
+    /// directly around it, whatever ended the row before.
+    pub(crate) fn pending_line_continues_block_statement(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let Some(first) = self.output.pending_tokens().map(|span| span.first) else {
+            return false;
+        };
+        is_code_token(&tokens[first])
+            && !matches!(tokens[first], Token::Preprocessor(_))
+            && !self.tree.statements.starts_block_statement(first)
+            && groups.enclosing(first).is_some_and(|group| {
+                matches!(
+                    self.tree.blocks.kind(group),
+                    Some(BlockKind::FunctionBody | BlockKind::Control | BlockKind::Block)
+                )
+            })
     }
 
     /// Whether the token `index` sits in a function body.
@@ -4955,14 +5306,6 @@ impl FormatEngine<'_> {
 
     /// Whether the line being laid out starts an initializer element after
     /// a comma.
-    /// Whether the pending line opens with the brace of a function body.
-    pub(crate) fn pending_line_opens_function_body(&self) -> bool {
-        self.output
-            .pending_tokens()
-            .and_then(|span| self.tree.groups.opened_at(span.first))
-            .is_some_and(|group| self.tree.blocks.kind(group) == Some(BlockKind::FunctionBody))
-    }
-
     pub(crate) fn pending_line_starts_initializer_element(&self) -> bool {
         let groups = &self.tree.groups;
         let Some(first) = self.output.pending_tokens().map(|span| span.first) else {
@@ -4979,13 +5322,6 @@ impl FormatEngine<'_> {
                     matches!(self.tree.tokens[previous], Token::Symbol(','))
                         && groups.enclosing(previous) == Some(group)
                 })
-    }
-
-    /// Whether the line being laid out starts outside every block.
-    pub(crate) fn pending_line_at_file_scope(&self) -> bool {
-        self.output
-            .pending_tokens()
-            .is_some_and(|span| self.tree.groups.enclosing(span.first).is_none())
     }
 
     /// Whether the line being laid out starts an enum member after a comma.
@@ -5169,14 +5505,73 @@ impl FormatEngine<'_> {
         } else {
             return None;
         };
-        let if_token = self.tree.statements.if_of_else(else_token)?;
+        let mut if_token = self.tree.statements.if_of_else(else_token)?;
         // A `}` closing a block nested in a braceless `if` body keeps the
         // `else` of that `if` at the brace.
         if first != else_token && self.is_dangling_else(else_token) {
             return None;
         }
-        let if_line = self.line_led_by(if_token)?;
-        Some(self.output.lead_width(if_line, self.options.tab_width) + self.case_unindent_spaces())
+        // An `if` an `else` runs into stands with the chain's first `if`.
+        let from = if_token;
+        let cached = self.recent_else_chain_head(&self.else_chain_head);
+        let if_line = loop {
+            if let Some(cached) = cached.filter(|cached| cached.from == if_token) {
+                break cached.head;
+            }
+            if let Some(line) = self.line_led_by(if_token).filter(|&line| {
+                self.output
+                    .line_tokens(line)
+                    .is_some_and(|span| span.first == if_token)
+            }) {
+                break Some(line);
+            }
+            let Some(before) = self
+                .tree
+                .previous_code_token(if_token)
+                .filter(|&before| is_else(before))
+            else {
+                break None;
+            };
+            match self.tree.statements.if_of_else(before) {
+                Some(next) => if_token = next,
+                None => break None,
+            }
+        };
+        self.keep_else_chain_head(&self.else_chain_head, from, if_line, false);
+        Some(self.output.lead_width(if_line?, self.options.tab_width) + self.case_unindent_spaces())
+    }
+
+    /// The head `cache` holds, while no line up to its walk's start has
+    /// changed.
+    fn recent_else_chain_head(
+        &self,
+        cache: &std::cell::Cell<Option<ElseChainHead>>,
+    ) -> Option<ElseChainHead> {
+        cache.get().filter(|cached| {
+            self.output
+                .lowest_change_since(cached.version)
+                .is_some_and(|lowest| lowest > cached.from_line)
+        })
+    }
+
+    /// Keeps what a chain walk from `from` found, when `from` stands on a
+    /// line already put out.
+    fn keep_else_chain_head(
+        &self,
+        cache: &std::cell::Cell<Option<ElseChainHead>>,
+        from: usize,
+        head: Option<usize>,
+        dangling: bool,
+    ) {
+        if let Some(from_line) = self.output.line_with_token(from) {
+            cache.set(Some(ElseChainHead {
+                from,
+                from_line,
+                version: self.output.version(),
+                head,
+                dangling,
+            }));
+        }
     }
 
     /// Whether the `}` right before the `else` at `else_token` closes a
@@ -5198,6 +5593,43 @@ impl FormatEngine<'_> {
                             != Some(if_token)
                     })
             })
+    }
+
+    /// The `if` leading its line that heads the chain of the `else` at
+    /// `else_token`, when an `else` of that chain follows a `}` closing a
+    /// block other than its `if`'s body.
+    fn dangling_chain_if(&self, else_token: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let from = else_token;
+        let cached = self.recent_else_chain_head(&self.dangling_chain_head);
+        let mut else_token = else_token;
+        let mut dangling = false;
+        let head =
+            loop {
+                if let Some(cached) = cached.filter(|cached| cached.from == else_token) {
+                    dangling |= cached.dangling;
+                    break cached.head;
+                }
+                dangling |= self.is_dangling_else(else_token);
+                let Some(if_token) = self.tree.statements.if_of_else(else_token) else {
+                    break None;
+                };
+                let leads_line = self
+                    .line_led_by(if_token)
+                    .and_then(|line| self.output.line_tokens(line))
+                    .is_some_and(|span| span.first == if_token);
+                if leads_line {
+                    break Some(if_token);
+                }
+                match self.tree.previous_code_token(if_token).filter(
+                    |&before| matches!(&tokens[before], Token::Word(word) if word == "else"),
+                ) {
+                    Some(before) => else_token = before,
+                    None => break None,
+                }
+            };
+        self.keep_else_chain_head(&self.dangling_chain_head, from, head, dangling);
+        head.filter(|_| dangling)
     }
 
     /// The keyword before the parens opening at `open`, past a `constexpr`
@@ -5225,13 +5657,20 @@ impl FormatEngine<'_> {
         } else {
             return None;
         };
-        let else_token = self.tree.previous_code_token(groups.get(block).open)?;
-        if !matches!(&tokens[else_token], Token::Word(word) if word == "else")
-            || !self.is_dangling_else(else_token)
-        {
-            return None;
-        }
-        let line = self.line_led_by(self.tree.statements.if_of_else(else_token)?)?;
+        let is_else = |index: usize| matches!(&tokens[index], Token::Word(word) if word == "else");
+        // The `else` opening the block, directly or through an `if` it runs
+        // into.
+        let before = self.tree.previous_code_token(groups.get(block).open)?;
+        let else_token = if is_else(before) {
+            before
+        } else {
+            let condition = groups.closed_at(before)?;
+            let if_token = self.condition_keyword(groups.get(condition).open)?;
+            let before_if = self.tree.previous_code_token(if_token)?;
+            (matches!(&tokens[if_token], Token::Word(word) if word == "if") && is_else(before_if))
+                .then_some(before_if)?
+        };
+        let line = self.line_led_by(self.dangling_chain_if(else_token)?)?;
         // GNU indents the block's braces a level past the `else`, Ratliff
         // its closing brace.
         let braces = if self.options.brace_style == BraceStyle::Gnu
@@ -5458,24 +5897,54 @@ impl FormatEngine<'_> {
     }
 
     fn group_in_braced_chain_of_braceless_body(&self, group: GroupId) -> bool {
+        self.tree
+            .groups
+            .ancestors(group)
+            .any(|id| self.braced_chain_block(id))
+    }
+
+    /// Whether `id` is a control block in a chain of `else if` headed by an
+    /// `if` with a braceless body: a short chain is walked, a long one read
+    /// from the table of every chain.
+    fn braced_chain_block(&self, id: GroupId) -> bool {
+        const WALKED_LINKS: usize = 16;
+        if self.tree.blocks.kind(id) != Some(BlockKind::Control) {
+            return false;
+        }
+        let Some(mut head) = self.tree.blocks.owner(id) else {
+            return false;
+        };
         let tokens = &self.tree.tokens;
-        let groups = &self.tree.groups;
         let statements = &self.tree.statements;
         let is_word =
             |index: usize, text: &str| matches!(&tokens[index], Token::Word(word) if word == text);
-        groups.ancestors(group).any(|id| {
-            if self.tree.blocks.kind(id) != Some(BlockKind::Control) {
-                return false;
+        for _ in 0..WALKED_LINKS {
+            if is_word(head, "else") {
+                match statements.if_of_else(head) {
+                    Some(keyword) => head = keyword,
+                    None => return false,
+                }
+            } else if let Some(previous) = self
+                .tree
+                .previous_code_token(head)
+                .filter(|&previous| is_word(head, "if") && is_word(previous, "else"))
+            {
+                head = previous;
+            } else {
+                return is_word(head, "if") && statements.braceless_header(head).is_some();
             }
-            let Some(mut head) = self.tree.blocks.owner(id) else {
-                return false;
-            };
-            loop {
+        }
+        self.braced_chain_blocks.get_or_init(|| {
+            let groups = &self.tree.groups;
+            // The first `if` of the chain each `if` belongs to, read on from
+            // the chains of the `if`s before it.
+            let mut heads: IndexMap<usize, Option<usize>> = IndexMap::default();
+            let chain_head = |heads: &IndexMap<usize, Option<usize>>, mut head: usize| loop {
+                if let Some(&known) = heads.get(&head) {
+                    return known;
+                }
                 if is_word(head, "else") {
-                    match statements.if_of_else(head) {
-                        Some(keyword) => head = keyword,
-                        None => return false,
-                    }
+                    head = statements.if_of_else(head)?;
                 } else if let Some(previous) = self
                     .tree
                     .previous_code_token(head)
@@ -5483,11 +5952,26 @@ impl FormatEngine<'_> {
                 {
                     head = previous;
                 } else {
-                    break;
+                    return is_word(head, "if").then_some(head);
                 }
+            };
+            for index in (0..tokens.len()).filter(|&index| is_word(index, "if")) {
+                let head = chain_head(&heads, index);
+                heads.insert(index, head);
             }
-            is_word(head, "if") && statements.braceless_header(head).is_some()
-        })
+            groups
+                .ids()
+                .map(|id| {
+                    self.tree.blocks.kind(id) == Some(BlockKind::Control)
+                        && self
+                            .tree
+                            .blocks
+                            .owner(id)
+                            .and_then(|owner| chain_head(&heads, owner))
+                            .is_some_and(|head| statements.braceless_header(head).is_some())
+                })
+                .collect()
+        })[id.index()]
     }
 
     /// A `{` on its own line after a control header stands at the header's
@@ -5614,10 +6098,37 @@ impl FormatEngine<'_> {
             return None;
         }
         let (line, levels) = self.header_chain_before(first)?;
+        // A closer leading the header's line stands at its own block's brace:
+        // the header stands at the statement that block belongs to.
+        let tokens = &self.tree.tokens;
+        let header_column = self
+            .output
+            .line_tokens(line)
+            .map(|span| span.first)
+            .filter(|&lead| matches!(tokens[lead], Token::Symbol('}')))
+            .and_then(|close| self.closed_block_statement_column(close))
+            .unwrap_or_else(|| self.output.lead_width(line, self.options.tab_width));
+        Some(header_column + levels * self.options.indent_width + self.case_unindent_spaces())
+    }
+
+    /// The column of the statement whose block the `}` at `close` ends: its
+    /// header's, or a bare block's own brace's out of the style's indent.
+    fn closed_block_statement_column(&self, close: usize) -> Option<usize> {
+        let group = self.tree.groups.closed_at(close)?;
+        let tab_width = self.options.tab_width;
+        let open = self.tree.groups.get(group).open;
+        if let Some(owner) = self.tree.blocks.owner(group).filter(|&owner| owner != open) {
+            return Some(
+                self.output
+                    .lead_width(self.line_led_by_header(owner)?, tab_width),
+            );
+        }
+        let brace_extra = usize::from(self.should_indent_brace_line(BraceType::Command))
+            * self.options.indent_width;
         Some(
-            self.output.lead_width(line, self.options.tab_width)
-                + levels * self.options.indent_width
-                + self.case_unindent_spaces(),
+            self.output
+                .lead_width(self.output.line_with_token(open)?, tab_width)
+                .saturating_sub(brace_extra),
         )
     }
 
@@ -5790,6 +6301,7 @@ impl FormatEngine<'_> {
                     if matches!(word.as_str(), "switch" | "case" | "default"))
             })
             || self.layout.line_adjuster.total_case_unindent_depth() > 0
+            || self.case_label_of_block(first).is_some()
         {
             return None;
         }
@@ -6000,21 +6512,16 @@ impl FormatEngine<'_> {
             return None;
         }
         // Only a `do` leading its line, or run in after a `{`, places it;
-        // one run in after an `else` stands at the else's body.
+        // one run in after headers stands at their body.
         let line = self.output.line_with_token(do_token)?;
-        let first = self.output.line_tokens(line)?.first;
-        if self
-            .tree
-            .previous_code_token(do_token)
-            .is_some_and(|previous| {
-                matches!(&tokens[previous], Token::Word(word) if word == "else")
-                    && self.output.line_with_token(previous) == Some(line)
-            })
-        {
+        let span = self.output.line_tokens(line)?;
+        let first = span.first;
+        if let Some((headers @ 1.., _)) = self.run_in_headers_from(first, do_token, |index| {
+            (span.first..=span.last).contains(&index)
+        }) {
             return Some(
-                self.output
-                    .lead_width(self.line_led_by(do_token)?, self.options.tab_width)
-                    + self.options.indent_width
+                self.output.lead_width(line, self.options.tab_width)
+                    + headers * self.options.indent_width
                     + self.case_unindent_spaces(),
             );
         }
@@ -6201,8 +6708,16 @@ impl FormatEngine<'_> {
             return None;
         }
         // The `(` line: styles that break or indent braces put the `{` back.
-        let paren = self.tree.previous_code_token(groups.get(group).open)?;
+        // A block more arguments follow is a macro's block argument: broken
+        // off its `(`, it lays out as any block.
+        let open = groups.get(group).open;
+        let paren = self.tree.previous_code_token(open)?;
         let line = self.output.line_with_token(paren)?;
+        if !closes_before_paren(tokens, groups, group)
+            && self.output.line_with_token(open) != Some(line)
+        {
+            return None;
+        }
         Some(
             self.output.lead_width(line, self.options.tab_width)
                 + extra
@@ -6222,9 +6737,18 @@ impl FormatEngine<'_> {
                 .filter(|&previous| is_word(previous, &["do", "else", "try"]))
         })?;
         // An `else` block belongs to the line of its `if`: a `}` before the
-        // `else` may close a block nested deeper.
-        if is_word(inner, &["else"])
-            && let Some(if_token) = self.tree.statements.if_of_else(inner)
+        // `else` may close a block nested deeper. So does the block of the
+        // `if` of an `else if` on one line.
+        let chain_else = if is_word(inner, &["if"]) {
+            self.tree.previous_code_token(inner).filter(|&previous| {
+                is_word(previous, &["else"])
+                    && self.output.line_with_token(previous) == self.output.line_with_token(inner)
+            })
+        } else {
+            Some(inner).filter(|&inner| is_word(inner, &["else"]))
+        };
+        if let Some(else_token) = chain_else
+            && let Some(if_token) = self.tree.statements.if_of_else(else_token)
         {
             inner = if_token;
         }
@@ -6313,7 +6837,10 @@ impl FormatEngine<'_> {
     fn braceless_body_indent(&self, first: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
         let header = self.tree.statements.braceless_header(first)?;
-        if self.alternative_branch_body_header(first).is_some() {
+        if self.alternative_branch_body_header(first).is_some()
+            // A header a later branch ends leaves no body past `#endif`.
+            || self.tree.in_later_branch_closing_before(header, first)
+        {
             return None;
         }
         // Added braces make the body a block; an empty statement, a
@@ -6639,6 +7166,127 @@ impl FormatEngine<'_> {
                 return None;
             }
             self.token_column(argument)?
+        };
+        Some(column + self.case_unindent_spaces())
+    }
+
+    /// A list leading its row among a call's arguments is one of them: the
+    /// row stands at the last argument before it that leads a row, else at
+    /// the first argument after the paren; its closer leading a row stands
+    /// at the brace when that leads one.
+    #[inline(never)]
+    fn list_argument_row_indent(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let list = groups.delimited_by(first)?;
+        let brace = groups.get(list).open;
+        if first != brace {
+            let brace_line = self.output.line_with_token(brace)?;
+            return (self.output.line_tokens(brace_line)?.first == brace
+                && self.list_argument_row_indent(brace).is_some())
+            .then(|| {
+                self.output.lead_width(brace_line, self.options.tab_width)
+                    + self.case_unindent_spaces()
+            });
+        }
+        let parens = groups.enclosing(first)?;
+        if groups.get(parens).delimiter != Delimiter::Paren {
+            return None;
+        }
+        let previous = self.tree.previous_code_token(first)?;
+        if self.options.indent_after_parens
+            || !matches!(
+                self.tree.blocks.kind(list),
+                Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+            )
+            || self.brace_holds_statements(list)
+            || !matches!(tokens[previous], Token::Symbol(','))
+            || groups.enclosing(previous) != Some(parens)
+        {
+            return None;
+        }
+        // Back over the arguments before it, each ended by a comma.
+        let open = groups.get(parens).open;
+        let mut index = previous;
+        let start = loop {
+            let before = self.tree.previous_code_token(index)?;
+            if let Some(closed) = groups.closed_at(before) {
+                index = groups.get(closed).open;
+                continue;
+            }
+            let ends_argument = before == open
+                || matches!(tokens[before], Token::Symbol(','))
+                    && groups.enclosing(before) == Some(parens);
+            if !ends_argument {
+                index = before;
+                continue;
+            }
+            let start = next_code_token(tokens, before + 1)?;
+            let line = self.output.line_with_token(start)?;
+            if before == open || self.output.line_tokens(line)?.first == start {
+                break start;
+            }
+            index = before;
+        };
+        let line = self.output.line_with_token(start)?;
+        let column = if self.output.line_tokens(line)?.first == start {
+            self.output.lead_width(line, self.options.tab_width)
+        } else {
+            self.token_column(start)?
+        };
+        Some(column + self.case_unindent_spaces())
+    }
+
+    /// A list's brace leading its line follows the row continuing a
+    /// statement, an argument or an operand, that holds the list's head, a
+    /// compound literal's cast or a type's name: a `{` stands at the row, a
+    /// `}` at the `{` that leads its line, else where the style closes a
+    /// block the row opens.
+    #[inline(never)]
+    fn list_brace_in_continuation_row_indent(&self, first: usize) -> Option<usize> {
+        let list = self.tree.groups.delimited_by(first)?;
+        let open = self.tree.groups.get(list).open;
+        let head = self.compound_literal_cast(open).or_else(|| {
+            let before = self.tree.previous_code_token(open)?;
+            let named = matches!(
+                self.tree.blocks.kind(list),
+                Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+            ) && match &self.tree.tokens[before] {
+                Token::Word(word) => !is_non_type_keyword(word),
+                Token::Operator(operator) => operator == ">",
+                _ => false,
+            } && !self.brace_holds_statements(list);
+            named.then_some(before)
+        })?;
+        let row = self.output.line_with_token(head)?;
+        // The row continues a statement, as an argument or an operand, not
+        // a list's element or a subscript.
+        let row_first = self.output.line_tokens(row)?.first;
+        let in_element = self.tree.groups.enclosing(row_first).is_some_and(|group| {
+            self.tree.groups.get(group).delimiter == Delimiter::Bracket
+                || matches!(
+                    self.tree.blocks.kind(group),
+                    Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                )
+        });
+        if in_element
+            || !self.token_in_parens(row_first)
+                && self.tree.statements.starts_block_statement(row_first)
+        {
+            return None;
+        }
+        let lead = self.output.lead_width(row, self.options.tab_width);
+        let column = if first == open {
+            lead
+        } else {
+            let brace_line = self.output.line_with_token(open)?;
+            if self.output.line_tokens(brace_line)?.first == open {
+                self.output.lead_width(brace_line, self.options.tab_width)
+            } else if self.options.brace_style == BraceStyle::Ratliff {
+                lead + self.options.indent_width
+            } else {
+                lead
+            }
         };
         Some(column + self.case_unindent_spaces())
     }
@@ -7174,8 +7822,11 @@ impl FormatEngine<'_> {
             return None;
         }
         let line = self.output.line_with_token(label)?;
-        // A block kept whole on its label's line is a statement of the case.
+        // A block kept whole on its label's line, or after a label continued
+        // over lines, is a statement of the case.
+        let colon = self.tree.previous_code_token(open)?;
         (self.output.line_tokens(line)?.first == label
+            && self.output.line_with_token(colon) == Some(line)
             && self.output.line_with_token(close) != Some(line))
         .then(|| {
             self.output.lead_width(line, self.options.tab_width)
@@ -7192,8 +7843,14 @@ impl FormatEngine<'_> {
     /// style's to tell.
     fn sibling_statement_column(&self, first: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
-        let sibling = self.tree.statements.previous_sibling(first)?;
-        let line = self.output.line_with_token(sibling)?;
+        let mut sibling = self.tree.statements.previous_sibling(first)?;
+        let mut line = self.output.line_with_token(sibling)?;
+        // The row a comment's closer leads holds no statement's column; the
+        // statements before stand at it.
+        while self.output.comment_start_index(line) != line {
+            sibling = self.tree.statements.previous_sibling(sibling)?;
+            line = self.output.line_with_token(sibling)?;
+        }
         // Statements kept on one line stand where the first of them does.
         let mut leader = sibling;
         while self.output.line_tokens(line)?.first != leader {
@@ -7533,6 +8190,7 @@ impl FormatEngine<'_> {
     /// The column of the statements of the block enclosing `first`, which
     /// a statement there stands at whatever it is.
     fn enclosing_block_statement_column(&self, first: usize) -> Option<usize> {
+        let tokens = &self.tree.tokens;
         let block = self.enclosing_block(first)?;
         let column = match self.block_body_anchor(block)? {
             BodyAnchor::BraceLine(lead) => {
@@ -7542,10 +8200,28 @@ impl FormatEngine<'_> {
                     BraceType::Command
                 };
                 // VTK indents the braces of blocks inside a function, not
-                // those of a function's own try block.
+                // those of a function's own try block and its handlers, which
+                // open at a declaration scope.
+                let parent = self.tree.groups.get(block).parent;
+                let opens_after = |word: &str| {
+                    self.tree
+                        .previous_code_token(self.tree.groups.get(block).open)
+                        .is_some_and(
+                            |before| matches!(&tokens[before], Token::Word(found) if found == word),
+                        )
+                };
+                let function_try_block = parent.is_some_and(|parent| {
+                    matches!(
+                        self.tree.blocks.kind(parent),
+                        Some(BlockKind::Namespace | BlockKind::ExternC | BlockKind::Aggregate)
+                    )
+                }) && (opens_after("try")
+                    || self.tree.blocks.owner(block).is_some_and(
+                        |owner| matches!(&tokens[owner], Token::Word(word) if word == "catch"),
+                    ));
                 let vtk_file_scope_block = self.options.brace_style == BraceStyle::Vtk
                     && brace_type == BraceType::Command
-                    && self.tree.groups.get(block).parent.is_none();
+                    && (parent.is_none() || function_try_block);
                 let indented_brace = (self.options.indent_braces
                     || matches!(
                         self.options.brace_style,
@@ -7631,7 +8307,24 @@ impl FormatEngine<'_> {
                     Some(self.output.lead_width(line, self.options.tab_width) + levels * width)
                 } else {
                     header
-                        .and_then(|header| self.line_led_by(header))
+                        .and_then(|header| {
+                            let header_line = self.line_led_by(header)?;
+                            // A closer leading the header's line stands where
+                            // its style sets closers; the header stands at
+                            // the statement the closer ends.
+                            let line = self
+                                .output
+                                .line_tokens(header_line)
+                                .map(|span| span.first)
+                                .filter(|&first| {
+                                    first != header && matches!(tokens[first], Token::Symbol('}'))
+                                })
+                                .and_then(|closer| self.tree.groups.closed_at(closer))
+                                .and_then(|closed| self.tree.blocks.owner(closed))
+                                .and_then(|owner| self.line_led_by(owner))
+                                .unwrap_or(header_line);
+                            Some(line)
+                        })
                         .map(|header_line| {
                             self.output.lead_width(header_line, self.options.tab_width) + width
                         })
@@ -7660,6 +8353,21 @@ impl FormatEngine<'_> {
         };
         (self.tree.blocks.kind(group).is_some()).then_some(group)
     }
+}
+
+/// The first token of the name ending at the word `last`: a `.` right
+/// before a name joins it, with the word right before that `.`.
+pub(super) fn dotted_name_start(tokens: &[Token], last: usize) -> usize {
+    let mut start = last;
+    while start > 0 && matches!(tokens[start - 1], Token::Symbol('.')) {
+        start -= 1;
+        if start > 0 && matches!(tokens[start - 1], Token::Word(_) | Token::Number(_)) {
+            start -= 1;
+        } else {
+            break;
+        }
+    }
+    start
 }
 
 /// Moves the last of `entries` to the front, keeping the order of the

@@ -7,10 +7,10 @@ use crate::formatter::lexer::{
 };
 use crate::formatter::structure::SourceTree;
 use crate::formatter::structure::blocks::BlockKind;
+use crate::formatter::structure::groups::GroupId;
 use crate::formatter::syntax::language::{
     is_macro_like_word, is_non_type_keyword, is_pointer_type_word, is_type_like_pointer_word,
 };
-use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{
     is_identifier_continue, is_identifier_start, is_word_char, trailing_word,
@@ -184,6 +184,81 @@ pub(crate) fn template_angle_role(
     })
 }
 
+/// The spans from each `<` astyle reads as opening a template to the `>`
+/// that closes it, outermost only. astyle reads on from the `<` across lines
+/// for its closing angle, through names, scopes, pointers, references,
+/// defaults, brackets and balanced parens, and takes anything else, a
+/// logical operator among them, for no template.
+pub(crate) fn astyle_template_spans(tokens: &[Token]) -> Vec<(usize, usize)> {
+    let mut spans = Vec::new();
+    let mut index = 0;
+    while index < tokens.len() {
+        if matches!(&tokens[index], Token::Operator(operator) if operator == "<")
+            && let Some(close) = astyle_template_close(tokens, index)
+        {
+            spans.push((index, close));
+            index = close;
+        }
+        index += 1;
+    }
+    spans
+}
+
+/// How many tokens astyle's look for a template's close reads at most.
+const MAX_TEMPLATE_SCAN_TOKENS: usize = 4096;
+
+fn astyle_template_close(tokens: &[Token], open: usize) -> Option<usize> {
+    // The `<` opens nothing that ends its line or starts an `<=`.
+    match tokens[open + 1..]
+        .iter()
+        .find(|token| !matches!(token, Token::Whitespace(_)))
+    {
+        None | Some(Token::Newline) => return None,
+        Some(Token::Operator(operator)) if operator.starts_with('=') => return None,
+        _ => {}
+    }
+    let name_char = |ch: char| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '.');
+    let mut depth = 1usize;
+    let mut parens = 0usize;
+    for (index, token) in tokens
+        .iter()
+        .enumerate()
+        .skip(open + 1)
+        .take(MAX_TEMPLATE_SCAN_TOKENS)
+    {
+        match token {
+            Token::Whitespace(_)
+            | Token::Newline
+            | Token::Comment(..)
+            | Token::StringLiteral(_)
+            | Token::CharLiteral(_)
+            | Token::Word(_)
+            | Token::Symbol(',' | ':' | '[' | ']' | '.') => {}
+            Token::Number(number) if number.chars().all(name_char) => {}
+            Token::Symbol('(') => parens += 1,
+            Token::Symbol(')') => parens = parens.checked_sub(1)?,
+            Token::Operator(operator) if !operator.contains("&&") && !operator.contains("||") => {
+                for ch in operator.chars() {
+                    match ch {
+                        '<' => depth += 1,
+                        '>' => {
+                            depth -= 1;
+                            if depth == 0 {
+                                return (parens == 0).then_some(index);
+                            }
+                        }
+                        '&' | '*' | '^' | ':' | '=' => {}
+                        ch if name_char(ch) => {}
+                        _ => return None,
+                    }
+                }
+            }
+            _ => return None,
+        }
+    }
+    None
+}
+
 /// Which tokens are `<`s that open a template, as
 /// `looks_like_template_opener` finds each one reading on to the end, found
 /// in one pass: each `<` still open is resolved by the token that ends its
@@ -191,14 +266,10 @@ pub(crate) fn template_angle_role(
 pub(crate) fn template_openers(tokens: &[Token]) -> Vec<bool> {
     let end = tokens.len();
     let mut opens = vec![false; end];
-    let closing_follows = |cursor: usize| {
-        next_non_whitespace(tokens, cursor + 1, end)
-            .and_then(|next| tokens.get(next))
-            .is_none_or(|token| !matches!(token, Token::Number(_)))
-    };
     // The `<`s still open, innermost last, with the paren depth each stands
-    // at and whether what follows it lets it open at all.
-    let mut open: Vec<(usize, isize, bool)> = Vec::new();
+    // at, whether what follows it lets it open at all and whether a logical
+    // operator joins its own arguments.
+    let mut open: Vec<(usize, isize, bool, bool)> = Vec::new();
     let mut paren_depth = 0isize;
     for (cursor, token) in tokens.iter().enumerate() {
         match token {
@@ -207,41 +278,61 @@ pub(crate) fn template_openers(tokens: &[Token]) -> Vec<bool> {
             | Token::Newline
             | Token::Comment(_, _)
             | Token::Preprocessor(_) => {}
-            Token::Word(_) | Token::Number(_) => {}
+            Token::Word(_) | Token::Number(_) | Token::CharLiteral(_) | Token::StringLiteral(_) => {
+            }
+            // A comparison among the arguments leaves them open.
+            Token::Operator(operator) if operator == "<" && !can_name_template(tokens, cursor) => {}
             Token::Operator(operator) if operator == "<" => {
                 let first_after_open =
                     next_non_whitespace(tokens, cursor + 1, end).and_then(|next| tokens.get(next));
                 let viable = first_after_open.is_some_and(
                     |token| !matches!(token, Token::Operator(operator) if operator == "="),
                 );
-                open.push((cursor, paren_depth, viable));
+                open.push((cursor, paren_depth, viable, false));
             }
             Token::Operator(operator) if operator == ">" || operator == ">>" => {
                 for _ in 0..operator.len() {
-                    let Some((opener, opener_depth, viable)) = open.pop() else {
+                    let Some((opener, opener_depth, viable, logical)) = open.pop() else {
                         break;
                     };
-                    opens[opener] =
-                        viable && opener_depth == paren_depth && closing_follows(cursor);
+                    opens[opener] = viable
+                        && opener_depth == paren_depth
+                        && closing_follows(tokens, cursor, end, logical);
+                }
+            }
+            Token::Operator(operator) if operator == "&&" || operator == "||" => {
+                if let Some(innermost) = open.last_mut()
+                    && innermost.1 == paren_depth
+                    && is_logical_operator(tokens, cursor)
+                    && !opens_template_head(tokens, innermost.0)
+                {
+                    innermost.3 = true;
                 }
             }
             Token::Operator(operator)
                 if matches!(
                     operator.as_str(),
-                    "::" | "*" | "&" | "&&" | "^" | "=" | "!" | "!="
+                    "::" | "*" | "&" | "^" | "=" | "==" | "!" | "!="
                 ) => {}
             Token::Symbol('(') => paren_depth += 1,
             Token::Symbol(')') => {
                 while open
                     .last()
-                    .is_some_and(|&(_, opener_depth, _)| opener_depth == paren_depth)
+                    .is_some_and(|&(_, opener_depth, _, _)| opener_depth == paren_depth)
                 {
                     open.pop();
                 }
                 paren_depth -= 1;
             }
-            Token::Symbol(',' | ':' | '[' | ']') => {}
-            Token::Symbol('.') if in_ellipsis(tokens, cursor) => {}
+            // A member access, as in `decltype(value.size())`, reads as a
+            // name's part.
+            Token::Symbol(',' | ':' | '[' | ']' | '.') => {}
+            // An operator within parens ends only the angles opened in them.
+            Token::Operator(_) => {
+                let outside =
+                    open.partition_point(|&(_, opener_depth, _, _)| opener_depth < paren_depth);
+                open.truncate(outside);
+            }
             _ => open.clear(),
         }
     }
@@ -258,7 +349,7 @@ pub(crate) fn known_template_angle_role(
 ) -> TemplateAngle {
     match tokens.get(index) {
         Some(Token::Operator(operator)) if operator == "<" => {
-            if template_depth > 0 || opens() {
+            if opens() {
                 TemplateAngle::Open
             } else {
                 TemplateAngle::None
@@ -274,14 +365,85 @@ pub(crate) fn known_template_angle_role(
     }
 }
 
-/// Whether the `.` at `index` is one of the three of a `...`, as a pack
-/// expansion among template arguments has.
-fn in_ellipsis(tokens: &[Token], index: usize) -> bool {
-    (index.saturating_sub(2)..=index).any(|start| {
-        tokens
-            .get(start..start + 3)
-            .is_some_and(|run| run.iter().all(|token| *token == Token::Symbol('.')))
-    })
+/// Whether the `>` at `close` can end a template's arguments: a literal
+/// after it makes it a comparison, and so does a name or a paren after
+/// arguments a logical operator joins.
+fn closing_follows(tokens: &[Token], close: usize, end: usize, logical: bool) -> bool {
+    tokens[close + 1..end]
+        .iter()
+        .find(|token| {
+            !matches!(
+                token,
+                Token::Whitespace(_) | Token::Newline | Token::Comment(..)
+            )
+        })
+        .is_none_or(|token| {
+            !(is_literal(token) || logical && matches!(token, Token::Word(_) | Token::Symbol('(')))
+        })
+}
+
+/// Whether the `<` at `open` opens a template head's parameters, which a
+/// declaration follows.
+fn opens_template_head(tokens: &[Token], open: usize) -> bool {
+    tokens[..open]
+        .iter()
+        .rev()
+        .find(|token| {
+            !matches!(
+                token,
+                Token::Whitespace(_) | Token::Newline | Token::Comment(..)
+            )
+        })
+        .is_some_and(|token| matches!(token, Token::Word(word) if word == "template"))
+}
+
+/// Whether the `&&` or `||` at `index` joins operands: an `&&` ending a
+/// type, before a `,`, a closing angle or paren, or a pack's `...`, names
+/// a reference.
+fn is_logical_operator(tokens: &[Token], index: usize) -> bool {
+    matches!(&tokens[index], Token::Operator(operator) if operator == "||")
+        || !tokens[index + 1..]
+            .iter()
+            .find(|token| {
+                !matches!(
+                    token,
+                    Token::Whitespace(_) | Token::Newline | Token::Comment(..)
+                )
+            })
+            .is_some_and(|token| match token {
+                Token::Symbol(',' | ')' | '.') => true,
+                Token::Operator(operator) => operator == ">" || operator == ">>",
+                _ => false,
+            })
+}
+
+/// A literal right after a `>` makes it a comparison, never a template's end.
+fn is_literal(token: &Token) -> bool {
+    matches!(
+        token,
+        Token::Number(_) | Token::CharLiteral(_) | Token::StringLiteral(_)
+    )
+}
+
+/// Whether what stands before the `<` at `index` can name a template: a
+/// literal names none, nor does a closing paren but a call operator's.
+fn can_name_template(tokens: &[Token], index: usize) -> bool {
+    let previous_code = |end: usize| {
+        (0..end).rev().find(|&at| {
+            !matches!(
+                tokens[at],
+                Token::Whitespace(_) | Token::Newline | Token::Comment(..)
+            )
+        })
+    };
+    match previous_code(index).map(|at| (at, &tokens[at])) {
+        Some((close, Token::Symbol(')'))) => previous_code(close)
+            .filter(|&open| matches!(tokens[open], Token::Symbol('(')))
+            .and_then(previous_code)
+            .is_some_and(|name| matches!(&tokens[name], Token::Word(word) if word == "operator")),
+        Some((_, token)) => !is_literal(token),
+        None => true,
+    }
 }
 
 fn looks_like_template_opener(tokens: &[Token], index: usize, end: usize) -> bool {
@@ -292,48 +454,63 @@ fn looks_like_template_opener(tokens: &[Token], index: usize, end: usize) -> boo
         next_non_whitespace(tokens, index + 1, end).and_then(|next| tokens.get(next));
     if first_after_open.is_none()
         || matches!(first_after_open, Some(Token::Operator(operator)) if operator == "=")
+        || !can_name_template(tokens, index)
     {
         return false;
     }
-    let mut depth = 0usize;
+    // The paren depth of each angle still open, the one at `index` first.
+    let mut angles: Vec<usize> = Vec::new();
     let mut paren_depth = 0usize;
+    let mut logical = false;
     for (cursor, token) in tokens.iter().enumerate().take(end).skip(index) {
         match token {
             Token::Whitespace(_) | Token::Newline | Token::Comment(_, _) => {}
-            Token::Word(_) | Token::Number(_) => {}
-            Token::Operator(operator) if operator == "<" => depth += 1,
-            Token::Operator(operator) if operator == ">" => {
-                depth = depth.saturating_sub(1);
-                if depth == 0 {
-                    return paren_depth == 0
-                        && next_non_whitespace(tokens, cursor + 1, end)
-                            .and_then(|next| tokens.get(next))
-                            .is_none_or(|token| !matches!(token, Token::Number(_)));
+            Token::Word(_) | Token::Number(_) | Token::CharLiteral(_) | Token::StringLiteral(_) => {
+            }
+            Token::Operator(operator) if operator == "<" => {
+                if can_name_template(tokens, cursor) {
+                    angles.push(paren_depth);
                 }
             }
-            Token::Operator(operator) if operator == ">>" => {
-                depth = depth.saturating_sub(2);
-                if depth == 0 {
-                    return paren_depth == 0
-                        && next_non_whitespace(tokens, cursor + 1, end)
-                            .and_then(|next| tokens.get(next))
-                            .is_none_or(|token| !matches!(token, Token::Number(_)));
+            Token::Operator(operator) if operator == ">" || operator == ">>" => {
+                for _ in 0..operator.len() {
+                    let Some(opener_depth) = angles.pop() else {
+                        break;
+                    };
+                    if angles.is_empty() {
+                        return opener_depth == paren_depth
+                            && closing_follows(tokens, cursor, end, logical);
+                    }
                 }
+            }
+            Token::Operator(operator) if operator == "&&" || operator == "||" => {
+                logical |= angles.len() == 1
+                    && paren_depth == 0
+                    && is_logical_operator(tokens, cursor)
+                    && !opens_template_head(tokens, index);
             }
             Token::Operator(operator)
                 if matches!(
                     operator.as_str(),
-                    "::" | "*" | "&" | "&&" | "^" | "=" | "!" | "!="
+                    "::" | "*" | "&" | "^" | "=" | "==" | "!" | "!="
                 ) => {}
             Token::Symbol('(') => paren_depth += 1,
             Token::Symbol(')') => {
                 if paren_depth == 0 {
                     return false;
                 }
+                while angles.last() == Some(&paren_depth) {
+                    angles.pop();
+                }
                 paren_depth -= 1;
             }
-            Token::Symbol(',' | ':' | '[' | ']') => {}
-            Token::Symbol('.') if in_ellipsis(tokens, cursor) => {}
+            // A member access, as in `decltype(value.size())`, reads as a
+            // name's part.
+            Token::Symbol(',' | ':' | '[' | ']' | '.') => {}
+            // An operator within parens ends only the angles opened in them.
+            Token::Operator(_) if paren_depth > 0 => {
+                angles.retain(|&opener_depth| opener_depth < paren_depth);
+            }
             _ => return false,
         }
     }
@@ -394,8 +571,17 @@ pub(crate) fn assignment_declarator_offset(line: &str) -> Option<usize> {
         i += 1;
     }
     let eq = eq?;
-    let head = line[..eq].trimmed_end();
-    if head.contains_any_byte(b"(),{}") {
+    declaration_head_declarator_offset(line[..eq].trimmed_end())
+}
+
+/// The offset of the declarator in `head`, a declaration up to its first
+/// `=` or `,`: past the type and the stars or ampersands before the name.
+pub(crate) fn declaration_head_declarator_offset(head: &str) -> Option<usize> {
+    // A head holds names and their declarator marks alone: a comment or an
+    // operator makes it no declaration.
+    if !head.chars().all(|ch| {
+        is_word_char(ch) || matches!(ch, ' ' | '\t' | '*' | '&' | ':' | '<' | '>' | '[' | ']')
+    }) {
         return None;
     }
     let head_bytes = head.as_bytes();
@@ -476,6 +662,7 @@ pub(crate) struct BraceListRows {
 pub(crate) fn brace_list_rows(tokens: &[Token], tree: &SourceTree, runs_in: bool) -> BraceListRows {
     let mut rows = BraceListRows::default();
     let mut run_in = IndexSet::default();
+    let mut leading = IndexSet::default();
     let mut children = Vec::new();
     let mut rows_of_nested = IndexSet::default();
     let mut stack: Vec<usize> = Vec::new();
@@ -500,7 +687,10 @@ pub(crate) fn brace_list_rows(tokens: &[Token], tree: &SourceTree, runs_in: bool
             Token::Comment(..) => {}
             Token::Symbol('}') => open_on_line = None,
             _ => {
-                if let Some(open) = open_on_line.take() {
+                // A brace leading its line levels the rows after it.
+                if let Some(open) = open_on_line.take()
+                    && !leading.contains(&open)
+                {
                     run_in.insert(open);
                 }
             }
@@ -517,6 +707,9 @@ pub(crate) fn brace_list_rows(tokens: &[Token], tree: &SourceTree, runs_in: bool
                     }
                 }
                 stack.push(index);
+                if begins_line {
+                    leading.insert(index);
+                }
                 if runs_in && begins_line {
                     if let Some((_, around)) = stack.split_last() {
                         rows.nested.extend(around.iter().copied());
@@ -537,15 +730,20 @@ pub(crate) fn brace_list_rows(tokens: &[Token], tree: &SourceTree, runs_in: bool
     }
     // An element brace follows a separator or a designator's `=`; one after
     // a capture list or a cast opens a lambda body or a compound literal. A
-    // row of a nested list stands as a block does.
+    // row of a nested list stands as a block does, as does the value of a
+    // designator among a list's elements.
+    let is_list = |group: GroupId| tree.blocks.kind(group) == Some(BlockKind::Initializer);
     for (child, parent) in children {
         if run_in.contains(&parent)
             && !rows.nested.contains(&parent)
             && !rows_of_nested.contains(&parent)
-            && tree
-                .groups
-                .opened_at(parent)
-                .is_some_and(|group| tree.blocks.kind(group) == Some(BlockKind::Initializer))
+            && tree.groups.opened_at(parent).is_some_and(|group| {
+                is_list(group)
+                    && !(tree.groups.get(group).parent.is_some_and(is_list)
+                        && tree.previous_code_token(parent).is_some_and(|before| {
+                            matches!(&tokens[before], Token::Operator(operator) if operator == "=")
+                        }))
+            })
             && tree.previous_code_token(child).is_some_and(|before| {
                 matches!(&tokens[before], Token::Symbol(','))
                     || matches!(&tokens[before], Token::Operator(operator) if operator == "=")
@@ -562,6 +760,7 @@ pub(crate) fn classify_syntax(tokens: &[Token], tree: &SourceTree) -> SyntaxRole
     let mut roles = SyntaxRoles::new(tokens.len());
     classify_paren_ranges(tokens, &mut roles);
     classify_word_roles(tokens, &mut roles);
+    let abstract_type_stars = abstract_type_stars(tokens);
     // Every `*` of a run is declared or not as the run is.
     let mut star_run = None;
     for (index, token) in tokens.iter().enumerate() {
@@ -569,6 +768,11 @@ pub(crate) fn classify_syntax(tokens: &[Token], tree: &SourceTree) -> SyntaxRole
             Token::Operator(operator)
                 if matches!(operator.as_str(), "*" | "&")
                     && is_tree_declarator_operator(tokens, tree, index) =>
+            {
+                OperatorRole::PointerDeclarator
+            }
+            Token::Operator(operator)
+                if operator == "*" && abstract_type_stars.binary_search(&index).is_ok() =>
             {
                 OperatorRole::PointerDeclarator
             }
@@ -601,6 +805,120 @@ pub(crate) fn classify_syntax(tokens: &[Token], tree: &SourceTree) -> SyntaxRole
         }
     }
     roles
+}
+
+/// The `*`s declaring pointers in a type named without a name declared: the
+/// type `new` allocates, as in `new Item*[count]`, and an alias's type before
+/// a declarator group, as in `using Row = Item*[4]`. In order. A name or
+/// value after the stars of an allocated type makes them products instead.
+fn abstract_type_stars(tokens: &[Token]) -> Vec<usize> {
+    let mut stars = Vec::new();
+    let mut closes = None;
+    for (index, token) in tokens.iter().enumerate() {
+        let Token::Word(word) = token else {
+            continue;
+        };
+        let (start, alias) = match word.as_str() {
+            language::NEW => (allocated_type_start(tokens, index, &mut closes), false),
+            "using" => (alias_type_start(tokens, index), true),
+            _ => continue,
+        };
+        let Some(mut cursor) = start.and_then(|start| type_name_end(tokens, start)) else {
+            continue;
+        };
+        let first = stars.len();
+        while matches!(&tokens[cursor], Token::Operator(operator) if operator == "*") {
+            stars.push(cursor);
+            let Some(next) = next_non_layout_token_index(tokens, cursor + 1) else {
+                break;
+            };
+            cursor = next;
+        }
+        let declares = if alias {
+            matches!(tokens[cursor], Token::Symbol('(' | '['))
+        } else {
+            !matches!(
+                tokens[cursor],
+                Token::Word(_) | Token::Number(_) | Token::CharLiteral(_) | Token::StringLiteral(_)
+            )
+        };
+        if !declares {
+            stars.truncate(first);
+        }
+    }
+    stars
+}
+
+/// The first token of the type the `new` at `new` allocates, past any
+/// placement arguments.
+fn allocated_type_start(
+    tokens: &[Token],
+    new: usize,
+    closes: &mut Option<Vec<u32>>,
+) -> Option<usize> {
+    let cursor = next_non_layout_token_index(tokens, new + 1)?;
+    if !matches!(tokens[cursor], Token::Symbol('(')) {
+        return Some(cursor);
+    }
+    let close = closes.get_or_insert_with(|| matching_close_parens(tokens))[cursor];
+    if close == u32::MAX {
+        return None;
+    }
+    next_non_layout_token_index(tokens, close as usize + 1)
+}
+
+/// The first token of the type the alias declaration at `using` names.
+fn alias_type_start(tokens: &[Token], using: usize) -> Option<usize> {
+    let name = next_non_layout_token_index(tokens, using + 1)?;
+    let assign = next_non_layout_token_index(tokens, name + 1)?;
+    if !matches!(tokens[name], Token::Word(_))
+        || !matches!(&tokens[assign], Token::Operator(operator) if operator == "=")
+    {
+        return None;
+    }
+    next_non_layout_token_index(tokens, assign + 1)
+}
+
+/// The first token after the type name starting at `start`, when one does.
+fn type_name_end(tokens: &[Token], start: usize) -> Option<usize> {
+    let mut cursor = start;
+    let mut type_words = 0;
+    loop {
+        match &tokens[cursor] {
+            Token::Word(word) if !starts_type_id(word) => type_words += 1,
+            Token::Operator(operator) if operator == "::" => {}
+            Token::Operator(operator) if operator == "<" && type_words > 0 => {
+                cursor = type_template_arguments_close(tokens, cursor)?;
+            }
+            _ => return (type_words > 0).then_some(cursor),
+        }
+        cursor = next_non_layout_token_index(tokens, cursor + 1)?;
+    }
+}
+
+fn starts_type_id(word: &str) -> bool {
+    matches!(word, language::NEW | "using")
+}
+
+/// The `>` closing the template arguments opened at `open`; another type
+/// or the statement's end leaves them unclosed.
+fn type_template_arguments_close(tokens: &[Token], open: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    for (index, token) in tokens.iter().enumerate().skip(open) {
+        match token {
+            Token::Operator(operator) if operator == "<" => depth += 1,
+            Token::Operator(operator) if operator == ">" || operator == ">>" => {
+                depth = depth.saturating_sub(operator.len());
+                if depth == 0 {
+                    return Some(index);
+                }
+            }
+            Token::Symbol(';' | '{' | '}') => return None,
+            Token::Word(word) if starts_type_id(word) => return None,
+            _ => {}
+        }
+    }
+    None
 }
 
 /// Whether the operator at `index` declares a pointer or reference by the
@@ -750,6 +1068,35 @@ fn standalone_macro_invocation_word(
             || line_ends_after_token(tokens, close))
 }
 
+/// Whether `token` can only go on with an expression before it.
+pub(crate) fn continues_expression(token: &Token) -> bool {
+    match token {
+        Token::Operator(operator) => {
+            language::is_assignment_operator(operator)
+                || matches!(
+                    operator.as_str(),
+                    "<<" | ">>"
+                        | "=="
+                        | "!="
+                        | "<"
+                        | ">"
+                        | "<="
+                        | ">="
+                        | "&&"
+                        | "||"
+                        | "|"
+                        | "^"
+                        | "/"
+                        | "%"
+                        | "?"
+                        | "->"
+                )
+        }
+        Token::Symbol('.' | '?') => true,
+        _ => false,
+    }
+}
+
 fn line_ends_after_token(tokens: &[Token], index: usize) -> bool {
     let mut cursor = index + 1;
     while matches!(tokens.get(cursor), Some(Token::Whitespace(_))) {
@@ -853,7 +1200,9 @@ fn star_run_declares(tokens: &[Token], first: usize, last: usize) -> bool {
 fn classify_star_operator(tokens: &[Token], index: usize, roles: &SyntaxRoles) -> OperatorRole {
     let previous = previous_non_layout_token_index(tokens, index);
     let next = next_non_layout_token_index(tokens, index + 1);
-    if star_is_binary_operator(tokens, previous, next, index, roles) {
+    if follows_tagged_type_name(tokens, previous) {
+        OperatorRole::PointerDeclarator
+    } else if star_is_binary_operator(tokens, previous, next, index, roles) {
         OperatorRole::BinaryOperator
     } else if star_is_pointer_declarator(tokens, previous, next) {
         OperatorRole::PointerDeclarator
@@ -876,7 +1225,9 @@ fn classify_ampersand_operator(tokens: &[Token], index: usize) -> OperatorRole {
     if suffix_type_word_in_expression(tokens, previous, next, index) {
         return OperatorRole::BinaryOperator;
     }
-    if star_is_pointer_declarator(tokens, previous, next) {
+    if follows_tagged_type_name(tokens, previous)
+        || star_is_pointer_declarator(tokens, previous, next)
+    {
         OperatorRole::PointerDeclarator
     } else if ampersand_is_binary_operator(tokens, previous, next) {
         OperatorRole::BinaryOperator
@@ -885,6 +1236,18 @@ fn classify_ampersand_operator(tokens: &[Token], index: usize) -> OperatorRole {
     } else {
         OperatorRole::Unknown
     }
+}
+
+/// Whether the token at `previous` names a type after its tag, as `Item`
+/// in `struct Item`, which only a declarator can follow.
+fn follows_tagged_type_name(tokens: &[Token], previous: Option<usize>) -> bool {
+    previous.is_some_and(|name| {
+        matches!(&tokens[name], Token::Word(word) if !is_non_type_keyword(word))
+            && previous_non_layout_token_index(tokens, name).is_some_and(|tag| {
+                matches!(&tokens[tag], Token::Word(word)
+                    if matches!(word.as_str(), "struct" | "union" | "enum" | "class"))
+            })
+    })
 }
 
 fn star_is_pointer_declarator(
@@ -1465,9 +1828,9 @@ mod tests {
 
     #[test]
     fn template_openers_match_the_scan_from_each_angle() {
-        const PIECES: [&str; 18] = [
+        const PIECES: [&str; 22] = [
             "<", ">", ">>", "(", ")", "a", "1", " ", ",", ";", "=", "::", "*", "[", "]", "+", "\n",
-            "<<",
+            "<<", "&&", "||", ".", "++",
         ];
         let mut state = 0x2545_f491_4f6c_dd1du64;
         for _ in 0..4000 {

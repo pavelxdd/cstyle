@@ -1,3 +1,4 @@
+use crate::config::BraceStyle;
 use crate::formatter::braces::closing::starts_post_closing_declaration;
 use crate::formatter::constructs::switch_cases::{
     case_label_with_trailing_comment, split_switch_label_statement,
@@ -6,8 +7,10 @@ use crate::formatter::continuation::operator_chains;
 use crate::formatter::ends_inside_block_comment;
 use crate::formatter::engine::{FormatEngine, SplitLineShift};
 use crate::formatter::lexer::Token;
+use crate::formatter::preprocessor::is_always_indented_preprocessor_line;
 use crate::formatter::state::BraceType;
 use crate::formatter::state::PreviousToken;
+use crate::formatter::structure::blocks::{BlockKind, next_code_token};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
@@ -26,11 +29,8 @@ impl FormatEngine<'_> {
         let comments = self.current.take_comments();
         self.output.set_pending_comments(comments);
         let line = self.take_current();
-        let published = self.output.len();
-        self.publish_unadjusted_line(line);
-        if self.output.len() > published {
-            self.output.mark_last_verbatim();
-        }
+        self.publish_verbatim_line(line);
+        self.output.mark_last_verbatim();
         self.layout.previous = PreviousToken::None;
         self.previous_was_newline = false;
     }
@@ -244,10 +244,12 @@ impl FormatEngine<'_> {
             } else {
                 self.finish_line_text(line);
             }
+            self.follow_lambda_row_to_statement();
             let output_line_index =
                 output_line_index + std::mem::take(&mut self.layout.blank_lines_before_pending);
             self.reset_continuation_after_output_line(line, output_line_index);
             self.reset_continuation_after_directive_rows(output_line_index);
+            self.follow_operator_frames_to_rows(output_line_index);
             // A closing brace line that ends its declaration, as `} name;`,
             // used the column it was given.
             if code.trimmed_start().starts_with('}')
@@ -282,7 +284,7 @@ impl FormatEngine<'_> {
                 );
             }
         }
-        if self.unmatched_closing_brace_recovery {
+        if self.unmatched_closing_brace_resets_line() {
             self.layout.continuation_indent.set_next_line_spaces(0);
             self.layout.indentation.clear_continuation_indents();
             self.layout.nesting.clear_continuation_indents();
@@ -299,6 +301,39 @@ impl FormatEngine<'_> {
         self.reset_after_finished_line();
     }
 
+    /// Moves the columns a row registered past the lead the engine planned
+    /// for it to where the layout set the row at its statement.
+    fn follow_lambda_row_to_statement(&mut self) {
+        let Some(planned) = self.lambda_row_planned_lead.take() else {
+            return;
+        };
+        let Some(line) = self.output.len().checked_sub(1) else {
+            return;
+        };
+        let lead = self.output.lead_width(line, self.options.tab_width);
+        let shift = lead as isize - planned as isize;
+        if shift == 0 {
+            return;
+        }
+        let base = self.continuation_base_indent() * self.options.indent_width;
+        self.layout.nesting.shift_columns_from(
+            planned,
+            shift,
+            base,
+            self.options.max_continuation_indent,
+        );
+        self.layout
+            .frame_stack
+            .move_split_line_frames(line, line, planned, shift, lead);
+        self.split_line_shift = Some(SplitLineShift {
+            line,
+            from_column: planned,
+            shift,
+            declaration_columns: None,
+            moved_stack: true,
+        });
+    }
+
     fn reset_continuation_after_output_line(&mut self, line: &str, output_line_index: usize) {
         if let Some(output_indent) = self.observe_operator_chain_output_line(output_line_index)
             && let Some(output_line) = self.output.get(output_line_index)
@@ -307,6 +342,7 @@ impl FormatEngine<'_> {
                 .frame_stack
                 .mark_delimiter_line_output_indent(output_line_index, output_indent);
             let output_code = self.output.code_trimmed_of(output_line);
+            let output_start = output_code.trimmed_start();
             let line_comment_limit = line_comment_split_limit(line);
             let code_before_line_comment = line[..line_comment_limit].trimmed_end();
             // A `#` in a literal is no directive.
@@ -319,12 +355,11 @@ impl FormatEngine<'_> {
                         .any(|token| matches!(token, Token::Preprocessor(_)))
                 });
             let embedded_preprocessor = holds_directive
-                && (has_hash_outside_literals(output_code)
-                    && !output_code.trimmed_start().starts_with('#')
+                && (has_hash_outside_literals(output_code) && !output_start.starts_with('#')
                     || (line_comment_limit < line.len() || line.trimmed_end().ends_with(':'))
                         && has_hash_outside_literals(code_before_line_comment)
                         && !code_before_line_comment.trimmed_start().starts_with('#'));
-            if output_code.trimmed_start().starts_with("return ")
+            if output_start.starts_with("return ")
                 && holds_directive
                 && has_hash_outside_literals(output_code)
                 && !output_code.ends_with(';')
@@ -354,7 +389,7 @@ impl FormatEngine<'_> {
                     &mut self.layout.continuation_indent.logical_chain_indent_spaces,
                 );
             }
-            if output_code.trimmed_start().starts_with("else,") {
+            if output_start.starts_with("else,") {
                 self.layout.continuation_indent.next_line_indent = None;
                 self.layout.continuation_indent.next_line_indent_spaces = Some(0);
                 self.layout.nesting.clear_continuation_indents();
@@ -363,7 +398,7 @@ impl FormatEngine<'_> {
                     &mut self.layout.continuation_indent.logical_chain_indent_spaces,
                 );
             }
-            if output_code.trimmed_start().starts_with("#define") && !output_code.ends_with('\\') {
+            if output_start.starts_with("#define") && !output_code.ends_with('\\') {
                 self.layout.continuation_indent.next_line_indent = None;
                 self.layout.continuation_indent.next_line_indent_spaces = None;
                 self.layout.nesting.clear_continuation_indents();
@@ -372,7 +407,7 @@ impl FormatEngine<'_> {
                     &mut self.layout.continuation_indent.logical_chain_indent_spaces,
                 );
             }
-            if preprocessor_directive(output_code.trimmed_start()) == Some("endif")
+            if preprocessor_directive(output_start) == Some("endif")
                 && let Some(previous) = self.output[..output_line_index]
                     .iter()
                     .rev()
@@ -384,12 +419,12 @@ impl FormatEngine<'_> {
                 self.layout.continuation_indent.next_line_indent_spaces =
                     Some(leading_visual_width(previous, self.options.tab_width));
             }
-            if output_code.trimmed() == "?" {
+            if output_start == "?" {
                 self.layout.continuation_indent.next_line_indent = None;
                 self.layout.continuation_indent.next_line_indent_spaces = Some(output_indent);
                 self.layout.nesting.clear_continuation_indents();
             }
-            if output_code.trimmed() == "catch"
+            if output_start == "catch"
                 && self.output[..output_line_index]
                     .iter()
                     .rev()
@@ -521,7 +556,11 @@ impl FormatEngine<'_> {
                 }
                 continue;
             }
-            if !meta.code_starts_with_hash {
+            // A directive indented as code leads the fill as code does.
+            if !meta.code_starts_with_hash
+                || preprocessor_directive(line.trimmed_start())
+                    .is_some_and(|directive| is_always_indented_preprocessor_line(line, directive))
+            {
                 state.1 = line[..line.len() - line.trimmed_start().len()].to_string();
             }
             let code = line.trimmed_start();
@@ -645,9 +684,10 @@ impl FormatEngine<'_> {
         }
     }
 
-    /// The finished text, and where the fill of each of its whitespace-only
-    /// lines came from.
-    pub(crate) fn finish(mut self) -> (String, Vec<EmptyFillSource>) {
+    /// The finished text, where the fill of each of its whitespace-only
+    /// lines came from, and its lines holding a list's lone brace that the
+    /// row closing the list runs into.
+    pub(crate) fn finish(mut self) -> (String, Vec<EmptyFillSource>, Vec<usize>) {
         // Whole-output passes look at every construct.
         self.output.clear_scope();
         self.flush_backslash_body_parts();
@@ -658,6 +698,7 @@ impl FormatEngine<'_> {
         self.fuse_adjacent_braces();
         self.attach_statement_expression_braces();
         self.align_comments_before_case_labels();
+        let run_in_list_braces = self.run_in_list_brace_lines();
         self.retab_output();
         let fill_sources = self.fill_empty_lines();
         let line_break = self.options.line_break();
@@ -665,12 +706,55 @@ impl FormatEngine<'_> {
         let lines = std::mem::take(&mut self.output).into_lines();
         drop(self);
         if lines.is_empty() {
-            (String::new(), fill_sources)
+            (String::new(), fill_sources, run_in_list_braces)
         } else {
             let mut output = lines.join(line_break);
             output.push_str(line_break);
-            (output, fill_sources)
+            (output, fill_sources, run_in_list_braces)
         }
+    }
+
+    /// The lines holding only a list's `{` whose list closes on the next
+    /// line, which the run-in styles bring up to the brace. Pico brings the
+    /// closer up to that line as well. A nested brace leading that line runs
+    /// in as a block's.
+    fn run_in_list_brace_lines(&self) -> Vec<usize> {
+        if !matches!(
+            self.options.brace_style,
+            BraceStyle::Horstmann | BraceStyle::Pico
+        ) {
+            return Vec::new();
+        }
+        let groups = &self.tree.groups;
+        let closes_row = |index: usize, close_line: usize| {
+            close_line == index + 1
+                || self.options.brace_style == BraceStyle::Pico
+                    && close_line == index + 2
+                    && self.output.trimmed(close_line).starts_with('}')
+        };
+        (0..self.output.len())
+            .filter(|&index| {
+                self.output.trimmed(index) == "{"
+                    && self
+                        .output
+                        .line_tokens(index)
+                        .filter(|span| {
+                            next_code_token(&self.tree.tokens, span.first + 1).is_none_or(|next| {
+                                !matches!(self.tree.tokens[next], Token::Symbol('{'))
+                            })
+                        })
+                        .and_then(|span| groups.opened_at(span.first))
+                        .filter(|&group| {
+                            matches!(
+                                self.tree.blocks.kind(group),
+                                Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                            )
+                        })
+                        .and_then(|group| groups.get(group).close)
+                        .and_then(|close| self.output.line_with_token(close))
+                        .is_some_and(|close_line| closes_row(index, close_line))
+            })
+            .collect()
     }
 }
 

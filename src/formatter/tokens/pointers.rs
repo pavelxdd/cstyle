@@ -35,9 +35,17 @@ pub(crate) struct PointerRunState {
     pub(crate) gap_before_column: Option<usize>,
     pub(super) skip_adjacent_pointer_operators: usize,
     pub(crate) template_close_before_current: bool,
-    /// A `*` aligned off its name before a parenthesized declarator, as in
-    /// `char* (*get)(void)`, keeps a space before the paren.
+    /// A `*` aligned off its name before a parenthesized declarator or an
+    /// array bound, as in `char* (*get)(void)` or `new char* [count]`, keeps
+    /// a space before the group.
     pub(crate) spaces_declarator_group: bool,
+    /// A parenthesized declarator, an array bound or a pack's `...` follows
+    /// the run.
+    pub(crate) group_follows_run: bool,
+    /// A `*` aligned to its name takes the parenthesized declarator, array
+    /// bound or pack's `...` right after it as that name, as in
+    /// `new char *[count]`.
+    pub(crate) attaches_declarator_group: bool,
     /// The last run of one operator read: the tokens' address, the token
     /// read from, and the run's last token.
     pub(crate) run_end: Option<(usize, usize, usize)>,
@@ -85,6 +93,10 @@ impl FormatEngine<'_> {
     }
 
     pub(super) fn is_rvalue_reference_like(&self, next: Option<&Token>) -> bool {
+        // A `.` after the operator starts a pack's `...`.
+        if matches!(next, Some(Token::Symbol('.'))) {
+            return self.declares_pack();
+        }
         // A parameter list continues no expression of the line before it.
         if self.tree_declaration_context() != Some(true)
             && self.continues_operator_expression()
@@ -137,7 +149,10 @@ impl FormatEngine<'_> {
             return true;
         }
         let previous_word = trailing_word(&self.current);
-        if (self.layout.command_state.current_header.is_some() && previous_word != language::AUTO)
+        let follows_template_arguments = self.current.trimmed_end().ends_with('>');
+        if (self.layout.command_state.current_header.is_some()
+            && previous_word != language::AUTO
+            && !follows_template_arguments)
             || (self.layout.nesting.paren_depth > 0
                 && self
                     .layout
@@ -149,7 +164,7 @@ impl FormatEngine<'_> {
             return false;
         }
         previous_word == language::AUTO
-            || self.current.trimmed_end().ends_with('>')
+            || follows_template_arguments
             || self.looks_like_pointer_declaration_context()
     }
 
@@ -202,6 +217,25 @@ impl FormatEngine<'_> {
             })
     }
 
+    /// Whether a `*` with another right after it follows an operand that is
+    /// no number: the stars point to a pointer wherever they stand.
+    pub(super) fn adjacent_stars_follow_operand(
+        &self,
+        next: Option<&Token>,
+        next_is_adjacent: bool,
+    ) -> bool {
+        next_is_adjacent
+            && matches!(next, Some(Token::Operator(next)) if next == "*")
+            && matches!(
+                self.layout.previous,
+                PreviousToken::Word | PreviousToken::CloseParen | PreviousToken::CloseBracket
+            )
+            && !self
+                .current
+                .trimmed_end()
+                .ends_with(|ch: char| ch.is_ascii_digit())
+    }
+
     pub(super) fn is_pointer_like(
         &self,
         operator: &str,
@@ -224,7 +258,8 @@ impl FormatEngine<'_> {
         {
             return false;
         }
-        // A run of stars right before `)` ends a type, as in `(u8**)`.
+        // A run of stars right before `)` ends a type, as in `(u8**)`; one
+        // before an array bound does where a single star would.
         if operator == "*"
             && matches!(self.layout.previous, PreviousToken::Word)
             && (matches!(next, Some(Token::Symbol(')')))
@@ -239,9 +274,16 @@ impl FormatEngine<'_> {
                                         && !matches!(token, Token::Operator(star) if star == "*")
                                 })
                             })
-                            .is_some_and(|token| matches!(token, Token::Symbol(')')))
+                            .is_some_and(|token| match token {
+                                Token::Symbol(')') => true,
+                                Token::Symbol('[') => self.looks_like_pointer_declaration_context(),
+                                _ => false,
+                            })
                     }))
         {
+            return true;
+        }
+        if operator == "*" && self.adjacent_stars_follow_operand(next, next_is_adjacent) {
             return true;
         }
         if self.continues_operator_expression()
@@ -409,7 +451,7 @@ impl FormatEngine<'_> {
         {
             return true;
         }
-        if self.in_initializer_brace()
+        if (self.in_initializer_brace() || self.directly_in_value_list())
             && matches!(next, Some(Token::Word(_)))
             && trailing_word(&self.current)
                 .chars()
@@ -529,13 +571,43 @@ impl FormatEngine<'_> {
             })
     }
 
+    /// Whether a `...` after a declarator's operator names a parameter or
+    /// type pack rather than ending a fold expression.
+    pub(super) fn declares_pack(&self) -> bool {
+        self.tree_declaration_context() == Some(true)
+            || self.current_paren_is_lambda_parameter_list()
+            || self.layout.line_state.template_angle_depth > 0
+                && self
+                    .current
+                    .rfind('<')
+                    .is_some_and(|open| !self.current[open..].contains('('))
+    }
+
+    /// Whether the token stands in a braced list of values, as a braced
+    /// initializer's, outside any parens in it.
+    fn directly_in_value_list(&self) -> bool {
+        matches!(
+            self.layout.nesting.brace_type_stack.last(),
+            Some(BraceType::Initializer)
+        ) && self.layout.nesting.paren_depth
+            == self.layout.nesting.current_brace_paren_depth().unwrap_or(0)
+            && self
+                .current
+                .active_token()
+                .and_then(|index| self.tree.groups.enclosing(index))
+                .and_then(|group| self.tree.blocks.kind(group))
+                .is_none_or(|kind| kind == BlockKind::Initializer)
+    }
+
     fn pointer_in_template_type_context(&self, next: Option<&Token>) -> bool {
         if self.layout.line_state.template_angle_depth == 0 {
             return false;
         }
         match next {
             Some(Token::Operator(operator)) if operator.starts_with('>') => true,
-            Some(Token::Symbol(',')) => true,
+            // An array bound ends the type, as in `Box<char*[4]>`.
+            Some(Token::Symbol(',' | '[')) => true,
+            Some(Token::Symbol('.')) => self.declares_pack(),
             Some(Token::Word(word))
                 if matches!(word.as_str(), "const" | "volatile" | "restrict") =>
             {
@@ -767,10 +839,13 @@ impl FormatEngine<'_> {
                     return self.paren_head_is_declaration(before);
                 }
                 // The enclosing open paren starts this line; its head is the
-                // preceding output line.
+                // preceding code line, past comments and directives.
                 self.output
-                    .last_non_empty_scoped()
-                    .is_some_and(|line| self.paren_head_is_declaration(line.trimmed_end()))
+                    .last_code_line_index_past_comments_and_directives()
+                    .filter(|index| self.output.scoped_range().contains(index))
+                    .is_some_and(|index| {
+                        self.paren_head_is_declaration(self.output[index].trimmed_end())
+                    })
             }
             Some(_) => false,
             None => {
@@ -868,7 +943,7 @@ impl FormatEngine<'_> {
 
     pub(crate) fn current_paren_is_lambda_parameter_list(&self) -> bool {
         let Some(open) = self.current.last_open_paren() else {
-            return false;
+            return self.active_paren_heads_lambda_body();
         };
         let mut before = self.current[..open].trimmed_end();
         if before.ends_with('>') {
@@ -916,6 +991,42 @@ impl FormatEngine<'_> {
         };
         let prefix = before[..start].trimmed_end();
         !prefix.ends_with(|ch: char| is_identifier_continue(ch) || matches!(ch, ')' | ']'))
+    }
+
+    /// Whether the parens around the token being pushed, opened on an
+    /// earlier line, hold a lambda's parameters: its body's brace follows
+    /// them past any specifiers and trailing return type.
+    fn active_paren_heads_lambda_body(&self) -> bool {
+        let tree = &self.tree;
+        let groups = &tree.groups;
+        let Some(params) = self
+            .current
+            .active_token()
+            .and_then(|token| groups.enclosing(token))
+            .filter(|&group| groups.get(group).delimiter == Delimiter::Paren)
+        else {
+            return false;
+        };
+        let Some(close) = groups.get(params).close else {
+            return false;
+        };
+        let mut index = close + 1;
+        while index < tree.tokens.len() {
+            match &tree.tokens[index] {
+                Token::Symbol('{') => {
+                    return groups
+                        .opened_at(index)
+                        .is_some_and(|body| tree.blocks.kind(body) == Some(BlockKind::Lambda));
+                }
+                Token::Symbol(';' | ',' | ')' | ']' | '}') => return false,
+                _ => {}
+            }
+            index = groups
+                .opened_at(index)
+                .and_then(|group| groups.get(group).close)
+                .map_or(index + 1, |close| close + 1);
+        }
+        false
     }
 
     fn current_paren_context_is_constructor_declaration(&self, segment: &str) -> bool {
@@ -988,13 +1099,17 @@ impl FormatEngine<'_> {
                 next,
                 Some(Token::Operator(next_operator)) if matches!(next_operator.as_str(), "&" | "&&")
             );
-        if self.current.trimmed().is_empty()
-            && self.token_input.token_begins_source_line
-            && self.is_function_declaration_parameter_continuation()
-        {
+        // A declarator leading its row has its type on the row before:
+        // name alignment attaches it to the name, and the alignments with
+        // nothing on its row to move it to keep the source's spacing.
+        if self.current.trimmed().is_empty() && self.token_input.token_begins_source_line {
             self.record_declaration_frame_for_pointer(operator, next);
             self.current.push_str(operator);
-            self.emit_trailing_source_space();
+            if !(resolved_pointer_align(self.options, operator) == PointerAlign::Name
+                && self.pointer_run.next_is_name_like)
+            {
+                self.emit_trailing_source_space();
+            }
             return;
         }
         if self.current.trimmed_end().ends_with('(') && !followed_by_reference {
@@ -1141,6 +1256,7 @@ impl FormatEngine<'_> {
                 ) {
                     return;
                 }
+                self.pointer_run.attaches_declarator_group = self.pointer_run.group_follows_run;
             }
             PointerAlign::None => {
                 self.emit_source_space();
@@ -1163,8 +1279,8 @@ impl FormatEngine<'_> {
         }
     }
 
-    /// Whether the `*` just pushed starts a parenthesized declarator a space
-    /// parts from it. astyle leaves the star of a `struct` type and of a
+    /// Whether the `*` just pushed starts a parenthesized declarator or an
+    /// array bound a space parts from it. astyle leaves the star of a `struct` type and of a
     /// conversion operator where it was.
     fn pointer_spaces_declarator_group(&self, operator: &str, next: Option<&Token>) -> bool {
         let current = self.current.trimmed_end();
@@ -1175,7 +1291,7 @@ impl FormatEngine<'_> {
             .split(|ch: char| !is_identifier_continue(ch))
             .filter(|word| !word.is_empty())
             .collect::<Vec<_>>();
-        matches!(next, Some(Token::Symbol('(')))
+        (matches!(next, Some(Token::Symbol('(' | '['))) || self.pointer_run.group_follows_run)
             && !words.iter().rev().take(2).any(|word| {
                 *word == "operator"
                         // In a statement astyle leaves a tagged type's star
@@ -1415,7 +1531,11 @@ impl FormatEngine<'_> {
                 self.trim_current_end_horizontal_space();
             } else if self.pointer_run.next_is_name_like {
                 self.trim_current_end();
-                let gap = if matches!(next, Some(Token::Symbol('('))) {
+                // Padding parens outside keeps the gap after the star before
+                // a declarator group.
+                let gap = if matches!(next, Some(Token::Symbol('(')))
+                    && (self.options.pad_parens_outside || self.options.pad_first_paren_outside)
+                {
                     match self.token_input.previous_input_whitespace.as_deref() {
                         Some(gap) if !gap.is_empty() => gap.to_string(),
                         _ => " ".to_string(),
@@ -1435,14 +1555,13 @@ impl FormatEngine<'_> {
         if matches!(next, Some(Token::Operator(next_operator)) if next_operator == operator) {
             self.trim_current_end();
         }
+        // The star takes a parameter's declarator group as its name unless
+        // padding sets it apart.
         if matches!(next, Some(Token::Symbol('(')))
             && self.function_pointer_parameter_keeps_space_before_name_group()
+            && self.function_pointer_parameter_name_group_uses_space()
         {
-            if self.function_pointer_parameter_name_group_uses_space() {
-                self.ensure_space();
-            } else {
-                self.emit_trailing_source_space();
-            }
+            self.ensure_space();
         }
         false
     }
@@ -1778,6 +1897,10 @@ pub(crate) fn is_pointer_declaration_segment(segment: &str) -> bool {
         return false;
     }
     if segment.contains(':') && segment.replace("::", "").contains(':') {
+        return false;
+    }
+    // A member access names no type; a pack's `...` may follow one.
+    if segment.contains('.') && segment.replace("...", "").contains('.') {
         return false;
     }
     let mut words = segment

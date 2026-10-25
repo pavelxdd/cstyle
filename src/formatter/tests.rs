@@ -259,8 +259,6 @@ fn preprocessor_branch_snapshots_restore_formatter_contract_state() {
         .compound_literal
         .forced_break_depths
         .push(3);
-    formatter.layout.compound_literal.arg_indent_spaces = Some(12);
-    formatter.layout.compound_literal.arg_paren_depth = Some(2);
     formatter.header_paren.depth = Some(2);
     formatter.inline_array.initializer_designator_bracket_depth = 1;
     formatter.inline_array.frames.push(InlineArrayFrame {
@@ -288,8 +286,6 @@ fn preprocessor_branch_snapshots_restore_formatter_contract_state() {
         .compound_literal
         .forced_break_depths
         .clear();
-    formatter.layout.compound_literal.arg_indent_spaces = None;
-    formatter.layout.compound_literal.arg_paren_depth = None;
     formatter.header_paren.depth = None;
     formatter.inline_array.initializer_designator_bracket_depth = 0;
     formatter.inline_array.frames.clear();
@@ -312,11 +308,6 @@ fn preprocessor_branch_snapshots_restore_formatter_contract_state() {
         formatter.layout.compound_literal.forced_break_depths,
         vec![3]
     );
-    assert_eq!(
-        formatter.layout.compound_literal.arg_indent_spaces,
-        Some(12)
-    );
-    assert_eq!(formatter.layout.compound_literal.arg_paren_depth, Some(2));
     assert_eq!(formatter.header_paren.depth, Some(2));
     assert_eq!(
         formatter.inline_array.initializer_designator_bracket_depth,

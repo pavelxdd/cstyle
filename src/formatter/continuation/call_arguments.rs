@@ -10,6 +10,7 @@ use crate::formatter::lexer::Token;
 use crate::formatter::preprocessor::output_has_active_preprocessor_branch;
 use crate::formatter::state::frame::CommaRole;
 use crate::formatter::state::indentation::LineKind;
+use crate::formatter::structure::blocks::next_code_token;
 use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::syntax::language;
 use crate::formatter::syntax::language::is_macro_like_word;
@@ -990,8 +991,12 @@ impl FormatEngine<'_> {
             return None;
         }
         let trimmed_end = line.trimmed_end();
-        let closes_enclosing_call = line.paren_imbalance().0 > 0;
-        if self.layout.nesting.paren_depth == 0 && !closes_enclosing_call {
+        let (closes, opens) = line.paren_imbalance();
+        // The row stands among a call's arguments only when a paren before
+        // it is open, not one it opens itself.
+        let depth_before_row =
+            (self.layout.nesting.paren_depth + closes).saturating_sub(opens.len());
+        if depth_before_row == 0 && closes == 0 {
             return None;
         }
         let trimmed = line.trimmed_start();
@@ -1232,7 +1237,9 @@ impl FormatEngine<'_> {
             return None;
         }
         let (previous, previous_code) = self.output.last_code_outside_comment()?;
-        if !previous_code.ends_with(',') {
+        // A row a brace leads ends a block or a list among the arguments,
+        // no sibling of the next one.
+        if !previous_code.ends_with(',') || previous_code.trimmed_start().starts_with_any(b"{}") {
             return None;
         }
         // A split opener stands among the lines before the last since the
@@ -1245,13 +1252,24 @@ impl FormatEngine<'_> {
                     simple_trailing_open_paren_line(self.output[index].trimmed_end())
                         && !self.output.paren_imbalance(index).1.is_empty()
                 });
-        let has_split_opener = opener.is_some_and(|opener| {
-            self.output
-                .last_line_looked(&self.statement_edge_look, opener + 1, end, |index| {
-                    let code = self.output[index].trimmed_end();
-                    code.ends_with(';') || code == "{" || code == "}"
+        // The opener's paren holds the row, when the tree knows the row.
+        let holds_row = |opener: usize| {
+            self.output.pending_tokens().is_none_or(|span| {
+                let groups = &self.tree.groups;
+                groups.enclosing(span.first).is_some_and(|group| {
+                    self.output.line_with_token(groups.get(group).open) == Some(opener)
                 })
-                .is_none()
+            })
+        };
+        let has_split_opener = opener.is_some_and(|opener| {
+            holds_row(opener)
+                && self
+                    .output
+                    .last_line_looked(&self.statement_edge_look, opener + 1, end, |index| {
+                        let code = self.output[index].trimmed_end();
+                        code.ends_with(';') || code == "{" || code == "}"
+                    })
+                    .is_none()
         });
         has_split_opener.then(|| {
             leading_visual_width(previous, self.options.tab_width)
@@ -1718,26 +1736,6 @@ impl FormatEngine<'_> {
         self.active_output_paren_continuation_indent_spaces()
     }
 
-    pub(crate) fn maximum_length_capped_open_paren_argument_indent_spaces(
-        &self,
-        line_kind: LineKind,
-    ) -> Option<usize> {
-        if line_kind != LineKind::Normal
-            || self.options.max_code_length.is_none()
-            || self.options.indent_after_parens
-        {
-            return None;
-        }
-        let (previous, previous_code) = self.output.last_code_outside_comment()?;
-        let base = self.continuation_base_indent() * self.options.indent_width;
-        (previous_code.ends_with('(')
-            && leading_visual_width(previous, self.options.tab_width) == base
-            && self
-                .open_paren_column_of(previous_code)
-                .is_some_and(|open| open + 1 > base + self.options.max_continuation_indent))
-        .then_some(base + self.options.indent_width * 2)
-    }
-
     pub(crate) fn over_max_new_call_argument_indent_spaces(
         &self,
         line: &LineView<'_>,
@@ -2170,8 +2168,102 @@ impl FormatEngine<'_> {
             return Some(spaces);
         }
         (has_member_after_paren(previous_code)
-            && self.open_paren_column_of(previous_code).is_none())
+            && self.open_paren_column_of(previous_code).is_none()
+            && !self
+                .output
+                .last_line_outside_comment_index()
+                .is_some_and(|index| self.row_leaves_template_angles_open(index)))
         .then(|| leading_visual_width(previous, self.options.tab_width))
+    }
+
+    /// Whether output line `index` leaves template angles open, as a row of
+    /// template arguments split across rows does.
+    fn row_leaves_template_angles_open(&self, index: usize) -> bool {
+        let Some(span) = self.output.line_tokens(index) else {
+            return false;
+        };
+        let tokens = &self.tree.tokens;
+        let mut depth = 0usize;
+        for at in span.first..=span.last.min(tokens.len().saturating_sub(1)) {
+            match &tokens[at] {
+                Token::Operator(operator) if operator == "<" && self.template_opener_at(at) => {
+                    depth += 1;
+                }
+                Token::Operator(operator)
+                    if depth > 0 && matches!(operator.as_str(), ">" | ">>") =>
+                {
+                    depth = depth.saturating_sub(operator.len());
+                }
+                _ => {}
+            }
+        }
+        depth > 0
+    }
+
+    /// Whether `line` opens a lambda's body outside a message: the row
+    /// stands at the statement however far the parens before it reach.
+    /// Whether the line being laid out opens a lambda's body that ends what
+    /// its statement continued: anywhere but among a constructor's
+    /// initializers, whose rows go on past it.
+    pub(crate) fn pending_line_opens_statement_lambda_body(&self) -> bool {
+        self.pending_line_opens_lambda_body()
+            && self
+                .layout
+                .frame_stack
+                .active_constructor_initializer()
+                .is_none()
+    }
+
+    pub(crate) fn line_opens_statement_level_lambda(&self, line: &LineView<'_>) -> bool {
+        // A row of a lambda's parameters may open its body too, and a row
+        // opening a lambda whose parameters go on opens it there.
+        (line.opens_attachable_lambda_block(self.options)
+            || line.trimmed_end().ends_with('{') && self.pending_line_opens_statement_lambda_body()
+            || self.pending_line_opens_split_lambda_parameters()
+                && self
+                    .layout
+                    .frame_stack
+                    .active_constructor_initializer()
+                    .is_none())
+            && !self.pending_line_in_message()
+            || self.line_opens_block_argument(line)
+    }
+
+    /// Whether the pending line ends with the brace of a block among a
+    /// call's arguments, which sets the row at the statement as a lambda's
+    /// body does.
+    fn line_opens_block_argument(&self, line: &str) -> bool {
+        if !line.as_bytes().contains(&b'{') {
+            return false;
+        }
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let Some(span) = self.output.pending_tokens() else {
+            return false;
+        };
+        // A brace the style brings up from the next line maps to none of
+        // the line's tokens.
+        let last = self.tree.previous_code_token(span.last + 1);
+        let brace = match last {
+            Some(last) if matches!(tokens[last], Token::Symbol('{')) => Some(last),
+            _ if line.as_bytes().contains(&b'{')
+                && self.output.code_trimmed_of(line).ends_with('{') =>
+            {
+                next_code_token(tokens, span.last + 1)
+                    .filter(|&brace| matches!(tokens[brace], Token::Symbol('{')))
+            }
+            _ => None,
+        };
+        let Some(brace) = brace.filter(|&brace| brace > span.first) else {
+            return false;
+        };
+        groups.opened_at(brace).is_some_and(|block| {
+            groups
+                .get(block)
+                .parent
+                .is_some_and(|parent| groups.get(parent).delimiter == Delimiter::Paren)
+                && self.brace_holds_statements(block)
+        })
     }
 
     pub(crate) fn nested_call_argument_over_max_output_indent_spaces(
@@ -2194,13 +2286,13 @@ impl FormatEngine<'_> {
             _ => {
                 let open = self.output.last_non_empty_scoped().is_some_and(|previous| {
                     let code = self.output.code_trimmed_of(previous);
-                    code.ends_with(',') && !unmatched_open_paren_columns(code).is_empty()
+                    code.ends_with(',') && self.leaves_paren_open(code)
                 });
                 self.open_before_comma_cache.set(Some((key, open)));
                 open
             }
         };
-        if !open_before_comma {
+        if !open_before_comma || self.line_opens_statement_level_lambda(line) {
             return None;
         }
         let previous = self.output.last_non_empty_scoped()?;
@@ -2419,8 +2511,11 @@ impl FormatEngine<'_> {
 }
 
 pub(crate) fn line_opens_attachable_lambda_block(options: &FormatOptions, line: &str) -> bool {
-    // A lambda's head holds its capture list, a block literal's its caret.
-    if !line.contains_any_byte(b"]^") {
+    // A lambda's head holds its capture list, a block literal's its caret,
+    // and the line its body's brace unless the line starts with the list.
+    if !line.contains_any_byte(b"]^")
+        || !line.as_bytes().contains(&b'{') && !line.trimmed_start().starts_with('[')
+    {
         return false;
     }
     // A comment after the code takes no part in the head.

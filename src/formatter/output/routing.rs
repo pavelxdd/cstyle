@@ -9,10 +9,7 @@ use crate::formatter::tokens::literals::starts_string_literal_token;
 
 impl FormatEngine<'_> {
     fn route_line_before_layout(&mut self, line: &LineView<'_>) -> LineRoute<LineKind> {
-        if self.try_emit_whitesmith_lambda_close(line)
-            || self.try_split_lambda_body_header(line)
-            || self.try_split_operator_body(line)
-            || self.try_emit_swig_line(line)
+        if self.try_emit_swig_line(line)
             || self.try_emit_backslash_body(line)
             || self.try_join_class_base_line(line)
         {
@@ -194,7 +191,12 @@ impl FormatEngine<'_> {
             self.deferred_post_emission_layout(line, &layout, restore_objc_message_align);
         let layout = self.apply_label_switch_case_and_opening_brace_correction_layout(line, layout);
         let layout = self.apply_final_recovery_floor_and_replay_layout(line, &replay, layout);
-        let mut layout = self.apply_tree_anchor_layout(line, layout);
+        // Template arguments hold their rows as a paren does, past the angle.
+        let mut layout = if let Some(spaces) = replay.template_arguments_spaces {
+            self.apply_template_argument_row_layout(line, layout, spaces)
+        } else {
+            self.apply_tree_anchor_layout(line, layout)
+        };
         self.plain_statement_line = false;
         if self.preprocessor.group_blocks.contains(&true)
             && layout.line_kind == LineKind::Normal
@@ -205,6 +207,11 @@ impl FormatEngine<'_> {
             self.preprocessor.group_block_rows.push(self.output.len());
         }
         let emitted_indent_spaces = self.publish_formatted_line_layout(line, &layout);
+        self.last_laid_out_statement_level = self
+            .output
+            .len()
+            .checked_sub(1)
+            .map(|index| (index, layout.normal_indent));
         self.apply_post_emission_state(
             line,
             &layout,

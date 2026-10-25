@@ -1,7 +1,8 @@
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
-use crate::formatter::structure::blocks::{BlockKind, next_code_token};
+use crate::formatter::structure::blocks::{BlockKind, closes_before_paren, next_code_token};
 use crate::formatter::structure::groups::GroupId;
+use crate::formatter::text::line_scan::trailing_comment_split_limit;
 use crate::formatter::text::trim::Trimmed;
 
 impl FormatEngine<'_> {
@@ -37,12 +38,15 @@ impl FormatEngine<'_> {
     }
 
     /// A statement expression's `{` that a brace style broke off its `(`
-    /// rejoins it: `({` is one opener of the expression.
+    /// rejoins it: `({` is one opener of the expression, closed by `})`. A
+    /// block more arguments follow is a macro's block argument.
     pub(crate) fn attach_statement_expression_braces(&mut self) {
+        let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
         let opens: Vec<usize> = groups
             .ids()
             .filter(|&id| self.tree.blocks.kind(id) == Some(BlockKind::StatementExpression))
+            .filter(|&id| closes_before_paren(tokens, groups, id))
             .map(|id| groups.get(id).open)
             .collect();
         for &open in opens.iter().rev() {
@@ -58,7 +62,22 @@ impl FormatEngine<'_> {
                 && self.output.code_trimmed(line - 1).ends_with('(')
                 && !self.output.is_verbatim(line - 1)
             {
+                // A comment the broken brace moved before it goes back after
+                // the brace, at its column.
+                let previous = &self.output[line - 1];
+                let code_end = trailing_comment_split_limit(previous);
+                let attached = (code_end < previous.len()).then(|| {
+                    let rest = &previous[code_end..];
+                    let rest = rest
+                        .strip_prefix(' ')
+                        .filter(|rest| rest.starts_with(' '))
+                        .unwrap_or(rest);
+                    format!("{}{{{rest}", &previous[..code_end])
+                });
                 self.output.join_into(line - 1, line, "");
+                if let Some(attached) = attached {
+                    self.output.set(line - 1, attached);
+                }
             }
         }
     }
@@ -66,7 +85,7 @@ impl FormatEngine<'_> {
     /// The only statement of the block `parent` when it is a plain block
     /// opened right after the parent's `{` on the same line and closed
     /// right before the parent's `}`, with nothing but `;` in between.
-    fn fused_child(&self, parent: GroupId) -> Option<GroupId> {
+    pub(crate) fn fused_child(&self, parent: GroupId) -> Option<GroupId> {
         let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
         let blocks = &self.tree.blocks;

@@ -236,6 +236,8 @@ fn access_label_after_preprocessor_constructor_keeps_member_indent() {
 
 #[test]
 fn method_signature_after_preprocessor_constexpr_keeps_member_indent() {
+    // The argument row holding a list closed on it continues the paren as
+    // any argument row does.
     let source = fixture!(
         "class Item",
         "{",
@@ -244,7 +246,7 @@ fn method_signature_after_preprocessor_constexpr_keeps_member_indent() {
         "    constexpr",
         "#endif",
         "    auto get() const noexcept(",
-        "    noexcept(std::declval<const source_type&>().template convert<Candidate>(detail::priority_tag<4> {})))",
+        "        noexcept(std::declval<const source_type&>().template convert<Candidate>(detail::priority_tag<4> {})))",
         "    -> decltype(std::declval<const source_type&>().template convert<Candidate>(detail::priority_tag<4> {}))",
         "    {}",
         "};",
@@ -503,7 +505,7 @@ fn struct_base_logical_continuation_stays_at_struct_indent() {
 }
 
 #[test]
-fn struct_template_argument_logical_continuation_uses_one_indent() {
+fn struct_template_argument_logical_continuation_aligns_at_the_first_argument() {
     assert_eq!(
         format_exact(
             fixture!(
@@ -518,8 +520,8 @@ fn struct_template_argument_logical_continuation_uses_one_indent() {
         fixture!(
             "template <typename T>",
             "struct Info<T, enable_if_t<trait<T>::first ||",
-            "    trait<T>::second ||",
-            "    trait<T>::third>> {",
+            "                           trait<T>::second ||",
+            "                           trait<T>::third>> {",
             "};",
         )
     );
@@ -556,24 +558,14 @@ fn template_base_after_wrapped_struct_header_aligns_to_header() {
 }
 
 #[test]
-fn typedef_template_argument_rows_keep_two_level_indent() {
-    assert_eq!(
-        format_exact(
-            fixture!(
-                "typedef PixelEncoding<unsigned char, 32,",
-                "                      NativePixelEncoding::RED,",
-                "                      NativePixelEncoding::GREEN,",
-                "                      PIXEL_ENCODING_ALPHA> AlphaPixelEncoding;",
-            ),
-            &FormatOptions::default(),
-        ),
-        fixture!(
-            "typedef PixelEncoding<unsigned char, 32,",
-            "        NativePixelEncoding::RED,",
-            "        NativePixelEncoding::GREEN,",
-            "        PIXEL_ENCODING_ALPHA> AlphaPixelEncoding;",
-        )
+fn typedef_template_argument_rows_stand_at_the_first_argument() {
+    let source = fixture!(
+        "typedef PixelEncoding<unsigned char, 32,",
+        "                      NativePixelEncoding::RED,",
+        "                      NativePixelEncoding::GREEN,",
+        "                      PIXEL_ENCODING_ALPHA> AlphaPixelEncoding;",
     );
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
 
 #[test]
@@ -589,34 +581,21 @@ fn typedef_function_pointer_parameter_rows_indent_one_level() {
 }
 
 #[test]
-fn typedef_inline_template_arguments_and_value_keep_two_level_indent() {
-    assert_eq!(
-        format_exact(
-            fixture!(
-                "struct X",
-                "{",
-                "    typedef typename T<A,",
-                "                      B,",
-                "                      C>::value",
-                "            V;",
-                "};",
-            ),
-            &FormatOptions::default(),
-        ),
-        fixture!(
-            "struct X",
-            "{",
-            "    typedef typename T<A,",
-            "            B,",
-            "            C>::value",
-            "            V;",
-            "};",
-        )
+fn typedef_inline_template_arguments_align_and_its_name_keeps_two_level_indent() {
+    let source = fixture!(
+        "struct X",
+        "{",
+        "    typedef typename T<A,",
+        "                       B,",
+        "                       C>::value",
+        "            V;",
+        "};",
     );
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
 
 #[test]
-fn typedef_template_argument_rows_return_to_typedef_indent() {
+fn typedef_template_arguments_after_an_angle_on_its_own_row_continue_past_it() {
     assert_eq!(
         format_exact(
             fixture!(
@@ -637,8 +616,8 @@ fn typedef_template_argument_rows_return_to_typedef_indent() {
             "{",
             "    typedef typename T",
             "    <",
-            "    A,",
-            "    B",
+            "        A,",
+            "        B",
             "    >::value",
             "    value;",
             "};",
@@ -836,7 +815,7 @@ fn split_partial_specialization_body_uses_normal_class_indent() {
         fixture!(
             "template<typename ContainerType>",
             "struct container_value_adapter_factory< ContainerType,",
-            "       void_t<decltype(begin(std::declval<ContainerType>()), end(std::declval<ContainerType>()))>>",
+            "                                        void_t<decltype(begin(std::declval<ContainerType>()), end(std::declval<ContainerType>()))>>",
             "{",
             "    using adapter_type = int;",
             "",
@@ -1021,6 +1000,14 @@ fn struct_split_declaration_name_gets_continuation_indent() {
 }
 
 #[test]
+fn struct_split_declaration_name_after_specifier_groups_gets_continuation_indent() {
+    // Specifiers with their own parens or brackets before the class key
+    // leave it a declaration of the type.
+    let source = "static __declspec(thread) struct Entry\n    entry;\nstatic __attribute__((section(\"data\"), used)) struct Entry\n    entry;\n[[maybe_unused]] static struct Entry\n    entry;\n";
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
+}
+
+#[test]
 fn attaches_pointer_declarator_after_anonymous_struct_brace() {
     let mut options = FormatOptions::default();
     options.brace_style = BraceStyle::OneTrueBrace;
@@ -1120,10 +1107,10 @@ fn struct_and_enum_assignment_continuations_use_same_indent() {
 }
 
 #[test]
-fn keeps_multiline_template_angles_at_statement_indent() {
+fn multiline_template_angles_continue_their_rows_past_the_statement() {
     assert_eq!(
         format_exact(fixture!("List<", "int>", "v;"), &FormatOptions::default()),
-        fixture!("List<", "int>", "v;")
+        fixture!("List<", "    int>", "v;")
     );
 
     assert_eq!(
@@ -1131,7 +1118,7 @@ fn keeps_multiline_template_angles_at_statement_indent() {
             fixture!("void f(void) {", "List<", "int>", "v;", "}"),
             &FormatOptions::default()
         ),
-        fixture!("void f(void) {", "    List<", "    int>", "    v;", "}")
+        fixture!("void f(void) {", "    List<", "        int>", "    v;", "}")
     );
 }
 
@@ -1576,7 +1563,7 @@ fn whitesmith_class_base_brace_uses_class_body_column() {
         fixture!(
             "class Item:",
             "    public Base<Alpha,",
-            "    Beta>,",
+            "                Beta>,",
             "    private Other",
             "    {",
             "    };",
@@ -1771,7 +1758,7 @@ fn using_alias_std_function_parameter_row_aligns_under_first_parameter() {
 }
 
 #[test]
-fn std_conditional_type_alias_rows_keep_first_argument_indent() {
+fn std_conditional_type_alias_rows_stand_at_the_first_argument() {
     assert_eq!(
         format_exact(
             fixture!(
@@ -1788,15 +1775,15 @@ fn std_conditional_type_alias_rows_keep_first_argument_indent() {
             "struct Item {",
             "    using reference =",
             "        typename std::conditional<std::is_const<ValueType>::value,",
-            "        typename ValueType::const_reference,",
-            "        typename ValueType::reference>::type;",
+            "                                  typename ValueType::const_reference,",
+            "                                  typename ValueType::reference>::type;",
             "};",
         )
     );
 }
 
 #[test]
-fn std_conditional_template_argument_rows_keep_first_argument_indent() {
+fn std_conditional_template_argument_rows_stand_a_continuation_past_the_value() {
     assert_eq!(
         format_exact(
             fixture!(
@@ -1812,22 +1799,22 @@ fn std_conditional_template_argument_rows_keep_first_argument_indent() {
         fixture!(
             "template<typename T>",
             "using value_base_type = typename std::conditional <",
-            "                        std::is_same<T, void>::value,",
-            "                        item_default_base,",
-            "                        T",
+            "                            std::is_same<T, void>::value,",
+            "                            item_default_base,",
+            "                            T",
             "                        >::type;",
         )
     );
 }
 
 #[test]
-fn using_alias_rhs_after_split_template_function_parameter_stays_at_body_indent() {
+fn using_alias_rhs_after_split_template_function_parameter_takes_a_continuation_indent() {
     assert_eq!(
         format_exact(
             "template <typename T>\nFIXED auto apply(Result dst, T value, const rules& r,\n                 context_id ctx = {}) -> Result {\n  using resolved_type =\n      selector_type<check<T>::value, unsigned char, unsigned>;\n}\n",
             &FormatOptions::default(),
         ),
-        "template <typename T>\nFIXED auto apply(Result dst, T value, const rules& r,\ncontext_id ctx = {}) -> Result {\n    using resolved_type =\n    selector_type<check<T>::value, unsigned char, unsigned>;\n}\n",
+        "template <typename T>\nFIXED auto apply(Result dst, T value, const rules& r,\n                 context_id ctx = {}) -> Result {\n    using resolved_type =\n        selector_type<check<T>::value, unsigned char, unsigned>;\n}\n",
     );
 }
 
@@ -1901,14 +1888,11 @@ fn enum_value_assignment_inside_preprocessor_branch_indents_one_level() {
 }
 
 #[test]
-fn nested_template_declaration_assignment_aligns_value_to_declarator() {
-    assert_eq!(
-        format_exact(
-            "void f()\n{\n    std::optional<Items<ValueT>> sampleValuesList =\n        db.readValue(Header::PayloadLength);\n}\n",
-            &FormatOptions::default(),
-        ),
-        "void f()\n{\n    std::optional<Items<ValueT>> sampleValuesList =\n                                  db.readValue(Header::PayloadLength);\n}\n",
-    );
+fn nested_template_declaration_assignment_continues_as_after_spaced_closers() {
+    // `>>` closes two lists as `> >` does, registering no shift column.
+    let source = "void f()\n{\n    std::optional<Items<ValueT>> sampleValuesList =\n        db.readValue(Header::PayloadLength);\n    std::optional<Items<ValueT> > otherValuesList =\n        db.readValue(Header::PayloadLength);\n}\n";
+
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }
 
 #[test]
@@ -1996,6 +1980,42 @@ fn enum_member_after_missing_comma_continues_previous_member() {
             "};",
         )
     );
+}
+
+#[test]
+fn enum_base_row_after_an_annotated_head_continues_the_head() {
+    // An `=` in the head's attribute assigns no member: the base's row
+    // continues the head, before the body opens.
+    let source = fixture!(
+        "enum class [[=helper::marker]] Item :",
+        "    signed char { value = 1 };",
+    );
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=kr".to_owned()]).expect("valid options");
+
+    assert_eq!(format_exact(source, &options), source);
+}
+
+#[test]
+fn enum_base_row_after_an_enum_head_continues_the_head() {
+    // A base on its own row continues the head as a class's does.
+    let source = fixture!(
+        "enum Mode",
+        "    : unsigned char {",
+        "    first = 1",
+        "};",
+        "void helper()",
+        "{",
+        "    enum Mode",
+        "        : unsigned char {",
+        "        first = 1",
+        "    };",
+        "}",
+    );
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=kr".to_owned()]).expect("valid options");
+
+    assert_eq!(format_exact(source, &options), source);
 }
 
 #[test]
@@ -2213,7 +2233,7 @@ fn multiline_macro_arg_with_struct_does_not_indent_following_function() {
 }
 
 #[test]
-fn declarators_after_a_comma_stand_where_the_first_assignment_registers() {
+fn declarators_after_a_comma_stand_at_the_name_the_first_assignment_assigns() {
     let actual = format_exact(
         fixture!(
             "void f(void)",
@@ -2239,9 +2259,9 @@ fn declarators_after_a_comma_stand_where_the_first_assignment_registers() {
             "    int c, d = 1,",
             "           e;",
             "    int x[2] = {1, 2},",
-            "               y;",
+            "        y;",
             "    static const char lower[] = \"abc\",",
-            "                                upper[] = \"ABC\";",
+            "                      upper[] = \"ABC\";",
             "    int a = 1, /* note */",
             "        b;",
             "}",
