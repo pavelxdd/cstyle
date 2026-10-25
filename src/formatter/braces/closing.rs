@@ -519,6 +519,7 @@ impl FormatEngine<'_> {
         let unmatched_closing_brace = self.layout.nesting.brace_type_stack.is_empty();
         if unmatched_closing_brace {
             self.unmatched_closing_brace_recovery = true;
+            self.unmatched_closing_brace_paren_depth = self.layout.nesting.paren_depth;
         }
         let closing_frame_indent = self.closing_brace_sibling_indent_column();
         self.exit_brace_state();

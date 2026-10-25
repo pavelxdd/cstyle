@@ -435,6 +435,8 @@ pub(crate) struct FormatEngine<'a> {
     /// index.
     pub(crate) adjuster_before_observed_lone_brace: Option<(usize, line_adjust::LineAdjuster)>,
     pub(crate) unmatched_closing_brace_recovery: bool,
+    /// The paren depth an unmatched closing brace left.
+    pub(crate) unmatched_closing_brace_paren_depth: usize,
     pub(crate) preserve_run_in_join_space: bool,
     pub(crate) one_line_block_mode: bool,
     /// A one-line block being formatted on the line after a directive.
@@ -609,6 +611,7 @@ impl<'a> FormatEngine<'a> {
             adjuster_before_lone_brace: None,
             adjuster_before_observed_lone_brace: None,
             unmatched_closing_brace_recovery: false,
+            unmatched_closing_brace_paren_depth: 0,
             preserve_run_in_join_space: false,
             one_line_block_mode: false,
             one_line_block_after_directive: false,
@@ -2466,7 +2469,7 @@ impl<'a> FormatEngine<'a> {
         } else if self.current_initializer_member_before_closing_brace() {
             self.finish_line();
             self.previous_was_newline = true;
-        } else if self.unmatched_closing_brace_recovery {
+        } else if self.unmatched_closing_brace_resets_line() {
             self.finish_line();
             self.layout.continuation_indent.set_next_line_spaces(0);
             self.layout.indentation.clear_continuation_indents();
@@ -2760,6 +2763,13 @@ impl<'a> FormatEngine<'a> {
             && !self.incomplete_control_header()
             && code.ends_with(is_identifier_continue)
             && trailing_word(code) != header
+    }
+
+    /// Whether the line ends where an unmatched closing brace leaves
+    /// nothing to continue: rows in parens opened since it continue them.
+    pub(crate) fn unmatched_closing_brace_resets_line(&self) -> bool {
+        self.unmatched_closing_brace_recovery
+            && self.layout.nesting.paren_depth <= self.unmatched_closing_brace_paren_depth
     }
 
     fn header_allows_statement_break(&self) -> bool {

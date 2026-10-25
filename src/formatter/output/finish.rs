@@ -284,7 +284,7 @@ impl FormatEngine<'_> {
                 );
             }
         }
-        if self.unmatched_closing_brace_recovery {
+        if self.unmatched_closing_brace_resets_line() {
             self.layout.continuation_indent.set_next_line_spaces(0);
             self.layout.indentation.clear_continuation_indents();
             self.layout.nesting.clear_continuation_indents();
