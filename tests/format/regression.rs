@@ -22290,6 +22290,31 @@ fn a_return_value_after_a_header_s_run_in_return_continues_past_its_body() {
 }
 
 #[test]
+fn a_do_body_the_source_breaks_after_a_word_keeps_its_rows() {
+    // As an `if` body's does: the row continues the statement past the body.
+    let input = "int f()\n{\n    do return\n            1;\n    while (ready);\n    do run\n        (1);\n    while (ready);\n}\n";
+    check(input, &["--style=kr"], input);
+    check(input, &["--style=allman"], input);
+}
+
+#[test]
+fn a_do_ending_its_line_after_an_else_takes_the_brace_added_to_its_body() {
+    // The `do` ends the line as a header does, with no statement after it.
+    let input = "void f()\n{\n    if (ready)\n        run();\n    else do\n            *target++ = *source++;\n        while (source < end);\n}\n";
+    let expected = "void f()\n{\n    if (ready) {\n        run();\n    } else do {\n            *target++ = *source++;\n        } while (source < end);\n}\n";
+    check(input, &["--style=1tbs"], expected);
+    check(expected, &["--style=1tbs"], expected);
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_header_s_body_the_source_breaks_after_a_comment_and_a_word_keeps_its_rows() {
+    // A comment between the header and its body ends neither.
+    let input = "int f()\n{\n    if (ready) /* note */ return\n            1;\n    else /* note */ run\n        (1);\n    do /* note */ return\n            1;\n    while (ready);\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
 fn a_part_the_code_length_splits_before_an_operator_continues_the_statement_as_its_row_does() {
     // One continuation indent past the statement, whichever operator leads
     // the part, as a row the source broke before the operator takes.

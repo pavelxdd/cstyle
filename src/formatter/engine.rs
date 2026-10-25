@@ -2552,9 +2552,7 @@ impl<'a> FormatEngine<'a> {
             // A statement the source broke after a header's one-line body
             // continues a level in, and a `return` value a level more.
             let levels = 1 + usize::from(
-                trailing_word(
-                    self.current[..self.current_trailing_comment_split_limit()].trimmed(),
-                ) == "return",
+                trailing_word(self.current_code_before_trailing_comment()) == "return",
             );
             self.finish_line();
             if let Some(last) = self.output.last() {
@@ -2752,14 +2750,16 @@ impl<'a> FormatEngine<'a> {
     /// Whether a word of a statement follows a complete control header on
     /// the line.
     fn statement_follows_complete_header(&self) -> bool {
-        let code = self.current[..self.current_trailing_comment_split_limit()].trimmed();
-        matches!(
-            self.layout.command_state.current_header.as_deref(),
-            Some("if" | "for" | "while" | "switch" | "else")
-        ) && self.header_paren.depth.is_none()
+        let code = self.current_code_before_trailing_comment().trimmed_start();
+        let Some(header @ ("if" | "for" | "while" | "switch" | "else" | "do")) =
+            self.layout.command_state.current_header.as_deref()
+        else {
+            return false;
+        };
+        self.header_paren.depth.is_none()
             && !self.incomplete_control_header()
             && code.ends_with(is_identifier_continue)
-            && code.trim_start_matches('}').trimmed_start() != "else"
+            && trailing_word(code) != header
     }
 
     fn header_allows_statement_break(&self) -> bool {
