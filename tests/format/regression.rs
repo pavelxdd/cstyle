@@ -25940,3 +25940,14 @@ fn attach_return_type_parameter_rows_after_a_split_joined_name_take_the_continua
     check(input, &options, expected);
     check(expected, &options, expected);
 }
+
+#[test]
+fn max_code_length_leaves_a_multi_row_comment_to_the_part_holding_it() {
+    // The row the split leaves the code before the comment on holds no
+    // comment, so the declaration after the comment starts a statement.
+    let input = "void f(void)\n{\n    int first_value_with_a_long_name = 1;   /* the first row of a comment\n                                               the second row of it */\n    Item *item;\n}\n";
+    let expected = "void f(void)\n{\n    int first_value_with_a_long_name =\n        1;   /* the first row of a comment\n                                               the second row of it */\n    Item *item;\n}\n";
+    let options = ["--style=kr", "--pad-oper", "--max-code-length=50"];
+    check(input, &options, expected);
+    check(expected, &options, expected);
+}

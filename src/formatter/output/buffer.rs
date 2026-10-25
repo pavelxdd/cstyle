@@ -1101,6 +1101,12 @@ impl OutputBuffer {
         self.pending_comments = Some(comments);
     }
 
+    /// The block comments set for the next pushed line, which it no longer
+    /// holds.
+    pub(crate) fn take_pending_comments(&mut self) -> Option<LineComments> {
+        self.pending_comments.take()
+    }
+
     pub(crate) fn clear_pending_sources(&mut self) {
         self.pending_tokens = None;
         self.pending_comments = None;

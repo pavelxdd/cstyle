@@ -12,10 +12,10 @@ use crate::formatter::continuation::{ContinuationIndent, min_conditional_indent_
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, token_text, tokenize};
 use crate::formatter::state::indentation::LineKind;
-use crate::formatter::structure::TokenSpan;
 use crate::formatter::structure::blocks::BlockKind;
 use crate::formatter::structure::blocks::{is_code_token, next_code_token};
 use crate::formatter::structure::groups::{Delimiter, GroupId};
+use crate::formatter::structure::{LineComments, TokenSpan};
 use crate::formatter::syntax::language::{self, is_non_type_keyword, is_pointer_type_word};
 use crate::formatter::syntax::{
     TemplateAngle, astyle_template_spans, function_name_start, known_template_angle_role,
@@ -26,7 +26,8 @@ use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
     advance_quoted_literal, after_leading_comments, code_contains, has_top_level_char,
     last_unmatched_open_delimiter, line_paren_imbalance, trailing_comment_split_limit,
-    unmatched_open_bracket_column, unmatched_open_paren_column, unmatched_open_paren_columns,
+    trailing_comment_start, unmatched_open_bracket_column, unmatched_open_paren_column,
+    unmatched_open_paren_columns,
 };
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::operators::{
@@ -212,6 +213,17 @@ impl FormatEngine<'_> {
             self.push_output_line_with_indent(line, structural_level, indent);
             return;
         };
+        // Each part holds the comments whose text it holds: the head the one
+        // leading the line, the part a comment ends the line's last.
+        let line_comments = self.output.take_pending_comments();
+        let part_comments = |part: &str, leads: bool| {
+            line_comments.map(|comments| LineComments {
+                lead: comments.lead.filter(|_| leads),
+                last: comments
+                    .last
+                    .filter(|_| trailing_comment_start(part).is_some()),
+            })
+        };
         let current_line_owner = if brace_row_layout.attaches_lisp_closer
             || configured_indent_width > structural_level * self.options.indent_width
             || (self.header_paren.depth.is_some() && !is_conditional_header_line(line))
@@ -374,6 +386,9 @@ impl FormatEngine<'_> {
             line.len() - split.tail.len(),
             &mut part_scan,
         );
+        if let Some(comments) = part_comments(&split.head, true) {
+            self.output.set_pending_comments(comments);
+        }
         self.push_output_line_with_indent(&split.head, structural_level, indent);
         let mut tail = split.tail;
         loop {
@@ -463,6 +478,9 @@ impl FormatEngine<'_> {
                 next_indent = ContinuationIndent::Spaces(spaces);
                 self.max_length_line.anchored_part = true;
             }
+            if let Some(comments) = part_comments(&split.head, false) {
+                self.output.set_pending_comments(comments);
+            }
             self.push_output_line_with_indent(&split.head, next_structural_level, next_indent);
             self.max_length_line.anchored_part = false;
             declarator_part = split_ends_template_type(&line[..line.len() - split.tail.len()]);
@@ -477,6 +495,9 @@ impl FormatEngine<'_> {
             if !declarator_part && let Some(spaces) = self.split_part_indent(tail) {
                 next_indent = ContinuationIndent::Spaces(spaces);
                 self.max_length_line.anchored_part = true;
+            }
+            if let Some(comments) = part_comments(tail, false) {
+                self.output.set_pending_comments(comments);
             }
             self.push_output_line_with_indent(tail, next_structural_level, next_indent);
             self.max_length_line.anchored_part = false;
