@@ -2558,6 +2558,9 @@ impl FormatEngine<'_> {
             return;
         }
         let current = line.trimmed_start();
+        // Only the rows of the statement the line ends lead it.
+        let in_statement =
+            |line: &&String| !self.output.code_trimmed_of(line).ends_with([';', '{', '}']);
         let statement = if current.starts_with("||") || current.starts_with("&&") {
             self.output
                 .scoped()
@@ -2565,6 +2568,7 @@ impl FormatEngine<'_> {
                 .rev()
                 .skip(1)
                 .take(8)
+                .take_while(in_statement)
                 .find(|line| {
                     let code = self.output.code_trimmed_of(line);
                     find_assignment_operator(code).is_some()
@@ -2576,6 +2580,7 @@ impl FormatEngine<'_> {
                 .rev()
                 .skip(1)
                 .take(4)
+                .take_while(in_statement)
                 .find(|line| {
                     let code = self.output.code_trimmed_of(line);
                     (code.ends_with("||") || code.ends_with("&&"))
@@ -2584,10 +2589,14 @@ impl FormatEngine<'_> {
         } else {
             None
         };
+        // The output row stands where a case block's unindent left it,
+        // which moves the next row too.
         if let Some(statement) = statement {
             self.layout.continuation_indent.next_line_indent = None;
-            self.layout.continuation_indent.next_line_indent_spaces =
-                Some(leading_visual_width(statement, self.options.tab_width));
+            self.layout.continuation_indent.next_line_indent_spaces = Some(
+                leading_visual_width(statement, self.options.tab_width)
+                    + self.case_unindent_spaces(),
+            );
             self.layout.nesting.clear_continuation_indents();
         }
     }

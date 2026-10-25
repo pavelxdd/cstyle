@@ -26051,3 +26051,11 @@ fn a_label_block_brace_leading_its_row_after_a_directive_split_else_stands_at_it
     check(input, &["--style=pico", "--indent-cases"], expected);
     check(expected, &["--style=pico", "--indent-cases"], expected);
 }
+
+#[test]
+fn a_logical_row_ending_a_statement_in_a_case_block_leaves_the_next_statement_its_columns() {
+    // The rows of the call stand as without the statements before it: the
+    // assignment before the `||` row's statement is none of it.
+    let input = "void f(void)\n{\n    switch (op) {\n    case 1: {\n        value = compute(item->list[0].expr);\n        check(value <= LIMIT_NONE_VALUE\n              || (value >= LIMIT_LOW && value <= LIMIT_HIGH));\n        load_string(handle, target,\n                    (value <= LIMIT_NONE_VALUE) ? \"none\" : names[value\n                            - LIMIT_LOW_VALUE]);\n        break;\n    }\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
