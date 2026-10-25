@@ -1258,8 +1258,8 @@ impl FormatEngine<'_> {
                     break;
                 }
                 match tokens[index] {
-                    Token::Symbol('(' | '[') => depth += 1,
-                    Token::Symbol(')' | ']') => depth -= 1,
+                    Token::Symbol('(' | '[' | '{') => depth += 1,
+                    Token::Symbol(')' | ']' | '}') => depth -= 1,
                     _ => {}
                 }
                 last = Some(index);

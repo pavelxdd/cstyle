@@ -3167,6 +3167,20 @@ fn indent_after_parens_indents_rows_of_a_run_in_initializer() {
 }
 
 #[test]
+fn indent_after_parens_indents_rows_of_a_list_assigned_to_a_name_as_to_an_array() {
+    for declarator in ["items", "items[]"] {
+        let input = format!(
+            "void f(void)\n{{\n    static const struct Item {declarator} = {{FIRST, SECOND, THIRD,\n            FOURTH, FIFTH\n        }};\n}}\n"
+        );
+        check(&input, &["--style=kr", "--indent-after-parens"], &input);
+        let input = format!(
+            "static const struct Item {declarator} = {{FIRST, SECOND, THIRD,\n        FOURTH, FIFTH\n    }};\n"
+        );
+        check(&input, &["--style=kr", "--indent-after-parens"], &input);
+    }
+}
+
+#[test]
 fn indent_after_parens_leaves_ternary_arms_and_operator_rows_at_the_value_level() {
     let input = "void f(void)\n{\n    struct Curl_cfilter *cf =\n        (data->conn && V(sockindex)) ?\n        data->conn->cfilter[sockindex] : NULL;\n    lu_mem sz = cast(lu_mem, sizeof(Proto))\n        + cast_uint(p->sizep) * sizeof(Proto*)\n        + cast_uint(p->sizek);\n    if( a\n        || b\n    ) {\n        x();\n    }\n}\n";
     check(input, &["--style=kr", "--indent-after-parens"], input);
@@ -7236,12 +7250,18 @@ fn an_indentable_block_opening_in_a_statement_stands_at_its_level() {
 }
 
 #[test]
-fn an_initializer_run_in_after_a_block_brace_measures_from_the_brace() {
-    check(
-        "static void f(void)\n{\n    hooks_t hooks = {&noop_alloc_hook, &noop_dalloc_hook, &noop_expand_hook,\n        NULL};\n    g();\n}\n",
-        &["--style=pico", "--indent-after-parens"],
-        "static void f(void)\n{   hooks_t hooks = {&noop_alloc_hook, &noop_dalloc_hook, &noop_expand_hook,\n                    NULL };\n    g(); }\n",
-    );
+fn an_initializer_run_in_after_a_block_brace_indents_from_its_statement() {
+    for declarator in ["handlers", "handlers[]"] {
+        check(
+            &format!(
+                "static void f(void)\n{{\n    Item {declarator} = {{&first_handler, &second_handler, &third_handler,\n        NULL}};\n    g();\n}}\n"
+            ),
+            &["--style=pico", "--indent-after-parens"],
+            &format!(
+                "static void f(void)\n{{   Item {declarator} = {{&first_handler, &second_handler, &third_handler,\n            NULL }};\n    g(); }}\n"
+            ),
+        );
+    }
 }
 
 #[test]
