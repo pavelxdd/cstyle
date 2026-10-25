@@ -4782,11 +4782,21 @@ impl FormatEngine<'_> {
             self.options.continuation_indent
         };
         let line = self.line_led_by(keyword)?;
-        (self.output.line_tokens(line)?.last == keyword).then(|| {
+        let span = self.output.line_tokens(line)?;
+        if span.last != keyword {
+            return None;
+        }
+        // A `return` run in after headers stands at their body.
+        let headers = self
+            .run_in_headers_from(span.first, keyword, |index| {
+                (span.first..=span.last).contains(&index)
+            })
+            .map_or(0, |(levels, _)| levels);
+        Some(
             self.output.lead_width(line, self.options.tab_width)
-                + levels * self.options.indent_width
-                + self.case_unindent_spaces()
-        })
+                + (levels + headers) * self.options.indent_width
+                + self.case_unindent_spaces(),
+        )
     }
 
     /// Column of the case label before the one at `first` in the same

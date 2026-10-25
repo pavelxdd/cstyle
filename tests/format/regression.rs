@@ -22282,6 +22282,14 @@ fn rows_of_a_subscript_within_parens_stand_past_its_bracket() {
 }
 
 #[test]
+fn a_return_value_after_a_header_s_run_in_return_continues_past_its_body() {
+    // As after a header with a condition: the `return` stands at the
+    // header's body, its value a continuation past it.
+    let input = "int f()\n{\n    if (ready) return\n            0;\n    else return\n            1;\n    while (ready) return\n            2;\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
 fn a_part_the_code_length_splits_before_an_operator_continues_the_statement_as_its_row_does() {
     // One continuation indent past the statement, whichever operator leads
     // the part, as a row the source broke before the operator takes.
