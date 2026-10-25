@@ -25958,3 +25958,11 @@ fn a_cast_whose_paren_opens_on_the_row_before_keeps_its_operand_unary() {
     let input = "void f(void)\n{\n    total = *first + ((\n                          long long)*count * size);\n    check(value != (Kind)(\n              size_t) -1);\n}\n";
     check(input, &["--style=kr", "--pad-oper"], input);
 }
+
+#[test]
+fn an_operator_leading_the_row_after_sizeof_or_a_cast_keeps_its_one_row_spacing() {
+    // A row break between them changes nothing; a `*` after `sizeof` is
+    // never a product, whatever its spacing.
+    let input = "void f(void)\n{\n    items->list = allocate(items->capacity * sizeof\n                           *items->list);\n    check(value != (size_t)\n          -1);\n    check(value != (unsigned char)\n          *prefix);\n    item = allocate(sizeof* item);\n    item = allocate(sizeof *item);\n}\n";
+    check(input, &["--style=kr", "--pad-oper"], input);
+}

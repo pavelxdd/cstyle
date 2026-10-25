@@ -2188,6 +2188,10 @@ impl<'a> FormatEngine<'a> {
 
     fn current_cast_words(&self) -> Option<Vec<&str>> {
         let current = self.current.trimmed_end();
+        // An operator leading its row follows the cast ending the row before.
+        if current.is_empty() {
+            return self.earlier_row_cast_words();
+        }
         if !current.ends_with(')') {
             return None;
         }

@@ -1255,8 +1255,10 @@ impl FormatEngine<'_> {
                     self.push_binary_operator(operator);
                 }
             }
-            "*" if operator_role != OperatorRole::PointerDeclarator
-                && self.layout.nesting.paren_depth > 0
+            "*" if !matches!(
+                operator_role,
+                OperatorRole::PointerDeclarator | OperatorRole::UnaryOperator
+            ) && self.layout.nesting.paren_depth > 0
                 && matches!(next, Some(Token::Word(_)))
                 && (self.current_paren_is_expression_context()
                     && !self.current_paren_context_is_declaration()
@@ -1789,6 +1791,10 @@ impl FormatEngine<'_> {
         };
         if !prefixes_operand {
             return false;
+        }
+        // As after a cast on its own row.
+        if self.is_cast_unary_sign(next) {
+            return true;
         }
         self.output
             .scoped()
