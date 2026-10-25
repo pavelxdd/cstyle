@@ -3228,6 +3228,36 @@ fn remove_comment_prefix_leaves_rows_of_a_trailing_comment_in_place() {
 }
 
 #[test]
+fn remove_comment_prefix_leaves_stripped_rows_of_a_trailing_comment_at_their_text_column() {
+    // Under tab indentation and in a case block, as the rows it keeps whole.
+    let input = "void f()\n{\n    unsigned temp;  /* first row\n                     * second row\n                     * third row */\n    next();\n}\n";
+    let expected = "void f()\n{\n\tunsigned temp;  /* first row\n                       second row\n                       third row */\n\tnext();\n}\n";
+    let options = [
+        "--style=allman",
+        "--indent=force-tab=4",
+        "--remove-comment-prefix",
+    ];
+    check(input, &options, expected);
+    check(expected, &options, expected);
+    let options = [
+        "--style=allman",
+        "--indent=force-tab=4",
+        "--remove-comment-prefix",
+        "--convert-tabs",
+    ];
+    check(input, &options, expected);
+    check(expected, &options, expected);
+    let input = "void f()\n{\n    switch (x) {\n    case 1: {\n        unsigned temp;  /* first row\n                         * second row */\n        break;\n    }\n    }\n}\n";
+    let expected = "void f()\n{\n    switch (x) {\n    case 1: {\n        unsigned temp;  /* first row\n                           second row */\n        break;\n    }\n    }\n}\n";
+    check(input, &["--style=kr", "--remove-comment-prefix"], expected);
+    check(
+        expected,
+        &["--style=kr", "--remove-comment-prefix"],
+        expected,
+    );
+}
+
+#[test]
 fn break_blocks_keeps_a_multi_line_comment_on_its_header() {
     let input = "void f(void)\n{\n    z();\n\n    /* two\n       lines */\n    if (b) {\n        y();\n    }\n\n    w();\n\n    /*\n     * three\n     */\n    if (c) {\n        y();\n    }\n}\n";
     check(input, &["--style=kr", "--break-blocks"], input);

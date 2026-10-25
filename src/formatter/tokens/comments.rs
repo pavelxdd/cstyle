@@ -3624,8 +3624,8 @@ impl FormatEngine<'_> {
                     line.trimmed_end().to_string()
                 };
                 // astyle writes the rows of a comment opened after code as
-                // they stand.
-                let verbatim = line_rows.is_none() && shifted == line.trimmed_end();
+                // they stand, past a prefix it removes.
+                let verbatim = line_rows.is_none();
                 // A case block's unindent leaves them standing too.
                 let unindent = self.layout.line_adjuster.comment_row_case_unindent_depth()
                     * self.options.indent_width;
