@@ -2946,15 +2946,15 @@ fn max_code_length_splits_standalone_macro_invocation_rows() {
 }
 
 #[test]
-fn max_code_length_goto_and_member_heads_register_no_continuation() {
+fn max_code_length_goto_registers_no_continuation_and_an_operator_part_continues_the_statement() {
     let mut options = FormatOptions::default();
     let args = ["--style=kr", "--max-code-length=50"].map(str::to_owned);
     apply_command_line_args(&mut options, &args).expect("valid options");
-    let source = "void f()\n{\n    while (abcdefghijklmnopqrstuvwxyz) goto extension_not_found;\n    hotkeys->net_bytes_sampled_commands_selected_slots += total_bytes;\n}\n";
+    let source = "void f()\n{\n    while (abcdefghijklmnopqrstuvwxyz) goto extension_not_found;\n    records->total_bytes_counted_in_the_selected_slots += total_bytes;\n}\n";
 
     assert_eq!(
         format_exact(source, &options),
-        "void f()\n{\n    while (abcdefghijklmnopqrstuvwxyz) goto\n        extension_not_found;\n    hotkeys->net_bytes_sampled_commands_selected_slots\n    += total_bytes;\n}\n",
+        "void f()\n{\n    while (abcdefghijklmnopqrstuvwxyz) goto\n        extension_not_found;\n    records->total_bytes_counted_in_the_selected_slots\n        += total_bytes;\n}\n",
     );
 }
 

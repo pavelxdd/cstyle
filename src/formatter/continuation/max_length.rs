@@ -31,7 +31,7 @@ use crate::formatter::text::line_scan::{
 use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::operators::{
     array_bound_operator_column, find_assignment_operator, head_ends_assignment_operator,
-    leads_keyword_colon,
+    leads_keyword_colon, leads_statement_continuation,
 };
 use crate::formatter::tokens::pointers::is_pointer_declaration_segment;
 use crate::source::lex::{is_identifier_continue, is_identifier_start, trailing_word};
@@ -276,6 +276,7 @@ impl FormatEngine<'_> {
             held: last_held.from(0),
         };
         let mut next_indent = continuation_indent_for_split(line, &split, &split_indent_inputs)
+            .or_else(|| self.split_operator_row_indent(line, split.tail))
             .unwrap_or(split_indent);
         // A brace ending the head opens a body the row after it stands in.
         if brace_row_layout.attaches_lisp_closer && !split.head.trimmed_end().ends_with('{') {
@@ -580,6 +581,33 @@ impl FormatEngine<'_> {
                             })
                     })
             })
+    }
+
+    /// The indent of `tail`, the end of `line`, when an operator leading it
+    /// continues a statement of a block: a continuation past the statement,
+    /// as a row the source broke before the operator takes.
+    fn split_operator_row_indent(&self, line: &str, tail: &str) -> Option<ContinuationIndent> {
+        let first = self.split_tail_first_token(line, tail)?;
+        let Token::Operator(operator) = &self.tree.tokens[first] else {
+            return None;
+        };
+        let in_statement_block = self.tree.groups.enclosing(first).is_some_and(|group| {
+            matches!(
+                self.tree.blocks.kind(group),
+                Some(
+                    BlockKind::FunctionBody
+                        | BlockKind::Control
+                        | BlockKind::Block
+                        | BlockKind::Lambda
+                        | BlockKind::StatementExpression
+                )
+            )
+        });
+        // A trailing return type goes on with a lambda's head.
+        (in_statement_block
+            && leads_statement_continuation(operator)
+            && !matches!(operator.as_str(), "->" | "->*"))
+        .then(|| ContinuationIndent::Spaces(self.statement_continuation_indent_spaces()))
     }
 
     /// The first source token of `tail`, the end of the pending `line`.
@@ -1124,6 +1152,7 @@ fn continuation_indent_for_split(
     let unaccessed_head = declaration.replace("->", ".");
     let commas_in_angles = commas_within_angles(&unaccessed_head);
     if !following_split
+        && !leads_statement_continuation(leading_operator(split.tail))
         && unaccessed_head.chars().all(|ch| {
             is_identifier_continue(ch)
                 || ch.is_whitespace()
@@ -1254,7 +1283,7 @@ fn continuation_indent_for_split(
     if (split.kind == SplitKind::Whitespace || splits_at_shift || splits_operand_parens)
         && held.less
         && let Some(spaces) =
-            stream_chain_continuation_indent(line, base_indent_width, indent_width)
+            stream_chain_continuation_indent(head, base_indent_width, indent_width)
     {
         return Some(ContinuationIndent::Spaces(
             if current_indent_width > base_indent_width {
@@ -1373,6 +1402,19 @@ fn continuation_indent_for_split(
     })
 }
 
+/// The run of operator characters `text` starts with.
+fn leading_operator(text: &str) -> &str {
+    let end = text
+        .find(|ch: char| {
+            !matches!(
+                ch,
+                '+' | '-' | '*' | '/' | '%' | '&' | '|' | '^' | '<' | '>' | '=' | '!' | '~'
+            )
+        })
+        .unwrap_or(text.len());
+    &text[..end]
+}
+
 /// What follows a linkage specification, as `extern "C"`, leading `line`.
 fn after_linkage_specification(line: &str) -> &str {
     line.trimmed_start()
@@ -1455,9 +1497,9 @@ fn nested_new_continuation_indent(
 }
 
 /// The column a stream chain's rows align at: its first shift outside
-/// parens, a level past it when the line runs the statement in after a
-/// braceless header. An assignment, a condition or a `return` before the
-/// shift aligns the rows by its own rule.
+/// parens, which `line` holds, a level past it when the line runs the
+/// statement in after a braceless header. An assignment, a condition or a
+/// `return` before the shift aligns the rows by its own rule.
 fn stream_chain_continuation_indent(
     line: &str,
     base_indent_width: usize,

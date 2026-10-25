@@ -22282,6 +22282,31 @@ fn rows_of_a_subscript_within_parens_stand_past_its_bracket() {
 }
 
 #[test]
+fn a_part_the_code_length_splits_before_an_operator_continues_the_statement_as_its_row_does() {
+    // One continuation indent past the statement, whichever operator leads
+    // the part, as a row the source broke before the operator takes.
+    let options = ["--style=kr", "--max-code-length=60"];
+    for operator in ["+=", "+", "&&", "<<", "<<="] {
+        let input = format!(
+            "void f()\n{{\n    if (ready) {{\n        target->count {operator}2;       /* the count of rows in the list and more of them */\n    }}\n}}\n"
+        );
+        let expected = format!(
+            "void f()\n{{\n    if (ready) {{\n        target->count\n            {operator}2;       /* the count of rows in the list and more of them */\n    }}\n}}\n"
+        );
+        check(&input, &options, &expected);
+        check(&expected, &options, &expected);
+    }
+}
+
+#[test]
+fn a_row_led_by_a_compound_assignment_takes_a_continuation_indent_as_any_operator_s() {
+    let input = "void f()\n{\n    total\n    += other;\n    item_word(result, 0)\n    &= ~MASK;\n    total\n    <<= 2;\n    total\n    + other;\n}\n";
+    let expected = "void f()\n{\n    total\n        += other;\n    item_word(result, 0)\n        &= ~MASK;\n    total\n        <<= 2;\n    total\n        + other;\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
 fn a_part_split_before_an_operator_in_a_header_s_run_in_body_stands_at_the_body() {
     // As a row the operator leads there does; the condition's floor holds
     // only the condition.

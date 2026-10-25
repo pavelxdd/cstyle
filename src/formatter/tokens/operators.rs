@@ -63,7 +63,7 @@ pub(crate) fn leads_keyword_colon(tail: &str) -> bool {
 
 /// Whether `operator` leading a row continues the statement before it: a
 /// binary operator no statement starts with, or a member access.
-fn leads_statement_continuation(operator: &str) -> bool {
+pub(crate) fn leads_statement_continuation(operator: &str) -> bool {
     matches!(
         operator,
         "&&" | "||"
@@ -84,6 +84,16 @@ fn leads_statement_continuation(operator: &str) -> bool {
             | "-"
             | "->"
             | "->*"
+            | "+="
+            | "-="
+            | "*="
+            | "/="
+            | "%="
+            | "&="
+            | "|="
+            | "^="
+            | "<<="
+            | ">>="
     )
 }
 
