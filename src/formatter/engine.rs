@@ -2191,7 +2191,9 @@ impl<'a> FormatEngine<'a> {
         if !current.ends_with(')') {
             return None;
         }
-        let open = self.current.last_close_paren_match()?;
+        let Some(open) = self.current.last_close_paren_match() else {
+            return self.earlier_row_cast_words();
+        };
         if current[..open]
             .chars()
             .next_back()
@@ -2230,6 +2232,47 @@ impl<'a> FormatEngine<'a> {
                 .filter(|part| !part.is_empty())
                 .collect(),
         )
+    }
+
+    /// The words of a cast whose `)` the row ends and whose `(` an earlier
+    /// row holds, read from the tokens as `current_cast_words` reads a row.
+    fn earlier_row_cast_words(&self) -> Option<Vec<&str>> {
+        let tokens = &self.tree.tokens;
+        let close = self
+            .current
+            .active_token()
+            .and_then(|token| self.tree.previous_code_token(token))
+            .filter(|&close| matches!(tokens[close], Token::Symbol(')')))?;
+        let open = self
+            .tree
+            .groups
+            .get(self.tree.groups.closed_at(close)?)
+            .open;
+        // A name before the `(` calls it, as `sizeof` measures its operand.
+        if self
+            .tree
+            .previous_code_token(open)
+            .is_some_and(|before| matches!(tokens[before], Token::Word(_) | Token::Number(_)))
+        {
+            return None;
+        }
+        let inner: Vec<&Token> = tokens[open + 1..close]
+            .iter()
+            .filter(|token| is_code_token(token))
+            .collect();
+        let stars = inner
+            .iter()
+            .rev()
+            .take_while(|token| matches!(token, Token::Operator(operator) if operator == "*"))
+            .count();
+        let words = inner[..inner.len() - stars]
+            .iter()
+            .map(|token| match token {
+                Token::Word(word) => Some(word.as_str()),
+                _ => None,
+            })
+            .collect::<Option<Vec<_>>>()?;
+        (!words.is_empty()).then_some(words)
     }
 
     fn push_newline(&mut self) {

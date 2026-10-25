@@ -25951,3 +25951,10 @@ fn max_code_length_leaves_a_multi_row_comment_to_the_part_holding_it() {
     check(input, &options, expected);
     check(expected, &options, expected);
 }
+
+#[test]
+fn a_cast_whose_paren_opens_on_the_row_before_keeps_its_operand_unary() {
+    // As on one row: the operator after the cast's `)` leads its operand.
+    let input = "void f(void)\n{\n    total = *first + ((\n                          long long)*count * size);\n    check(value != (Kind)(\n              size_t) -1);\n}\n";
+    check(input, &["--style=kr", "--pad-oper"], input);
+}
