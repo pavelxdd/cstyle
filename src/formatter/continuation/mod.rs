@@ -2103,12 +2103,14 @@ impl FormatEngine<'_> {
         }
         let line = self.current.trimmed_end();
         let open = self.open_paren_column_of(line)?;
-        // A name, a subscript or a literal takes the subscript.
+        // A name, a subscript, a literal, a call or a parenthesized
+        // expression take the subscript; a cast's parens send a message.
         if !line[open..].starts_with('[')
             || !line[..open]
                 .chars()
                 .next_back()
                 .is_some_and(|ch| matches!(ch, ']' | '_' | '"' | '\'') || ch.is_alphanumeric())
+                && !parens_before_hold_an_operand(&line[..open])
         {
             return None;
         }
@@ -2802,4 +2804,44 @@ fn closes_its_groups(text: &str) -> bool {
         }
     }
     depth == 0
+}
+
+/// Whether `text` ends with parens that hold an operand rather than name a
+/// type: a call's, or ones holding an expression past a lone name or type.
+fn parens_before_hold_an_operand(text: &str) -> bool {
+    let text = text.trimmed_end();
+    let Some(inner_end) = text.len().checked_sub(1).filter(|_| text.ends_with(')')) else {
+        return false;
+    };
+    let mut depth = 0usize;
+    let Some(open) = text[..inner_end]
+        .char_indices()
+        .rev()
+        .find_map(|(index, ch)| {
+            match ch {
+                ')' | ']' => depth += 1,
+                '(' | '[' if depth == 0 => return Some(index),
+                '(' | '[' => depth -= 1,
+                _ => {}
+            }
+            None
+        })
+    else {
+        return false;
+    };
+    if !text[open..].starts_with('(') {
+        return false;
+    }
+    if text[..open]
+        .trimmed_end()
+        .ends_with(|ch: char| ch == '_' || ch == ')' || ch.is_alphanumeric())
+    {
+        return true;
+    }
+    let inner = text[open + 1..inner_end].trimmed();
+    let inner = inner.trim_end_matches(['*', '&', ' ']);
+    inner.contains("->")
+        || inner
+            .bytes()
+            .any(|byte| b"([.+-/%<>=!|^?,*&".contains(&byte))
 }

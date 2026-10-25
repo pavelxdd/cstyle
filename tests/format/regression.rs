@@ -25981,3 +25981,11 @@ fn a_cast_or_parameter_list_split_over_rows_keeps_the_space_after_its_paren() {
     let input = "void *(*allocate)(\n    size_t bytes) ATTR;\nvoid f(void)\n{\n    value = (struct Item\n             *) item;\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn an_operator_row_in_a_subscript_after_parens_continues_past_its_bracket() {
+    // A call or a parenthesized expression takes a subscript as a name
+    // does.
+    let input = "int f(void)\n{\n    x = ((Item *)&page->items[count])[value\n                                      + 4];\n    x = run(a)[value\n               + 4];\n    x = table[value\n              + 4];\n}\n";
+    check(input, &["--style=kr"], input);
+}
