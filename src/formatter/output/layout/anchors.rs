@@ -6483,21 +6483,16 @@ impl FormatEngine<'_> {
             return None;
         }
         // Only a `do` leading its line, or run in after a `{`, places it;
-        // one run in after an `else` stands at the else's body.
+        // one run in after headers stands at their body.
         let line = self.output.line_with_token(do_token)?;
-        let first = self.output.line_tokens(line)?.first;
-        if self
-            .tree
-            .previous_code_token(do_token)
-            .is_some_and(|previous| {
-                matches!(&tokens[previous], Token::Word(word) if word == "else")
-                    && self.output.line_with_token(previous) == Some(line)
-            })
-        {
+        let span = self.output.line_tokens(line)?;
+        let first = span.first;
+        if let Some((headers @ 1.., _)) = self.run_in_headers_from(first, do_token, |index| {
+            (span.first..=span.last).contains(&index)
+        }) {
             return Some(
-                self.output
-                    .lead_width(self.line_led_by(do_token)?, self.options.tab_width)
-                    + self.options.indent_width
+                self.output.lead_width(line, self.options.tab_width)
+                    + headers * self.options.indent_width
                     + self.case_unindent_spaces(),
             );
         }

@@ -22315,6 +22315,15 @@ fn a_header_s_body_the_source_breaks_after_a_comment_and_a_word_keeps_its_rows()
 }
 
 #[test]
+fn the_while_of_a_do_run_in_after_headers_stands_at_their_body() {
+    // As after an `else`: the `do` stands at the body of each header before
+    // it on its line, wherever its own body stands.
+    let input = "int f()\n{\n    if (ready) do run();\n        while (ready);\n    for (;;) do run();\n        while (ready);\n    if (ready) if (more) do run();\n            while (ready);\n    if (ready) do\n            run();\n        while (ready);\n    next();\n}\n";
+    check(input, &["--style=kr"], input);
+    check(input, &["--style=allman"], input);
+}
+
+#[test]
 fn a_part_the_code_length_splits_before_an_operator_continues_the_statement_as_its_row_does() {
     // One continuation indent past the statement, whichever operator leads
     // the part, as a row the source broke before the operator takes.
