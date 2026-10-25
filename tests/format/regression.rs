@@ -26041,3 +26041,13 @@ fn a_declarator_star_leading_its_row_attaches_to_the_name_and_keeps_its_spacing_
         check(input, &["--style=kr", &pointer, &reference], input);
     }
 }
+
+#[test]
+fn a_label_block_brace_leading_its_row_after_a_directive_split_else_stands_at_its_label() {
+    // The brace opens the label's block, so it is no row of the body the
+    // directive interrupted; formatting again keeps it.
+    let input = "void f()\n{\n    if (ready)\n        first();\n    else\n#ifdef FEATURE\n        second();\n#endif\n    switch (kind) {\n    case 1: {\n        break;\n    } /*c*/ case 2: {\n        go();\n        break;\n    }\n    }\n}\n";
+    let expected = "void f()\n{   if (ready)\n        first();\n    else\n#ifdef FEATURE\n        second();\n#endif\n    switch (kind)\n    {   case 1:\n            {   break; } /*c*/ case 2:\n            {   go();\n                break; } } }\n";
+    check(input, &["--style=pico", "--indent-cases"], expected);
+    check(expected, &["--style=pico", "--indent-cases"], expected);
+}

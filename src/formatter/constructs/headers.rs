@@ -1649,12 +1649,14 @@ impl FormatEngine<'_> {
         interrupted_header_context: impl FnOnce() -> bool,
     ) -> Option<usize> {
         let line_start = line.trimmed_start();
-        // A block given to a braceless header stands at that header.
+        // A block given to a braceless header stands at that header, as one
+        // a label opens does: its brace is none of the body's rows.
         let header_body_block = line_start.starts_with('{')
-            && self
+            && (self
                 .output
                 .last_line_outside_comment()
-                .is_some_and(|previous| line_is_control_body_header(previous.trimmed_start()));
+                .is_some_and(|previous| line_is_control_body_header(previous.trimmed_start()))
+                || self.pending_line_opens_label_block());
         if header_body_block
             || line_kind != LineKind::Normal
             || line_start.starts_with_any(b"#}:)")
@@ -1687,6 +1689,21 @@ impl FormatEngine<'_> {
             multiline_header_body = true;
         }
         (target > current || multiline_header_body && current > target).then_some(target)
+    }
+
+    /// Whether the line being laid out starts with the brace of a block a
+    /// label before it opens.
+    fn pending_line_opens_label_block(&self) -> bool {
+        self.output.pending_tokens().is_some_and(|span| {
+            matches!(self.tree.tokens[span.first], Token::Symbol('{'))
+                && self
+                    .tree
+                    .previous_code_token(span.first)
+                    .is_some_and(|colon| {
+                        matches!(self.tree.tokens[colon], Token::Symbol(':'))
+                            && self.tree.statements.starts_block_statement(span.first)
+                    })
+        })
     }
 
     pub(crate) fn split_else_condition_body_indent_spaces(
