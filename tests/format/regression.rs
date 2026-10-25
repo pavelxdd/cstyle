@@ -22315,6 +22315,16 @@ fn a_header_s_body_the_source_breaks_after_a_comment_and_a_word_keeps_its_rows()
 }
 
 #[test]
+fn an_array_bound_row_in_a_case_block_stands_past_its_bracket() {
+    // As outside a switch: the case block's unindent moves the row with
+    // its statement, once.
+    let input = "void f(int kind)\n{\n    switch (kind) {\n        case 1: {\n            char buffer[4*sizeof(void *) +\n                        8];\n            break;\n        }\n    }\n    char other[4*sizeof(void *) +\n               8];\n}\n";
+    let expected = "void f(int kind)\n{\n    switch (kind) {\n    case 1: {\n        char buffer[4*sizeof(void *) +\n                    8];\n        break;\n    }\n    }\n    char other[4*sizeof(void *) +\n               8];\n}\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
 fn a_pointer_declarator_the_code_length_splits_after_specifier_groups_stands_at_the_head() {
     // As a declarator name split there does, and as without the groups.
     let input = "__declspec(thread) connection_record_t  *connections[MAXIMUM_WAIT_EVENTS + 1];\n__declspec(thread) event_record_t        events_records[MAXIMUM_WAIT_EVENTS + 1];\nstatic connection_record_t  *other_connections[MAXIMUM_WAIT_EVENTS + 1];\n";

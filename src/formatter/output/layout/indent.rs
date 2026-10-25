@@ -327,7 +327,9 @@ impl FormatEngine<'_> {
         if self.options.indent_after_parens || !head_ends_binary_operator(trimmed) {
             return None;
         }
-        let column = array_bound_operator_column(trimmed)?;
+        // The published row stands where a case block's unindent moved it,
+        // as the row after it will be.
+        let column = array_bound_operator_column(trimmed)? + self.case_unindent_spaces();
         // Past the maximum the continuation worked out for the row holds,
         // as it weighs the parens around the subscript.
         let statement_base = self.continuation_base_indent() * self.options.indent_width;
