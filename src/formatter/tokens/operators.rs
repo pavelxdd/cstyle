@@ -1779,10 +1779,15 @@ impl FormatEngine<'_> {
     }
 
     fn line_start_sign_is_unary(&self, next: Option<&Token>) -> bool {
-        if !matches!(
-            next,
-            Some(Token::Word(_) | Token::Number(_) | Token::Symbol('('))
-        ) {
+        let prefixes_operand = match next {
+            Some(Token::Word(_) | Token::Number(_) | Token::Symbol('(')) => true,
+            // A dereference, address, negation or increment after it.
+            Some(Token::Operator(operator)) => {
+                matches!(operator.as_str(), "*" | "&" | "!" | "~" | "++" | "--")
+            }
+            _ => false,
+        };
+        if !prefixes_operand {
             return false;
         }
         self.output
@@ -1793,7 +1798,7 @@ impl FormatEngine<'_> {
             .find(|line| !self.output.code_of(line).trimmed().is_empty())
             .is_some_and(|previous| {
                 let code = self.output.code_trimmed_of(previous);
-                code.ends_with_any(b"([{,=?:")
+                code.ends_with_any(b"([{,=?:<>!")
                     || head_ends_binary_operator(code)
                     || code.trimmed_start().starts_with("return ")
             })

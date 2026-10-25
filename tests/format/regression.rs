@@ -25855,3 +25855,11 @@ fn a_row_in_a_subscript_past_the_maximum_stands_in_the_enclosing_subscript() {
     let input = "void f(void)\n{\n    Item *second = &iter->items[ iter->firsts[index*2\n                                 +1].first ];\n    Item *second = run(iter->items_list, other(iter->firsts, index*2\n                       +1)).first;\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_sign_leading_a_row_after_a_comparison_stays_unary_under_pad_oper() {
+    // As after any other operator ending the row before, and as before a
+    // dereference.
+    let input = "void f(void)\n{\n    check(value >\n          -1);\n    check(value <\n          -1);\n    if (value < 0 &&\n            -*offset * 60 > limit)\n        run();\n}\n";
+    check(input, &["--style=kr", "--pad-oper"], input);
+}
