@@ -2948,6 +2948,22 @@ pub(crate) fn closer_width_after_semicolon(
     if header.is_some() {
         return (width + 1, None);
     }
+    // A comment ending the line stays on the braces' line after them.
+    let comment_at = usize::from(matches!(tail.first(), Some(Token::Whitespace(_))));
+    if let Some(Token::Comment(_, comment)) = tail.get(comment_at)
+        && !comment.contains('\n')
+        && tail[comment_at + 1..]
+            .iter()
+            .find(|token| !matches!(token, Token::Whitespace(_)))
+            .is_none_or(|token| matches!(token, Token::Newline))
+    {
+        let gap = match tail.first() {
+            Some(Token::Whitespace(gap)) => gap.as_str(),
+            _ => " ",
+        };
+        let suffix = format!("{}{gap}{}", " }".repeat(width / 2), comment.trimmed_end());
+        return (suffix.len(), Some(suffix));
+    }
     for token in tail {
         match token {
             Token::Whitespace(_) => spaced = true,

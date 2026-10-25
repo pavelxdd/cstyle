@@ -51,8 +51,9 @@ pub(crate) struct ObjCMessageRows {
 #[derive(Default)]
 pub(crate) struct MaxLengthLineState {
     suffix_width: usize,
-    /// The braces and `while` attached after the statement on its line.
-    while_suffix: Option<String>,
+    /// The braces attached after the statement on its line, with the
+    /// `while` or the comment that follows them there.
+    closer_suffix: Option<String>,
     objc_messages: Vec<ObjCMessageRows>,
     /// The part of a split line being published stands where astyle's
     /// stack or the syntax tree put it.
@@ -72,8 +73,8 @@ impl MaxLengthLineState {
         self.suffix_width = width;
     }
 
-    pub(crate) fn set_while_suffix(&mut self, suffix: Option<String>) {
-        self.while_suffix = suffix;
+    pub(crate) fn set_closer_suffix(&mut self, suffix: Option<String>) {
+        self.closer_suffix = suffix;
     }
 
     /// The column of the rows a split makes in the innermost message it
@@ -146,7 +147,7 @@ impl FormatEngine<'_> {
         // stays whole.
         let suffix_room = self.max_length_line.suffix_width().max(1).max(
             self.max_length_line
-                .while_suffix
+                .closer_suffix
                 .as_ref()
                 .map_or(0, String::len),
         );
@@ -187,15 +188,15 @@ impl FormatEngine<'_> {
         let first_rules = SplitRules::new(self.options)
             .with_offset(brace_row_layout.prefix_width)
             .with_templates(templates);
-        // A `while` attached after the statement's braces shares its line,
-        // so the line splits where the whole of it would, and not before
-        // the `while` when it would split there.
-        let while_suffix = line
+        // A `while` or a comment attached after the statement's braces
+        // shares its line, so the line splits where the whole of it would,
+        // and not past the statement when it would split there.
+        let closer_suffix = line
             .trimmed_end()
             .ends_with(';')
-            .then(|| self.max_length_line.while_suffix.clone())
+            .then(|| self.max_length_line.closer_suffix.clone())
             .flatten();
-        let split = match &while_suffix {
+        let split = match &closer_suffix {
             Some(suffix) => split_result(
                 &format!("{}{suffix}", line.trimmed_end()),
                 first_width,

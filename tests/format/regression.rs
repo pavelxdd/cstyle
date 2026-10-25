@@ -25898,3 +25898,18 @@ fn max_code_length_measures_a_comment_moved_onto_the_first_of_several_block_stat
     check(input, &options, expected);
     check(expected, &options, expected);
 }
+
+#[test]
+fn max_code_length_measures_a_comment_after_closers_run_into_the_statement_row() {
+    // The closers and the comment after them stand on the row, which
+    // splits as it would with all of them written there; a block kept on
+    // its line splits not at all.
+    let input = "void f(void)\n{\n    if (a) { value = 10*24*60*60; } // the value holds at most ten days\n    if (a) {\n        value = 10*24*60*60;\n    } // the value holds at most ten days\n    if (a) { value = 10*24*60*60; } /* the value holds at most ten */\n}\n";
+    let lisp = "void f(void) {\n    if (a) {\n        value = 10 * 24 * 60 *\n                60; } // the value holds at most ten days\n    if (a) {\n        value = 10 * 24 * 60 *\n                60; } // the value holds at most ten days\n    if (a) {\n        value = 10 * 24 * 60 *\n                60; } /* the value holds at most ten */\n}\n";
+    let pico = "void f(void)\n{   if (a) { value = 10 * 24 * 60 * 60; } // the value holds at most ten days\n    if (a)\n    {   value = 10 * 24 * 60 *\n                60; } // the value holds at most ten days\n    if (a) { value = 10 * 24 * 60 * 60; } /* the value holds at most ten */\n}\n";
+    for (style, expected) in [("--style=lisp", lisp), ("--style=pico", pico)] {
+        let options = [style, "--pad-oper", "--max-code-length=60"];
+        check(input, &options, expected);
+        check(expected, &options, expected);
+    }
+}

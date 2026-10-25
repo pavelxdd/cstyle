@@ -139,15 +139,16 @@ impl FormatEngine<'_> {
             ']' => self.push_close_bracket(),
             ';' => {
                 let added_brace_follows = self.added_brace_follows(token_index);
-                let following_while_suffix = self
-                    .options
-                    .attach_closing_while
-                    .then(|| closer_width_after_semicolon(&self.tree.tokens, token_index, true).1)
-                    .flatten();
+                let following_closer_suffix = closer_width_after_semicolon(
+                    &self.tree.tokens,
+                    token_index,
+                    self.options.attach_closing_while,
+                )
+                .1;
                 self.push_semicolon(
                     next,
                     following_closer_width,
-                    following_while_suffix,
+                    following_closer_suffix,
                     added_brace_follows,
                 );
             }
@@ -1056,7 +1057,7 @@ impl FormatEngine<'_> {
         &mut self,
         next: Option<&Token>,
         following_closer_width: usize,
-        following_while_suffix: Option<String>,
+        following_closer_suffix: Option<String>,
         added_brace_follows: bool,
     ) {
         let run_in_closers = matches!(
@@ -1070,7 +1071,7 @@ impl FormatEngine<'_> {
         };
         self.max_length_line.set_suffix_width(suffix_width);
         self.max_length_line
-            .set_while_suffix(following_while_suffix.filter(|_| run_in_closers));
+            .set_closer_suffix(following_closer_suffix.filter(|_| run_in_closers));
         let closed_lambda_header_indent = self
             .current
             .trimmed_end()
