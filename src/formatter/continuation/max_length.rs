@@ -1135,10 +1135,12 @@ fn continuation_indent_for_split(
             // A function pointer's parameters split from its `(*name)`.
             || split.tail.starts_with('(')
                 && declaration.trimmed_end().ends_with(')')
-                && declaration.contains("(*"))
+                && declaration
+                    .match_indices('(')
+                    .any(|(at, _)| opens_pointer_declarator(&declaration[at + 1..])))
         && declaration.match_indices('(').all(|(at, _)| {
             // A function pointer's `(*name)` and the parameters after it.
-            declaration[at + 1..].trimmed_start().starts_with('*')
+            opens_pointer_declarator(&declaration[at + 1..])
                 || declaration[..at].trimmed_end().ends_with_any(b"()")
                 || declaration[..at]
                     .trimmed_end()
@@ -2746,6 +2748,18 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
         index = end;
     }
     None
+}
+
+/// Whether `rest`, the text after a `(`, names a pointer declarator, as in
+/// `(*name)` or `(CALLING_CONVENTION *name)`.
+fn opens_pointer_declarator(rest: &str) -> bool {
+    let mut rest = rest.trimmed_start();
+    while rest.starts_with(is_identifier_start) {
+        rest = rest
+            .trim_start_matches(is_identifier_continue)
+            .trimmed_start();
+    }
+    rest.starts_with('*')
 }
 
 fn holds_code(text: &str) -> bool {

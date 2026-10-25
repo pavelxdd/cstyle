@@ -25827,3 +25827,17 @@ fn rows_continuing_a_goto_or_return_in_a_case_block_stand_as_in_any_block() {
     let input = "int f(int op)\n{\n    switch (op) {\n    case 1: {\n        if (ready) goto\n            done;\n        return\n            value;\n    }\n    case 2:\n        if (ready) goto\n            done;\n        return\n            value;\n    }\ndone:\n    return 0;\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn function_pointer_parameters_the_code_length_splits_off_stand_at_the_head_past_a_calling_convention()
+ {
+    // As after a bare `(*name)`.
+    let expected = "STREAM_API STREAM_EXTERN void (STREAM_CDECL *stream3IoTrace)\n(const char*,...);\nSTREAM_API STREAM_EXTERN void (*stream3IoTraceCallbackFuncs)\n(const char*,...);\n";
+    let options = ["--style=kr", "--max-code-length=60"];
+    check(
+        "STREAM_API STREAM_EXTERN void (STREAM_CDECL *stream3IoTrace)(const char*,...);\nSTREAM_API STREAM_EXTERN void (*stream3IoTraceCallbackFuncs)(const char*,...);\n",
+        &options,
+        expected,
+    );
+    check(expected, &options, expected);
+}
