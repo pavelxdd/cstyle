@@ -5040,6 +5040,12 @@ pub(crate) struct CommentState {
     /// A block added around a statement is being closed on a line of its
     /// own.
     pub(crate) closing_broken_added_block: bool,
+    /// The `;` of a statement braces are being added around on rows of
+    /// their own, the comment after it moving onto its row.
+    pub(crate) broken_added_block_semicolon: Option<usize>,
+    /// The closer, none for an added one, whose comment already joined its
+    /// block's first statement row.
+    pub(crate) joined_closer_comment: Option<Option<usize>>,
     pub(crate) block_comment_close_paren_ends_declaration: bool,
     pub(crate) previous_block_comment_close_paren_ended_declaration: bool,
     /// Source token index of the comment being pushed, of either kind.

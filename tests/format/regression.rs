@@ -25863,3 +25863,38 @@ fn a_sign_leading_a_row_after_a_comparison_stays_unary_under_pad_oper() {
     let input = "void f(void)\n{\n    check(value >\n          -1);\n    check(value <\n          -1);\n    if (value < 0 &&\n            -*offset * 60 > limit)\n        run();\n}\n";
     check(input, &["--style=kr", "--pad-oper"], input);
 }
+
+#[test]
+fn max_code_length_measures_the_comment_a_broken_block_moves_onto_its_statement() {
+    // The statement splits as one the source wrote with the comment after
+    // it, whether the block's braces were written or added.
+    let expected = "void f(void)\n{\n    if (value > 10 * 24 * 60 * 60) {\n        value = 10 * 24 * 60 *\n                60;    // the value holds at most ten days\n    }\n    if (a) {\n        return compute(alpha, beta,\n                       gamma);    // computed at most once\n    }\n}\n";
+    let written = "void f(void)\n{\n    if (value > 10*24*60*60) { value = 10*24*60*60; } // the value holds at most ten days\n    if (a) { return compute(alpha, beta, gamma); } // computed at most once\n}\n";
+    let added = "void f(void)\n{\n    if (value > 10*24*60*60) value = 10*24*60*60; // the value holds at most ten days\n    if (a) return compute(alpha, beta, gamma); // computed at most once\n}\n";
+    check(
+        written,
+        &["--style=kr", "--pad-oper", "--max-code-length=60"],
+        expected,
+    );
+    check(
+        added,
+        &["--style=1tbs", "--pad-oper", "--max-code-length=60"],
+        expected,
+    );
+    check(
+        expected,
+        &["--style=1tbs", "--pad-oper", "--max-code-length=60"],
+        expected,
+    );
+}
+
+#[test]
+fn max_code_length_measures_a_comment_moved_onto_the_first_of_several_block_statements() {
+    // The row splits as one written with the comment after it, and the
+    // comment stays on the row it moved to.
+    let input = "void f(void)\n{\n    if (a) { value = 10*24*60*60; next(); } // the value holds at most ten days\n}\n";
+    let expected = "void f(void)\n{\n    if (a) {\n        value = 10 * 24 * 60 *\n                60;    // the value holds at most ten days\n        next();\n    }\n}\n";
+    let options = ["--style=kr", "--pad-oper", "--max-code-length=60"];
+    check(input, &options, expected);
+    check(expected, &options, expected);
+}

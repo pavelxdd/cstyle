@@ -844,6 +844,7 @@ impl OutputBuffer {
         self.may_have_asm |= hints.has_asm;
     }
 
+    #[cfg(test)]
     pub(crate) fn push(&mut self, line: String) {
         let hints = self.line_hints(&line);
         self.push_with_hints(line, hints);

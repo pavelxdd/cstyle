@@ -409,6 +409,11 @@ impl FormatEngine<'_> {
                             .is_none_or(|after| matches!(tokens[after], Token::Newline))
                 })
                 .unwrap_or(semicolon);
+            // The comment after the statement, which the closer moves onto
+            // the statement's row, joins the row before it is laid out.
+            self.comments.broken_added_block_semicolon = (statement_end == semicolon
+                && self.layout.line_state.is_one_line_block)
+                .then_some(semicolon);
             self.push_replayed_statement(
                 tokens,
                 statement_start,
@@ -417,6 +422,7 @@ impl FormatEngine<'_> {
                 statement_start,
                 None,
             );
+            self.comments.broken_added_block_semicolon = None;
             // A comment or a statement on a later line follows the block,
             // not the brace; a closing header still joins it.
             let next = next_statement_token(tokens, statement_end + 1, tokens.len(), true)

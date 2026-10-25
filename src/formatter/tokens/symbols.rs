@@ -1203,6 +1203,7 @@ impl FormatEngine<'_> {
                     && (self.options.break_one_line_statements
                         || !self.layout.line_state.is_multi_statement_line))
             {
+                self.join_closer_comment_to_statement_row();
                 self.finish_line();
                 self.observe_block_spacing_semicolon();
             } else if !matches!(next, Some(Token::Symbol(';' | ')' | '}'))) {

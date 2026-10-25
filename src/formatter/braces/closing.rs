@@ -7,7 +7,7 @@ use crate::formatter::constructs::headers::{
     is_attachable_closing_header, same_line_nested_header_extra, starts_header_word,
 };
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::lexer::Token;
+use crate::formatter::lexer::{Token, next_non_whitespace};
 use crate::formatter::output::buffer::OpenBraceShape;
 use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
@@ -39,19 +39,6 @@ pub(crate) fn starts_post_closing_declaration(line: &str) -> bool {
         .next()
         .unwrap_or_default();
     !word.is_empty() && !matches!(word, "while") && !is_attachable_closing_header(word)
-}
-
-fn split_return_call_with_comment(line: &mut String) -> Option<String> {
-    let leading = line.len() - line.trimmed_start().len();
-    let trimmed = line.trimmed_start();
-    if !trimmed.starts_with("return ") || !trimmed.contains("//") {
-        return None;
-    }
-    let open = line.find('(')?;
-    line[open + 1..].find(");")?;
-    let tail = line[open + 1..].to_string();
-    line.truncate(open + 1);
-    Some(format!("{}{}", " ".repeat(leading + 11), tail))
 }
 
 impl FormatEngine<'_> {
@@ -551,39 +538,25 @@ impl FormatEngine<'_> {
         self.layout.command_state.observe_char('}');
         self.layout.compound_literal.just_closed =
             self.layout.nesting.last_closed_brace_type == Some(BraceType::CompoundLiteral);
-        // Breaking one-line headers breaks the one-line blocks they open.
-        let move_one_line_block_comment = (self.options.break_one_line_blocks
-            || self.options.lisp_add_one_line_braces_breaks_blocks()
-            || self.comments.closing_broken_added_block
-            || self.options.break_one_line_headers
-                && self
-                    .layout
-                    .nesting
-                    .last_closed_brace_header
-                    .as_deref()
-                    .is_some_and(|header| {
-                        is_standard_add_braces_header(header) || header == "switch"
-                    }))
-            && self.layout.line_state.is_one_line_block
-            && self.closes_block_opened_on_its_line()
-            && !matches!(
+        // A comment that joined the block's first statement row already
+        // moves no further.
+        let comment_joined_statement_row =
+            self.comments.joined_closer_comment.is_some_and(|closer| {
+                closer == self.current.active_token()
+                    && (closer.is_some() || self.comments.closing_broken_added_block)
+            });
+        if comment_joined_statement_row {
+            self.comments.joined_closer_comment = None;
+            self.comments.skip_next_attached_comment = true;
+        }
+        let move_one_line_block_comment = comment_joined_statement_row
+            || self.one_line_block_comment_moves(
+                next,
                 self.layout.nesting.last_closed_brace_type,
-                Some(BraceType::Array | BraceType::CompoundLiteral | BraceType::Initializer)
-            )
-            && matches!(next, Some(Token::Comment(_, comment)) if !comment.contains('\n') && !comment.contains('}'))
-            // A comment code goes on after keeps its place.
-            && self.comment_after_closer_ends_line()
-            // A closer run into the line the comment would move to already
-            // leads the comment there.
-            && !(matches!(
-                self.options.brace_style,
-                BraceStyle::Pico | BraceStyle::Lisp
-            ) && self.one_line_block_comment_target().is_some_and(|target| {
-                self.output
-                    .get(target + 1)
-                    .is_none_or(|line| line.trimmed_start().starts_with('}'))
-            }));
-        if move_one_line_block_comment {
+                self.layout.nesting.last_closed_brace_header.as_deref(),
+                self.one_line_block_comment_target(),
+            );
+        if move_one_line_block_comment && !comment_joined_statement_row {
             self.move_one_line_block_comment_after_brace(next, &whitespace_before_brace);
         }
         self.finish_line_after_closing_brace(
@@ -733,34 +706,66 @@ impl FormatEngine<'_> {
         next: Option<&Token>,
         whitespace_before_brace: &str,
     ) {
-        let mut moved_comment_tail = None;
         if let Some(Token::Comment(_, comment)) = next {
             let target_index = self.one_line_block_comment_target();
-            // astyle puts the brace's indent less one after the space
-            // that follows the block's first statement, a space at least
-            // where another statement follows.
-            let gap = format!(
-                "{}{}",
-                self.first_block_statement_gap()
-                    .unwrap_or_else(|| whitespace_before_brace.to_string()),
-                " ".repeat(self.options.indent_width.saturating_sub(1))
-            );
+            let gap = self.one_line_block_comment_gap(whitespace_before_brace);
             if let Some(line) = target_index.and_then(|index| self.output.get_mut(index)) {
                 line.push_str(&gap);
                 line.push_str(comment.trimmed_end());
-                if self
-                    .options
-                    .max_code_length
-                    .is_some_and(|width| line.len() > width)
-                {
-                    moved_comment_tail = split_return_call_with_comment(line);
-                }
                 self.comments.skip_next_attached_comment = true;
             }
         }
-        if let Some(tail) = moved_comment_tail {
-            self.output.push(tail);
-        }
+    }
+
+    /// Whether the comment after the closer being pushed moves to `target`,
+    /// the first body row of the one-line block it closes, the block being
+    /// of `closed_type` after `closed_header`.
+    fn one_line_block_comment_moves(
+        &self,
+        next: Option<&Token>,
+        closed_type: Option<BraceType>,
+        closed_header: Option<&str>,
+        target: Option<usize>,
+    ) -> bool {
+        // Breaking one-line headers breaks the one-line blocks they open.
+        (self.options.break_one_line_blocks
+            || self.options.lisp_add_one_line_braces_breaks_blocks()
+            || self.comments.closing_broken_added_block
+            || self.options.break_one_line_headers
+                && closed_header
+                    .is_some_and(|header| is_standard_add_braces_header(header) || header == "switch"))
+            && self.layout.line_state.is_one_line_block
+            && self.closes_block_opened_on_its_line()
+            && !matches!(
+                closed_type,
+                Some(BraceType::Array | BraceType::CompoundLiteral | BraceType::Initializer)
+            )
+            && matches!(next, Some(Token::Comment(_, comment)) if !comment.contains('\n') && !comment.contains('}'))
+            // A comment code goes on after keeps its place.
+            && self.comment_after_closer_ends_line()
+            // A closer run into the line the comment would move to already
+            // leads the comment there.
+            && !(matches!(
+                self.options.brace_style,
+                BraceStyle::Pico | BraceStyle::Lisp
+            ) && target.is_some_and(|target| {
+                self.output
+                    .get(target + 1)
+                    .is_none_or(|line| line.trimmed_start().starts_with('}'))
+            }))
+    }
+
+    /// The gap before a comment an expanded one-line block moves.
+    fn one_line_block_comment_gap(&self, whitespace_before_brace: &str) -> String {
+        // astyle puts the brace's indent less one after the space that
+        // follows the block's first statement, a space at least where
+        // another statement follows.
+        format!(
+            "{}{}",
+            self.first_block_statement_gap()
+                .unwrap_or_else(|| whitespace_before_brace.to_string()),
+            " ".repeat(self.options.indent_width.saturating_sub(1))
+        )
     }
 
     /// The output line a comment after an expanded one-line block moves to:
@@ -792,6 +797,106 @@ impl FormatEngine<'_> {
                     .find(|index| !self.output[*index].trimmed().is_empty())
             })
             .or_else(|| self.output.len().checked_sub(1))
+    }
+
+    /// Joins the comment that the closer of a broken one-line block moves
+    /// onto its first statement's row to that row, which the `;` being
+    /// pushed ends, so the row is laid out with it as if written there.
+    pub(crate) fn join_closer_comment_to_statement_row(&mut self) {
+        if matches!(
+            self.options.brace_style,
+            BraceStyle::Pico | BraceStyle::Lisp
+        ) {
+            return;
+        }
+        let Some(semicolon) = self.current.active_token() else {
+            return;
+        };
+        let tokens = &self.tree.tokens;
+        let joined = if self.comments.broken_added_block_semicolon == Some(semicolon) {
+            next_non_whitespace(tokens, semicolon + 1, tokens.len())
+                .map(|comment| (None, comment, " ".to_string()))
+        } else {
+            self.source_block_closer_comment(semicolon)
+                .map(|(close, comment, gap)| (Some(close), comment, gap))
+        };
+        let Some((closer, comment, gap)) = joined else {
+            return;
+        };
+        let Token::Comment(_, text) = &tokens[comment] else {
+            return;
+        };
+        if text.contains('\n') || text.contains('}') {
+            return;
+        }
+        let text = text.trimmed_end().to_string();
+        self.trim_current_end_horizontal_space();
+        self.current.push_str(&gap);
+        self.current
+            .push_str(&" ".repeat(self.options.indent_width.saturating_sub(1)));
+        self.current.push_str(&text);
+        self.comments.joined_closer_comment = Some(closer);
+    }
+
+    /// The closer, the comment it moves and the gap before the comment, of
+    /// the broken one-line block whose first statement `semicolon` ends.
+    fn source_block_closer_comment(&self, semicolon: usize) -> Option<(usize, usize, String)> {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let group = groups.enclosing(semicolon)?;
+        let open = groups.get(group).open;
+        let close = groups.get(group).close?;
+        let opens_block =
+            |group: GroupId| matches!(tokens[groups.get(group).open], Token::Symbol('{'));
+        let header = self
+            .layout
+            .nesting
+            .brace_header_stack
+            .last()
+            .cloned()
+            .flatten();
+        let breaks_block = self.options.break_one_line_blocks
+            || self.options.lisp_add_one_line_braces_breaks_blocks()
+            || self.options.break_one_line_headers
+                && header.as_deref().is_some_and(|header| {
+                    is_standard_add_braces_header(header) || header == "switch"
+                });
+        if !opens_block(group)
+            || !breaks_block
+            || !self.layout.line_state.is_one_line_block
+            || !self.in_broken_one_line_block(semicolon)
+            || matches!(
+                self.layout.nesting.brace_type_stack.last(),
+                Some(BraceType::Array | BraceType::CompoundLiteral | BraceType::Initializer)
+            )
+            || (open + 1..semicolon).any(|index| {
+                matches!(tokens[index], Token::Symbol(';'))
+                    && groups.enclosing(index).is_some_and(opens_block)
+            })
+            || tokens[semicolon..close]
+                .iter()
+                .any(|token| matches!(token, Token::Comment(..)))
+        {
+            return None;
+        }
+        let comment = next_non_whitespace(tokens, close + 1, tokens.len())?;
+        // A comment code goes on after keeps its place.
+        if !matches!(tokens[comment], Token::Comment(..))
+            || next_non_whitespace(tokens, comment + 1, tokens.len())
+                .is_some_and(|after| !matches!(tokens[after], Token::Newline))
+        {
+            return None;
+        }
+        let gap = match &tokens[semicolon + 1] {
+            Token::Whitespace(whitespace) => whitespace.to_string(),
+            _ => String::new(),
+        };
+        let gap = if gap.is_empty() && next_code_token(tokens, semicolon + 1) != Some(close) {
+            " ".to_string()
+        } else {
+            gap
+        };
+        Some((close, comment, gap))
     }
 
     /// The source whitespace after the first statement of the block the
