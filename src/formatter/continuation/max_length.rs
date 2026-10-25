@@ -2682,7 +2682,7 @@ fn astyle_split_point(line: &str, width: usize, rules: SplitRules) -> Option<usi
                             b'&' => rules.reference_to_type,
                             _ => false,
                         };
-                        if !matches!(next, b')' | b'(' | b':')
+                        if !matches!(next, b')' | b'(' | b':' | b';')
                             && previous_non_space != b'('
                             && (!to_type || potential_operator(previous_non_space))
                         {

@@ -25813,3 +25813,11 @@ fn a_base_the_code_length_splits_off_a_class_head_stands_as_one_the_source_break
     );
     check(expected, &options, expected);
 }
+
+#[test]
+fn the_code_length_never_splits_a_statement_s_semicolon_off() {
+    // The trailing comment leaves the line past the maximum; a `;` alone on
+    // a row ends nothing the row before did not.
+    let input = "struct Item {\n    char name[4]    ;            /* first bytes followed by the rest */\n};\nvoid f(void)\n{\n    run(value)    ;            /* first bytes followed by the rest */\n}\n";
+    check(input, &["--style=kr", "--max-code-length=60"], input);
+}
