@@ -2242,16 +2242,25 @@ impl<'a> FormatEngine<'a> {
     /// row holds, read from the tokens as `current_cast_words` reads a row.
     fn earlier_row_cast_words(&self) -> Option<Vec<&str>> {
         let tokens = &self.tree.tokens;
+        // The `)` being pushed, or the one before the token being pushed.
         let close = self
             .current
             .active_token()
-            .and_then(|token| self.tree.previous_code_token(token))
+            .and_then(|token| {
+                if matches!(tokens[token], Token::Symbol(')')) {
+                    Some(token)
+                } else {
+                    self.tree.previous_code_token(token)
+                }
+            })
             .filter(|&close| matches!(tokens[close], Token::Symbol(')')))?;
-        let open = self
-            .tree
-            .groups
-            .get(self.tree.groups.closed_at(close)?)
-            .open;
+        let group = self.tree.groups.closed_at(close)?;
+        // Parameters declare names, no type to convert to.
+        if self.tree.functions.is_parameter_list(group) || self.tree.functions.is_declarator(group)
+        {
+            return None;
+        }
+        let open = self.tree.groups.get(group).open;
         // A name before the `(` calls it, as `sizeof` measures its operand.
         if self
             .tree

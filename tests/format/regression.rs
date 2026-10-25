@@ -25966,3 +25966,11 @@ fn an_operator_leading_the_row_after_sizeof_or_a_cast_keeps_its_one_row_spacing(
     let input = "void f(void)\n{\n    items->list = allocate(items->capacity * sizeof\n                           *items->list);\n    check(value != (size_t)\n          -1);\n    check(value != (unsigned char)\n          *prefix);\n    item = allocate(sizeof* item);\n    item = allocate(sizeof *item);\n}\n";
     check(input, &["--style=kr", "--pad-oper"], input);
 }
+
+#[test]
+fn a_cast_or_parameter_list_split_over_rows_keeps_the_space_after_its_paren() {
+    // Parameters are no cast, and a cast split over rows keeps its spacing
+    // as on one row.
+    let input = "void *(*allocate)(\n    size_t bytes) ATTR;\nvoid f(void)\n{\n    value = (struct Item\n             *) item;\n}\n";
+    check(input, &["--style=kr"], input);
+}
