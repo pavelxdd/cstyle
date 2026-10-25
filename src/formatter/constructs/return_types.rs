@@ -342,6 +342,14 @@ impl FormatEngine<'_> {
         let Some(head) = self.tree.functions.named_at(span.first).cloned() else {
             return false;
         };
+        // The joined row holds the tokens of the row the name joins, not of
+        // rows the head started on before it.
+        let first = self
+            .output
+            .len()
+            .checked_sub(1)
+            .and_then(|previous| self.output.line_tokens(previous))
+            .map_or(head.start, |previous| previous.first.max(head.start));
         let previous = self.output.pop().expect("previous line exists");
         let previous_trimmed = previous.trimmed();
         let previous_prefix = &previous[..previous.len() - previous.trimmed_start().len()];
@@ -369,7 +377,7 @@ impl FormatEngine<'_> {
             _ => " ",
         };
         self.output.set_pending_tokens(Some(TokenSpan {
-            first: head.start,
+            first,
             last: span.last,
         }));
         let previous_indent = leading_visual_width(&previous, self.options.tab_width);

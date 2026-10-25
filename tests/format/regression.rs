@@ -25925,3 +25925,18 @@ fn a_declarator_after_a_tagged_type_name_on_the_row_before_stays_a_declarator_in
         input,
     );
 }
+
+#[test]
+fn attach_return_type_parameter_rows_after_a_split_joined_name_take_the_continuation_indent() {
+    // The name joins only the row before it; the head's earlier rows keep
+    // their tokens, and the rows after a split `(` stand as after any.
+    let input = "int\nsection_attribute_name\nfunction_name (const struct Item *restrict first,\n               const char *restrict second, int count,\n               int flags)\n{\n    return 0;\n}\n";
+    let expected = "int\nsection_attribute_name function_name (\n    const struct Item *restrict first,\n    const char *restrict second, int count,\n    int flags)\n{\n    return 0;\n}\n";
+    let options = [
+        "--style=1tbs",
+        "--attach-return-type",
+        "--max-code-length=50",
+    ];
+    check(input, &options, expected);
+    check(expected, &options, expected);
+}
