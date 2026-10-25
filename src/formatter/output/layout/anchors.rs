@@ -21,7 +21,9 @@ use crate::formatter::structure::blocks::{
     BlockKind, closes_before_paren, is_code_token, next_code_token,
 };
 use crate::formatter::structure::groups::{Delimiter, GroupId};
-use crate::formatter::syntax::language::{is_header, is_macro_like_word, is_non_type_keyword};
+use crate::formatter::syntax::language::{
+    is_assignment_operator, is_header, is_macro_like_word, is_non_type_keyword,
+};
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::{
     ContainsAnyByte, after_leading_comments, has_unmatched_open_brace, preprocessor_directive,
@@ -4517,7 +4519,13 @@ impl FormatEngine<'_> {
         if self.options.indent_after_parens {
             return self.stacked_argument_indent(first);
         }
-        let content = next_code_token(tokens, open + 1)?;
+        // The arms of a value assigned in the parentheses stand at the value.
+        let assignment = (open + 1..colon).rev().find(|&index| {
+            matches!(&tokens[index], Token::Operator(operator) if is_assignment_operator(operator))
+                && groups.enclosing(index) == Some(group)
+                && (index..colon).any(|arm| matches!(tokens[arm], Token::Symbol('?')))
+        });
+        let content = next_code_token(tokens, assignment.unwrap_or(open) + 1)?;
         let column = self.token_column(content)?;
         // Parens past the continuation limit leave the arm to the stack.
         if column

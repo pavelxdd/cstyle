@@ -1472,7 +1472,19 @@ impl FormatEngine<'_> {
             && previous_code.contains('?')
             && let Some(open) = self.open_paren_column_of(previous_code)
         {
-            let column = column_after(previous_code, open, tab_width);
+            // The arms of a value assigned in the parens continue the value.
+            let inside = &previous_code[open + 1..];
+            let column = match inside
+                .find('?')
+                .and_then(|question| find_assignment_operator(&inside[..question]))
+            {
+                Some((assignment, operator)) => {
+                    let value = &inside[assignment + operator.len()..];
+                    let value_start = previous_code.len() - value.trimmed_start().len();
+                    visual_width_from(&previous_code[..value_start], 0, tab_width)
+                }
+                None => column_after(previous_code, open, tab_width),
+            };
             let column = self
                 .control_condition_header_indent()
                 .map_or(column, |header| {

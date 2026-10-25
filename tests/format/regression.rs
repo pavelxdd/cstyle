@@ -22315,6 +22315,13 @@ fn a_header_s_body_the_source_breaks_after_a_comment_and_a_word_keeps_its_rows()
 }
 
 #[test]
+fn a_ternary_arm_row_of_a_value_assigned_in_parens_continues_the_value() {
+    // As after any other operator ending the row, and as at statement level.
+    let input = "void f()\n{\n    run(first = value ? other :\n                third);\n    run(first = value ?\n                other : third);\n    run(first = value +\n                other);\n    first = value ? other :\n            third;\n    run(value ? other :\n        third);\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
 fn a_row_after_parens_closing_within_a_bracket_stands_past_the_bracket() {
     // Whatever row led the parens' last row, as when an operator ends the
     // row before.
