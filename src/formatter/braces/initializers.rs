@@ -48,8 +48,8 @@ fn brace_follows_assignment(tokens: &[Token], brace: usize) -> bool {
 }
 
 /// Whether the declaration the `=` before `brace` ends declares a `struct`
-/// outside its parentheses and brackets, on any of its lines: astyle closes
-/// its aggregate at the statement rather than under its brace.
+/// outside its parentheses and brackets, on any of its lines: its aggregate
+/// counts its levels from the statement, though its declarator continues it.
 fn statement_declares_struct(tokens: &[Token], brace: usize) -> bool {
     let mut depth = 0usize;
     for token in tokens[..brace].iter().rev() {
@@ -768,7 +768,6 @@ impl FormatEngine<'_> {
             || brace_type == BraceType::CompoundLiteral && self.layout.nesting.paren_depth == 0;
         let declares_struct = self.current.trimmed_end().ends_with('=')
             && statement_declares_struct(&self.tree.tokens, token_index);
-        let struct_declaration = !nested && declares_struct;
         if self.current_is_lambda_body_header()
             || is_lambda_capture_header(self.current.trimmed_end())
         {
@@ -911,14 +910,6 @@ impl FormatEngine<'_> {
             column
         } else if run_in_nested_brace {
             base_indent + self.options.indent_width
-        } else if struct_declaration {
-            // The statement's level, though its declarator continues it.
-            (self
-                .layout
-                .indentation
-                .line_indent(LineKind::Normal, self.options)
-                + self.case_body_indent_extra(LineKind::Normal))
-                * self.options.indent_width
         } else if leveled_literal {
             // Ratliff closes it at its rows.
             base_indent

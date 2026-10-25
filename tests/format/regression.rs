@@ -2535,10 +2535,7 @@ fn closing_brace_after_braces_opened_in_both_directive_branches_finds_its_opener
 #[test]
 fn designator_rows_after_run_in_first_element_align_with_it() {
     let input = "void f(void)\n{\n    struct s v = { .a = 1,\n                   .b = 2\n                 };\n    x();\n}\n";
-    // A struct declaration closes its aggregate at the statement.
-    let expected = "void f(void)\n{\n    struct s v = { .a = 1,\n                   .b = 2\n    };\n    x();\n}\n";
-    check(input, &["--style=kr"], expected);
-    check(expected, &["--style=kr"], expected);
+    check(input, &["--style=kr"], input);
 }
 
 #[test]
@@ -8096,21 +8093,30 @@ fn bit_field_declarators_after_a_type_line_stand_at_the_first_declarator() {
 }
 
 #[test]
-fn a_struct_declaration_split_before_its_declarator_closes_its_run_in_list_at_the_statement() {
-    // The declaration names `struct` on a line before the declarator: its
-    // aggregate still closes at the statement.
-    let input = "void f(void)\n{\n    struct s\n        w = { .a = 1,\n              .b = 2\n    };\n    struct s v = { .a = 1,\n                   .b = 2\n    };\n}\n";
+fn a_struct_declaration_closes_its_run_in_list_under_its_brace_as_any_declaration() {
+    // Whether the declaration names `struct`, `union` or a plain type, and
+    // whether its declarator stands on the type's line or after it.
+    let expected = "void f(void)\n{\n    struct s\n        w = { .a = 1,\n              .b = 2\n            };\n    struct s v = { .a = 1,\n                   .b = 2\n                 };\n}\n";
     for style in ["--style=kr", "--style=1tbs"] {
-        check(input, &[style], input);
+        for head in ["struct s", "union ss"] {
+            let expected = expected.replace("struct s", head);
+            let input = expected
+                .replace("\n            };", "\n    };")
+                .replace("\n                 };", "\n    };");
+            check(&input, &[style], &expected);
+            check(&expected, &[style], &expected);
+        }
+        let expected = "void f(void)\n{\n    Item v = { .a = 1,\n               .b = 2\n             };\n    Item w = { 1, 2,\n               3\n             }, other;\n    struct s x = { 1, 2,\n                   3\n                 }, other;\n}\n";
+        check(expected, &[style], expected);
     }
 }
 
 #[test]
-fn aggregate_with_run_in_first_fields_closes_at_its_statement() {
+fn aggregate_with_run_in_first_fields_aligns_its_fields_at_the_first() {
     let input = "void f(void)\n{\n    struct s sa = { .a = 1, .b = 2,\n        .c = 3\n    };\n    *p = (struct s) { .a = 1,\n        .c = 3\n    };\n    T y = (T) { .a = 1,\n        .b = 2 };\n}\n";
     // Fields after those run in stand at the first, as in any list, an
     // assigned compound literal's too.
-    let expected = "void f(void)\n{\n    struct s sa = { .a = 1, .b = 2,\n                    .c = 3\n    };\n    *p = (struct s) { .a = 1,\n                      .c = 3\n    };\n    T y = (T) { .a = 1,\n                .b = 2\n    };\n}\n";
+    let expected = "void f(void)\n{\n    struct s sa = { .a = 1, .b = 2,\n                    .c = 3\n                  };\n    *p = (struct s) { .a = 1,\n                      .c = 3\n    };\n    T y = (T) { .a = 1,\n                .b = 2\n    };\n}\n";
     let args = [
         "--style=1tbs",
         "--pad-oper",
