@@ -25821,3 +25821,9 @@ fn the_code_length_never_splits_a_statement_s_semicolon_off() {
     let input = "struct Item {\n    char name[4]    ;            /* first bytes followed by the rest */\n};\nvoid f(void)\n{\n    run(value)    ;            /* first bytes followed by the rest */\n}\n";
     check(input, &["--style=kr", "--max-code-length=60"], input);
 }
+
+#[test]
+fn rows_continuing_a_goto_or_return_in_a_case_block_stand_as_in_any_block() {
+    let input = "int f(int op)\n{\n    switch (op) {\n    case 1: {\n        if (ready) goto\n            done;\n        return\n            value;\n    }\n    case 2:\n        if (ready) goto\n            done;\n        return\n            value;\n    }\ndone:\n    return 0;\n}\n";
+    check(input, &["--style=kr"], input);
+}

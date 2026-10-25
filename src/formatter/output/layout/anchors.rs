@@ -5243,6 +5243,25 @@ impl FormatEngine<'_> {
             })
     }
 
+    /// Whether the line being laid out continues a statement of the block
+    /// directly around it, whatever ended the row before.
+    pub(crate) fn pending_line_continues_block_statement(&self) -> bool {
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let Some(first) = self.output.pending_tokens().map(|span| span.first) else {
+            return false;
+        };
+        is_code_token(&tokens[first])
+            && !matches!(tokens[first], Token::Preprocessor(_))
+            && !self.tree.statements.starts_block_statement(first)
+            && groups.enclosing(first).is_some_and(|group| {
+                matches!(
+                    self.tree.blocks.kind(group),
+                    Some(BlockKind::FunctionBody | BlockKind::Control | BlockKind::Block)
+                )
+            })
+    }
+
     /// Whether the token `index` sits in a function body.
     fn in_code(&self, index: usize) -> bool {
         let groups = &self.tree.groups;

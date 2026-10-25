@@ -2488,7 +2488,7 @@ impl FormatEngine<'_> {
             });
         if delimiters().continues()
             || follows_ternary_arm
-            || self.pending_line_continues_statement()
+            || self.pending_line_continues_block_statement()
             || self.continues_aligned_brace_elements()
         {
             return None;
