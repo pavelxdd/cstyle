@@ -345,14 +345,14 @@ impl FormatEngine<'_> {
         } else if head_ends_statement {
             next_indent = ContinuationIndent::Spaces(block_spaces);
         }
-        // A `goto` split from its label continues one level in.
-        if split
-            .head
-            .trimmed_end()
-            .strip_suffix("goto")
-            .is_some_and(|before| !before.ends_with(is_identifier_continue))
-        {
-            next_indent = ContinuationIndent::Spaces(base_indent_width + self.options.indent_width);
+        if let Some(spaces) = self.goto_label_split_indent(
+            self.output.pending_tokens(),
+            line,
+            &split.head,
+            split.tail,
+            base_indent_width,
+        ) {
+            next_indent = ContinuationIndent::Spaces(spaces);
         }
         if let Some(extra) = inline_body_indent_extra
             && !head_ends_statement
@@ -458,6 +458,15 @@ impl FormatEngine<'_> {
                 && following_indent.columns(self.options.indent_width) < floor
             {
                 following_indent = ContinuationIndent::Spaces(floor);
+            }
+            if let Some(spaces) = self.goto_label_split_indent(
+                source_tokens,
+                line,
+                &split.head,
+                split.tail,
+                next_indent.columns(self.options.indent_width),
+            ) {
+                following_indent = ContinuationIndent::Spaces(spaces);
             }
             if self.split_ends_statement(&line[..line.len() - split.tail.len()]) {
                 following_indent = ContinuationIndent::Spaces(block_spaces);
@@ -633,8 +642,53 @@ impl FormatEngine<'_> {
     }
 
     /// The first source token of `tail`, the end of the pending `line`.
+    /// The indent of the label a split of `line` moves off its `goto`
+    /// ending `head` on a row at `row_indent`: one level in, or past the
+    /// body of headers the `goto` runs in after.
+    fn goto_label_split_indent(
+        &self,
+        line_tokens: Option<TokenSpan>,
+        line: &str,
+        head: &str,
+        tail: &str,
+        row_indent: usize,
+    ) -> Option<usize> {
+        head.trimmed_end()
+            .strip_suffix("goto")
+            .filter(|before| !before.ends_with(is_identifier_continue))?;
+        let levels = match self.split_tail_run_in_header_levels(line_tokens, line, tail) {
+            0 => 1,
+            headers => headers + self.options.continuation_indent,
+        };
+        Some(row_indent + levels * self.options.indent_width)
+    }
+
+    /// How many levels the headers whose bodies run in before it on the
+    /// line indent the statement holding the start of `tail`, the end of
+    /// `line`, whose tokens are `line_tokens`.
+    fn split_tail_run_in_header_levels(
+        &self,
+        line_tokens: Option<TokenSpan>,
+        line: &str,
+        tail: &str,
+    ) -> usize {
+        line_tokens
+            .and_then(|span| {
+                let tail_first = self.tail_first_token_in(span, line, tail)?;
+                self.run_in_headers_from(span.first, tail_first, |index| {
+                    (span.first..=span.last).contains(&index)
+                })
+            })
+            .map_or(0, |(levels, _)| levels)
+    }
+
     fn split_tail_first_token(&self, line: &str, tail: &str) -> Option<usize> {
-        let span = self.output.pending_tokens()?;
+        self.tail_first_token_in(self.output.pending_tokens()?, line, tail)
+    }
+
+    /// The first code token of `tail`, the end of `line`, whose tokens are
+    /// `span`.
+    fn tail_first_token_in(&self, span: TokenSpan, line: &str, tail: &str) -> Option<usize> {
         let tokens = &self.tree.tokens;
         let tail_start = line.len() - tail.len();
         let mut cursor = 0;
@@ -1141,7 +1195,20 @@ fn continuation_indent_for_split(
             .flatten()
     };
     if splits_header_body_statement(split) {
-        return Some(ContinuationIndent::Spaces(base_indent_width + indent_width));
+        // The body split off its headers stands at their body, as does a
+        // word after a `)` ending the head, which a row there starts anew;
+        // the rest of a statement begun there continues past it.
+        let (levels, statement) = run_in_headers(head);
+        let continuation = if statement.is_empty()
+            || statement.ends_with(')') && split.tail.starts_with(is_identifier_continue)
+        {
+            0
+        } else {
+            configured_continuation_spaces
+        };
+        return Some(ContinuationIndent::Spaces(
+            base_indent_width + levels * indent_width + continuation,
+        ));
     }
     // A declaration split at the whitespace before its name continues
     // nothing astyle registered, unless an aggregate keyword leads it.
@@ -1310,8 +1377,7 @@ fn continuation_indent_for_split(
         split.tail.starts_with('(') && unmatched_open_paren_columns(head).is_empty();
     if (split.kind == SplitKind::Whitespace || splits_at_shift || splits_operand_parens)
         && held.less
-        && let Some(spaces) =
-            stream_chain_continuation_indent(head, base_indent_width, indent_width)
+        && let Some(spaces) = stream_chain_continuation_indent(head, base_indent_width)
     {
         return Some(ContinuationIndent::Spaces(
             if current_indent_width > base_indent_width {
@@ -1525,14 +1591,9 @@ fn nested_new_continuation_indent(
 }
 
 /// The column a stream chain's rows align at: its first shift outside
-/// parens, which `line` holds, a level past it when the line runs the
-/// statement in after a braceless header. An assignment, a condition or a
-/// `return` before the shift aligns the rows by its own rule.
-fn stream_chain_continuation_indent(
-    line: &str,
-    base_indent_width: usize,
-    indent_width: usize,
-) -> Option<usize> {
+/// parens, which `line` holds. An assignment, a condition or a `return`
+/// before the shift aligns the rows by its own rule.
+fn stream_chain_continuation_indent(line: &str, base_indent_width: usize) -> Option<usize> {
     // The `<<` naming an operator shifts nothing.
     let names_operator = |index: usize| {
         line[..index]
@@ -1552,17 +1613,13 @@ fn stream_chain_continuation_indent(
     {
         return None;
     }
-    Some(
-        base_indent_width
-            + shift
-            + usize::from(header_body_run_in(operand).is_some()) * indent_width,
-    )
+    Some(base_indent_width + shift)
 }
 
 /// Whether `split` breaks the statement a braceless header runs in on its
 /// line before a word or an operator, right after the header or with
-/// nothing in the statement registering a column: the rest goes on at the
-/// header's body, as a row the operator leads there does.
+/// nothing in the statement registering a column: the rest goes on from
+/// the header's body, as a row the source breaks there does.
 fn splits_header_body_statement(split: &SplitResult) -> bool {
     split.kind == SplitKind::Whitespace
         && split.tail.starts_with(|ch: char| {
@@ -1594,10 +1651,20 @@ fn splits_header_body_statement(split: &SplitResult) -> bool {
         })
 }
 
-/// The statement a braceless control header leading `text` runs in after
-/// it on the line, as `log() <<` in `if (ready) log() <<`.
-fn header_body_run_in(text: &str) -> Option<&str> {
-    header_body(text).filter(|body| !body.is_empty())
+/// How many levels the braceless headers leading `text` indent the
+/// statement they run in on the line, an `else if` being one header, and
+/// that statement's code.
+fn run_in_headers(text: &str) -> (usize, &str) {
+    let mut levels = 0;
+    let mut rest = text.trimmed();
+    while let Some(body) = header_body(rest) {
+        let else_if = rest.starts_with("else")
+            && body.starts_with("if")
+            && !body[2..].starts_with(is_identifier_continue);
+        levels += usize::from(!else_if);
+        rest = body;
+    }
+    (levels, rest)
 }
 
 /// The code after a control header leading `text`, empty when the header

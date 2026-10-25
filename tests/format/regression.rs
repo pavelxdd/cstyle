@@ -3018,8 +3018,8 @@ fn added_braces_leave_a_statement_after_a_macro_body_alone() {
 }
 
 #[test]
-fn continuation_of_a_body_run_in_after_its_header_goes_a_level_in() {
-    let input = "int f(void)\n{\n    if (arg_len % 4) {\n        if (err) *err = \"Wrong number of arguments in \"\n                            \"buffer limit configuration.\";\n        return 0;\n    }\n    if (c) addReplyError(c,\"Invalid stream ID specified as stream \"\n                             \"command argument\");\n    if (vecSize(vdeleted)) notify(NOTIFY_HASH, \"hdel\",\n                                      keyArg, c->db->id);\n    return 1;\n}\n";
+fn rows_of_a_body_run_in_after_its_header_align_at_their_anchor() {
+    let input = "int f(void)\n{\n    if (size % 4) {\n        if (error) *error = \"Wrong number of values in \"\n                            \"the size setting.\";\n        return 0;\n    }\n    if (item) report(item, \"Invalid identifier given as an \"\n                     \"argument\");\n    if (count(list)) notify(KIND_VALUE, \"name\",\n                            key, item->owner->id);\n    return 1;\n}\n";
     check(input, &["--style=kr"], input);
 }
 
@@ -3447,13 +3447,13 @@ fn break_blocks_keeps_a_row_of_comments_after_a_block_with_its_closing_header() 
 }
 
 #[test]
-fn a_body_run_in_after_else_or_do_continues_its_arguments_a_level_in_as_after_an_if() {
+fn a_body_run_in_after_else_or_do_aligns_its_arguments_as_after_an_if() {
     // An `else if` is one header; `else` before any other body nests it.
-    let input = "void f()\n{\n    if (ready) {\n        x();\n    } else value = compute(first,\n                               second);\n    if (ready)\n        x();\n    else if (other) value = compute(first,\n                                        second);\n    do value = compute(first,\n                           second); while (x);\n    if (a) if (b) value = compute(first,\n                                      second);\n    if (ready)\n        x();\n    else for (;;) value = compute(first,\n                                      second);\n}\n";
+    let input = "void f()\n{\n    if (ready) {\n        x();\n    } else value = compute(first,\n                           second);\n    if (ready)\n        x();\n    else if (other) value = compute(first,\n                                    second);\n    do value = compute(first,\n                       second); while (x);\n    if (a) if (b) value = compute(first,\n                                      second);\n    if (ready)\n        x();\n    else for (;;) value = compute(first,\n                                      second);\n}\n";
     check(
         input,
         &["--style=kr", "--keep-one-line-statements"],
-        "void f()\n{\n    if (ready) {\n        x();\n    } else value = compute(first,\n                               second);\n    if (ready)\n        x();\n    else if (other) value = compute(first,\n                                        second);\n    do value = compute(first,\n                           second); while (x);\n    if (a) if (b) value = compute(first,\n                                          second);\n    if (ready)\n        x();\n    else for (;;) value = compute(first,\n                                          second);\n}\n",
+        "void f()\n{\n    if (ready) {\n        x();\n    } else value = compute(first,\n                           second);\n    if (ready)\n        x();\n    else if (other) value = compute(first,\n                                    second);\n    do value = compute(first,\n                       second); while (x);\n    if (a) if (b) value = compute(first,\n                                  second);\n    if (ready)\n        x();\n    else for (;;) value = compute(first,\n                                  second);\n}\n",
     );
 }
 
@@ -3473,12 +3473,12 @@ fn break_blocks_pads_a_header_after_a_comment_led_code_line_as_after_its_code() 
 }
 
 #[test]
-fn a_body_run_in_after_a_case_label_continues_its_arguments_a_level_in_whatever_headers_follow() {
-    let input = "void f()\n{\n    switch (kind) {\n    case 1: value = compute(first,\n                                second);\n        break;\n    case 2: if (ready) value = compute(first,\n                                           second);\n        break;\n    default: if (ready) value = helper(first,\n                                           second);\n        break;\n    }\n}\n";
+fn a_body_run_in_after_a_case_label_aligns_its_arguments_whatever_headers_follow() {
+    let input = "void f()\n{\n    switch (kind) {\n    case 1: value = compute(first,\n                            second);\n        break;\n    case 2: if (ready) value = compute(first,\n                                           second);\n        break;\n    default: if (ready) value = helper(first,\n                                           second);\n        break;\n    }\n}\n";
     check(
         input,
         &["--style=kr", "--keep-one-line-statements"],
-        "void f()\n{\n    switch (kind) {\n    case 1: value = compute(first,\n                                second);\n        break;\n    case 2: if (ready) value = compute(first,\n                                               second);\n        break;\n    default: if (ready) value = helper(first,\n                                               second);\n        break;\n    }\n}\n",
+        "void f()\n{\n    switch (kind) {\n    case 1: value = compute(first,\n                            second);\n        break;\n    case 2: if (ready) value = compute(first,\n                                       second);\n        break;\n    default: if (ready) value = helper(first,\n                                       second);\n        break;\n    }\n}\n",
     );
     check(
         input,
@@ -3487,12 +3487,12 @@ fn a_body_run_in_after_a_case_label_continues_its_arguments_a_level_in_whatever_
             "--keep-one-line-statements",
             "--indent-switches",
         ],
-        "void f()\n{\n    switch (kind) {\n        case 1: value = compute(first,\n                                    second);\n            break;\n        case 2: if (ready) value = compute(first,\n                                                   second);\n            break;\n        default: if (ready) value = helper(first,\n                                                   second);\n            break;\n    }\n}\n",
+        "void f()\n{\n    switch (kind) {\n        case 1: value = compute(first,\n                                second);\n            break;\n        case 2: if (ready) value = compute(first,\n                                           second);\n            break;\n        default: if (ready) value = helper(first,\n                                           second);\n            break;\n    }\n}\n",
     );
     check(
         input,
         &["--style=whitesmith", "--keep-one-line-statements"],
-        "void f()\n    {\n    switch (kind)\n        {\n        case 1: value = compute(first,\n                                    second);\n            break;\n        case 2: if (ready) value = compute(first,\n                                                   second);\n            break;\n        default: if (ready) value = helper(first,\n                                                   second);\n            break;\n        }\n    }\n",
+        "void f()\n    {\n    switch (kind)\n        {\n        case 1: value = compute(first,\n                                second);\n            break;\n        case 2: if (ready) value = compute(first,\n                                           second);\n            break;\n        default: if (ready) value = helper(first,\n                                           second);\n            break;\n        }\n    }\n",
     );
 }
 
@@ -3504,69 +3504,67 @@ fn add_braces_leaves_a_statement_run_in_after_else_or_do_over_rows_unbraced() {
     check(
         input,
         &["--style=kr", "--add-braces"],
-        "void f()\n{\n    if (ready) {\n        x();\n    } else return helper(first,\n                             second);\n    do total += helper(first,\n                           second);\n    while (ready);\n    if (ready) {\n        x();\n    } else value = first\n                       + second;\n}\n",
+        "void f()\n{\n    if (ready) {\n        x();\n    } else return helper(first,\n                         second);\n    do total += helper(first,\n                       second);\n    while (ready);\n    if (ready) {\n        x();\n    } else value = first\n                   + second;\n}\n",
     );
     check(
         input,
         &["--style=kr", "--add-one-line-braces"],
-        "void f()\n{\n    if (ready)\n    { x(); }\n    else return helper(first,\n                           second);\n    do total += helper(first,\n                           second);\n    while (ready);\n    if (ready)\n    { x(); }\n    else value = first\n                     + second;\n}\n",
+        "void f()\n{\n    if (ready)\n    { x(); }\n    else return helper(first,\n                       second);\n    do total += helper(first,\n                       second);\n    while (ready);\n    if (ready)\n    { x(); }\n    else value = first\n                 + second;\n}\n",
     );
     check(
         input,
         &["--style=allman", "--add-braces"],
-        "void f()\n{\n    if (ready)\n    {\n        x();\n    }\n    else return helper(first,\n                           second);\n    do total += helper(first,\n                           second);\n    while (ready);\n    if (ready)\n    {\n        x();\n    }\n    else value = first\n                     + second;\n}\n",
+        "void f()\n{\n    if (ready)\n    {\n        x();\n    }\n    else return helper(first,\n                       second);\n    do total += helper(first,\n                       second);\n    while (ready);\n    if (ready)\n    {\n        x();\n    }\n    else value = first\n                 + second;\n}\n",
     );
 }
 
 #[test]
-fn a_string_continuing_a_value_run_in_after_else_stands_a_level_in_as_after_an_if() {
-    let input = "void f()\n{\n    if (other) value = \"first part\"\n                       \" second part\";\n    else value = \"first part\"\n                 \" second part\";\n    if (ready) {\n        x();\n    } else value = \"first part\"\n                   \" second part\";\n}\n";
+fn a_string_continuing_a_value_run_in_after_else_aligns_at_the_value_as_after_an_if() {
+    let input = "void f()\n{\n    if (other) value = \"first part\"\n                       \" second part\";\n    else value = \"first part\"\n                 \" second part\";\n    if (ready) {\n        x();\n    } else value = \"first part\"\n                       \" second part\";\n}\n";
     check(
         input,
         &["--style=kr"],
-        "void f()\n{\n    if (other) value = \"first part\"\n                           \" second part\";\n    else value = \"first part\"\n                     \" second part\";\n    if (ready) {\n        x();\n    } else value = \"first part\"\n                       \" second part\";\n}\n",
+        "void f()\n{\n    if (other) value = \"first part\"\n                       \" second part\";\n    else value = \"first part\"\n                 \" second part\";\n    if (ready) {\n        x();\n    } else value = \"first part\"\n                   \" second part\";\n}\n",
     );
 }
 
 #[test]
-fn a_logical_operand_of_a_value_run_in_after_a_header_stands_a_level_in() {
+fn a_logical_operand_of_a_value_run_in_after_a_header_aligns_at_the_value() {
     let input = "void f()\n{\n    if (ready) result = first &&\n                        second;\n    else result = first ||\n                  second;\n    while (ready) return first &&\n                         second;\n}\n";
     check(
         input,
         &["--style=kr"],
-        "void f()\n{\n    if (ready) result = first &&\n                            second;\n    else result = first ||\n                      second;\n    while (ready) return first &&\n                             second;\n}\n",
+        "void f()\n{\n    if (ready) result = first &&\n                        second;\n    else result = first ||\n                  second;\n    while (ready) return first &&\n                         second;\n}\n",
     );
 }
 
 #[test]
-fn a_shift_chain_run_in_after_a_header_continues_a_level_in() {
+fn a_shift_chain_run_in_after_a_header_aligns_at_its_first_shift() {
     let input = "void f()\n{\n    if (ready) stream << first\n                      << second;\n    else stream << first\n                << second;\n    stream << first\n           << second;\n}\n";
     check(
         input,
         &["--style=kr"],
-        "void f()\n{\n    if (ready) stream << first\n                          << second;\n    else stream << first\n                    << second;\n    stream << first\n           << second;\n}\n",
+        "void f()\n{\n    if (ready) stream << first\n                      << second;\n    else stream << first\n                << second;\n    stream << first\n           << second;\n}\n",
     );
 }
 
 #[test]
-fn keeping_one_line_statements_continues_arguments_run_in_after_a_header_past_a_statement_a_level_in()
- {
+fn keeping_one_line_statements_aligns_arguments_run_in_after_a_header_past_a_statement() {
     let input = "void f(void)\n{\n    if (ready) x = 1; else value = compute(first,\n            second);\n    x = 1; if (ready) value = compute(first,\n            second);\n    x = 1; while (ready) value = compute(first,\n            second);\n    x = 1; do value = compute(first,\n            second); while (ready);\n    if (ready) x = 1; else if (other) value = compute(first,\n            second);\n    if (ready) x = 1; value = compute(first,\n            second);\n}\n";
     check(
         input,
         &["--keep-one-line-statements"],
-        "void f(void)\n{\n    if (ready) x = 1; else value = compute(first,\n                                               second);\n    x = 1; if (ready) value = compute(first,\n                                          second);\n    x = 1; while (ready) value = compute(first,\n                                             second);\n    x = 1; do value = compute(first,\n                                  second); while (ready);\n    if (ready) x = 1; else if (other) value = compute(first,\n                second);\n    if (ready) x = 1; value = compute(first,\n                                      second);\n}\n",
+        "void f(void)\n{\n    if (ready) x = 1; else value = compute(first,\n                                           second);\n    x = 1; if (ready) value = compute(first,\n                                      second);\n    x = 1; while (ready) value = compute(first,\n                                         second);\n    x = 1; do value = compute(first,\n                              second); while (ready);\n    if (ready) x = 1; else if (other) value = compute(first,\n                second);\n    if (ready) x = 1; value = compute(first,\n                                      second);\n}\n",
     );
 }
 
 #[test]
-fn keeping_one_line_statements_continues_a_value_run_in_after_a_header_past_a_statement_a_level_in()
-{
+fn keeping_one_line_statements_aligns_a_value_run_in_after_a_header_past_a_statement() {
     let input = "void f()\n{\n    x = 1; if (ready) value = \"first part\"\n            \" second part\";\n    if (ready) x = 1; else value = \"first part\"\n            \" second part\";\n    x = 1; if (ready) value = first\n            + second;\n    x = 1; if (ready) result = first &&\n            second;\n    x = 1; if (ready) stream << first\n            << second;\n}\n";
     check(
         input,
         &["--style=kr", "--keep-one-line-statements"],
-        "void f()\n{\n    x = 1; if (ready) value = \"first part\"\n                                  \" second part\";\n    if (ready) x = 1; else value = \"first part\"\n                                       \" second part\";\n    x = 1; if (ready) value = first\n                                  + second;\n    x = 1; if (ready) result = first &&\n                                   second;\n    x = 1; if (ready) stream << first\n                                 << second;\n}\n",
+        "void f()\n{\n    x = 1; if (ready) value = \"first part\"\n                              \" second part\";\n    if (ready) x = 1; else value = \"first part\"\n                                   \" second part\";\n    x = 1; if (ready) value = first\n                              + second;\n    x = 1; if (ready) result = first &&\n                               second;\n    x = 1; if (ready) stream << first\n                             << second;\n}\n",
     );
 }
 
@@ -3675,12 +3673,12 @@ fn pico_sets_a_switch_brace_at_the_switch_when_its_first_label_opens_a_block() {
 }
 
 #[test]
-fn keeping_one_line_blocks_continues_arguments_run_in_after_else_past_a_block_a_level_in() {
+fn keeping_one_line_blocks_aligns_arguments_run_in_after_else_past_a_block() {
     let input = "void f(void)\n{\n    if (ready) { x = 1; } else value = compute(first,\n            second);\n    while (ready) { x = 1; } value = compute(first,\n            second);\n}\n";
     check(
         input,
         &["--keep-one-line-statements", "--keep-one-line-blocks"],
-        "void f(void)\n{\n    if (ready) { x = 1; } else value = compute(first,\n                                           second);\n    while (ready) { x = 1; } value = compute(first,\n                                     second);\n}\n",
+        "void f(void)\n{\n    if (ready) { x = 1; } else value = compute(first,\n                                       second);\n    while (ready) { x = 1; } value = compute(first,\n                                     second);\n}\n",
     );
 }
 
@@ -6854,8 +6852,8 @@ fn a_comment_after_a_dangling_else_stands_in_its_body() {
 }
 
 #[test]
-fn an_assignment_run_in_after_its_header_continues_a_level_in() {
-    let input = "void f(void) {\n    if (k) *k = (long long) aaaa() -\n                    b;\n    x = aaaa() -\n        b;\n}\n";
+fn an_assignment_run_in_after_its_header_aligns_at_its_value() {
+    let input = "void f(void) {\n    if (k) *k = (long long) aaaa() -\n                b;\n    x = aaaa() -\n        b;\n}\n";
     check(input, &["--style=google"], input);
 }
 
@@ -9525,7 +9523,7 @@ fn a_split_kept_case_statement_aligns_after_the_padding_inside_its_paren() {
             "--pad-paren-in",
             "--keep-one-line-statements",
         ],
-        "void f()\n{\n    switch ( kind ) {\n    case 1: snprintf( buffer, length, \"Unknown system error %d\",\n                          error );\n    }\n}\n",
+        "void f()\n{\n    switch ( kind ) {\n    case 1: snprintf( buffer, length, \"Unknown system error %d\",\n                      error );\n    }\n}\n",
     );
 }
 
@@ -22334,7 +22332,7 @@ fn a_return_value_after_a_header_s_run_in_return_continues_past_its_body() {
 #[test]
 fn a_do_body_the_source_breaks_after_a_word_keeps_its_rows() {
     // As an `if` body's does: the row continues the statement past the body.
-    let input = "int f()\n{\n    do return\n            1;\n    while (ready);\n    do run\n        (1);\n    while (ready);\n}\n";
+    let input = "int f()\n{\n    do return\n            1;\n    while (ready);\n    do run\n            (1);\n    while (ready);\n}\n";
     check(input, &["--style=kr"], input);
     check(input, &["--style=allman"], input);
 }
@@ -22352,7 +22350,7 @@ fn a_do_ending_its_line_after_an_else_takes_the_brace_added_to_its_body() {
 #[test]
 fn a_header_s_body_the_source_breaks_after_a_comment_and_a_word_keeps_its_rows() {
     // A comment between the header and its body ends neither.
-    let input = "int f()\n{\n    if (ready) /* note */ return\n            1;\n    else /* note */ run\n        (1);\n    do /* note */ return\n            1;\n    while (ready);\n}\n";
+    let input = "int f()\n{\n    if (ready) /* note */ return\n            1;\n    else /* note */ run\n            (1);\n    do /* note */ return\n            1;\n    while (ready);\n}\n";
     check(input, &["--style=kr"], input);
 }
 
@@ -22488,11 +22486,11 @@ fn a_row_led_by_a_compound_assignment_takes_a_continuation_indent_as_any_operato
 }
 
 #[test]
-fn a_part_split_before_an_operator_in_a_header_s_run_in_body_stands_at_the_body() {
+fn a_part_split_before_an_operator_in_a_header_s_run_in_body_continues_past_the_body() {
     // As a row the operator leads there does; the condition's floor holds
     // only the condition.
     let input = "void f()\n{\n    while (ready) {\n        if (more) {\n            if (item_position != settings->current_rules) item_position -= 1;\n        }\n    }\n}\n";
-    let expected = "void f()\n{\n    while (ready) {\n        if (more) {\n            if (item_position != settings->current_rules) item_position\n                -= 1;\n        }\n    }\n}\n";
+    let expected = "void f()\n{\n    while (ready) {\n        if (more) {\n            if (item_position != settings->current_rules) item_position\n                    -= 1;\n        }\n    }\n}\n";
     let options = ["--style=kr", "--max-code-length=60"];
     check(input, &options, expected);
     check(expected, &options, expected);
@@ -24179,14 +24177,14 @@ fn a_typename_before_a_call_in_a_template_default_leaves_its_rows_as_without_it(
 }
 
 #[test]
-fn an_argument_row_after_a_run_in_header_takes_its_level_past_a_closed_brace_list() {
+fn an_argument_row_after_a_run_in_header_aligns_past_a_closed_brace_list() {
     // A list closed on its row registers nothing, so the row stands as
-    // after any argument there, the header's level included.
+    // after any argument there.
     let input = "void f()\n{\n    if (ready) call(first, Item{1, 2},\n                    second);\n    for (;;) call(first, {1, 2},\n                  second);\n    call(first, Item{1, 2},\n         second);\n}\n";
     for (args, expected) in [
         (
             &["--style=kr"][..],
-            "void f()\n{\n    if (ready) call(first, Item{1, 2},\n                        second);\n    for (;;) call(first, {1, 2},\n                      second);\n    call(first, Item{1, 2},\n         second);\n}\n",
+            "void f()\n{\n    if (ready) call(first, Item{1, 2},\n                    second);\n    for (;;) call(first, {1, 2},\n                  second);\n    call(first, Item{1, 2},\n         second);\n}\n",
         ),
         (
             &["--style=kr", "--indent-after-parens"][..],
@@ -25461,11 +25459,11 @@ fn an_initializer_s_arguments_below_its_member_name_continue_the_initializer_lis
 }
 
 #[test]
-fn a_statement_run_in_after_a_condition_spanning_rows_continues_a_level_in() {
+fn a_statement_run_in_after_a_condition_spanning_rows_aligns_at_its_anchors() {
     check(
         "void f()\n{\n    if (a\n            || b) value = first +\n        second;\n    if (a\n            || b) helper(value,\n        compute(fp));\n    if (a\n            || b) value =\n        compute(fp);\n    while (a &&\n            b) out << first <<\n        second;\n    if (a) {\n    } else if (b\n            || c) helper(value,\n        compute(fp));\n    for (i = 0;\n            i < n; i++) helper(value,\n        compute(fp));\n}\n",
         &["--style=kr"],
-        "void f()\n{\n    if (a\n            || b) value = first +\n                              second;\n    if (a\n            || b) helper(value,\n                             compute(fp));\n    if (a\n            || b) value =\n                    compute(fp);\n    while (a &&\n            b) out << first <<\n                       second;\n    if (a) {\n    } else if (b\n               || c) helper(value,\n                                compute(fp));\n    for (i = 0;\n            i < n; i++) helper(value,\n                                   compute(fp));\n}\n",
+        "void f()\n{\n    if (a\n            || b) value = first +\n                          second;\n    if (a\n            || b) helper(value,\n                         compute(fp));\n    if (a\n            || b) value =\n                    compute(fp);\n    while (a &&\n            b) out << first <<\n                   second;\n    if (a) {\n    } else if (b\n               || c) helper(value,\n                            compute(fp));\n    for (i = 0;\n            i < n; i++) helper(value,\n                               compute(fp));\n}\n",
     );
 }
 
@@ -25524,7 +25522,7 @@ fn a_stream_row_after_an_operand_row_of_a_trailing_shift_stands_at_the_chain() {
 #[test]
 fn an_argument_row_after_a_run_in_header_in_a_lambda_body_stands_as_in_a_function_body() {
     let input = "void helper()\n{\n    auto write = [=](int value) {\n        if (count > 0) value = fill(value, count,\n             Item(0));\n    };\n    call([=](int value) {\n        if (count > 0) value = fill(value, count,\n             Item(0));\n    });\n}\n";
-    let expected = "void helper()\n{\n    auto write = [=](int value) {\n        if (count > 0) value = fill(value, count,\n                                        Item(0));\n    };\n    call([=](int value) {\n        if (count > 0) value = fill(value, count,\n                                        Item(0));\n    });\n}\n";
+    let expected = "void helper()\n{\n    auto write = [=](int value) {\n        if (count > 0) value = fill(value, count,\n                                    Item(0));\n    };\n    call([=](int value) {\n        if (count > 0) value = fill(value, count,\n                                    Item(0));\n    });\n}\n";
     check(input, &["--style=kr"], expected);
     check(expected, &["--style=kr"], expected);
 }
@@ -25824,7 +25822,7 @@ fn the_code_length_never_splits_a_statement_s_semicolon_off() {
 
 #[test]
 fn rows_continuing_a_goto_or_return_in_a_case_block_stand_as_in_any_block() {
-    let input = "int f(int op)\n{\n    switch (op) {\n    case 1: {\n        if (ready) goto\n            done;\n        return\n            value;\n    }\n    case 2:\n        if (ready) goto\n            done;\n        return\n            value;\n    }\ndone:\n    return 0;\n}\n";
+    let input = "int f(int op)\n{\n    switch (op) {\n    case 1: {\n        if (ready) goto\n                done;\n        return\n            value;\n    }\n    case 2:\n        if (ready) goto\n                done;\n        return\n            value;\n    }\ndone:\n    return 0;\n}\n";
     check(input, &["--style=kr"], input);
 }
 
@@ -25987,5 +25985,38 @@ fn an_operator_row_in_a_subscript_after_parens_continues_past_its_bracket() {
     // A call or a parenthesized expression takes a subscript as a name
     // does.
     let input = "int f(void)\n{\n    x = ((Item *)&page->items[count])[value\n                                      + 4];\n    x = run(a)[value\n               + 4];\n    x = table[value\n              + 4];\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn an_operator_row_of_a_body_run_in_after_a_header_continues_past_its_body() {
+    // As a member access row there does, and as on the body's own line.
+    let input = "void f(void)\n{\n    if (a) run(a) +\n            run(b);\n    if (a)\n        run(a) +\n            run(b);\n    if (a) run(a)\n            .next();\n    else run(a) +\n            run(b);\n    do run(a) +\n            run(b);\n    while (a);\n    if (a) if (b) run(a) +\n                run(b);\n}\n";
+    check(input, &["--style=kr"], input);
+    check(
+        "void f(void)\n{\n    if (a) run(a) +\n    run(b);\n    else run(a) +\n        run(b);\n}\n",
+        &["--style=kr"],
+        "void f(void)\n{\n    if (a) run(a) +\n            run(b);\n    else run(a) +\n            run(b);\n}\n",
+    );
+}
+
+#[test]
+fn a_comma_row_of_an_assignment_run_in_after_a_header_stands_at_its_body() {
+    // As that of a call there does: a statement run in declares nothing.
+    let input = "void f(void)\n{\n    if (a) value = 1,\n        other = 2;\n    for (;;) total = first,\n        count = second;\n    if (a) run(),\n        next();\n    if (a) if (b) value = 1,\n            other = 2;\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn a_statement_run_in_on_a_condition_s_last_row_continues_past_its_body_from_that_row() {
+    // As an assignment there does; the condition's row is not the
+    // statement's.
+    let input = "void f(void)\n{\n    if (a) run(a) +\n            run(b) +\n            run(c);\n    if (a\n            || b) goto\n                    done;\n    if (a\n            || b) value =\n                    compute(fp);\n    if (a\n            || b) run(a) +\n                    run(b);\n    if (a\n            || b)\n        value =\n            compute(fp);\n    if (a\n            || b) total +=\n                    compute(fp);\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
+fn an_assignment_leading_a_row_after_a_target_run_in_after_a_header_continues_past_its_body() {
+    let input = "void f(void)\n{\n    if (a) x\n            = 1;\n    else if (b) y\n            = 2;\n    x\n        = 3;\n    if (a)\n        x\n            = 1;\n}\n";
     check(input, &["--style=kr"], input);
 }

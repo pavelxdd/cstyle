@@ -1534,7 +1534,7 @@ fn max_code_length_inline_case_statement_keeps_case_body_owner() {
             "void run(int value) {",
             "  switch(value) {",
             "  case 1:resultValue=calculateResult(alphaValue,",
-            "                                       betaValue,gammaValue,deltaValue,epsilonValue);",
+            "                                     betaValue,gammaValue,deltaValue,epsilonValue);",
             "    break;",
             "  default:break; } }",
         ),
@@ -2954,7 +2954,7 @@ fn max_code_length_goto_registers_no_continuation_and_an_operator_part_continues
 
     assert_eq!(
         format_exact(source, &options),
-        "void f()\n{\n    while (abcdefghijklmnopqrstuvwxyz) goto\n        extension_not_found;\n    records->total_bytes_counted_in_the_selected_slots\n        += total_bytes;\n}\n",
+        "void f()\n{\n    while (abcdefghijklmnopqrstuvwxyz) goto\n            extension_not_found;\n    records->total_bytes_counted_in_the_selected_slots\n        += total_bytes;\n}\n",
     );
 }
 
@@ -2973,14 +2973,14 @@ fn attached_closing_while_counts_in_the_line_a_run_in_statement_splits() {
 
     assert_eq!(
         format_exact(
-            "void f(void)\n{\n    do {\n        if( p->bFold ) iCode = sqlite3Fts5UnicodeFold(iCode, p->iFoldParam);\n    } while( iCode==0 );\n}\n",
+            "void f(void)\n{\n    do {\n        if( p->folds ) value = fold_code_point_number(value, p->fold_param);\n    } while( value==0 );\n}\n",
             &options,
         ),
         fixture!(
             "void f(void) {",
             "    do {",
-            "        if( p->bFold ) iCode = sqlite3Fts5UnicodeFold(iCode,",
-            "                                   p->iFoldParam); } while( iCode==0 ); }",
+            "        if( p->folds ) value = fold_code_point_number(value,",
+            "                               p->fold_param); } while( value==0 ); }",
         )
     );
 }
@@ -3456,7 +3456,7 @@ fn max_code_length_aligns_a_stream_row_at_the_first_shift_past_a_closed_call() {
 }
 
 #[test]
-fn max_code_length_aligns_a_stream_row_a_level_past_the_shift_after_a_braceless_header() {
+fn max_code_length_aligns_a_stream_row_at_the_shift_after_a_braceless_header() {
     let mut options = FormatOptions::default();
     apply_command_line_args(
         &mut options,
@@ -3466,7 +3466,7 @@ fn max_code_length_aligns_a_stream_row_a_level_past_the_shift_after_a_braceless_
     assert_stable_max_length_format(
         "void f()\n{\n    if (ready) REPORT(ERROR) << value.name << \" on \" << value.text << \": want \";\n    if (ready)\n        helper();\n    else stream << first_value << second_value << third_value << fourth_one;\n}\n",
         &options,
-        "void f()\n{\n    if (ready) REPORT(ERROR) << value.name << \" on \" <<\n                                 value.text << \": want \";\n    if (ready)\n        helper();\n    else stream << first_value << second_value << third_value <<\n                    fourth_one;\n}\n",
+        "void f()\n{\n    if (ready) REPORT(ERROR) << value.name << \" on \" <<\n                             value.text << \": want \";\n    if (ready)\n        helper();\n    else stream << first_value << second_value << third_value <<\n                fourth_one;\n}\n",
     );
 }
 
@@ -3516,7 +3516,7 @@ fn max_code_length_splits_a_specialization_s_qualifiers_off_at_its_head() {
 }
 
 #[test]
-fn max_code_length_splits_a_braceless_header_s_statement_to_its_body_level() {
+fn max_code_length_continues_a_braceless_header_s_statement_past_its_body_level() {
     let mut options = FormatOptions::default();
     apply_command_line_args(
         &mut options,
@@ -3526,7 +3526,7 @@ fn max_code_length_splits_a_braceless_header_s_statement_to_its_body_level() {
     assert_stable_max_length_format(
         "void f()\n{\n    if (condition) throw std::runtime_error(\"the limit was reached\");\n    if (condition) delete first_item_value_name_and_more_names_here;\n    else delete first_item_value_name_and_more_names_here_too_long;\n}\n",
         &options,
-        "void f()\n{\n    if (condition) throw\n        std::runtime_error(\"the limit was reached\");\n    if (condition) delete\n        first_item_value_name_and_more_names_here;\n    else delete\n        first_item_value_name_and_more_names_here_too_long;\n}\n",
+        "void f()\n{\n    if (condition) throw\n            std::runtime_error(\"the limit was reached\");\n    if (condition) delete\n            first_item_value_name_and_more_names_here;\n    else delete\n            first_item_value_name_and_more_names_here_too_long;\n}\n",
     );
 }
 
@@ -3722,4 +3722,27 @@ fn max_code_length_continues_a_stream_operand_split_before_its_parens_at_the_cha
     let source = "void helper()\n{\n    LOG_ITEM(INFO) << \"Memory at \" << reinterpret_cast<void*>(v);\n}\n";
     let expected = "void helper()\n{\n    LOG_ITEM(INFO) << \"Memory at \" << reinterpret_cast<void*>\n                   (v);\n}\n";
     assert_stable_max_length_format(source, &options, expected);
+}
+
+#[test]
+fn max_code_length_parts_of_a_body_run_in_after_a_header_stand_as_its_source_rows() {
+    // A label split off its `goto` on a condition's last row continues
+    // past the body from that row; a word after a cast ending the head
+    // starts the body anew, as a row the source breaks there does.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "void f(void)\n{\n    if (ready) {\n        if (value == 0 && !advance(&item)) goto cleanup; /* Last item and no more work. */\n        if (mode > PASSIVE_MODE_SETTING) (void)enable_blocking(handle);\n    }\n}\n",
+        &options,
+        "void f(void)\n{\n    if (ready) {\n        if (value == 0\n                && !advance(&item)) goto\n                        cleanup; /* Last item and no more work. */\n        if (mode > PASSIVE_MODE_SETTING) (void)enable_blocking(\n                handle);\n    }\n}\n",
+    );
+    assert_stable_max_length_format(
+        "void f(void)\n{\n    if (ready) {\n        if (mode > PASSIVE_SETTING) (void)enable_blocking_mode_for_all(handle);\n    }\n}\n",
+        &options,
+        "void f(void)\n{\n    if (ready) {\n        if (mode > PASSIVE_SETTING) (void)\n            enable_blocking_mode_for_all(handle);\n    }\n}\n",
+    );
 }

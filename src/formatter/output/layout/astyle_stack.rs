@@ -731,6 +731,9 @@ impl FormatEngine<'_> {
                 })
         });
         let block_lead = self.output.lead_width(start_line, self.options.tab_width);
+        // A statement run in after headers stands at their body: what it
+        // registers by level counts from there, its columns from its row.
+        let body_space = header_levels * self.options.indent_width;
         // Indenting after parens, astyle measures a line run in after a
         // block brace from the brace.
         let column_base = self
@@ -856,9 +859,9 @@ impl FormatEngine<'_> {
                     .last()
                     .copied()
                     .unwrap_or(if leading_assignment {
-                        self.options.continuation_indent * self.options.indent_width
+                        body_space + self.options.continuation_indent * self.options.indent_width
                     } else {
-                        0
+                        body_space
                     });
                 replay.assigned_this_line = false;
             }
@@ -1007,9 +1010,9 @@ impl FormatEngine<'_> {
                     } else if replay.stack.is_empty() {
                         // A shift leading its line stands a continuation
                         // indent in, and its chain continues from there.
-                        if starts_line && replay.line_space == 0 {
-                            replay.line_space =
-                                self.options.continuation_indent * self.options.indent_width;
+                        if starts_line && replay.line_space == body_space {
+                            replay.line_space = body_space
+                                + self.options.continuation_indent * self.options.indent_width;
                         }
                         self.register(&mut replay, index, next_on_line, false, &relative)?;
                         replay.continuation = true;
@@ -1038,6 +1041,9 @@ impl FormatEngine<'_> {
                         {
                             replay.assigned_this_line = true;
                             let indent = match tokens[previous] {
+                                // A statement run in after headers declares
+                                // nothing: its rows stand at their body.
+                                _ if body_space > 0 => body_space,
                                 Token::Word(_) | Token::Number(_) => {
                                     relative(dotted_name_start(tokens, previous))?
                                 }
@@ -1113,10 +1119,7 @@ impl FormatEngine<'_> {
         }));
         let top = top?;
         Some((
-            block_lead
-                + top
-                + header_levels * self.options.indent_width
-                + self.case_unindent_spaces(),
+            block_lead + top + self.case_unindent_spaces(),
             among_template_arguments,
         ))
     }

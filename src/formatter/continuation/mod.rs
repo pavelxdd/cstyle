@@ -1335,7 +1335,11 @@ impl FormatEngine<'_> {
             if let Some(spaces) = self.logical_chain_head_indent_spaces() {
                 return ContinuationIndent::Spaces(spaces);
             }
-            if let Some(spaces) = self.layout.continuation_indent.next_line_indent_spaces {
+            // A statement run in on a row continuing a header's condition
+            // goes on past its body, not at the condition's row.
+            if let Some(spaces) = self.layout.continuation_indent.next_line_indent_spaces
+                && !self.current_runs_body_in_after_condition()
+            {
                 return ContinuationIndent::Spaces(spaces);
             }
         }
@@ -1418,6 +1422,15 @@ impl FormatEngine<'_> {
         }
         if self.in_initializer_brace() || self.innermost_init_block_brace() {
             return ContinuationIndent::Level(base_indent);
+        }
+        // A statement run in after headers continues past their body on
+        // the row it starts on.
+        let headers = self.current_run_in_header_levels();
+        if headers > 0 {
+            return ContinuationIndent::Spaces(
+                self.current_line_indent_spaces()
+                    + (headers + self.options.continuation_indent) * self.options.indent_width,
+            );
         }
         let max_level = self.options.max_continuation_indent / self.options.indent_width.max(1);
         let indent =
@@ -1744,14 +1757,35 @@ impl FormatEngine<'_> {
             .then_some(frame.line_indent_spaces)
     }
 
+    /// How many levels the headers whose bodies run in before it on the
+    /// current line indent the statement the line ends in.
+    pub(crate) fn current_run_in_header_levels(&self) -> usize {
+        self.current
+            .tokens()
+            .and_then(|span| {
+                self.run_in_headers_from(span.first, span.last, |index| {
+                    (span.first..=span.last).contains(&index)
+                })
+            })
+            .map_or(0, |(levels, _)| levels)
+    }
+
+    /// Whether the current row goes on with a header's condition from a row
+    /// before and runs the header's body in after the condition closes.
+    fn current_runs_body_in_after_condition(&self) -> bool {
+        self.current.tokens().is_some_and(|span| {
+            self.condition_closing_on_row(span.first, span.last + 1, &|index| {
+                (span.first..=span.last).contains(&index)
+            })
+            .is_some_and(|close| close < span.last)
+        })
+    }
+
     /// The indent of the row after a comma ending the line when the line
     /// runs its statement in after headers: a statement there declares
     /// nothing, and the row stands at their body.
     fn run_in_statement_comma_indent_spaces(&self) -> Option<usize> {
-        let span = self.current.tokens()?;
-        let (headers, _) = self.run_in_headers_from(span.first, span.last, |index| {
-            (span.first..=span.last).contains(&index)
-        })?;
+        let headers = self.current_run_in_header_levels();
         (headers > 0
             && matches!(
                 self.layout.nesting.brace_type_stack.last(),

@@ -2609,14 +2609,16 @@ impl<'a> FormatEngine<'a> {
             self.previous_was_newline = true;
         } else if self.newline_breaks_statement && self.statement_follows_complete_header() {
             // A statement the source broke after a header's one-line body
-            // continues a level in, and a `return` value a level more.
-            let levels = 1 + usize::from(
-                trailing_word(self.current_code_before_trailing_comment()) == "return",
-            );
+            // continues past the body, as any statement run in there.
+            let levels =
+                self.current_run_in_header_levels().max(1) + self.options.continuation_indent;
             self.finish_line();
+            // The output row stands where a case block's unindent left it,
+            // which moves the next row too.
             if let Some(last) = self.output.last() {
                 let spaces = columns::leading_visual_width(last, self.options.tab_width)
-                    + levels * self.options.indent_width;
+                    + levels * self.options.indent_width
+                    + self.case_unindent_spaces();
                 self.layout.continuation_indent.set_next_line_spaces(spaces);
             }
             self.previous_was_newline = true;

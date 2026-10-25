@@ -9757,9 +9757,9 @@ fn tab_indent_continuation_of_a_statement_on_its_header_line_tabs_to_the_body_le
             "void f(void)",
             "{",
             "\tif (bp) reason = ok ? \"called\" :",
-            "\t\t                 \"break point\";",
+            "\t\t             \"break point\";",
             "\tif (a) g(1,",
-            "\t\t         2);",
+            "\t\t     2);",
             "}",
         )
     );

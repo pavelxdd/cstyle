@@ -2724,7 +2724,7 @@ fn pico_kept_else_block_ends_a_broken_else_if_chain() {
 #[test]
 fn statement_broken_after_a_one_line_header_body_stays_broken() {
     let options = FormatOptions::default();
-    let input = "int f(int x)\n{\n    if (x) return\n            0;\n    else if (x > 1) return\n            1;\n    if (x) goto\n        fail;\n    return 3;\nfail:\n    return 4;\n}\n";
+    let input = "int f(int x)\n{\n    if (x) return\n            0;\n    else if (x > 1) return\n            1;\n    if (x) goto\n            fail;\n    return 3;\nfail:\n    return 4;\n}\n";
     let first = format_exact(input, &options);
 
     assert_eq!(first, input);

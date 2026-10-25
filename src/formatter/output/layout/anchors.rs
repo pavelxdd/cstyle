@@ -2140,6 +2140,8 @@ impl FormatEngine<'_> {
         }
         let lead = self.output.lead_width(line, self.options.tab_width);
         let max = self.options.max_continuation_indent;
+        // A statement run in after its headers continues from their body.
+        let body = self.run_in_header_levels(start) * self.options.indent_width;
         let mut stack: Vec<usize> = Vec::new();
         let mut index = start;
         loop {
@@ -2161,11 +2163,11 @@ impl FormatEngine<'_> {
                 }
                 _ if is_assignment(index) => {
                     let indent = if index == last || self.options.indent_after_parens {
-                        let previous = stack.last().copied().unwrap_or(0);
+                        let previous = stack.last().copied().unwrap_or(body);
                         let indent =
                             self.options.continuation_indent * self.options.indent_width + previous;
                         if indent > max {
-                            2 * self.options.indent_width
+                            body + 2 * self.options.indent_width
                         } else {
                             indent
                         }
@@ -2178,7 +2180,7 @@ impl FormatEngine<'_> {
                         }
                         let mut indent = self.token_column(value)?.checked_sub(lead)?;
                         if indent > max {
-                            indent = 2 * self.options.indent_width;
+                            indent = body + 2 * self.options.indent_width;
                         }
                         indent.max(stack.last().copied().unwrap_or(0))
                     };
@@ -2205,12 +2207,7 @@ impl FormatEngine<'_> {
             }
         }
         let top = stack.last().copied()?;
-        // A statement run in after its header continues a level in.
-        Some(
-            lead + top
-                + self.run_in_header_levels(start) * self.options.indent_width
-                + self.case_unindent_spaces(),
-        )
+        Some(lead + top + self.case_unindent_spaces())
     }
 
     /// The first statement of a case starting a line after its label's
@@ -3867,15 +3864,9 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        // Operands stand at a value, a level in past each header run in
-        // before it on its line.
-        let value_column = |value: usize| {
-            Some(
-                self.token_column(value)?
-                    + self.run_in_header_levels(value) * self.options.indent_width
-                    + self.case_unindent_spaces(),
-            )
-        };
+        // Operands stand at a value.
+        let value_column =
+            |value: usize| Some(self.token_column(value)? + self.case_unindent_spaces());
         if let Some(value) = self.returned_value_past_comments(first) {
             return value_column(value);
         }
@@ -4197,8 +4188,12 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        // astyle indents it one level whatever the continuation indent.
-        Some(self.output.lead_width(line, self.options.tab_width) + self.options.indent_width)
+        // astyle indents it one level whatever the continuation indent,
+        // past the body of headers run in before the target.
+        Some(
+            self.output.lead_width(line, self.options.tab_width)
+                + (self.run_in_header_levels(target) + 1) * self.options.indent_width,
+        )
     }
 
     /// A line leading with a binary operator in an assignment's value stands
@@ -4421,25 +4416,21 @@ impl FormatEngine<'_> {
         };
         self.string_assign_walk.set(Some((previous, group, assign)));
         let assign = assign?;
-        // The value's line is published: the literal continues it, a level
-        // in when the statement runs in after a header. Past the maximum,
-        // measured from the line holding the `=`, it stands two levels past
-        // that line.
+        // The value's line is published: the literal continues it. Past the
+        // maximum, measured from the line holding the `=`, it stands two
+        // levels past the statement, at the body of headers run in before
+        // it.
         let value = next_code_token(tokens, assign + 1)?;
         let column = self.token_column(value)?;
         let lead = self
             .output
             .lead_width(self.output.line_with_token(assign)?, self.options.tab_width);
         let column = if column.saturating_sub(lead) > self.options.max_continuation_indent {
-            lead + 2 * self.options.indent_width
+            lead + (self.run_in_header_levels(assign) + 2) * self.options.indent_width
         } else {
             column
         };
-        Some(
-            column
-                + self.run_in_header_levels(assign) * self.options.indent_width
-                + self.case_unindent_spaces(),
-        )
+        Some(column + self.case_unindent_spaces())
     }
 
     /// How many levels the headers whose bodies run in before it on its
