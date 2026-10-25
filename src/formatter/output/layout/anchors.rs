@@ -10,7 +10,9 @@ use super::astyle_stack::literal_closed;
 use crate::config::BraceStyle;
 use crate::formatter::constructs::headers::starts_header_word;
 use crate::formatter::constructs::labels;
-use crate::formatter::continuation::min_conditional_indent_spaces;
+use crate::formatter::continuation::{
+    min_conditional_indent_spaces, splits_aggregate_declaration_name,
+};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::index_hash::IndexMap;
 use crate::formatter::lexer::{CommentKind, Token, token_text};
@@ -5208,7 +5210,8 @@ impl FormatEngine<'_> {
     }
 
     /// Whether the line being laid out continues a statement of a block
-    /// at the block's own level, as the value after a trailing `=`.
+    /// at the block's own level, as the value after a trailing `=` or a
+    /// declarator after the line naming its struct, union or class type.
     pub(crate) fn pending_line_continues_statement(&self) -> bool {
         let tokens = &self.tree.tokens;
         let groups = &self.tree.groups;
@@ -5226,7 +5229,13 @@ impl FormatEngine<'_> {
         }
         self.tree
             .previous_code_token(first)
-            .is_some_and(|previous| matches!(&tokens[previous], Token::Operator(_)))
+            .is_some_and(|previous| match &tokens[previous] {
+                Token::Operator(_) => true,
+                Token::Word(_) => self.output.line_with_token(previous).is_some_and(|line| {
+                    splits_aggregate_declaration_name(self.output.code_trimmed(line))
+                }),
+                _ => false,
+            })
     }
 
     /// Whether the token `index` sits in a function body.

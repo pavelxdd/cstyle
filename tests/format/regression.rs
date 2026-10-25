@@ -25766,3 +25766,10 @@ fn the_code_length_never_splits_a_postfix_increment_from_its_operand() {
     let options = ["--style=kr", "--max-code-length=60"];
     check(input, &options, input);
 }
+
+#[test]
+fn a_declarator_after_its_struct_type_line_continues_it_in_a_case_block() {
+    // As in a case without braces and in any other block.
+    let input = "int f(int op)\n{\n    switch (op) {\n    case 1: {\n        struct Item\n            *first;\n        break;\n    }\n    case 2:\n        struct Item\n            *second;\n        break;\n    }\n    {\n        struct Item\n            *third;\n    }\n    return 0;\n}\n";
+    check(input, &["--style=kr"], input);
+}
