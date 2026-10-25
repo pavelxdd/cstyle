@@ -3228,6 +3228,20 @@ fn remove_comment_prefix_leaves_rows_of_a_trailing_comment_in_place() {
 }
 
 #[test]
+fn remove_comment_prefix_lays_rows_of_a_comment_after_an_element_brace_from_its_opener() {
+    // Its rows keep their offset past the `/*`, at least one indent, wherever
+    // the brace's row moves the opener, as without the option they keep it.
+    let input = "struct Item items[] = {\n  { /* first row of a note\n       second row */\n    \"value\", 1\n  },\n  { /* first row of a note\n               second row */\n    \"other\", 2\n  },\n};\n";
+    let expected = "struct Item items[] = {\n    { /* first row of a note\n          second row */\n        \"value\", 1\n    },\n    { /* first row of a note\n                 second row */\n        \"other\", 2\n    },\n};\n";
+    check(input, &["--style=kr", "--remove-comment-prefix"], expected);
+    check(
+        expected,
+        &["--style=kr", "--remove-comment-prefix"],
+        expected,
+    );
+}
+
+#[test]
 fn remove_comment_prefix_leaves_stripped_rows_of_a_trailing_comment_at_their_text_column() {
     // Under tab indentation and in a case block, as the rows it keeps whole.
     let input = "void f()\n{\n    unsigned temp;  /* first row\n                     * second row\n                     * third row */\n    next();\n}\n";

@@ -3803,6 +3803,17 @@ impl FormatEngine<'_> {
                         .is_some_and(|brace| brace.trimmed() == "{")
                 {
                     format!("{opener_prefix}{}", line.trimmed_end())
+                } else if let Some(column) = run_in_column {
+                    // The rows of a comment run in after an element brace
+                    // follow its opener, as they do without the option.
+                    strip_block_comment_line(
+                        self.options,
+                        line,
+                        false,
+                        &self.comment_row_prefix(column),
+                        &mut row_trim,
+                        opener_tab_extra,
+                    )
                 } else {
                     strip_block_comment_line(
                         self.options,
