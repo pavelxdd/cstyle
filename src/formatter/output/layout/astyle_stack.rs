@@ -453,6 +453,20 @@ impl FormatEngine<'_> {
             {
                 return false;
             }
+            // A list closed on its row opens no group of it.
+            if let Some(list) = groups
+                .opened_at(at)
+                .filter(|&list| self.tree.blocks.kind(list) == Some(BlockKind::Initializer))
+                && let Some(close) = groups.get(list).close.filter(|&close| {
+                    close < limit
+                        && !tokens[at..close]
+                            .iter()
+                            .any(|token| matches!(token, Token::Newline))
+                })
+            {
+                from = close + 1;
+                continue;
+            }
             // The block brace after a closing paren opens no group of the
             // line.
             if !(at == first && closes_stacked_brace)

@@ -406,11 +406,6 @@ impl FormatEngine<'_> {
             exact_indent_spaces = Some(leading_visual_width(previous, self.options.tab_width));
         }
         if !plain {
-            if let Some(spaces) =
-                self.maximum_length_capped_open_paren_argument_indent_spaces(line_kind)
-            {
-                exact_indent_spaces = Some(spaces);
-            }
             if let Some(spaces) = self.maximum_length_logical_header_indent_spaces(line, line_kind)
             {
                 exact_indent_spaces = Some(spaces);

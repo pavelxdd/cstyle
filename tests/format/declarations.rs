@@ -236,6 +236,8 @@ fn access_label_after_preprocessor_constructor_keeps_member_indent() {
 
 #[test]
 fn method_signature_after_preprocessor_constexpr_keeps_member_indent() {
+    // The argument row holding a list closed on it continues the paren as
+    // any argument row does.
     let source = fixture!(
         "class Item",
         "{",
@@ -244,7 +246,7 @@ fn method_signature_after_preprocessor_constexpr_keeps_member_indent() {
         "    constexpr",
         "#endif",
         "    auto get() const noexcept(",
-        "    noexcept(std::declval<const source_type&>().template convert<Candidate>(detail::priority_tag<4> {})))",
+        "        noexcept(std::declval<const source_type&>().template convert<Candidate>(detail::priority_tag<4> {})))",
         "    -> decltype(std::declval<const source_type&>().template convert<Candidate>(detail::priority_tag<4> {}))",
         "    {}",
         "};",

@@ -1736,26 +1736,6 @@ impl FormatEngine<'_> {
         self.active_output_paren_continuation_indent_spaces()
     }
 
-    pub(crate) fn maximum_length_capped_open_paren_argument_indent_spaces(
-        &self,
-        line_kind: LineKind,
-    ) -> Option<usize> {
-        if line_kind != LineKind::Normal
-            || self.options.max_code_length.is_none()
-            || self.options.indent_after_parens
-        {
-            return None;
-        }
-        let (previous, previous_code) = self.output.last_code_outside_comment()?;
-        let base = self.continuation_base_indent() * self.options.indent_width;
-        (previous_code.ends_with('(')
-            && leading_visual_width(previous, self.options.tab_width) == base
-            && self
-                .open_paren_column_of(previous_code)
-                .is_some_and(|open| open + 1 > base + self.options.max_continuation_indent))
-        .then_some(base + self.options.indent_width * 2)
-    }
-
     pub(crate) fn over_max_new_call_argument_indent_spaces(
         &self,
         line: &LineView<'_>,

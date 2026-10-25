@@ -3746,3 +3746,20 @@ fn max_code_length_parts_of_a_body_run_in_after_a_header_stand_as_its_source_row
         "void f(void)\n{\n    if (ready) {\n        if (mode > PASSIVE_SETTING) (void)\n            enable_blocking_mode_for_all(handle);\n    }\n}\n",
     );
 }
+
+#[test]
+fn max_code_length_argument_rows_after_a_split_off_call_holding_a_closed_list_stand_together() {
+    // A row holding a list closed on it continues the call as the rows
+    // after it do, wherever the split left the call.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=kr".to_string(), "--max-code-length=60".to_string()],
+    )
+    .expect("valid options");
+    assert_stable_max_length_format(
+        "class Item {\n    template <size_t... Is>\n    static auto check(index_sequence<Is...>) -> decltype(all_true(\n        index_sequence<Is...>{},\n        integer_sequence<bool,\n                         (is_convertible<typename std::tuple_element<Is, T>::type,\n                                         C>::value)...>{}));\n};\n",
+        &options,
+        "class Item\n{\n    template <size_t... Is>\n    static auto check(index_sequence<Is...>) -> decltype(\n        all_true(\n            index_sequence<Is...>{},\n            integer_sequence<bool,\n                             (is_convertible<typename std::tuple_element<Is, T>::type,\n                                     C>::value)...>{}));\n};\n",
+    );
+}

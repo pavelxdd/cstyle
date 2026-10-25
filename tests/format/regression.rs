@@ -26059,3 +26059,13 @@ fn a_logical_row_ending_a_statement_in_a_case_block_leaves_the_next_statement_it
     let input = "void f(void)\n{\n    switch (op) {\n    case 1: {\n        value = compute(item->list[0].expr);\n        check(value <= LIMIT_NONE_VALUE\n              || (value >= LIMIT_LOW && value <= LIMIT_HIGH));\n        load_string(handle, target,\n                    (value <= LIMIT_NONE_VALUE) ? \"none\" : names[value\n                            - LIMIT_LOW_VALUE]);\n        break;\n    }\n    }\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn max_code_length_leaves_the_rows_it_does_not_split_where_they_stand_without_it() {
+    // The maximum length splits rows; past a paren beyond the continuation
+    // maximum the arguments stand as they do without it.
+    let input = "class Item {\n    static auto check(sequence<Ids...>) -> decltype(all_ready(\n        sequence<Ids...>{},\n        integer_sequence<bool,\n                         (ready<Ids>::value)...>{}));\n};\n";
+    let expected = "class Item\n{\n    static auto check(sequence<Ids...>) -> decltype(all_ready(\n                sequence<Ids...>{},\n                integer_sequence<bool,\n                                 (ready<Ids>::value)...>{}));\n};\n";
+    check(input, &["--style=kr"], expected);
+    check(input, &["--style=kr", "--max-code-length=60"], expected);
+}
