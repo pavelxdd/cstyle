@@ -22434,6 +22434,33 @@ fn a_row_after_parens_closing_within_a_bracket_stands_past_the_bracket() {
 }
 
 #[test]
+fn a_row_after_parens_closing_within_a_bracket_stands_at_the_bracket_s_content() {
+    // A space after the bracket, from the source or from padding, moves the
+    // row with the content, as it moves rows the bracket's own row continues.
+    let input = "static int table[ (VALUE % 7 == 1\n                   && VALUE % 5 == 1)\n                  ? 1 : -1];\nstatic int other[ VALUE % 7 == 1\n                  && VALUE % 5 == 1\n                  ? 1 : -1];\nvoid f()\n{\n    run(items[ (first\n                || second)\n               + 1]);\n}\n";
+    check(input, &["--style=kr"], input);
+    check(
+        "static int table[(VALUE % 7 == 1\n                  && VALUE % 5 == 1)\n                 ? 1 : -1];\n",
+        &["--style=kr", "--pad-first-paren-out"],
+        "static int table[ (VALUE % 7 == 1\n                   && VALUE % 5 == 1)\n                  ? 1 : -1];\n",
+    );
+}
+
+#[test]
+fn a_row_after_parens_closing_within_a_bracket_in_a_case_block_stands_past_the_bracket() {
+    let input = "void f()\n{\n    switch (x) {\n    case 1: {\n        int table[(VALUE % 7 == 1 &&\n                   VALUE % 5 == 1)\n                  ? 1 : -1];\n        int other[ (VALUE % 7 == 1\n                    && VALUE % 5 == 1)\n                   ? 1 : -1];\n        break;\n    }\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+    check(
+        input,
+        &["--style=kr", "--indent-switches"],
+        "void f()\n{\n    switch (x) {\n        case 1: {\n            int table[(VALUE % 7 == 1 &&\n                       VALUE % 5 == 1)\n                      ? 1 : -1];\n            int other[ (VALUE % 7 == 1\n                        && VALUE % 5 == 1)\n                       ? 1 : -1];\n            break;\n        }\n    }\n}\n",
+    );
+    // Past the maximum continuation it stands two levels past its row.
+    let input = "void f()\n{\n    switch (x) {\n    case 1: {\n        int a_table_with_a_name_long_enough_to_pass[(VALUE % 7 == 1 &&\n                VALUE % 5 == 1)\n                ? 1 : -1];\n        break;\n    }\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
 fn rows_after_a_comma_of_an_expression_statement_stand_at_the_statement() {
     // A member call, a postfix operator or a subscript declares nothing, as
     // a plain call does, whether the statement opens its line or runs in.

@@ -15,7 +15,9 @@ use crate::formatter::continuation::max_length::lambda_parameter_continuation_in
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::output::buffer::OutputBuffer;
-use crate::formatter::state::frame::{BraceSemanticKind, BracketRole, ColonRole, LogicalOperator};
+use crate::formatter::state::frame::{
+    BraceSemanticKind, BracketFrame, BracketRole, ColonRole, LogicalOperator,
+};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
 use crate::formatter::structure::blocks::{BlockKind, is_code_token, next_code_token};
@@ -2077,8 +2079,8 @@ impl FormatEngine<'_> {
     }
 
     /// The column a bracket an earlier row left open holds the next row at
-    /// once the parens opened in it close: past the bracket, as the rows
-    /// its own row continues stand.
+    /// once the parens opened in it close: at the content past the bracket,
+    /// as the rows its own row continues stand.
     fn enclosing_bracket_indent_spaces(&self) -> Option<usize> {
         if self.options.indent_after_parens || self.layout.objc.message_active {
             return None;
@@ -2108,19 +2110,51 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let column = bracket.opener_output_column + 1;
+        // The bracket's columns are output columns, which a case block
+        // unindents.
+        let unindent = self.case_unindent_spaces();
+        let after = bracket.opener_output_column + 1;
+        let column = after + self.bracket_content_gap(bracket, after) + unindent;
         // Past the maximum it continues two levels past its row, as a paren
         // does, and no nearer than the column the parens around it hold.
         let statement_base = self.continuation_base_indent() * self.options.indent_width;
         if column.saturating_sub(statement_base) <= self.options.max_continuation_indent {
             return Some(column);
         }
-        let capped = bracket.line_indent_spaces + 2 * self.options.indent_width;
+        let capped = bracket.line_indent_spaces + 2 * self.options.indent_width + unindent;
         Some(
             self.layout
                 .nesting
                 .current_continuation_indent_spaces()
                 .map_or(capped, |around| capped.max(around)),
+        )
+    }
+
+    /// The width of the blanks between a bracket and the code after it on
+    /// its output line, from `after`, the column past the bracket.
+    fn bracket_content_gap(&self, bracket: &BracketFrame, after: usize) -> usize {
+        let Some(line) = self.output.get(bracket.opener_output_line) else {
+            return 0;
+        };
+        let code = line.trim_start_matches([' ', '\t']);
+        let offset = bracket
+            .opener_output_column
+            .saturating_sub(bracket.line_indent_spaces);
+        let Some(rest) = code
+            .char_indices()
+            .nth(offset)
+            .and_then(|(at, _)| code[at..].strip_prefix('['))
+        else {
+            return 0;
+        };
+        let content = rest.trim_start_matches([' ', '\t']);
+        if content.is_empty() {
+            return 0;
+        }
+        visual_width_from(
+            &rest[..rest.len() - content.len()],
+            after,
+            self.options.tab_width,
         )
     }
 
