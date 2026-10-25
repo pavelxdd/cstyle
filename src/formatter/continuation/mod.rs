@@ -2125,6 +2125,20 @@ impl FormatEngine<'_> {
         if column.saturating_sub(statement_base) <= self.options.max_continuation_indent {
             return Some(column);
         }
+        // A subscript around it on the row holds it at its first element
+        // instead, as parens around it do.
+        if let [.., outer, inner] = unmatched_open_paren_columns(line)[..]
+            && inner == open
+            && line[outer..].starts_with('[')
+        {
+            let after = outer + 1;
+            let content = after + (line[after..].len() - line[after..].trimmed_start().len());
+            let column = indent
+                + visual_width_from(&self.current[lead..content], indent, self.options.tab_width);
+            if column.saturating_sub(statement_base) <= self.options.max_continuation_indent {
+                return Some(column);
+            }
+        }
         let capped = indent + 2 * self.options.indent_width;
         Some(
             self.layout

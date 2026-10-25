@@ -25848,3 +25848,10 @@ fn a_nested_switch_s_closer_stands_at_its_header_whose_condition_spans_rows() {
     let input = "void f(void)\n{\n    switch (kind) {\n    case 1: {\n        switch (encoding(value,\n                         index)) {\n        case 2: {\n            stop();\n        }\n        }\n        break;\n    }\n    }\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_row_in_a_subscript_past_the_maximum_stands_in_the_enclosing_subscript() {
+    // As a row in parens past the maximum stands in the enclosing parens.
+    let input = "void f(void)\n{\n    Item *second = &iter->items[ iter->firsts[index*2\n                                 +1].first ];\n    Item *second = run(iter->items_list, other(iter->firsts, index*2\n                       +1)).first;\n}\n";
+    check(input, &["--style=kr"], input);
+}
