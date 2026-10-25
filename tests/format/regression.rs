@@ -25773,3 +25773,29 @@ fn a_declarator_after_its_struct_type_line_continues_it_in_a_case_block() {
     let input = "int f(int op)\n{\n    switch (op) {\n    case 1: {\n        struct Item\n            *first;\n        break;\n    }\n    case 2:\n        struct Item\n            *second;\n        break;\n    }\n    {\n        struct Item\n            *third;\n    }\n    return 0;\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_list_brace_after_a_row_the_assignment_leads_stands_as_after_a_trailing_assignment() {
+    // Styles indenting braces indent the brace alone on its line and the
+    // list with it, whether the `=` ends the declaration's line or leads
+    // a row of its own.
+    for (style, expected) in [
+        (
+            "--style=whitesmith",
+            "void f(void)\n    {\n    static const Item items\n    =\n        {\n        1,\n        2,\n        };\n    }\nstatic const Item items\n=\n    {\n    1,\n    2,\n    };\n",
+        ),
+        (
+            "--style=vtk",
+            "void f(void)\n{\n    static const Item items\n    =\n        {\n        1,\n        2,\n        };\n}\nstatic const Item items\n=\n{\n    1,\n    2,\n};\n",
+        ),
+    ] {
+        check(
+            "void f(void)\n{\n    static const Item items\n    = {\n        1,\n        2,\n    };\n}\nstatic const Item items\n= {\n    1,\n    2,\n};\n",
+            &[style],
+            expected,
+        );
+        check(expected, &[style], expected);
+        let trailing = expected.replace("items\n    =\n", "items =\n").replace("items\n=\n", "items =\n");
+        check(&trailing, &[style], &trailing);
+    }
+}
