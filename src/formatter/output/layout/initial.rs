@@ -1074,7 +1074,10 @@ impl FormatEngine<'_> {
             && (self
                 .output
                 .last_non_empty_index()
-                .is_some_and(|index| is_bare_comment_line(self.output.trimmed(index)))
+                .is_some_and(|index| {
+                    is_bare_comment_line(self.output.trimmed(index))
+                        && !self.line_holds_code(index)
+                })
                 || self.output.last().is_some_and(|last| last.trimmed().is_empty()))
             && !after_leading_comments(line.trimmed_start()).starts_with_any(b"{}")
             && !line_starts_call(after_leading_comments(line.trimmed_start()))
@@ -1123,7 +1126,7 @@ impl FormatEngine<'_> {
     fn is_code_row_past_comments_and_directives(&self, index: usize) -> bool {
         let trimmed = self.output.trimmed(index);
         !trimmed.is_empty()
-            && !is_bare_comment_line(trimmed)
+            && (!is_bare_comment_line(trimmed) || self.line_holds_code(index))
             && !trimmed.starts_with('#')
             && self.output.directive_of_continuation(index).is_none()
     }

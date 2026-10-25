@@ -26020,3 +26020,24 @@ fn an_assignment_leading_a_row_after_a_target_run_in_after_a_header_continues_pa
     let input = "void f(void)\n{\n    if (a) x\n            = 1;\n    else if (b) y\n            = 2;\n    x\n        = 3;\n    if (a)\n        x\n            = 1;\n}\n";
     check(input, &["--style=kr"], input);
 }
+
+#[test]
+fn a_declarator_star_leading_its_row_attaches_to_the_name_and_keeps_its_spacing_otherwise() {
+    // Its type stands on the row before, so only name alignment has a side
+    // to move it to; the declarations after it keep their level.
+    let input = "struct Item\n    *first = 0;\nstruct Item\n    * second = 0;\n\nstruct Item\n    &third = item;\n/* note */\nstruct Item\n    * fourth = 0;\nvoid f(void)\n{\n    struct Node\n        *next = 0;\n    struct Node\n        * other = 0;\n}\n";
+    check(
+        input,
+        &[
+            "--style=kr",
+            "--align-pointer=name",
+            "--align-reference=name",
+        ],
+        "struct Item\n    *first = 0;\nstruct Item\n    *second = 0;\n\nstruct Item\n    &third = item;\n/* note */\nstruct Item\n    *fourth = 0;\nvoid f(void)\n{\n    struct Node\n        *next = 0;\n    struct Node\n        *other = 0;\n}\n",
+    );
+    for align in ["type", "middle"] {
+        let pointer = format!("--align-pointer={align}");
+        let reference = format!("--align-reference={align}");
+        check(input, &["--style=kr", &pointer, &reference], input);
+    }
+}

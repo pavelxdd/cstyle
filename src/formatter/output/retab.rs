@@ -474,7 +474,7 @@ impl FormatEngine<'_> {
     }
 
     /// Whether output line `index` holds a token other than a comment.
-    fn line_holds_code(&self, index: usize) -> bool {
+    pub(crate) fn line_holds_code(&self, index: usize) -> bool {
         self.output.line_tokens(index).is_some_and(|span| {
             self.tree.tokens[span.first..=span.last]
                 .iter()

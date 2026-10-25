@@ -1099,13 +1099,17 @@ impl FormatEngine<'_> {
                 next,
                 Some(Token::Operator(next_operator)) if matches!(next_operator.as_str(), "&" | "&&")
             );
-        if self.current.trimmed().is_empty()
-            && self.token_input.token_begins_source_line
-            && self.is_function_declaration_parameter_continuation()
-        {
+        // A declarator leading its row has its type on the row before:
+        // name alignment attaches it to the name, and the alignments with
+        // nothing on its row to move it to keep the source's spacing.
+        if self.current.trimmed().is_empty() && self.token_input.token_begins_source_line {
             self.record_declaration_frame_for_pointer(operator, next);
             self.current.push_str(operator);
-            self.emit_trailing_source_space();
+            if !(resolved_pointer_align(self.options, operator) == PointerAlign::Name
+                && self.pointer_run.next_is_name_like)
+            {
+                self.emit_trailing_source_space();
+            }
             return;
         }
         if self.current.trimmed_end().ends_with('(') && !followed_by_reference {

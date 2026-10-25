@@ -1684,16 +1684,25 @@ fn pointer_align_middle_keeps_split_declarator_tokens_flush() {
 }
 
 #[test]
-fn reference_align_modes_keep_split_rvalue_reference_flush_with_type() {
-    let source = "Item\n&&value;\n";
-
-    let mut none_options = FormatOptions::default();
-    none_options.reference_align = ReferenceAlign::None;
-    assert_eq!(format_exact(source, &none_options), source);
-
-    let mut middle_options = FormatOptions::default();
-    middle_options.reference_align = ReferenceAlign::Middle;
-    assert_eq!(format_exact(source, &middle_options), "Item\n&& value;\n");
+fn reference_align_modes_keep_the_spacing_of_a_reference_leading_its_row() {
+    // Its type stands on the row before, so only name alignment has a side
+    // to move it to.
+    let source = "Item\n&&value;\nItem\n&& other;\n";
+    for align in [
+        ReferenceAlign::None,
+        ReferenceAlign::Type,
+        ReferenceAlign::Middle,
+    ] {
+        let mut options = FormatOptions::default();
+        options.reference_align = align;
+        assert_eq!(format_exact(source, &options), source);
+    }
+    let mut name_options = FormatOptions::default();
+    name_options.reference_align = ReferenceAlign::Name;
+    assert_eq!(
+        format_exact(source, &name_options),
+        "Item\n&&value;\nItem\n&&other;\n"
+    );
 }
 
 #[test]
