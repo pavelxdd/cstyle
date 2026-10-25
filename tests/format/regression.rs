@@ -22315,6 +22315,16 @@ fn a_header_s_body_the_source_breaks_after_a_comment_and_a_word_keeps_its_rows()
 }
 
 #[test]
+fn a_function_name_the_code_length_splits_after_a_spaced_attribute_stands_at_the_head() {
+    // As after an attribute without the space before its parens.
+    let input = "__attribute__ ((noinline)) static void collect_backtrace_entries(void) {\n    return;\n}\n__attribute__((noinline)) static void collect_backtrace_records(void) {\n    return;\n}\n";
+    let expected = "__attribute__ ((noinline)) static void\ncollect_backtrace_entries(void)\n{\n    return;\n}\n__attribute__((noinline)) static void\ncollect_backtrace_records(void)\n{\n    return;\n}\n";
+    let options = ["--style=kr", "--max-code-length=60"];
+    check(input, &options, expected);
+    check(expected, &options, expected);
+}
+
+#[test]
 fn an_array_bound_row_in_a_case_block_stands_past_its_bracket() {
     // As outside a switch: the case block's unindent moves the row with
     // its statement, once.

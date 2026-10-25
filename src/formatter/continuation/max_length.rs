@@ -1141,6 +1141,7 @@ fn continuation_indent_for_split(
             declaration[at + 1..].trimmed_start().starts_with('*')
                 || declaration[..at].trimmed_end().ends_with_any(b"()")
                 || declaration[..at]
+                    .trimmed_end()
                     .rsplit(|ch: char| !is_identifier_continue(ch))
                     .next()
                     .is_some_and(|word| {
