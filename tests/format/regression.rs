@@ -25841,3 +25841,10 @@ fn function_pointer_parameters_the_code_length_splits_off_stand_at_the_head_past
     );
     check(expected, &options, expected);
 }
+
+#[test]
+fn a_nested_switch_s_closer_stands_at_its_header_whose_condition_spans_rows() {
+    // As when the condition fits its row.
+    let input = "void f(void)\n{\n    switch (kind) {\n    case 1: {\n        switch (encoding(value,\n                         index)) {\n        case 2: {\n            stop();\n        }\n        }\n        break;\n    }\n    }\n}\n";
+    check(input, &["--style=kr"], input);
+}

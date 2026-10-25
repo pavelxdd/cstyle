@@ -569,6 +569,7 @@ impl FormatEngine<'_> {
         let Some(mut line) = self.output.last() else {
             return;
         };
+        let mut header_on_earlier_row = false;
         // A header continued onto the brace's line, as a max-code-length
         // split leaves it, stands where its first line does.
         if let Some(header) = self
@@ -601,6 +602,7 @@ impl FormatEngine<'_> {
                     .find(|line| starts_header(line))
             {
                 line = header_line;
+                header_on_earlier_row = true;
             }
         }
         let code = self.output.code_of(line).trimmed();
@@ -649,9 +651,12 @@ impl FormatEngine<'_> {
                         && frame.sibling_indent_column < sibling)
                     || (frame.semantic_kind == BraceSemanticKind::Lambda
                         && frame.sibling_indent_column != sibling)
+                    // A header's own row published before the brace's
+                    // places the block, as the brace's row does otherwise.
                     || (frame.semantic_kind == BraceSemanticKind::Command
                         && frame.split_header
-                        && frame.header.is_some()))
+                        && frame.header.is_some()
+                        && !header_on_earlier_row))
         }) {
             return;
         }
