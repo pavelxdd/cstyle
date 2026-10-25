@@ -22315,6 +22315,14 @@ fn a_header_s_body_the_source_breaks_after_a_comment_and_a_word_keeps_its_rows()
 }
 
 #[test]
+fn a_row_after_parens_closing_within_a_bracket_stands_past_the_bracket() {
+    // Whatever row led the parens' last row, as when an operator ends the
+    // row before.
+    let input = "static int table[(VALUE % 7 == 1\n                  && VALUE % 5 == 1)\n                 ? 1 : -1];\nvoid f()\n{\n    int table[(VALUE % 7 == 1\n               &&\n               VALUE % 5 == 1)\n              ? 1 : -1];\n    int other[(VALUE % 7 == 1 &&\n               VALUE % 5 == 1)\n              ? 1 : -1];\n    run(items[(first\n               || second)\n              + 1]);\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
 fn rows_after_a_comma_of_an_expression_statement_stand_at_the_statement() {
     // A member call, a postfix operator or a subscript declares nothing, as
     // a plain call does, whether the statement opens its line or runs in.

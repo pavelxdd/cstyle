@@ -15,10 +15,10 @@ use crate::formatter::continuation::max_length::lambda_parameter_continuation_in
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::output::buffer::OutputBuffer;
-use crate::formatter::state::frame::{BraceSemanticKind, ColonRole, LogicalOperator};
+use crate::formatter::state::frame::{BraceSemanticKind, BracketRole, ColonRole, LogicalOperator};
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::state::{BraceType, PreviousToken};
-use crate::formatter::structure::blocks::{BlockKind, next_code_token};
+use crate::formatter::structure::blocks::{BlockKind, is_code_token, next_code_token};
 use crate::formatter::structure::functions::FunctionHead;
 use crate::formatter::structure::groups::{Delimiter, GroupId};
 use crate::formatter::syntax::language::{is_leading_continuation_operator, is_macro_like_word};
@@ -1318,6 +1318,9 @@ impl FormatEngine<'_> {
         if let Some(spaces) = self.open_subscript_indent_spaces() {
             return ContinuationIndent::Spaces(spaces);
         }
+        if let Some(spaces) = self.enclosing_bracket_indent_spaces() {
+            return ContinuationIndent::Spaces(spaces);
+        }
         if !self.options.indent_after_parens
             && self.layout.frame_stack.active_delimiter().is_some()
             && let Some(spaces) = self.layout.nesting.current_continuation_indent_spaces()
@@ -2036,6 +2039,54 @@ impl FormatEngine<'_> {
                     leading,
                     self.options.tab_width,
                 ),
+        )
+    }
+
+    /// The column a bracket an earlier row left open holds the next row at
+    /// once the parens opened in it close: past the bracket, as the rows
+    /// its own row continues stand.
+    fn enclosing_bracket_indent_spaces(&self) -> Option<usize> {
+        if self.options.indent_after_parens || self.layout.objc.message_active {
+            return None;
+        }
+        let bracket = self.layout.frame_stack.active_bracket()?;
+        if bracket.role != BracketRole::Other || bracket.opener_output_line >= self.output.len() {
+            return None;
+        }
+        // The line ends in the bracket, past parens opened in it that close
+        // on the line.
+        let span = self.current.tokens()?;
+        let tokens = &self.tree.tokens;
+        let groups = &self.tree.groups;
+        let last = (span.first..=span.last)
+            .rev()
+            .find(|&index| is_code_token(&tokens[index]))?;
+        let group = groups.enclosing(last)?;
+        let closes_parens_in_it = (span.first..=span.last).any(|index| {
+            matches!(tokens[index], Token::Symbol(')'))
+                && groups
+                    .closed_at(index)
+                    .is_some_and(|paren| groups.get(paren).parent == Some(group))
+        });
+        if groups.get(group).delimiter != Delimiter::Bracket
+            || groups.get(group).open >= span.first
+            || !closes_parens_in_it
+        {
+            return None;
+        }
+        let column = bracket.opener_output_column + 1;
+        // Past the maximum it continues two levels past its row, as a paren
+        // does, and no nearer than the column the parens around it hold.
+        let statement_base = self.continuation_base_indent() * self.options.indent_width;
+        if column.saturating_sub(statement_base) <= self.options.max_continuation_indent {
+            return Some(column);
+        }
+        let capped = bracket.line_indent_spaces + 2 * self.options.indent_width;
+        Some(
+            self.layout
+                .nesting
+                .current_continuation_indent_spaces()
+                .map_or(capped, |around| capped.max(around)),
         )
     }
 
