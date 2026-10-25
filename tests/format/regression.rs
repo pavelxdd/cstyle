@@ -22315,6 +22315,16 @@ fn a_header_s_body_the_source_breaks_after_a_comment_and_a_word_keeps_its_rows()
 }
 
 #[test]
+fn a_pointer_declarator_the_code_length_splits_after_specifier_groups_stands_at_the_head() {
+    // As a declarator name split there does, and as without the groups.
+    let input = "__declspec(thread) connection_record_t  *connections[MAXIMUM_WAIT_EVENTS + 1];\n__declspec(thread) event_record_t        events_records[MAXIMUM_WAIT_EVENTS + 1];\nstatic connection_record_t  *other_connections[MAXIMUM_WAIT_EVENTS + 1];\n";
+    let expected = "__declspec(thread) connection_record_t\n*connections[MAXIMUM_WAIT_EVENTS + 1];\n__declspec(thread) event_record_t\nevents_records[MAXIMUM_WAIT_EVENTS + 1];\nstatic connection_record_t\n*other_connections[MAXIMUM_WAIT_EVENTS + 1];\n";
+    let options = ["--style=kr", "--max-code-length=60"];
+    check(input, &options, expected);
+    check(expected, &options, expected);
+}
+
+#[test]
 fn an_argument_row_of_a_macro_call_stands_at_its_paren_after_an_earlier_split_call() {
     // The call split after its `(` rows above closed there; the row stands
     // in the call around it.

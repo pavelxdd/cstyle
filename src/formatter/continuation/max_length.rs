@@ -1129,6 +1129,9 @@ fn continuation_indent_for_split(
     let macro_groups = declaration.contains('(')
         && unmatched_open_paren_columns(declaration).is_empty()
         && (split.tail.starts_with(is_identifier_continue)
+            // A pointer or reference declarator, as a name.
+            || split.tail.starts_with(['*', '&'])
+                && split.tail[1..].trim_start_matches(['*', '&']).starts_with(is_identifier_start)
             // A function pointer's parameters split from its `(*name)`.
             || split.tail.starts_with('(')
                 && declaration.trimmed_end().ends_with(')')
