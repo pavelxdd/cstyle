@@ -1490,13 +1490,32 @@ fn stream_chain_continuation_indent(
 }
 
 /// Whether `split` breaks the statement a braceless header runs in on its
-/// line before a word, right after the header or with nothing in the
-/// statement registering a column: the rest goes on at the header's body.
+/// line before a word or an operator, right after the header or with
+/// nothing in the statement registering a column: the rest goes on at the
+/// header's body, as a row the operator leads there does.
 fn splits_header_body_statement(split: &SplitResult) -> bool {
     split.kind == SplitKind::Whitespace
-        && split
-            .tail
-            .starts_with(|ch: char| is_identifier_continue(ch) || matches!(ch, '"' | '\''))
+        && split.tail.starts_with(|ch: char| {
+            is_identifier_continue(ch)
+                || matches!(
+                    ch,
+                    '"' | '\''
+                        | '+'
+                        | '-'
+                        | '*'
+                        | '/'
+                        | '%'
+                        | '&'
+                        | '|'
+                        | '^'
+                        | '='
+                        | '<'
+                        | '>'
+                        | '.'
+                        | '!'
+                        | '~'
+                )
+        })
         && unmatched_open_paren_columns(&split.head).is_empty()
         && header_body(&split.head).is_some_and(|body| {
             !["<<", ">>", "=", "?"]

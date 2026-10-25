@@ -22282,6 +22282,17 @@ fn rows_of_a_subscript_within_parens_stand_past_its_bracket() {
 }
 
 #[test]
+fn a_part_split_before_an_operator_in_a_header_s_run_in_body_stands_at_the_body() {
+    // As a row the operator leads there does; the condition's floor holds
+    // only the condition.
+    let input = "void f()\n{\n    while (ready) {\n        if (more) {\n            if (item_position != settings->current_rules) item_position -= 1;\n        }\n    }\n}\n";
+    let expected = "void f()\n{\n    while (ready) {\n        if (more) {\n            if (item_position != settings->current_rules) item_position\n                -= 1;\n        }\n    }\n}\n";
+    let options = ["--style=kr", "--max-code-length=60"];
+    check(input, &options, expected);
+    check(expected, &options, expected);
+}
+
+#[test]
 fn parts_the_code_length_splits_in_a_subscript_past_the_maximum_stand_as_its_rows() {
     // Two levels past the row, as the row's own continuation, where the
     // parens around are past the maximum too.
