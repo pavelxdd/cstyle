@@ -3982,20 +3982,23 @@ impl FormatEngine<'_> {
             self.output
                 .line_with_token(self.tree.previous_code_token(assign)?)?
         };
-        // Only a statement's declaration line leads it.
+        // Only a statement's declaration line leads it: one after a
+        // statement or a block, or one standing at the block's level, as
+        // after a macro call without its `;`.
         let start = self.output.line_tokens(statement_line)?.first;
-        if self
-            .tree
-            .previous_code_token(start)
-            .is_some_and(|before| !matches!(tokens[before], Token::Symbol(';' | '{' | '}')))
+        let lead = self
+            .output
+            .lead_width(statement_line, self.options.tab_width)
+            + self.case_unindent_spaces();
+        if lead != self.continuation_base_indent() * self.options.indent_width
+            && self
+                .tree
+                .previous_code_token(start)
+                .is_some_and(|before| !matches!(tokens[before], Token::Symbol(';' | '{' | '}')))
         {
             return None;
         }
-        Some(
-            self.output
-                .lead_width(statement_line, self.options.tab_width)
-                + self.case_unindent_spaces(),
-        )
+        Some(lead)
     }
 
     /// Whether the line before is a one-line block that adding braces made.

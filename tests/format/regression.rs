@@ -25722,3 +25722,24 @@ fn a_block_comment_leading_a_list_argument_rows_stands_with_them() {
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn an_initializer_brace_row_after_a_macro_call_line_stands_at_its_statement() {
+    // As without the call: a call without `;` on the line before ends
+    // there, whether the source or the code length breaks before the `=`.
+    let expected = "MACRO(value)\n\nstatic const struct item_node_type stats_value_list_node[]\n= {\n    {1, 2},\n};\n";
+    let options = ["--style=kr", "--max-code-length=60"];
+    check(
+        "MACRO(value)\n\nstatic const struct item_node_type stats_value_list_node[] = {\n    {1, 2},\n};\n",
+        &options,
+        expected,
+    );
+    check(expected, &options, expected);
+    let expected = "void f(void)\n{\n    MACRO(value)\n\n    static const struct item_node_type stats_value_list_node[]\n    = {\n        {1, 2},\n    };\n}\n";
+    check(
+        "void f(void)\n{\n    MACRO(value)\n\n    static const struct item_node_type stats_value_list_node[] = {\n        {1, 2},\n    };\n}\n",
+        &options,
+        expected,
+    );
+    check(expected, &options, expected);
+}
