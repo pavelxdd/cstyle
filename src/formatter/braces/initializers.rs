@@ -47,17 +47,32 @@ fn brace_follows_assignment(tokens: &[Token], brace: usize) -> bool {
         .is_some_and(|token| matches!(token, Token::Operator(operator) if operator.ends_with('=')))
 }
 
-/// Whether the declaration the `=` before `brace` ends declares a `struct`
-/// outside its parentheses and brackets, on any of its lines: its aggregate
-/// counts its levels from the statement, though its declarator continues it.
-fn statement_declares_struct(tokens: &[Token], brace: usize) -> bool {
+/// Whether the declaration the `=` before `brace` ends names a `struct`,
+/// `union` or `class` type outside its parentheses and brackets, on any of
+/// its lines: its aggregate counts its levels from the statement, though its
+/// declarator continues it.
+fn statement_declares_aggregate(tokens: &[Token], brace: usize) -> bool {
     let mut depth = 0usize;
-    for token in tokens[..brace].iter().rev() {
+    for (index, token) in tokens[..brace].iter().enumerate().rev() {
         match token {
             Token::Symbol(')' | ']') => depth += 1,
             Token::Symbol('(' | '[') if depth > 0 => depth -= 1,
             Token::Symbol(';' | '{' | '}' | '(' | '[') => return false,
-            Token::Word(word) if depth == 0 && word == "struct" => return true,
+            // A template's type parameter names no type the declaration has.
+            Token::Word(word)
+                if depth == 0
+                    && matches!(word.as_str(), "struct" | "union" | "class")
+                    && !tokens[..index]
+                        .iter()
+                        .rev()
+                        .find(|token| is_code_token(token))
+                        .is_some_and(|token| {
+                            matches!(token, Token::Operator(operator) if operator == "<")
+                                || matches!(token, Token::Symbol(','))
+                        }) =>
+            {
+                return true;
+            }
             _ => {}
         }
     }
@@ -767,7 +782,7 @@ impl FormatEngine<'_> {
         let aggregate_assign = self.current.trimmed_end().ends_with('=')
             || brace_type == BraceType::CompoundLiteral && self.layout.nesting.paren_depth == 0;
         let declares_struct = self.current.trimmed_end().ends_with('=')
-            && statement_declares_struct(&self.tree.tokens, token_index);
+            && statement_declares_aggregate(&self.tree.tokens, token_index);
         if self.current_is_lambda_body_header()
             || is_lambda_capture_header(self.current.trimmed_end())
         {
@@ -1584,7 +1599,8 @@ impl FormatEngine<'_> {
     /// `brace` opens, though its declarator stands on a later line.
     pub(crate) fn struct_declaration_statement_lead(&self, brace: usize) -> Option<usize> {
         let tokens = &self.tree.tokens;
-        if !brace_follows_assignment(tokens, brace) || !statement_declares_struct(tokens, brace) {
+        if !brace_follows_assignment(tokens, brace) || !statement_declares_aggregate(tokens, brace)
+        {
             return None;
         }
         // The statement starts after the one before it and any label.

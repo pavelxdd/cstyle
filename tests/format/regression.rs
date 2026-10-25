@@ -13141,6 +13141,18 @@ fn designator_rows_of_a_list_after_a_continued_declarator_stand_as_its_other_row
 }
 
 #[test]
+fn rows_of_a_list_after_a_continued_union_or_class_declarator_stand_as_after_a_struct_one() {
+    let expected = "void f()\n{\n    struct Item\n        first = {\n        1, 2\n    };\n    struct Item\n        first = {\n        .a = 1,\n        .u = {\n            .b = 2,\n        }\n    };\n}\n";
+    let input = "void f()\n{\n    struct Item\n        first = {\n            1, 2\n        };\n    struct Item\n        first = {\n            .a = 1,\n            .u = {\n                .b = 2,\n            }\n        };\n}\n";
+    for keyword in ["union", "class"] {
+        let expected = expected.replace("struct", keyword);
+        let input = input.replace("struct", keyword);
+        check(&input, &[], &expected);
+        check(&expected, &[], &expected);
+    }
+}
+
+#[test]
 fn nested_list_rows_of_a_run_in_list_after_a_struct_type_line_stand_as_on_one_line() {
     // A declarator continuing its struct type on a line of its own sets
     // the rows of a list run in after its brace as the one-line
