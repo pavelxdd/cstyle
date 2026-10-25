@@ -25913,3 +25913,15 @@ fn max_code_length_measures_a_comment_after_closers_run_into_the_statement_row()
         check(expected, &options, expected);
     }
 }
+
+#[test]
+fn a_declarator_after_a_tagged_type_name_on_the_row_before_stays_a_declarator_in_macro_arguments() {
+    // A `*` or `&` after `struct Name` declares, as on the type's own row.
+    let input = "EXPORT(struct Item *first(const struct Config\n                          *config));\nEXPORT(struct Item *first(const union Value\n                          &value));\nEXPORT(int first(enum Kind\n                 *kind, struct Item *item));\n";
+    check(input, &["--style=kr", "--pad-oper"], input);
+    check(
+        input,
+        &["--style=kr", "--pad-oper", "--align-pointer=name"],
+        input,
+    );
+}

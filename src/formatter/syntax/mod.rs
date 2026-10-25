@@ -1200,7 +1200,9 @@ fn star_run_declares(tokens: &[Token], first: usize, last: usize) -> bool {
 fn classify_star_operator(tokens: &[Token], index: usize, roles: &SyntaxRoles) -> OperatorRole {
     let previous = previous_non_layout_token_index(tokens, index);
     let next = next_non_layout_token_index(tokens, index + 1);
-    if star_is_binary_operator(tokens, previous, next, index, roles) {
+    if follows_tagged_type_name(tokens, previous) {
+        OperatorRole::PointerDeclarator
+    } else if star_is_binary_operator(tokens, previous, next, index, roles) {
         OperatorRole::BinaryOperator
     } else if star_is_pointer_declarator(tokens, previous, next) {
         OperatorRole::PointerDeclarator
@@ -1223,7 +1225,9 @@ fn classify_ampersand_operator(tokens: &[Token], index: usize) -> OperatorRole {
     if suffix_type_word_in_expression(tokens, previous, next, index) {
         return OperatorRole::BinaryOperator;
     }
-    if star_is_pointer_declarator(tokens, previous, next) {
+    if follows_tagged_type_name(tokens, previous)
+        || star_is_pointer_declarator(tokens, previous, next)
+    {
         OperatorRole::PointerDeclarator
     } else if ampersand_is_binary_operator(tokens, previous, next) {
         OperatorRole::BinaryOperator
@@ -1232,6 +1236,18 @@ fn classify_ampersand_operator(tokens: &[Token], index: usize) -> OperatorRole {
     } else {
         OperatorRole::Unknown
     }
+}
+
+/// Whether the token at `previous` names a type after its tag, as `Item`
+/// in `struct Item`, which only a declarator can follow.
+fn follows_tagged_type_name(tokens: &[Token], previous: Option<usize>) -> bool {
+    previous.is_some_and(|name| {
+        matches!(&tokens[name], Token::Word(word) if !is_non_type_keyword(word))
+            && previous_non_layout_token_index(tokens, name).is_some_and(|tag| {
+                matches!(&tokens[tag], Token::Word(word)
+                    if matches!(word.as_str(), "struct" | "union" | "enum" | "class"))
+            })
+    })
 }
 
 fn star_is_pointer_declarator(
