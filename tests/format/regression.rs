@@ -22315,6 +22315,16 @@ fn a_header_s_body_the_source_breaks_after_a_comment_and_a_word_keeps_its_rows()
 }
 
 #[test]
+fn an_argument_row_of_a_macro_call_stands_at_its_paren_after_an_earlier_split_call() {
+    // The call split after its `(` rows above closed there; the row stands
+    // in the call around it.
+    let input = "    first_long_name)\nDECLARE (\n    second_long_name)\n#ifndef OTHER /* a note that spans\n                 two rows */\n/* another note\n */\nHELPER (third,\n        echo_server)\n";
+    let expected = "first_long_name)\nDECLARE (\n    second_long_name)\n#ifndef OTHER /* a note that spans\n                 two rows */\n/* another note\n */\nHELPER (third,\n        echo_server)\n";
+    check(input, &["--style=kr"], expected);
+    check(expected, &["--style=kr"], expected);
+}
+
+#[test]
 fn rows_continuing_a_head_after_an_unmatched_closing_brace_keep_their_columns() {
     // The brace a conditional branch leaves unmatched ends nothing the rows
     // after it continue.

@@ -1252,13 +1252,24 @@ impl FormatEngine<'_> {
                     simple_trailing_open_paren_line(self.output[index].trimmed_end())
                         && !self.output.paren_imbalance(index).1.is_empty()
                 });
-        let has_split_opener = opener.is_some_and(|opener| {
-            self.output
-                .last_line_looked(&self.statement_edge_look, opener + 1, end, |index| {
-                    let code = self.output[index].trimmed_end();
-                    code.ends_with(';') || code == "{" || code == "}"
+        // The opener's paren holds the row, when the tree knows the row.
+        let holds_row = |opener: usize| {
+            self.output.pending_tokens().is_none_or(|span| {
+                let groups = &self.tree.groups;
+                groups.enclosing(span.first).is_some_and(|group| {
+                    self.output.line_with_token(groups.get(group).open) == Some(opener)
                 })
-                .is_none()
+            })
+        };
+        let has_split_opener = opener.is_some_and(|opener| {
+            holds_row(opener)
+                && self
+                    .output
+                    .last_line_looked(&self.statement_edge_look, opener + 1, end, |index| {
+                        let code = self.output[index].trimmed_end();
+                        code.ends_with(';') || code == "{" || code == "}"
+                    })
+                    .is_none()
         });
         has_split_opener.then(|| {
             leading_visual_width(previous, self.options.tab_width)
