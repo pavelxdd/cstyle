@@ -25743,3 +25743,17 @@ fn an_initializer_brace_row_after_a_macro_call_line_stands_at_its_statement() {
     );
     check(expected, &options, expected);
 }
+
+#[test]
+fn a_declarator_the_code_length_splits_off_stands_at_the_first_past_a_tab() {
+    // The tab before the first declarator counts to its tab stop, as when
+    // the source breaks the row there.
+    let expected = "void f(void)\n{\n    unsigned\tfirst_value, second_value, third_value,\n                fourth_value;\n}\n";
+    let options = ["--style=kr", "--max-code-length=60"];
+    check(
+        "void f(void)\n{\n\tunsigned\tfirst_value, second_value, third_value, fourth_value;\n}\n",
+        &options,
+        expected,
+    );
+    check(expected, &options, expected);
+}

@@ -19,6 +19,7 @@ use crate::formatter::structure::blocks::{BlockKind, is_code_token, next_code_to
 use crate::formatter::structure::functions::template_arguments_start;
 use crate::formatter::structure::groups::{Delimiter, GroupId};
 use crate::formatter::syntax::language::is_header;
+use crate::formatter::text::columns::visual_width_from;
 use crate::formatter::text::line_scan::preprocessor_directive;
 use crate::formatter::text::trim::Trimmed;
 
@@ -897,7 +898,13 @@ impl FormatEngine<'_> {
                             return None;
                         }
                         let text = self.output.as_slice()[token_line].trimmed_start();
-                        replay.stack.push(second_word_column(text, relative(index)?));
+                        let lead = self.output.lead_width(token_line, self.options.tab_width);
+                        replay.stack.push(second_word_column(
+                            text,
+                            lead,
+                            relative(index)?,
+                            self.options.tab_width,
+                        ));
                         replay.continuation = true;
                     }
                 }
@@ -1567,21 +1574,25 @@ fn is_control_keyword(token: &Token) -> bool {
     matches!(token, Token::Word(word) if matches!(word.as_str(), "if" | "while" | "for" | "switch"))
 }
 
-/// The column astyle registers for a `,` at `comma` ending `line`: its second
-/// word, past a first word of at least three characters.
-fn second_word_column(line: &str, comma: usize) -> usize {
+/// The column astyle registers for a `,` at `comma` ending `line`, which
+/// starts at column `lead`: its second word, past a first word of at least
+/// three characters, measured to its tab stop past a tab.
+fn second_word_column(line: &str, lead: usize, comma: usize, tab_width: usize) -> usize {
     let name_char = |ch: char| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '.');
     if !line.starts_with(name_char) {
         return 0;
     }
     let first_end = line.find(|ch: char| !name_char(ch)).unwrap_or(line.len());
     let after = first_end + 1;
-    if after >= comma || after < 4 {
+    if after < 4 || visual_width_from(&line[..after], lead, tab_width) >= comma {
         return 0;
     }
     match line[after..].find(|ch: char| !matches!(ch, ' ' | '\t')) {
-        Some(offset) if after + offset < comma => after + offset,
-        _ => 0,
+        Some(offset) => {
+            let column = visual_width_from(&line[..after + offset], lead, tab_width);
+            if column < comma { column } else { 0 }
+        }
+        None => 0,
     }
 }
 
