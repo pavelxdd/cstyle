@@ -2103,11 +2103,12 @@ impl FormatEngine<'_> {
         }
         let line = self.current.trimmed_end();
         let open = self.open_paren_column_of(line)?;
+        // A name, a subscript or a literal takes the subscript.
         if !line[open..].starts_with('[')
             || !line[..open]
                 .chars()
                 .next_back()
-                .is_some_and(|ch| ch == ']' || ch == '_' || ch.is_alphanumeric())
+                .is_some_and(|ch| matches!(ch, ']' | '_' | '"' | '\'') || ch.is_alphanumeric())
         {
             return None;
         }

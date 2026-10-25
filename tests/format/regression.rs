@@ -25968,6 +25968,13 @@ fn an_operator_leading_the_row_after_sizeof_or_a_cast_keeps_its_one_row_spacing(
 }
 
 #[test]
+fn an_operator_row_in_a_literal_s_subscript_continues_past_its_bracket() {
+    // As in a name's subscript, whichever row the operator stands on.
+    let input = "int f(void)\n{\n    x = \"abcd\"[value\n               + 4];\n    x = table[value\n              + 4];\n    x = 'a'[value\n            + 4];\n}\n";
+    check(input, &["--style=kr"], input);
+}
+
+#[test]
 fn a_cast_or_parameter_list_split_over_rows_keeps_the_space_after_its_paren() {
     // Parameters are no cast, and a cast split over rows keeps its spacing
     // as on one row.
