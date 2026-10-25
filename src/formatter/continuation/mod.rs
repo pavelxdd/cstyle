@@ -111,8 +111,11 @@ fn declaration_comma_continuation_column(line: &str) -> usize {
     while column < comma && is_word_char(chars[column]) {
         column += 1;
     }
-    // A bit-field's colon parts no type from the declarator it ends.
-    if chars[column] == ':' && chars.get(column + 1) != Some(&':') {
+    // A bit-field's colon parts no type from the declarator it ends, nor
+    // does an operator applied to the word or a member it accesses.
+    if chars[column] == ':' && chars.get(column + 1) != Some(&':')
+        || matches!(chars[column], '+' | '-' | '.' | '[')
+    {
         return 0;
     }
     column += 1;
@@ -1738,6 +1741,22 @@ impl FormatEngine<'_> {
             .then_some(frame.line_indent_spaces)
     }
 
+    /// The indent of the row after a comma ending the line when the line
+    /// runs its statement in after headers: a statement there declares
+    /// nothing, and the row stands at their body.
+    fn run_in_statement_comma_indent_spaces(&self) -> Option<usize> {
+        let span = self.current.tokens()?;
+        let (headers, _) = self.run_in_headers_from(span.first, span.last, |index| {
+            (span.first..=span.last).contains(&index)
+        })?;
+        (headers > 0
+            && matches!(
+                self.layout.nesting.brace_type_stack.last(),
+                Some(BraceType::Command | BraceType::Definition)
+            ))
+        .then(|| self.current_line_indent_spaces() + headers * self.options.indent_width)
+    }
+
     fn declaration_continuation_indent_spaces(&self) -> Option<usize> {
         // A head below its return type declares as one opening its line.
         if self.layout.indentation.statement_depth() != 0 && !self.comma_follows_head_parameters()
@@ -1752,16 +1771,18 @@ impl FormatEngine<'_> {
         if !line.ends_with(',') || line.contains('=') {
             return None;
         }
+        if let Some(spaces) = self.run_in_statement_comma_indent_spaces() {
+            return Some(spaces);
+        }
         if let Some(paren) = line.find('(') {
             let before_paren = line[..paren].trimmed_end();
             if !before_paren.contains(char::is_whitespace) {
-                // A call or a cast leading a statement declares nothing:
-                // astyle continues nothing past its comma.
-                let leads_statement = before_paren
-                    .trimmed_start()
-                    .chars()
-                    .all(is_identifier_continue)
-                    && !is_header(self.options, before_paren.trimmed_start())
+                // A call or a cast leading a statement, a member's call
+                // too, declares nothing: the row after its comma stands at
+                // the statement.
+                let leads_statement = before_paren.trimmed_start().chars().all(|ch| {
+                    is_identifier_continue(ch) || matches!(ch, '.' | '-' | '>' | ':' | '[' | ']')
+                }) && !is_header(self.options, before_paren.trimmed_start())
                     && self.open_paren_column_of(line).is_none()
                     && matches!(
                         self.layout.nesting.brace_type_stack.last(),

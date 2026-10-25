@@ -22315,6 +22315,24 @@ fn a_header_s_body_the_source_breaks_after_a_comment_and_a_word_keeps_its_rows()
 }
 
 #[test]
+fn rows_after_a_comma_of_an_expression_statement_stand_at_the_statement() {
+    // A member call, a postfix operator or a subscript declares nothing, as
+    // a plain call does, whether the statement opens its line or runs in.
+    let input = "int f()\n{\n    item.run(),\n    next();\n    item->run(),\n    next();\n    value++,\n    next();\n    count--,\n    next();\n    items[0].run(),\n    next();\n    run(),\n    next();\n    if (ready) item.run(),\n        next();\n    if (ready) value++,\n        next();\n}\n";
+    check(input, &["--style=kr"], input);
+    check(input, &["--style=kr", "--indent-continuation=2"], input);
+}
+
+#[test]
+fn a_call_statement_run_in_after_headers_continues_past_its_comma_at_their_body() {
+    // As after one header: the row stands at the body of each header before
+    // the statement on its line.
+    let input = "int f()\n{\n    if (ready) run(),\n        next();\n    do run(),\n        next();\n    while (ready);\n    if (ready) if (more) run(),\n            next();\n    if (ready) next();\n    else do run(),\n            next();\n        while (ready);\n}\n";
+    check(input, &["--style=kr"], input);
+    check(input, &["--style=kr", "--indent-continuation=2"], input);
+}
+
+#[test]
 fn the_while_of_a_do_run_in_after_headers_stands_at_their_body() {
     // As after an `else`: the `do` stands at the body of each header before
     // it on its line, wherever its own body stands.
