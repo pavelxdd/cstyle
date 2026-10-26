@@ -503,6 +503,51 @@ fn file_scope_labels_keep_broken_definition_braces() {
 }
 
 #[test]
+fn lisp_label_block_keeps_switch_body_indent_on_reformat() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=lisp".to_owned(), "--indent-switches".to_owned()],
+    )
+    .expect("valid options");
+    let source = "void outer(void)\n{\nswitch (value)\n{\nnext:\n{\nuse(value);\n}\n}\n}\n";
+    let expected =
+        "void outer(void) {\n    switch (value) {\nnext: {\n                use(value); } } }\n";
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn lisp_nested_label_block_counts_its_own_switch_body() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=lisp".to_owned(), "--indent-switches".to_owned()],
+    )
+    .expect("valid options");
+    let source = "void outer(void)\n{\nswitch (value)\n{\ncase 1:\nswitch (value)\n{\nnext:\n{\nuse(value);\n}\n}\n}\n}\n";
+    let expected = "void outer(void) {\n    switch (value) {\n        case 1:\n            switch (value) {\nnext: {\n                        use(value); } } } }\n";
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn pico_inline_label_block_starts_at_switch_body_column() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=pico".to_owned()]).expect("valid options");
+    let source = "void outer(void)\n{\nswitch (value)\n{\nnext: {\nuse(value);\n}\n}\n}\n";
+    let output = format_exact(source, &options);
+
+    assert_eq!(
+        output.lines().nth(3),
+        Some("            {   use(value); } } }")
+    );
+    assert_eq!(format_exact(&output, &options), output);
+}
+
+#[test]
 fn whitesmith_label_block_brace_and_body_share_the_nested_body_column() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=whitesmith".to_owned()])

@@ -1583,7 +1583,7 @@ impl FormatEngine<'_> {
         self.layout.switch_case_layout.closing_line_needs_unindent
     }
 
-    fn has_case_body_at_current_depth(&self) -> bool {
+    pub(crate) fn has_case_body_at_current_depth(&self) -> bool {
         let current = self.layout.nesting.brace_header_stack.len();
         self.layout
             .switch_case_layout

@@ -352,14 +352,17 @@ impl FormatEngine<'_> {
                 .active_header()
                 .filter(|frame| frame.header == *header)
         });
-        // A switch label still leading the line opens its body first.
-        // A case body the indent already counts holds no pending label;
-        // without indented switches it counts the body from the label on.
+        // A label kept on the current line starts the switch body before emission.
+        // A published label has already registered that level.
         let pending_case_label = usize::from(
             self.options.indent_switches
                 && in_switch_body
-                && find_case_colon(&self.current).is_some()
-                && self.case_body_indent_extra(LineKind::Normal) == 0,
+                && (find_case_colon(&self.current).is_some()
+                    && self.case_body_indent_extra(LineKind::Normal) == 0
+                    || label_block
+                        && !self.current_is_blank()
+                        && self.directly_in_switch_body()
+                        && !self.has_case_body_at_current_depth()),
         );
         let label_owner_column = label_block.then(|| {
             (self
