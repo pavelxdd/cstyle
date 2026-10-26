@@ -442,7 +442,6 @@ impl FormatEngine<'_> {
         }
         if line_kind == LineKind::Normal
             && !line_start.starts_with_any(b"{}")
-            && !starts_header_word(line_start, "switch")
             && let Some(spaces) = self.direct_switch_body_indent_spaces()
         {
             let current = exact_indent_spaces.unwrap_or(indent * self.options.indent_width);
