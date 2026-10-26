@@ -1413,6 +1413,15 @@ impl FormatEngine<'_> {
             return None;
         }
         if self.is_objc_method_line()
+            || tokens.len() == self.tree.tokens.len()
+                && self
+                    .tree
+                    .groups
+                    .opened_at(start)
+                    .is_some_and(|group| self.tree.blocks.kind(group) == Some(BlockKind::Control))
+                && self.tree.previous_code_token(start).is_some_and(|previous| {
+                    matches!(&tokens[previous], Token::Word(word) if language::is_non_paren_header(word))
+                })
             || self
                 .layout
                 .command_state
@@ -2040,7 +2049,15 @@ impl FormatEngine<'_> {
         });
         let empty_block_after_operator =
             is_empty_block && self.layout.previous == PreviousToken::Operator;
-        let brace_header = is_asm_block.then_some("_asm");
+        let control_header = (self
+            .tree
+            .groups
+            .opened_at(start)
+            .is_some_and(|group| self.tree.blocks.kind(group) == Some(BlockKind::Control))
+            && !self.token_in_header_parens(start))
+        .then(|| self.layout.command_state.current_header.clone())
+        .flatten();
+        let brace_header = is_asm_block.then_some("_asm").or(control_header.as_deref());
         let brace_type = if inferred_capture_lambda || self.inferred_definition_brace(tokens, start)
         {
             self.classify_opening_brace(brace_header, self.pending_extern);

@@ -22857,6 +22857,15 @@ fn vtk_definition_bodies_in_macro_arguments_indent_past_their_braces() {
 }
 
 #[test]
+fn one_line_else_bodies_in_macro_arguments_end_their_statement() {
+    let input = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\nRUN_ROWS(\nif( ready ) {\nuse(value);\n} else {\nuse(other);\n}\nuse(next);\n)\n}\n";
+    let expected = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{   RUN_ROWS(\n        if( ready )\n        {   use(value); }\n        else\n        {   use(other); }\n    use(next);\n    ) }\n";
+    let args = &["--style=pico", "--indent-after-parens"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
 fn definition_brace_layout_preserves_a_control_headers_braceless_scope() {
     let input = "else\nfor(i=1;;i++)\n{\nuse(value);\n}\n";
     let expected = "else\n    for(i=1;; i++)\n    {\n        use(value);\n    }\n";
@@ -22867,11 +22876,21 @@ fn definition_brace_layout_preserves_a_control_headers_braceless_scope() {
 
 #[test]
 fn rewritten_file_scope_control_bodies_keep_definition_brace_layout() {
-    let input = "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\nfor( int i=0; i<3; ++i ) {\nuse(value);\n}\n)\n";
-    let expected = "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\n    for( int i=0; i<3; ++i )\n{   use(value); }\n)\n";
+    let cases = [
+        (
+            "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\nfor( int i=0; i<3; ++i ) {\nuse(value);\n}\n)\n",
+            "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\n    for( int i=0; i<3; ++i )\n{   use(value); }\n)\n",
+        ),
+        (
+            "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\ntry {\nuse(value);\n} catch(...) {\nuse(other);\n}\n)\n",
+            "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\n    try\n{   use(value); }\n    catch(...)\n{   use(other); }\n)\n",
+        ),
+    ];
     let args = &["--style=pico", "--indent-after-parens"];
-    check(input, args, expected);
-    check(expected, args, expected);
+    for (input, expected) in cases {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
 }
 
 #[test]
