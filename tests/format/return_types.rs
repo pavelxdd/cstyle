@@ -2,6 +2,28 @@ use crate::common::{format_exact, format_with};
 use cstyle::config::{BraceStyle, FormatOptions, PointerAlign, apply_command_line_args};
 
 #[test]
+fn break_return_type_decl_after_xml_comment_keeps_the_name_column() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=kr".to_owned(),
+            "-xB".to_owned(),
+            "-xD".to_owned(),
+            "-p".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let input =
+        "/**\n <?xml version=\"1.0\" encoding=\"UTF-8\"?>\n */\nItem* NewItem(const char* text);\n";
+    let expected = "/**\n <?xml version=\"1.0\" encoding=\"UTF-8\"?>\n */\nItem*\nNewItem(const char* text);\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), expected);
+}
+
+#[test]
 fn splits_return_types_when_requested() {
     let mut options = FormatOptions::default();
     options.break_return_type = true;
