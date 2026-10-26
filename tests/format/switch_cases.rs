@@ -114,6 +114,18 @@ fn attached_case_blocks_outside_switch_keep_the_enclosing_body_indent() {
 }
 
 #[test]
+fn vtk_file_scope_case_blocks_keep_one_body_indent() {
+    let options = options_from_args(&["--style=vtk"]);
+    let expected = "case 1:\n{\n    use(value);\n}\n";
+
+    assert_eq!(
+        format_exact("case 1:\n{\nuse(value);\n}\n", &options),
+        expected
+    );
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
 fn nested_switch_keeps_block_indent_inside_case_brace() {
     let source = fixture!(
         "void helper(int value)",

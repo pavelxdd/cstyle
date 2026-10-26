@@ -7676,6 +7676,14 @@ impl FormatEngine<'_> {
         if self.output.line_tokens(line)?.first != open {
             return None;
         }
+        if self
+            .layout
+            .frame_stack
+            .active_brace()
+            .is_some_and(|frame| frame.open_token == Some(open) && !frame.case_block)
+        {
+            return None;
+        }
         Some(self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces())
     }
 
