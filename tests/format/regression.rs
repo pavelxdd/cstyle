@@ -22741,6 +22741,21 @@ fn rows_continuing_a_head_after_an_unmatched_closing_brace_keep_their_columns() 
 }
 
 #[test]
+fn code_length_splits_after_an_unmatched_closing_brace_keep_argument_columns() {
+    let input = "}\nItemInfo result = obj->FirstEntryElement()->LastEntryElement()->FetchIntAttribute( \"option\", &value1 );\n";
+    let expected = "}\nItemInfo result =\n    obj->FirstEntryElement()->LastEntryElement()->FetchIntAttribute( \"option\",\n            &value1 );\n";
+    let args = &["--max-code-length=80"];
+    check(input, args, expected);
+    check(expected, args, expected);
+
+    let input = "\t\t}\n\t\tResult result = item->FirstElement()->LastElement()->ReadAttribute( \"value\", &value );\n";
+    let expected = "}\nResult result = item->FirstElement()->LastElement()->ReadAttribute( \"value\",\n        &value );\n";
+    let args = &["--indent-after-parens", "--max-code-length=80"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
 fn a_declarator_after_array_declarators_with_lists_stands_at_the_first_declarator() {
     // As after scalar declarators: an array's bounds and its closed list
     // leave the first name the column.

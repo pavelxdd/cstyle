@@ -1339,6 +1339,7 @@ impl FormatEngine<'_> {
             Token::Symbol('{') => groups
                 .opened_at(before)
                 .is_some_and(|group| self.is_stack_block(group)),
+            Token::Symbol('}') if groups.closed_at(before).is_none() => true,
             Token::Symbol(')' | ']' | '}') => groups.closed_at(before).is_some_and(|closed| {
                 self.is_stack_block(closed) || self.closes_control_header(closed)
             }),
@@ -1426,6 +1427,9 @@ impl FormatEngine<'_> {
                             })
                     })
             {
+                break None;
+            }
+            if matches!(tokens[before], Token::Symbol('}')) && self.ends_stack_statement(before) {
                 break None;
             }
             if let Some(closed) = groups.closed_at(before) {
