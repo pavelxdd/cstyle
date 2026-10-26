@@ -1209,12 +1209,20 @@ impl FormatEngine<'_> {
     }
 
     fn record_header_frame(&mut self, word: &str) {
-        // The `if` of an `else` kept after a statement on its line stands
-        // with the `else`, not with the statement.
-        let else_after_statement_indent = (word == "if")
+        // Joined `else if` headers share the `else` frame's column; pending
+        // continuation state can still include split-chain levels.
+        let inline_else_if_indent = (word == "if")
             .then(|| self.current.trimmed_end().strip_suffix("else"))
             .flatten()
-            .filter(|before| self.output.code_of(before).trimmed_end().ends_with(';'))
+            .filter(|before| {
+                self.output.code_of(before).trimmed_end().ends_with(';')
+                    || self
+                        .current
+                        .active_token()
+                        .and_then(|keyword| self.tree.previous_code_token(keyword))
+                        .and_then(|keyword| self.tree.statements.if_of_else(keyword))
+                        .is_some()
+            })
             .and_then(|_| {
                 self.layout
                     .frame_stack
@@ -1364,7 +1372,7 @@ impl FormatEngine<'_> {
             && !self.current_is_blank()
             && after_leading_comments(&self.current).trimmed().is_empty())
         .then(|| self.continuation_base_indent() * self.options.indent_width);
-        let line_indent_spaces = else_after_statement_indent
+        let line_indent_spaces = inline_else_if_indent
             .or(comment_led_label_indent)
             .or(attached_closing_indent)
             .or(closed_if_indent)

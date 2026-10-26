@@ -3233,7 +3233,7 @@ fn indent_preproc_block_preserves_padded_pound_outside_block() {
 }
 
 #[test]
-fn indent_preproc_block_skips_block_with_multiline_unbalanced_paren() {
+fn indent_preproc_block_indents_balanced_multiline_parameters() {
     let mut options = FormatOptions::default();
     options.indent_preproc_block = true;
     let actual = format_with(
@@ -3251,12 +3251,13 @@ fn indent_preproc_block_skips_block_with_multiline_unbalanced_paren() {
         actual,
         fixture!(
             "#ifdef ALPHA",
-            "int helper(int alpha,",
-            "           int beta);",
+            "    int helper(int alpha,",
+            "               int beta);",
             "#endif",
             "int after;",
         )
     );
+    assert_eq!(format_with(&actual, &options), actual);
 }
 
 #[test]

@@ -409,7 +409,9 @@ impl FormatEngine<'_> {
     }
 
     pub(crate) fn is_continuation_break(&self) -> bool {
-        if self.is_complete_template_declaration_line() {
+        if self.header_paren.just_closed && self.layout.nesting.paren_depth == 0
+            || self.is_complete_template_declaration_line()
+        {
             return false;
         }
         let trimmed = self.current.trimmed_end();

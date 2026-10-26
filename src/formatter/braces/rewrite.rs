@@ -2589,7 +2589,7 @@ impl FormatEngine<'_> {
                     .layout
                     .command_state
                     .previous_command_char
-                    .is_some_and(is_word_char));
+                    .is_some_and(|ch| is_word_char(ch) || ch == '>'));
         if !matches!(
             self.layout.command_state.previous_command_char,
             Some(',' | '{')

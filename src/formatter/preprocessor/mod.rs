@@ -111,7 +111,7 @@ pub(crate) struct PreprocessorBranchState {
     /// from after `#endif`.
     first_branch_end: Option<Box<PreprocessorBranchState>>,
     /// The token index of the directive that opened the conditional.
-    directive: Option<usize>,
+    pub(crate) directive: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -267,9 +267,6 @@ struct BlockBreakers {
     endif_words: Vec<usize>,
     /// Parens, with the count of those open after each.
     parens: Vec<(usize, isize)>,
-    /// Newlines, with the count of parens open at each and the next newline
-    /// at which the count differs.
-    newlines: Vec<(usize, isize, usize)>,
 }
 
 impl BlockBreakers {
@@ -280,7 +277,6 @@ impl BlockBreakers {
             continued_defines: Vec::new(),
             endif_words: Vec::new(),
             parens: Vec::new(),
-            newlines: Vec::new(),
         };
         let mut open_parens = 0isize;
         let mut line_endif_words = Vec::new();
@@ -311,23 +307,9 @@ impl BlockBreakers {
                     open_parens += if *paren == '(' { 1 } else { -1 };
                     breakers.parens.push((index, open_parens));
                 }
-                Token::Newline => {
-                    line_endif_words.clear();
-                    breakers.newlines.push((index, open_parens, 0));
-                }
+                Token::Newline => line_endif_words.clear(),
                 _ => {}
             }
-        }
-        let mut change = breakers.newlines.len();
-        for at in (0..breakers.newlines.len()).rev() {
-            if breakers
-                .newlines
-                .get(at + 1)
-                .is_some_and(|next| next.1 != breakers.newlines[at].1)
-            {
-                change = at + 1;
-            }
-            breakers.newlines[at].2 = change;
         }
         breakers
     }
@@ -369,16 +351,7 @@ impl BlockBreakers {
         {
             return false;
         }
-        // Every newline in the block, and its end, sees the parens open
-        // that were open at its start.
-        let open = self.open_parens_before(start);
-        let first = self.newlines.partition_point(|&(at, _, _)| at <= start);
-        let differing = match self.newlines.get(first) {
-            Some(&(_, count, change)) if count == open => change,
-            _ => first,
-        };
-        !inside(self.newlines.get(differing).map(|&(at, _, _)| at))
-            && self.open_parens_before(endif) == open
+        self.open_parens_before(endif) == self.open_parens_before(start)
     }
 }
 
@@ -469,7 +442,6 @@ fn is_indentable_preprocessor_block(
             Token::Symbol('(') if depth > 0 => paren_depth += 1,
             Token::Symbol(')') if depth > 0 => paren_depth -= 1,
             Token::Symbol(':') if depth > 0 => return false,
-            Token::Newline if depth > 0 && paren_depth != 0 => return false,
             _ => {}
         }
     }

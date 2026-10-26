@@ -980,11 +980,15 @@ impl FormatEngine<'_> {
     }
 
     /// Whether the region read back from the end of the output stops at the
-    /// line `index`: a `{` line at the margin that is no directive.
+    /// line `index`: a function's closing brace or a `{` at the margin.
     fn ends_split_else_region(&self, index: usize) -> bool {
-        self.output.code(index).ends_with('{')
-            && !self.output.code_trimmed(index).starts_with('#')
-            && !self.output[index].starts_with_any(b" \t")
+        self.output
+            .line_tokens(index)
+            .and_then(|span| self.tree.groups.closed_at(span.last))
+            .is_some_and(|group| self.tree.blocks.kind(group) == Some(BlockKind::FunctionBody))
+            || self.output.code(index).ends_with('{')
+                && !self.output.code_trimmed(index).starts_with('#')
+                && !self.output[index].starts_with_any(b" \t")
     }
 
     pub(crate) fn split_else_preprocessor_branch_body_indent_spaces(&self) -> Option<usize> {

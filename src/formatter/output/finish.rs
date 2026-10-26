@@ -10,7 +10,9 @@ use crate::formatter::lexer::Token;
 use crate::formatter::preprocessor::is_always_indented_preprocessor_line;
 use crate::formatter::state::BraceType;
 use crate::formatter::state::PreviousToken;
-use crate::formatter::structure::blocks::{BlockKind, next_code_token};
+use crate::formatter::structure::TokenSpan;
+use crate::formatter::structure::blocks::{BlockKind, is_code_token, next_code_token};
+use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{
@@ -37,6 +39,11 @@ impl FormatEngine<'_> {
 
     pub(crate) fn finish_line(&mut self) {
         let tokens = self.current.take_tokens();
+        if tokens.is_some_and(|span| self.span_ends_statement(span)) {
+            self.layout
+                .continuation_indent
+                .after_one_shot_continuation_indent = None;
+        }
         self.output.set_pending_tokens(tokens);
         let comments = self.current.take_comments();
         self.output.set_pending_comments(comments);
@@ -70,6 +77,22 @@ impl FormatEngine<'_> {
             self.layout.indentation.exit_braceless_block();
         }
         self.layout.joined_added_closer_spaces = None;
+    }
+
+    fn span_ends_statement(&self, span: TokenSpan) -> bool {
+        let tokens = &self.tree.tokens;
+        (span.first..=span.last)
+            .rev()
+            .find(|&index| is_code_token(&tokens[index]))
+            .is_some_and(|last| {
+                matches!(tokens[last], Token::Symbol(';'))
+                    && !self.tree.groups.enclosing(last).is_some_and(|group| {
+                        matches!(
+                            self.tree.groups.get(group).delimiter,
+                            Delimiter::Paren | Delimiter::Bracket
+                        )
+                    })
+            })
     }
 
     fn publish_finished_line(&mut self) {

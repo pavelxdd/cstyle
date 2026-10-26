@@ -39,11 +39,23 @@ impl FormatEngine<'_> {
     /// Whether the line's first token stands among the operands of parens
     /// or brackets opened before it.
     pub(crate) fn line_continues_operands(&self) -> bool {
+        self.line_operand_opening().is_some()
+    }
+
+    fn line_operand_opening(&self) -> Option<usize> {
         let groups = &self.tree.groups;
-        self.output
-            .pending_tokens()
-            .and_then(|span| groups.enclosing(span.first))
-            .is_some_and(|group| groups.get(group).delimiter != Delimiter::Brace)
+        let group = groups.get(groups.enclosing(self.output.pending_tokens()?.first)?);
+        (group.delimiter != Delimiter::Brace).then_some(group.open)
+    }
+
+    fn line_continuation_opening(&self) -> Option<usize> {
+        let groups = &self.tree.groups;
+        groups
+            .closed_at(self.output.pending_tokens()?.first)
+            .map(|group| groups.get(group))
+            .filter(|group| group.delimiter != Delimiter::Brace)
+            .map(|group| group.open)
+            .or_else(|| self.line_operand_opening())
     }
 
     /// Whether the line starts with a word, no string literal, after a
@@ -201,6 +213,15 @@ impl FormatEngine<'_> {
         if self.preprocessor.group_blocks.contains(&true)
             && layout.line_kind == LineKind::Normal
             && !line.trimmed_start().starts_with('#')
+            && !self
+                .line_continuation_opening()
+                .zip(
+                    self.preprocessor
+                        .branch_stack
+                        .last()
+                        .and_then(|branch| branch.directive),
+                )
+                .is_some_and(|(open, directive)| open > directive)
         {
             layout.exact_indent_spaces =
                 Some(self.layout.indentation.indent() * self.options.indent_width);

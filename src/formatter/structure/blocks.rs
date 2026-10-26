@@ -315,7 +315,7 @@ fn classify(tokens: &[Token], groups: &Groups, blocks: &Blocks, id: GroupId) -> 
         }
         // A template type's value, as `std::vector<int>{ 1, 2 };`.
         Token::Operator(operator)
-            if operator == ">"
+            if matches!(operator.as_str(), ">" | ">>")
                 && (closing_is_followed_by_terminator(tokens, group.close)
                     || braces_value_in_expression(tokens, &head, group.close)) =>
         {

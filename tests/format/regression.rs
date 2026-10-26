@@ -15,6 +15,153 @@ fn check(input: &str, args: &[&str], expected: &str) {
 }
 
 #[test]
+fn pico_sibling_case_blocks_keep_the_nested_switch_column() {
+    let input = "void helper(int value)\n{\nswitch (value) {\ncase 'a': {\nswitch (value) {\ncase 'b': {\nvalue++;\nbreak;\n} case 'c': {\nvalue++;\nbreak;\n} case 'd': case 'D': {\nvalue++;\nbreak;\n}\n}\nbreak;\n}\n}\n}\n";
+    let expected = "void helper(int value)\n{   switch (value)\n    {   case 'a':\n        {   switch (value)\n            {   case 'b':\n                {   value++;\n                    break; } case 'c':\n                {   value++;\n                    break; } case 'd': case 'D':\n                {   value++;\n                    break; } }\n            break; } } }\n";
+    let args = &["--style=pico"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn pico_indented_case_blocks_align_body_statements_before_each_closer() {
+    let input = "void helper(int value)\n{\nswitch (value) {\ncase 'b': {\nvalue++;\nbreak;\n} case 'c': {\nvalue++;\nbreak;\n} case 'd': case 'D': {\nvalue++;\nbreak;\n}\n}\n}\n";
+    let expected = "void helper(int value)\n{   switch (value)\n    {   case 'b':\n            {   value++;\n                break; } case 'c':\n            {   value++;\n                break; } case 'd': case 'D':\n            {   value++;\n                break; } } }\n";
+    let args = &["--style=pico", "--indent-cases"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn statement_macro_control_bodies_preserve_their_source_newlines() {
+    for header in [
+        "if (value)",
+        "while (value)",
+        "for (int index=0; index<value; index+=1)",
+    ] {
+        let input = format!("void helper(int value)\n{{\nGuard(\n{header}\nrun(value);\n)\n}}\n");
+        let expected = format!(
+            "void helper(int value)\n{{\n    Guard(\n        {header}\n            run(value);\n    )\n}}\n"
+        );
+        for args in [
+            &[][..],
+            &["--style=kr"],
+            &["--style=allman"],
+            &["--style=gnu"],
+        ] {
+            check(&input, args, &expected);
+            check(&expected, args, &expected);
+        }
+        let expected = format!(
+            "void helper(int value)\n    {{\n    Guard(\n        {header}\n            run(value);\n    )\n    }}\n"
+        );
+        let args = &["--style=whitesmith"];
+        check(&input, args, &expected);
+        check(&expected, args, &expected);
+    }
+}
+
+#[test]
+fn added_one_line_braces_after_a_for_update_assignment_stand_at_the_header() {
+    let input = "void helper(int count)\n{\n    for (int index=0; index<count;\n            index+=1)\n        count-=index;\n}\n";
+    let expected = "void helper(int count)\n{\n    for (int index=0; index<count;\n            index+=1)\n    { count-=index; }\n}\n";
+    let args = &["--add-one-line-braces"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn comments_after_a_preprocessor_block_leave_a_finished_else_at_file_scope() {
+    let input = "void first(int value)\n{\n    if (value)\n        value++;\n    else\n        value--;\n}\n#ifdef FEATURE\n   /* note */\n#endif\n/* details\n */\nstatic int helper(void) { return 0; }\n";
+    let expected = "void\nfirst(int value)\n{\n    if (value)\n        value++;\n    else\n        value--;\n}\n#ifdef FEATURE\n    /* note */\n#endif\n/* details\n */\nstatic int\nhelper(void) {\n    return 0;\n}\n";
+    let args = &["--indent-preproc-block", "--break-return-type"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn a_wrapped_member_declarator_keeps_its_level_with_zero_continuation_indent() {
+    let input =
+        "struct Item {\n    struct Other *members;  /* information about local members */\n};\n";
+    let expected = "struct Item {\n    struct Other\n        *members;  /* information about local members */\n};\n";
+    let args = &["--indent-continuation=0", "--max-code-length=60"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn a_wrapped_member_declarator_keeps_one_level_with_wider_continuation_indent() {
+    let input =
+        "struct Item {\n    struct Other *members;  /* information about local members */\n};\n";
+    let expected = "struct Item {\n    struct Other\n        *members;  /* information about local members */\n};\n";
+    let args = &["--indent-continuation=2", "--max-code-length=60"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn ratliff_wrapped_call_after_an_if_in_a_nested_case_keeps_the_case_column() {
+    let input = "int helper(int choice, int mode, int count)\n{\nswitch (choice) {\ncase 0: {\nswitch (mode) {\ncase 1: {\nif (count>4) {\nrun(value);\nreturn 0;\n}\nRunAction(value, item, (count==4 ? items[3] : 0), &config->field);\nbreak;\n}\n}\nbreak;\n}\n}\nreturn 0;\n}\n";
+    let expected = "int helper(int choice, int mode, int count) {\n    switch (choice) {\n        case 0: {\n            switch (mode) {\n                case 1: {\n                    if (count>4) {\n                        run(value);\n                        return 0;\n                        }\n                    RunAction(value, item, (count==4 ? items[3] : 0),\n                              &config->field);\n                    break;\n                    }\n                }\n            break;\n            }\n        }\n    return 0;\n    }\n";
+    let args = &[
+        "--style=ratliff",
+        "--keep-one-line-statements",
+        "--max-code-length=60",
+    ];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn ratliff_wrapped_assignment_in_a_nested_case_if_keeps_its_body_column() {
+    let input = "int helper(int choice, int mode, int count)\n{\nswitch (choice) {\ncase 0: {\nswitch (mode) {\ncase 1: {\nif (count==0) {\nItem *result;\nresult = MakeStringValue((char*)get_string_value(config->value), -1);\nuse(result);\n}\nbreak;\n}\n}\nbreak;\n}\n}\nreturn 0;\n}\n";
+    let expected = "int helper(int choice, int mode, int count) {\n    switch (choice) {\n        case 0: {\n            switch (mode) {\n                case 1: {\n                    if (count==0) {\n                        Item *result;\n                        result = MakeStringValue((char*)get_string_value(\n                                                     config->value), -1);\n                        use(result);\n                        }\n                    break;\n                    }\n                }\n            break;\n            }\n        }\n    return 0;\n    }\n";
+    let args = &[
+        "--style=ratliff",
+        "--keep-one-line-statements",
+        "--max-code-length=60",
+    ];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn a_preprocessor_block_preserves_a_string_initializer_closer_column() {
+    let input = "#if FEATURE\nstatic const char text[] = MARK_(\n            \"alpha\"\n            \"beta\"\n        );\n#endif\n";
+    let expected = "#if FEATURE\n    static const char text[] = MARK_(\n                                   \"alpha\"\n                                   \"beta\"\n                               );\n#endif\n";
+    let args = &["--indent-preproc-block"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn a_wrapped_declaration_keeps_its_preprocessor_block_indent() {
+    let input = "#if FEATURE\n#include <item.h>\nstatic void write_chain_to_output_handler(void *data, item_t *item);\n#endif\n";
+    let expected = "#if FEATURE\n    #include <item.h>\n    static void write_chain_to_output_handler(void *data,\n            item_t *item);\n#endif\n";
+    let args = &["--indent-preproc-block", "--max-code-length=60"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn pico_template_pack_initializers_keep_spacing_in_a_run_in_body() {
+    let input = "template<class... T> auto helper(T... values)\n{\n    return apply(items<T...>{{values...}});\n}\n";
+    let expected = "template<class... T> auto helper(T... values)\n{   return apply(items<T...>{{values... } }); }\n";
+    let args = &["--style=pico"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn pico_nested_template_initializers_keep_their_brace_gap() {
+    let input = "template<typename T> auto helper(T value)\n{\n    return sample::item<inner_t<T>>{value};\n}\n";
+    let expected = "template<typename T> auto helper(T value)\n{   return sample::item<inner_t<T>>{value }; }\n";
+    let args = &["--style=pico"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
 fn struct_members_after_continued_preprocessor_condition_keep_indent() {
     check(
         "#ifdef FEATURE\n#if defined(ALPHA) && \\\n    !defined(BETA)\n\n#include <item.h>\ntypedef struct {\n    flag_t first;\n    int second;\n} Item;\n#endif\n#endif\n",
@@ -22506,6 +22653,43 @@ fn a_row_after_parens_closing_within_a_bracket_stands_past_the_bracket() {
 }
 
 #[test]
+fn a_bracket_declaration_ending_its_statement_clears_saved_continuation() {
+    let input = "int values[\n        2];\nstatic const struct Item\n    value;\nstatic const struct Item\n    other[N] =\n{\n    { 1, 0 },\n};\n";
+    check(input, &["--style=allman", "--indent-continuation=2"], input);
+}
+
+#[test]
+fn one_true_brace_case_compound_literal_keeps_its_statement_column() {
+    let input = "void helper(void)\n{\n    switch (value) {\n        case FIRST: {\n            int result = run(&value, output, &(struct Config) {\n                .first = true,\n                .second = true,\n                .third = true,\n            });\n            use(result);\n            break;\n        }\n    }\n}\n";
+    check(input, &["--style=1tbs", "--indent-switches"], input);
+}
+
+#[test]
+fn kr_case_compound_literal_keeps_its_statement_column() {
+    let input = "void helper(void)\n{\n    switch (value) {\n        case FIRST: {\n            int result = run(&value, output, &(struct Config) {\n                .first = true,\n                .second = true,\n                .third = true,\n            });\n            use(result);\n            break;\n        }\n    }\n}\n";
+    check(input, &["--style=kr", "--indent-switches"], input);
+}
+
+#[test]
+fn java_case_compound_literal_keeps_its_statement_column() {
+    let input = "void helper(void) {\n    switch (value) {\n        case FIRST: {\n            int result = run(&value, output, &(struct Config) {\n                .first = true,\n                .second = true,\n                .third = true,\n            });\n            use(result);\n            break;\n        }\n    }\n}\n";
+    check(input, &["--style=java", "--indent-switches"], input);
+}
+
+#[test]
+fn removed_braces_after_a_directive_split_else_if_keep_the_body_at_its_header() {
+    let input = "void helper(void)\n{\n    if (first) {\n        run();\n    } else\n#if FEATURE\n    if (second) {\n        run();\n        run();\n    } else\n#endif\n    if (choice0) {\n        run();\n    } else\n    if (choice1) {\n        run();\n    } else\n    if (last) {\n        run();\n        run();\n    }\n}\n";
+    let expected = "void helper(void)\n{\n    if (first)\n        run();\n    else\n#if FEATURE\n        if (second)\n        {\n            run();\n            run();\n        }\n        else\n#endif\n            if (choice0)\n                run();\n            else if (choice1)\n                run();\n            else if (last)\n            {\n                run();\n                run();\n            }\n}\n";
+    for args in [
+        &["--style=allman", "--remove-braces"][..],
+        &["--style=allman", "-xU", "-xt2", "-xj"][..],
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
 fn a_row_after_parens_closing_within_a_bracket_stands_at_the_bracket_s_content() {
     // A space after the bracket, from the source or from padding, moves the
     // row with the content, as it moves rows the bracket's own row continues.
@@ -25182,7 +25366,7 @@ fn a_type_s_braces_called_in_a_kept_one_line_block_keep_their_spacing() {
     check(expected, &["--style=pico"], expected);
     // A template type's braces in a requirement row are a value too.
     let input = "template <typename T>\nconcept Hashable = requires(T value) {\n    { std::hash<T>{}(value) } -> std::convertible_to<size_t>;\n};\n";
-    let expected = "template <typename T>\nconcept Hashable = requires(T value)\n{\n    {   std::hash<T> { }(value) } -> std::convertible_to<size_t>; };\n";
+    let expected = "template <typename T>\nconcept Hashable = requires(T value)\n{\n    {   std::hash<T>{ }(value) } -> std::convertible_to<size_t>; };\n";
     check(input, &["--style=pico"], expected);
     check(expected, &["--style=pico"], expected);
 }

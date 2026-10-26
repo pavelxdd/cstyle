@@ -379,9 +379,20 @@ impl FormatEngine<'_> {
             {
                 column
             } else if self.preprocessor.split_else.extra_levels == 0 {
+                // Indented switches add case body levels during layout,
+                // not to the structural indent.
+                let case_unindent = if self.options.indent_switches {
+                    0
+                } else {
+                    self.layout
+                        .line_adjuster
+                        .next_line_case_unindent_depth()
+                        .min(self.layout.frame_stack.open_case_blocks())
+                };
                 self.layout
                     .indentation
                     .line_indent(LineKind::SwitchLabel, self.options)
+                    .saturating_sub(case_unindent)
                     * self.options.indent_width
             } else {
                 let owner_depth = 1 + self

@@ -584,7 +584,8 @@ impl FormatEngine<'_> {
             && !brace_begins_line
             && let Some(row) = self.output.last()
         {
-            opening_indent = leading_visual_width(row, self.options.tab_width);
+            opening_indent = leading_visual_width(row, self.options.tab_width)
+                + self.layout.line_adjuster.last_line_case_unindent();
         }
         let body_indent = if indented_initializer_brace {
             opening_indent

@@ -8,7 +8,9 @@ use crate::formatter::constructs::headers::is_conditional_header_line;
 use crate::formatter::constructs::labels::max_length_inline_access_body_indent_extra;
 use crate::formatter::constructs::switch_cases::max_length_inline_case_body_indent_extra;
 use crate::formatter::constructs::template_declarations::after_template_head;
-use crate::formatter::continuation::{ContinuationIndent, min_conditional_indent_spaces};
+use crate::formatter::continuation::{
+    ContinuationIndent, min_conditional_indent_spaces, splits_aggregate_declaration_name,
+};
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::{Token, token_text, tokenize};
 use crate::formatter::state::indentation::LineKind;
@@ -1260,14 +1262,13 @@ fn continuation_indent_for_split(
         })
         && !declaration
             .split(|ch: char| !is_identifier_continue(ch))
-            .any(|word| {
-                matches!(word, "return" | "case" | "goto")
-                    || matches!(word, "struct" | "union" | "class")
-                        && (macro_groups
-                            || !line[..trailing_comment_split_limit(line)].contains('('))
-            })
+            .any(|word| matches!(word, "return" | "case" | "goto"))
     {
-        return Some(ContinuationIndent::Spaces(base_indent_width));
+        let aggregate = splits_aggregate_declaration_name(declaration)
+            && (macro_groups || !line[..trailing_comment_split_limit(line)].contains('('));
+        return Some(ContinuationIndent::Spaces(
+            base_indent_width + usize::from(aggregate) * indent_width,
+        ));
     }
     // So does a member split at its bit-field colon.
     if head.trimmed().strip_suffix(':').is_some_and(|member| {
