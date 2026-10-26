@@ -70,6 +70,15 @@ fn kr_c_options() -> FormatOptions {
 }
 
 #[test]
+fn indent_switches_does_not_indent_file_scope_case_statements() {
+    let options = options_from_args(&["--indent-switches"]);
+    let expected = "case 1:\nuse(value);\n";
+
+    assert_eq!(format_exact("case 1: use(value);\n", &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
 fn nested_switch_keeps_block_indent_inside_case_brace() {
     let source = fixture!(
         "void helper(int value)",

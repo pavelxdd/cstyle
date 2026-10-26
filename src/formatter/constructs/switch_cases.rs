@@ -1917,7 +1917,7 @@ impl FormatEngine<'_> {
     /// body or in a block a label of that body opens. A label nested in
     /// another block labels that block's statements.
     fn pending_label_stands_in_switch_body(&self) -> bool {
-        self.pending_nested_label().is_none()
+        !self.layout.nesting.brace_header_stack.is_empty() && self.pending_nested_label().is_none()
     }
 
     /// The label the pending line starts with and the block holding it,
