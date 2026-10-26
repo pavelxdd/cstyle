@@ -265,6 +265,11 @@ impl FormatEngine<'_> {
                     && !(header == "if" && header_candidate.starts_with("else if"))
             });
         let semantic_kind = self.brace_semantic_kind(brace_type, opens_lambda_body);
+        let in_switch_body = self
+            .layout
+            .frame_stack
+            .active_brace()
+            .is_some_and(|frame| frame.header.as_deref() == Some("switch") || frame.case_block);
         let current_label = || {
             let line = if self.current.trimmed().is_empty() {
                 self.output
@@ -289,7 +294,8 @@ impl FormatEngine<'_> {
                 }
                 line = rest;
             }
-            labels::line_kind(line, &self.options.access_labels) == LineKind::Label
+            let kind = labels::line_kind(line, &self.options.access_labels);
+            kind == LineKind::Label || kind == LineKind::SwitchLabel && !in_switch_body
         };
         let case_header = brace_header
             .filter(|header| matches!(header.as_str(), "case" | "default"))
@@ -351,6 +357,7 @@ impl FormatEngine<'_> {
         // without indented switches it counts the body from the label on.
         let pending_case_label = usize::from(
             self.options.indent_switches
+                && in_switch_body
                 && find_case_colon(&self.current).is_some()
                 && self.case_body_indent_extra(LineKind::Normal) == 0,
         );

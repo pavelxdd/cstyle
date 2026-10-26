@@ -7717,6 +7717,14 @@ impl FormatEngine<'_> {
         {
             return None;
         }
+        let frame = if closing.is_some() {
+            self.layout.frame_stack.first_closed_brace()
+        } else {
+            self.layout.frame_stack.active_brace()
+        };
+        if frame.is_some_and(|frame| frame.open_token == Some(open) && frame.label_block) {
+            return None;
+        }
         // A goto label after the case label owns the block, a statement of
         // the case body.
         let goto_label = self.tree.previous_code_token(colon).is_some_and(|name| {

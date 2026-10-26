@@ -79,6 +79,41 @@ fn indent_switches_does_not_indent_file_scope_case_statements() {
 }
 
 #[test]
+fn case_blocks_outside_switch_keep_the_enclosing_body_indent() {
+    let options = FormatOptions::default();
+    let source = "void outer(void)\n{\ncase 1:\n{\nuse(value);\n}\n}\n";
+    let expected = fixture!(
+        "void outer(void)",
+        "{",
+        "case 1:",
+        "    {",
+        "        use(value);",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn attached_case_blocks_outside_switch_keep_the_enclosing_body_indent() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = "void outer(void)\n{\ncase 1:\n{\nuse(value);\n}\n}\n";
+    let expected = fixture!(
+        "void outer(void)",
+        "{",
+        "case 1: {",
+        "        use(value);",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
 fn nested_switch_keeps_block_indent_inside_case_brace() {
     let source = fixture!(
         "void helper(int value)",
