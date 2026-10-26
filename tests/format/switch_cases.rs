@@ -126,6 +126,16 @@ fn vtk_file_scope_case_blocks_keep_one_body_indent() {
 }
 
 #[test]
+fn file_scope_case_blocks_follow_attached_definition_style() {
+    let options = options_from_args(&["--style=google"]);
+    let source = "case 1:\n{\nuse(value);\n}\n";
+    let expected = "case 1: {\n    use(value);\n}\n";
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
 fn nested_switch_keeps_block_indent_inside_case_brace() {
     let source = fixture!(
         "void helper(int value)",

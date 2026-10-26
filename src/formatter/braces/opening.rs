@@ -4020,7 +4020,10 @@ impl FormatEngine<'_> {
 
     fn should_attach_output_case_label_brace(&self, brace_type: BraceType) -> bool {
         if !self.current_is_blank()
-            || !matches!(brace_type, BraceType::NonStatement | BraceType::Command)
+            || !matches!(
+                brace_type,
+                BraceType::NonStatement | BraceType::Command | BraceType::Definition
+            )
         {
             return false;
         }
@@ -4036,6 +4039,9 @@ impl FormatEngine<'_> {
         });
         if !after_case_label {
             return false;
+        }
+        if brace_type == BraceType::Definition {
+            return self.style_attaches_opening_brace(brace_type, None);
         }
         match self.options.brace_style {
             BraceStyle::None => !self.token_input.token_begins_source_line,
