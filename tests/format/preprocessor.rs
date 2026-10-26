@@ -40,6 +40,17 @@ fn one_true_brace_c_options() -> FormatOptions {
 }
 
 #[test]
+fn inline_preprocessor_after_switch_label_stays_at_column_zero() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--indent-switches".to_owned()])
+        .expect("valid options");
+    let expected = "case 1:\n#else\n";
+
+    assert_eq!(format_exact("case 1: #else\n", &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
 fn inline_preprocessor_after_opening_brace_stays_at_column_zero() {
     assert_eq!(
         format_exact(
