@@ -226,6 +226,10 @@ fn is_control_keyword(word: &str) -> bool {
     )
 }
 
+fn is_unparenthesized_control_keyword(word: &str) -> bool {
+    matches!(word, "else" | "do" | "try" | "__try" | "defer" | "_Defer")
+}
+
 fn classify(tokens: &[Token], groups: &Groups, blocks: &Blocks, id: GroupId) -> BlockKind {
     let group = groups.get(id);
     let parent = group.parent;
@@ -258,8 +262,18 @@ fn classify(tokens: &[Token], groups: &Groups, blocks: &Blocks, id: GroupId) -> 
         return BlockKind::FunctionBody;
     }
     let head = statement_head(tokens, groups, group.open);
-    // Inside parentheses or brackets a brace belongs to an expression.
     if parent.is_some_and(|parent| groups.get(parent).delimiter != Delimiter::Brace) {
+        // An enclosing expression does not turn a control body into a literal.
+        let opens_control_body = match &tokens[previous] {
+            Token::Word(word) => is_unparenthesized_control_keyword(word),
+            Token::Symbol(')') => groups.closed_at(previous).is_some_and(|paren| {
+                classify_after_paren(tokens, groups, paren, parent_block) == BlockKind::Control
+            }),
+            _ => false,
+        };
+        if opens_control_body {
+            return BlockKind::Control;
+        }
         return classify_in_expression(tokens, groups, &head, previous);
     }
     if let Some(close) = function_suffix_start(tokens, groups, &head)
@@ -275,14 +289,7 @@ fn classify(tokens: &[Token], groups: &Groups, blocks: &Blocks, id: GroupId) -> 
         // An Objective-C dictionary literal, `@{ key : value }`.
         Token::Symbol('@') => return BlockKind::Initializer,
         Token::Word(word) if word == "return" => return BlockKind::Initializer,
-        Token::Word(word)
-            if matches!(
-                word.as_str(),
-                "else" | "do" | "try" | "__try" | "defer" | "_Defer"
-            ) =>
-        {
-            return BlockKind::Control;
-        }
+        Token::Word(word) if is_unparenthesized_control_keyword(word) => return BlockKind::Control,
         Token::Symbol(')') => {
             if let Some(paren) = groups.closed_at(previous) {
                 return classify_after_paren(tokens, groups, paren, parent_block);

@@ -22771,6 +22771,88 @@ fn code_length_splits_after_brace_recovery_start_at_the_new_statement() {
 }
 
 #[test]
+fn control_bodies_in_macro_arguments_keep_their_scope_during_line_splitting() {
+    let input = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\nRUN_ROWS(\nfor( int i=0; i<3; ++i ) {\n}\nRUNTest( \"Declaration test\", \"message\", obj->FirstEntryElement( \"setting\" )->FirstEntry()->Value() );\n)\n}\n";
+    let expected = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\n    RUN_ROWS(\n        for( int i=0; i<3; ++i ) {\n        }\n    RUNTest( \"Declaration test\", \"message\",\n        obj->FirstEntryElement( \"setting\" )->FirstEntry()->Value() );\n    )\n}\n";
+    let args = &["--indent-after-parens", "--max-code-length=80"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn control_bodies_in_macro_arguments_align_allman_braces_to_the_header() {
+    let input = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\nRUN_ROWS(\nif( ready ) {\nuse(value);\n}\n)\n}\n";
+    let expected = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\n    RUN_ROWS(\n        if( ready )\n        {\n            use(value);\n        }\n    )\n}\n";
+    let args = &["--style=allman", "--indent-after-parens"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn else_bodies_in_macro_arguments_close_at_their_header() {
+    let input = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\nRUN_ROWS(\nif( ready ) {\nuse(value);\n} else {\nuse(other);\n}\n)\n}\n";
+    let expected = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\n    RUN_ROWS(\n        if( ready ) {\n            use(value);\n        } else {\n            use(other);\n        }\n    )\n}\n";
+    let args = &["--indent-after-parens"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn try_bodies_in_macro_arguments_keep_their_body_and_closing_indent() {
+    let input = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\nRUN_ROWS(\ntry {\nuse(value);\n} catch(...) {\nuse(other);\n}\n)\n}\n";
+    let expected = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\n    RUN_ROWS(\n        try {\n            use(value);\n        } catch(...) {\n            use(other);\n        }\n    )\n}\n";
+    let args = &["--indent-after-parens"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn broken_catch_headers_in_macro_arguments_follow_the_try_header() {
+    let input = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\nRUN_ROWS(\ntry {\nuse(value);\n} catch(...) {\nuse(other);\n}\n)\n}\n";
+    let expected = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\n    RUN_ROWS(\n        try\n        {\n            use(value);\n        }\n        catch(...)\n        {\n            use(other);\n        }\n    )\n}\n";
+    let args = &["--style=allman", "--indent-after-parens"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn vtk_definition_bodies_in_macro_arguments_indent_past_their_braces() {
+    let cases = [
+        (
+            "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\nfor(;;) {\nuse(value);\n}\n)\n",
+            "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\n    for(;;)\n{\n    use(value);\n}\n)\n",
+        ),
+        (
+            "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\ntry {\nuse(value);\n} catch(...) {\nuse(other);\n}\n)\n",
+            "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\n    try\n{\n    use(value);\n}\n    catch(...)\n{\n    use(other);\n}\n)\n",
+        ),
+    ];
+    let args = &["--style=vtk", "--indent-after-parens"];
+    for (input, expected) in cases {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
+fn definition_brace_layout_preserves_a_control_headers_braceless_scope() {
+    let input = "else\nfor(i=1;;i++)\n{\nuse(value);\n}\n";
+    let expected = "else\n    for(i=1;; i++)\n    {\n        use(value);\n    }\n";
+    let args = &["--style=kr"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn rewritten_file_scope_control_bodies_keep_definition_brace_layout() {
+    let input = "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\nfor( int i=0; i<3; ++i ) {\nuse(value);\n}\n)\n";
+    let expected = "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\n    for( int i=0; i<3; ++i )\n{   use(value); }\n)\n";
+    let args = &["--style=pico", "--indent-after-parens"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
 fn a_declarator_after_array_declarators_with_lists_stands_at_the_first_declarator() {
     // As after scalar declarators: an array's bounds and its closed list
     // leave the first name the column.

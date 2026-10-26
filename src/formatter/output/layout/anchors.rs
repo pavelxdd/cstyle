@@ -172,6 +172,7 @@ impl FormatEngine<'_> {
                 self.else_matching_if_indent(first)
             })
         })
+        .or_else(|| when(is_word(token, "catch"), || self.catch_header_indent(first)))
         .or_else(|| when(brace, || self.list_brace_in_continuation_row_indent(first)))
         .or_else(|| when(brace, || self.list_argument_row_indent(first)))
         .or_else(|| when(in_parens, || self.literal_argument_indent(first)))
@@ -566,6 +567,14 @@ impl FormatEngine<'_> {
             }
             return layout;
         };
+        if matches!(self.tree.tokens[first], Token::Symbol('{'))
+            && self.control_brace_in_expression_uses_definition_layout(first)
+        {
+            let indent =
+                layout.indent + usize::from(self.should_indent_brace_line(BraceType::Definition));
+            layout.exact_indent_spaces = Some(indent * self.options.indent_width);
+            return layout;
+        }
         if let Some(spaces) = self.tree_anchor_indent(first, line) {
             layout.exact_indent_spaces = Some(spaces);
             return layout;
@@ -3178,6 +3187,7 @@ impl FormatEngine<'_> {
         if !groups
             .opened_at(open)
             .is_some_and(|block| self.tree.blocks.kind(block) == Some(BlockKind::Control))
+            || self.control_brace_in_expression_uses_definition_layout(open)
         {
             return line;
         }
@@ -6020,6 +6030,26 @@ impl FormatEngine<'_> {
         )
     }
 
+    fn control_brace_in_expression_uses_definition_layout(&self, open: usize) -> bool {
+        let Some(group) = self.tree.groups.opened_at(open) else {
+            return false;
+        };
+        if self.tree.blocks.kind(group) != Some(BlockKind::Control)
+            || !self
+                .tree
+                .groups
+                .get(group)
+                .parent
+                .is_some_and(|parent| self.tree.groups.get(parent).delimiter != Delimiter::Brace)
+        {
+            return false;
+        }
+        self.rewritten_definition_braces.contains(&open)
+            || self.layout.frame_stack.active_brace().is_some_and(|frame| {
+                frame.open_token == Some(open) && frame.brace_type == BraceType::Definition
+            })
+    }
+
     fn opening_brace_indent(&self, first: usize) -> Option<usize> {
         if !matches!(self.tree.tokens[first], Token::Symbol('{')) {
             return None;
@@ -6725,6 +6755,28 @@ impl FormatEngine<'_> {
         )
     }
 
+    fn catch_header_indent(&self, first: usize) -> Option<usize> {
+        let groups = &self.tree.groups;
+        let close = self.tree.previous_code_token_in_first_branches(first)?;
+        let body = groups.closed_at(close)?;
+        if self.tree.blocks.kind(body) != Some(BlockKind::Control)
+            || groups.get(body).parent != groups.enclosing(first)
+        {
+            return None;
+        }
+        let mut header = self.tree.previous_code_token(groups.get(body).open)?;
+        if matches!(self.tree.tokens[header], Token::Symbol(')')) {
+            let condition = groups.closed_at(header)?;
+            header = self.tree.previous_code_token(groups.get(condition).open)?;
+        }
+        if !matches!(&self.tree.tokens[header], Token::Word(word) if matches!(word.as_str(), "try" | "catch"))
+        {
+            return None;
+        }
+        let line = self.output.line_with_token(header)?;
+        Some(self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces())
+    }
+
     /// The line leading the header chain that owns the `{` at `open`, and
     /// how many levels the chain nests on that line: `else if` is one
     /// header.
@@ -6791,7 +6843,10 @@ impl FormatEngine<'_> {
         let condition = groups.closed_at(close)?;
         let keyword = self.tree.previous_code_token(groups.get(condition).open)?;
         matches!(&self.tree.tokens[keyword], Token::Word(word)
-            if matches!(word.as_str(), "if" | "for" | "while" | "switch" | "foreach"))
+            if matches!(word.as_str(), "if" | "for" | "while" | "switch" | "foreach")
+                || word == "catch" && groups.opened_at(open)
+                    .and_then(|body| groups.get(body).parent)
+                    .is_some_and(|parent| groups.get(parent).delimiter != Delimiter::Brace))
         .then_some(keyword)
     }
 
@@ -7506,8 +7561,8 @@ impl FormatEngine<'_> {
                 line = header_line;
                 line_first = header_line_first;
             }
-            if !matches!(&tokens[header], Token::Word(word)
-                if matches!(word.as_str(), "if" | "else" | "for" | "while" | "switch" | "do"))
+            if self.tree.blocks.kind(block) != Some(BlockKind::Control)
+                || !matches!(tokens[header], Token::Word(_))
             {
                 return None;
             }
@@ -7523,8 +7578,7 @@ impl FormatEngine<'_> {
             {
                 header = before;
             }
-            if is_word(header, "else")
-                && let Some(before) = self.tree.previous_code_token(header)
+            if let Some(before) = self.tree.previous_code_token(header)
                 && matches!(tokens[before], Token::Symbol('}'))
                 && same_line(before, header)
             {
@@ -8194,7 +8248,10 @@ impl FormatEngine<'_> {
         let block = self.enclosing_block(first)?;
         let column = match self.block_body_anchor(block)? {
             BodyAnchor::BraceLine(lead) => {
-                let brace_type = if self.tree.blocks.kind(block) == Some(BlockKind::FunctionBody) {
+                let brace_type = if self.tree.blocks.kind(block) == Some(BlockKind::FunctionBody)
+                    || self.control_brace_in_expression_uses_definition_layout(
+                        self.tree.groups.get(block).open,
+                    ) {
                     BraceType::Definition
                 } else {
                     BraceType::Command
