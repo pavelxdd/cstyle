@@ -22756,6 +22756,21 @@ fn code_length_splits_after_an_unmatched_closing_brace_keep_argument_columns() {
 }
 
 #[test]
+fn code_length_splits_after_brace_recovery_start_at_the_new_statement() {
+    for head in ["new Item(", "values[", "call((values["] {
+        let input = format!(
+            "{head}\n}}\nitem->AppendChild( values[2] );\nItemInfo result = obj->FirstEntryElement()->LastEntryElement()->FetchIntAttribute( \"option\", &value1 );\n"
+        );
+        let expected = format!(
+            "{head}\n}}\nitem->AppendChild( values[2] );\nItemInfo result =\n    obj->FirstEntryElement()->LastEntryElement()->FetchIntAttribute( \"option\",\n            &value1 );\n"
+        );
+        let args = &["--max-code-length=80"];
+        check(&input, args, &expected);
+        check(&expected, args, &expected);
+    }
+}
+
+#[test]
 fn a_declarator_after_array_declarators_with_lists_stands_at_the_first_declarator() {
     // As after scalar declarators: an array's bounds and its closed list
     // leave the first name the column.

@@ -64,7 +64,8 @@ pub(crate) struct Group {
 /// the first branch: `#elif`/`#else` branches start from the nesting at
 /// `#if`, and `#endif` continues with the nesting left by the first branch.
 /// A closing delimiter never closes a group across an unclosed brace unless
-/// it is itself a brace, so a stray `)` cannot end a block.
+/// it is itself a brace, so a stray `)` cannot end a block. A stray `}`
+/// ends any unclosed parentheses or brackets.
 #[derive(Debug, Clone, Default, Eq, PartialEq)]
 pub(crate) struct Groups {
     groups: Vec<Group>,
@@ -103,14 +104,17 @@ impl Groups {
                 });
                 groups.delimits[index] = Some(id);
                 stack.push(id);
-            } else if let Some(delimiter) = Delimiter::closed_by(token)
-                && let Some(depth) = groups.matching_open_depth(&stack, delimiter)
-            {
-                let id = stack[depth];
-                stack.truncate(depth);
-                groups.groups[id.index()].close = Some(index);
-                groups.delimits[index] = Some(id);
-                groups.enclosing[index] = groups.groups[id.index()].parent;
+            } else if let Some(delimiter) = Delimiter::closed_by(token) {
+                if let Some(depth) = groups.matching_open_depth(&stack, delimiter) {
+                    let id = stack[depth];
+                    stack.truncate(depth);
+                    groups.groups[id.index()].close = Some(index);
+                    groups.delimits[index] = Some(id);
+                    groups.enclosing[index] = groups.groups[id.index()].parent;
+                } else if delimiter == Delimiter::Brace {
+                    stack.clear();
+                    groups.enclosing[index] = None;
+                }
             }
         }
         groups
