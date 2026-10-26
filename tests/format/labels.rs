@@ -481,6 +481,28 @@ fn tab_indented_label_inside_indented_case_uses_structural_tabs() {
 }
 
 #[test]
+fn vtk_file_scope_labels_keep_the_root_block_indent() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=vtk".to_owned()]).expect("valid options");
+    let source = "next:\n{\nuse(value);\n}\n";
+    let expected = "next:\n{\n    use(value);\n}\n";
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn file_scope_labels_keep_broken_definition_braces() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=kr".to_owned()]).expect("valid options");
+    let source = "next:\n{\nuse(value);\n}\n";
+    let expected = "next:\n{\n    use(value);\n}\n";
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
 fn whitesmith_label_block_brace_and_body_share_the_nested_body_column() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=whitesmith".to_owned()])

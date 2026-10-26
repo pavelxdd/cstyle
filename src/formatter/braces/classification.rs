@@ -404,7 +404,18 @@ impl FormatEngine<'_> {
             BraceType::Command
         } else if self.current_ends_definition_header()
             // A head a line splice ends stands on the line before the brace.
-            || self.current_is_blank() && self.brace_opens_function_body()
+            || self.current_is_blank()
+                && (self.brace_opens_function_body()
+                    || self.layout.nesting.brace_type_stack.is_empty()
+                        && self
+                            .previous_code_line_past_comments_and_directives()
+                            .is_some_and(|line| {
+                                let code = self.output.code_trimmed_of(line);
+                                labels::line_kind(
+                                    after_leading_comments(code),
+                                    &self.options.access_labels,
+                                ) == LineKind::Label
+                            }))
         {
             BraceType::Definition
         } else if matches!(
