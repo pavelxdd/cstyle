@@ -2,6 +2,27 @@ use crate::common::{format_exact, format_with};
 use cstyle::config::{BraceStyle, FormatOptions, PointerAlign, apply_command_line_args};
 
 #[test]
+fn break_return_type_keeps_operator_bodies_in_function_brace_style() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=kr".to_owned(),
+            "-xB".to_owned(),
+            "-xD".to_owned(),
+            "-p".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let input = "struct Item {\n    int value;\n    Item& assign(const Item& other) { return *this; }\n    Item& operator=(const Item& other) { return *this; }\n    int& get(int index) { return value; }\n    int& operator[](int index) { return value; }\n};\n";
+    let expected = "struct Item {\n    int value;\n    Item&\n    assign(const Item& other)\n    {\n        return *this;\n    }\n    Item&\n    operator=(const Item& other)\n    {\n        return *this;\n    }\n    int&\n    get(int index)\n    {\n        return value;\n    }\n    int&\n    operator[](int index)\n    {\n        return value;\n    }\n};\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), expected);
+}
+
+#[test]
 fn break_return_type_decl_after_xml_comment_keeps_the_name_column() {
     let mut options = FormatOptions::default();
     apply_command_line_args(
