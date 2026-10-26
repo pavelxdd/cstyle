@@ -73,6 +73,17 @@ fn kr_c_options() -> FormatOptions {
 }
 
 #[test]
+fn pad_operators_spaces_sizeof_multiplication_in_call_arguments() {
+    let options = options_from_args(&["--style=kr", "--pad-oper"]);
+    let input = "template<class T>\nvoid helper()\n{\n    result=sizeof(T)*static_cast<size_t>(value);\n    copy(target, source, sizeof(T)*static_cast<size_t>(value));\n    copy(target, source, sizeof(T)  *  static_cast<size_t>(value));\n    copy(target, source, sizeof(T)*size_t(value));\n}\n";
+    let expected = "template<class T>\nvoid helper()\n{\n    result = sizeof(T) * static_cast<size_t>(value);\n    copy(target, source, sizeof(T) * static_cast<size_t>(value));\n    copy(target, source, sizeof(T)  *  static_cast<size_t>(value));\n    copy(target, source, sizeof(T) * size_t(value));\n}\n";
+    let first = format_exact(input, &options);
+
+    assert_eq!(first, expected);
+    assert_eq!(format_exact(&first, &options), expected);
+}
+
+#[test]
 fn preserves_existing_initializer_edge_spaces() {
     let mut options = FormatOptions::default();
     options.brace_style = BraceStyle::OneTrueBrace;
