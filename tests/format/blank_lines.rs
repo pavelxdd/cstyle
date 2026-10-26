@@ -907,6 +907,70 @@ fn vtk_break_all_blocks_keeps_closing_header_body_at_brace_indent() {
 }
 
 #[test]
+fn break_blocks_finishes_headers_with_declaration_like_bodies() {
+    let source = "void helper(void)\n{\nif (ready)\nstatic char* item(void)\n{\nuse(value);\n}\nresult = 0;\n}\n";
+    let cases = [
+        (
+            "--style=pico",
+            fixture!(
+                "void helper(void)",
+                "{   if (ready)",
+                "        static char* item(void)",
+                "        {   use(value); }",
+                "",
+                "    result = 0; }",
+            ),
+        ),
+        (
+            "--style=allman",
+            fixture!(
+                "void helper(void)",
+                "{",
+                "    if (ready)",
+                "        static char* item(void)",
+                "        {",
+                "            use(value);",
+                "        }",
+                "",
+                "    result = 0;",
+                "}",
+            ),
+        ),
+    ];
+    for (style, expected) in cases {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(
+            &mut options,
+            &[style.to_owned(), "--break-blocks=all".to_owned()],
+        )
+        .expect("valid options");
+        assert_eq!(format_exact(source, &options), expected);
+        assert_eq!(format_exact(expected, &options), expected);
+    }
+}
+
+#[test]
+fn pico_break_blocks_keeps_statement_led_declaration_bodies_unpadded() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=pico".to_owned(), "--break-blocks=all".to_owned()],
+    )
+    .expect("valid options");
+    let source = "void helper(void)\n{\nsetup(); if (ready)\nstatic char* item(void)\n{\nuse(value);\n}\nresult = 0;\n}\n";
+    let expected = fixture!(
+        "void helper(void)",
+        "{   setup(); if (ready)",
+        "        static char* item(void)",
+        "        {   use(value); }",
+        "    result = 0; }",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
 fn pico_break_blocks_does_not_separate_do_from_closing_while() {
     let mut options = FormatOptions::default();
     options.brace_style = BraceStyle::Pico;

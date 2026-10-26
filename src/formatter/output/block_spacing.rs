@@ -31,8 +31,7 @@ pub(crate) struct BlockSpacingState {
     pending_closed_empty_block: Option<bool>,
     case_block_before_directive: bool,
     pending_case_block_before_directive: bool,
-    /// Depths of blocks opened right after a header's block closed, which
-    /// astyle reads as more of that header.
+    /// Depths of blocks that complete a pending header or continue its body.
     header_continued_depths: Vec<usize>,
 }
 
@@ -404,7 +403,14 @@ impl FormatEngine<'_> {
 
     pub(crate) fn observe_block_spacing_open_brace(&mut self) {
         if self.options.break_blocks && !self.brace_in_header_parens() {
-            if self.brace_continues_header_block() {
+            let completes_header = self.block_spacing.header_expects_body
+                && !self.block_spacing.header_follows_statement
+                && self
+                    .block_spacing
+                    .active_header
+                    .as_deref()
+                    .is_some_and(|header| !matches!(header, "case" | "default"));
+            if completes_header || self.brace_continues_header_block() {
                 let depth = self.layout.nesting.brace_header_stack.len();
                 self.block_spacing.header_continued_depths.push(depth);
             }
