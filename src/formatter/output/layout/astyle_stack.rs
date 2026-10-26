@@ -1333,9 +1333,20 @@ impl FormatEngine<'_> {
     pub(super) fn ends_stack_statement(&self, before: usize) -> bool {
         let groups = &self.tree.groups;
         match &self.tree.tokens[before] {
-            Token::Symbol(';') => groups
-                .enclosing(before)
-                .is_none_or(|group| groups.get(group).delimiter == Delimiter::Brace),
+            Token::Symbol(';') => {
+                let mut enclosing = groups.enclosing(before);
+                while let Some(parent) = enclosing {
+                    let group = groups.get(parent);
+                    if group.delimiter == Delimiter::Brace {
+                        return true;
+                    }
+                    if group.delimiter == Delimiter::Paren && self.closes_control_header(parent) {
+                        return false;
+                    }
+                    enclosing = group.parent;
+                }
+                true
+            }
             Token::Symbol('{') => groups
                 .opened_at(before)
                 .is_some_and(|group| self.is_stack_block(group)),
@@ -1468,9 +1479,7 @@ impl FormatEngine<'_> {
                         .is_some_and(|group| row_array(group) || enum_body(group))
                 // The `;` of a `for` header stays inside its statement.
                 || matches!(tokens[before], Token::Symbol(';'))
-                    && groups
-                        .enclosing(before)
-                        .is_none_or(|group| groups.get(group).delimiter == Delimiter::Brace)
+                    && self.ends_stack_statement(before)
                 || matches!(&tokens[before], Token::Word(word) if word == "else" || word == "do")
                 || matches!(tokens[before], Token::Symbol(':'))
                     && (self.ends_case_label(before)
