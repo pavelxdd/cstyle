@@ -1645,6 +1645,7 @@ impl FormatEngine<'_> {
             self.previous_was_newline = true;
         }
         if self.token_input.token_begins_source_line
+            && self.pushed_brace_kind() != Some(BlockKind::FunctionBody)
             && is_semicolonless_call_line(&self.current)
             && !is_header(
                 self.options,

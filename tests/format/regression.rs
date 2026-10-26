@@ -15,6 +15,19 @@ fn check(input: &str, args: &[&str], expected: &str) {
 }
 
 #[test]
+fn wrapped_parameters_after_a_return_type_macro_keep_the_first_body_indent() {
+    let input = "PUBLIC_API(int) helper(int first_value, int second_value)\n{\n    int result;\n    return result;\n}\n";
+    let expected = "PUBLIC_API(int) helper(int first_value,\n                       int second_value) {\n    int result;\n    return result;\n}\n";
+    let args = &[
+        "--style=google",
+        "--max-code-length=50",
+        "--break-after-logical",
+    ];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
 fn pico_sibling_case_blocks_keep_the_nested_switch_column() {
     let input = "void helper(int value)\n{\nswitch (value) {\ncase 'a': {\nswitch (value) {\ncase 'b': {\nvalue++;\nbreak;\n} case 'c': {\nvalue++;\nbreak;\n} case 'd': case 'D': {\nvalue++;\nbreak;\n}\n}\nbreak;\n}\n}\n}\n";
     let expected = "void helper(int value)\n{   switch (value)\n    {   case 'a':\n        {   switch (value)\n            {   case 'b':\n                {   value++;\n                    break; } case 'c':\n                {   value++;\n                    break; } case 'd': case 'D':\n                {   value++;\n                    break; } }\n            break; } } }\n";
