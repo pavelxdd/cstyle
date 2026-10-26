@@ -1401,14 +1401,17 @@ impl FormatEngine<'_> {
                 };
                 let structural_indent = current_indent
                     + self.layout.else_if_break_depths.len() * self.options.indent_width;
-                self.layout
-                    .frame_stack
-                    .active_brace()
-                    .filter(|frame| frame.semantic_kind == BraceSemanticKind::Command)
-                    .map_or(structural_indent, |frame| {
-                        structural_indent
-                            .max(frame.header_indent_column + self.options.indent_width)
-                    })
+                self.layout.frame_stack.active_brace().map_or(
+                    structural_indent,
+                    |frame| match frame.semantic_kind {
+                        BraceSemanticKind::Command => structural_indent
+                            .max(frame.header_indent_column + self.options.indent_width),
+                        BraceSemanticKind::Definition => {
+                            structural_indent.max(frame.body_indent_column)
+                        }
+                        _ => structural_indent,
+                    },
+                )
             });
         let parent_delimiter = self
             .layout

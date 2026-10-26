@@ -232,6 +232,25 @@ fn pico_file_scope_definition_keeps_control_columns_consistent() {
 }
 
 #[test]
+fn gnu_definition_keeps_body_column_after_a_statement() {
+    let options = options_from_args(&["--style=gnu", "--indent-switches"]);
+    let source = "switch (value)\n{\n;\nswitch (value)\n{\nuse(value);\n}\n}\n";
+    let expected = fixture!(
+        "switch (value)",
+        "    {",
+        "        ;",
+        "        switch (value)",
+        "            {",
+        "                    use(value);",
+        "            }",
+        "    }",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
 fn case_blocks_outside_switch_keep_the_enclosing_body_indent() {
     let options = FormatOptions::default();
     let source = "void outer(void)\n{\ncase 1:\n{\nuse(value);\n}\n}\n";
