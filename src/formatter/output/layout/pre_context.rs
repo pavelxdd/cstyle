@@ -296,6 +296,7 @@ impl FormatEngine<'_> {
                 layout.exact_indent_spaces = Some(
                     leading_visual_width(previous, self.options.tab_width)
                         + self.options.indent_width
+                        + self.direct_switch_body_indent_extra() * self.options.indent_width
                         + self.case_unindent_spaces(),
                 );
             }

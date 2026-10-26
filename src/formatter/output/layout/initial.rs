@@ -1598,8 +1598,11 @@ impl FormatEngine<'_> {
                 } else {
                     self.options.indent_width
                 };
-                layout.exact_indent_spaces =
-                    Some(leading_visual_width(previous, self.options.tab_width) + extra);
+                layout.exact_indent_spaces = Some(
+                    leading_visual_width(previous, self.options.tab_width)
+                        + extra
+                        + self.direct_switch_body_indent_extra() * self.options.indent_width,
+                );
             } else if previous_code.ends_with('/')
                 && self
                     .output

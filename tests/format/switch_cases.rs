@@ -79,6 +79,60 @@ fn indent_switches_does_not_indent_file_scope_case_statements() {
 }
 
 #[test]
+fn indented_switch_body_includes_an_initial_anonymous_block() {
+    let options = options_from_args(&["--style=allman", "--indent-switches"]);
+    let source = "void outer(void)\n{\nswitch (value)\n{\n{\nuse(value);\n}\n}\n}\n";
+    let expected = fixture!(
+        "void outer(void)",
+        "{",
+        "    switch (value)",
+        "    {",
+        "            {",
+        "                use(value);",
+        "            }",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn kr_initial_switch_block_keeps_case_body_level() {
+    let options = options_from_args(&["--style=kr", "--indent-switches"]);
+    let source = "void outer(void)\n{\nswitch (value)\n{\n{\nuse(value);\n}\n}\n}\n";
+    let expected = fixture!(
+        "void outer(void)",
+        "{",
+        "    switch (value) {",
+        "            {",
+        "                use(value);",
+        "            }",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn pico_initial_switch_block_keeps_level_on_reformat() {
+    let options = options_from_args(&["--style=pico"]);
+    let source = "void outer(void)\n{\nswitch (value)\n{\n{\nuse(value);\n}\n}\n}\n";
+    let expected = fixture!(
+        "void outer(void)",
+        "{   switch (value)",
+        "    {",
+        "            {   use(value); } } }",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
 fn case_blocks_outside_switch_keep_the_enclosing_body_indent() {
     let options = FormatOptions::default();
     let source = "void outer(void)\n{\ncase 1:\n{\nuse(value);\n}\n}\n";

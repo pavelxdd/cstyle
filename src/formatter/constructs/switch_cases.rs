@@ -2667,6 +2667,32 @@ impl FormatEngine<'_> {
         None
     }
 
+    pub(crate) fn prepare_switch_body_for_open_brace(
+        &mut self,
+        brace_type: BraceType,
+        brace_header: Option<&str>,
+        opens_lambda_body: bool,
+    ) {
+        if self.direct_switch_body_indent_extra() > 0
+            && brace_type == BraceType::Command
+            && brace_header.is_none()
+            && !opens_lambda_body
+            && find_case_colon(&self.current).is_none()
+        {
+            self.register_case_body_indent();
+        }
+    }
+
+    fn register_case_body_indent(&mut self) {
+        let current = self.layout.nesting.brace_header_stack.len();
+        if self.layout.switch_case_layout.body_brace_depths.last() != Some(&current) {
+            self.layout
+                .switch_case_layout
+                .body_brace_depths
+                .push(current);
+        }
+    }
+
     pub(crate) fn update_case_body_indent(&mut self, line_kind: LineKind, line: &str) {
         // A statement before the first label stands in the case body too.
         let statement_in_switch_body = matches!(line_kind, LineKind::Normal | LineKind::Label)
@@ -2688,13 +2714,7 @@ impl FormatEngine<'_> {
             && !label_in_indented_case_block
             && (line_kind != LineKind::SwitchLabel || self.pending_label_stands_in_switch_body())
         {
-            let current = self.layout.nesting.brace_header_stack.len();
-            if self.layout.switch_case_layout.body_brace_depths.last() != Some(&current) {
-                self.layout
-                    .switch_case_layout
-                    .body_brace_depths
-                    .push(current);
-            }
+            self.register_case_body_indent();
         }
     }
 
@@ -2716,6 +2736,20 @@ impl FormatEngine<'_> {
                 })
                 .is_some_and(|line| preprocessor_directive(line.trimmed_start()).is_some())
         })
+    }
+
+    pub(crate) fn direct_switch_body_indent_extra(&self) -> usize {
+        usize::from(
+            self.options.indent_switches
+                && self
+                    .layout
+                    .frame_stack
+                    .brace_at_depth(self.layout.nesting.brace_header_stack.len())
+                    .is_some_and(|frame| {
+                        frame.semantic_kind == BraceSemanticKind::Command
+                            && frame.header.as_deref() == Some("switch")
+                    }),
+        )
     }
 
     pub(crate) fn directly_in_switch_body(&self) -> bool {

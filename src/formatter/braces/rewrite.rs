@@ -2065,6 +2065,7 @@ impl FormatEngine<'_> {
         } else {
             self.classify_opening_brace(brace_header, self.pending_extern)
         };
+        self.prepare_switch_body_for_open_brace(brace_type, brace_header, lambda_header);
         if token_begins_line(tokens, start) && self.current_is_blank() {
             // Styles that indent braces indent a block kept after a macro,
             // unless it is empty, and Whitesmith and Ratliff a type's body

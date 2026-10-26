@@ -186,6 +186,11 @@ impl FormatEngine<'_> {
         lambda_header_indent: Option<usize>,
         class_base: bool,
     ) {
+        self.prepare_switch_body_for_open_brace(
+            brace_type,
+            brace_header.map(String::as_str),
+            opens_lambda_body,
+        );
         let current_line_indent = if self.current_is_blank()
             && brace_header.is_some()
             && self
