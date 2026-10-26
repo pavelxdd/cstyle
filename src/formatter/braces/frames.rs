@@ -380,6 +380,15 @@ impl FormatEngine<'_> {
         });
         // The column of the switch's labels.
         let label_base = || {
+            if let Some(column) = self
+                .layout
+                .frame_stack
+                .active_brace()
+                .filter(|frame| frame.semantic_kind == BraceSemanticKind::Definition)
+                .and_then(|_| self.switch_label_indent_spaces())
+            {
+                return column;
+            }
             // VTK's and Whitesmith's labels stand at their switch's brace.
             let vtk_switch_brace = matches!(
                 self.options.brace_style,

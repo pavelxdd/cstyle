@@ -1897,6 +1897,19 @@ impl FormatEngine<'_> {
     /// The column of a label in the innermost open switch, when the
     /// switch line sets it.
     pub(crate) fn switch_label_indent_spaces(&self) -> Option<usize> {
+        if let Some(frame) = self
+            .layout
+            .frame_stack
+            .brace_at_depth(self.layout.nesting.brace_header_stack.len())
+            && frame.semantic_kind == BraceSemanticKind::Definition
+            && frame.header.as_deref() == Some("switch")
+        {
+            return Some(
+                frame
+                    .body_indent_column
+                    .saturating_sub(self.options.indent_width),
+            );
+        }
         let spaces = self.nearest_open_switch_indent_spaces()?;
         let switch_body_indent = usize::from(
             self.options.indent_switches || self.options.brace_style == BraceStyle::Ratliff,
@@ -1912,7 +1925,11 @@ impl FormatEngine<'_> {
     /// body or in a block a label of that body opens. A label nested in
     /// another block labels that block's statements.
     fn pending_label_stands_in_switch_body(&self) -> bool {
-        !self.layout.nesting.brace_header_stack.is_empty() && self.pending_nested_label().is_none()
+        self.layout
+            .frame_stack
+            .brace_at_depth(self.layout.nesting.brace_header_stack.len())
+            .is_some_and(|frame| frame.semantic_kind == BraceSemanticKind::Command)
+            && self.pending_nested_label().is_none()
     }
 
     /// The label the pending line starts with and the block holding it,

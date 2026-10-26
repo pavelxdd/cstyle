@@ -18,6 +18,7 @@ use crate::formatter::index_hash::IndexMap;
 use crate::formatter::lexer::{CommentKind, Token, token_text};
 use crate::formatter::output::model::LineLayout;
 use crate::formatter::state::BraceType;
+use crate::formatter::state::frame::BraceSemanticKind;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::structure::blocks::{
     BlockKind, closes_before_paren, is_code_token, next_code_token,
@@ -4865,6 +4866,19 @@ impl FormatEngine<'_> {
             .or_else(|| self.tree.blocks.owner(body))?;
         if !matches!(&tokens[owner], Token::Word(word) if word == "switch") {
             return None;
+        }
+        if let Some(frame) = self
+            .layout
+            .frame_stack
+            .brace_at_depth(self.layout.nesting.brace_header_stack.len())
+            && frame.open_token == Some(open)
+            && frame.semantic_kind == BraceSemanticKind::Definition
+        {
+            return Some(
+                frame
+                    .body_indent_column
+                    .saturating_sub(self.options.indent_width),
+            );
         }
         let brace_line = self.output.line_with_token(open)?;
         // Indented switch braces take their labels after layout, except a

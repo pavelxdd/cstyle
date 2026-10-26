@@ -3046,7 +3046,9 @@ impl FormatEngine<'_> {
         {
             layout.exact_indent_spaces = Some(spaces);
         }
-        if let Some(floor) = self.call_shaped_brace_body_indent_floor(line, layout.normal_indent)
+        if layout.line_kind != LineKind::SwitchLabel
+            && let Some(floor) =
+                self.call_shaped_brace_body_indent_floor(line, layout.normal_indent)
             && layout.exact_indent_spaces.unwrap_or(0) < floor
         {
             layout.exact_indent_spaces = Some(floor);

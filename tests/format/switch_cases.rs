@@ -251,6 +251,50 @@ fn gnu_definition_keeps_body_column_after_a_statement() {
 }
 
 #[test]
+fn file_scope_switch_definition_keeps_case_label_before_body() {
+    let options = options_from_args(&["--style=lisp", "--indent-switches"]);
+    let source = "switch (value)\n{\ncase 1:\nswitch (value)\n{\nuse(value);\n}\n}\n";
+    let expected = fixture!(
+        "switch (value) {",
+        "case 1:",
+        "    switch (value) {",
+        "            use(value); } }",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn gnu_definition_case_labels_follow_body_column() {
+    let options = options_from_args(&["--style=gnu", "--indent-switches"]);
+    let source = "switch (value)\n{\ncase 1:\nswitch (value)\n{\nuse(value);\n}\n}\n";
+    let expected = fixture!(
+        "switch (value)",
+        "    {",
+        "    case 1:",
+        "        switch (value)",
+        "            {",
+        "                    use(value);",
+        "            }",
+        "    }",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn lisp_definition_case_blocks_keep_body_column_on_reformat() {
+    let options = options_from_args(&["--style=lisp", "--indent-switches", "--indent-cases"]);
+    let source = "switch (value)\n{\ncase 1:\n{\nuse(value);\n}\n}\n";
+    let expected = fixture!("switch (value) {", "case 1: {", "        use(value); } }",);
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
 fn case_blocks_outside_switch_keep_the_enclosing_body_indent() {
     let options = FormatOptions::default();
     let source = "void outer(void)\n{\ncase 1:\n{\nuse(value);\n}\n}\n";
