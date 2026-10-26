@@ -1598,9 +1598,15 @@ impl FormatEngine<'_> {
                 } else {
                     self.options.indent_width
                 };
+                let case_body_column = self
+                    .layout
+                    .frame_stack
+                    .brace_at_depth(self.layout.nesting.brace_header_stack.len())
+                    .filter(|frame| frame.case_block)
+                    .map_or(0, |frame| frame.body_indent_column);
                 layout.exact_indent_spaces = Some(
-                    leading_visual_width(previous, self.options.tab_width)
-                        + extra
+                    (leading_visual_width(previous, self.options.tab_width) + extra)
+                        .max(case_body_column)
                         + self.direct_switch_body_indent_extra() * self.options.indent_width,
                 );
             } else if previous_code.ends_with('/')

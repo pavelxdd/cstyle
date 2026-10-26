@@ -133,6 +133,27 @@ fn pico_initial_switch_block_keeps_level_on_reformat() {
 }
 
 #[test]
+fn indented_case_body_keeps_initial_anonymous_block_level() {
+    let options = options_from_args(&["--style=kr", "--indent-cases"]);
+    let source = "void outer(void)\n{\nswitch (value)\n{\ncase 1:\n{\n{\nuse(value);\n}\n}\n}\n}\n";
+    let expected = fixture!(
+        "void outer(void)",
+        "{",
+        "    switch (value) {",
+        "    case 1: {",
+        "            {",
+        "                use(value);",
+        "            }",
+        "        }",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
 fn case_blocks_outside_switch_keep_the_enclosing_body_indent() {
     let options = FormatOptions::default();
     let source = "void outer(void)\n{\ncase 1:\n{\nuse(value);\n}\n}\n";
