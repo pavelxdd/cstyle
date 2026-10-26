@@ -3822,6 +3822,10 @@ impl FormatEngine<'_> {
         let opened_in_block = self.layout.nesting.paren_depth
             > self.layout.nesting.current_brace_paren_depth().unwrap_or(0);
         if !opened_in_block
+            || !self
+                .current
+                .active_token()
+                .is_some_and(|token| self.token_in_for_header(token))
             || !matches!(
                 self.options.brace_style,
                 BraceStyle::OneTrueBrace

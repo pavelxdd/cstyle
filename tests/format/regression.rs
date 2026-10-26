@@ -22773,7 +22773,7 @@ fn code_length_splits_after_brace_recovery_start_at_the_new_statement() {
 #[test]
 fn code_length_replay_starts_after_semicolons_in_unclosed_arguments() {
     let input = "void helper(void)\n{\nnew Item(\nfor( int i=0; i<3; ++i ) {\n}\nfirst(value);\nRUNTest( \"Declaration test\", \"message\", obj->FirstEntryElement( \"setting\" )->FirstEntry()->Value() );\n}\n";
-    let expected = "void helper(void) {\n    new Item(\n        for( int i=0; i<3; ++i ) {\n            }\n        first(value);\n        RUNTest( \"Declaration test\", \"message\",\n            obj->FirstEntryElement( \"setting\" )->FirstEntry()->Value() );\n    }\n";
+    let expected = "void helper(void) {\n    new Item(\n        for( int i=0; i<3; ++i ) {\n            }\n    first(value);\n    RUNTest( \"Declaration test\", \"message\",\n        obj->FirstEntryElement( \"setting\" )->FirstEntry()->Value() );\n    }\n";
     let args = &[
         "--style=ratliff",
         "--indent-after-parens",
@@ -22788,6 +22788,15 @@ fn control_bodies_in_macro_arguments_keep_their_scope_during_line_splitting() {
     let input = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\nRUN_ROWS(\nfor( int i=0; i<3; ++i ) {\n}\nRUNTest( \"Declaration test\", \"message\", obj->FirstEntryElement( \"setting\" )->FirstEntry()->Value() );\n)\n}\n";
     let expected = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\n    RUN_ROWS(\n        for( int i=0; i<3; ++i ) {\n        }\n    RUNTest( \"Declaration test\", \"message\",\n        obj->FirstEntryElement( \"setting\" )->FirstEntry()->Value() );\n    )\n}\n";
     let args = &["--indent-after-parens", "--max-code-length=80"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn for_bodies_in_macro_arguments_do_not_continue_the_closed_header() {
+    let input = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\nRUN_ROWS(\nfor( int i=0; i<3; ++i ) {\nuse(value);\n}\n)\n}\n";
+    let expected = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\n    RUN_ROWS(\n        for( int i=0; i<3; ++i ) {\n            use(value);\n        }\n    )\n}\n";
+    let args = &["--style=kr", "--indent-after-parens"];
     check(input, args, expected);
     check(expected, args, expected);
 }
