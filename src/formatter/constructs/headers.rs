@@ -681,6 +681,14 @@ impl FormatEngine<'_> {
         }
         let previous_indent = leading_visual_width(previous, self.options.tab_width);
         if line.trimmed() == "{" {
+            if self
+                .layout
+                .frame_stack
+                .active_brace()
+                .is_some_and(|frame| frame.semantic_kind == BraceSemanticKind::Definition)
+            {
+                return None;
+            }
             return Some(ElseBodyLayout {
                 indent_level: Some(previous_indent / self.options.indent_width),
                 indent_spaces: previous_indent,

@@ -22875,6 +22875,21 @@ fn definition_brace_layout_preserves_a_control_headers_braceless_scope() {
 }
 
 #[test]
+fn definition_brace_layout_is_independent_of_an_else_header() {
+    let input = "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\nif( ready ) {\nuse(value);\n} else {\nuse(other);\n}\n)\n";
+    let expected = "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\n    if( ready )\n{\n    use(value);\n}\n    else\n{\n    use(other);\n}\n)\n";
+    for style in ["--style=allman", "--style=gnu", "--style=vtk"] {
+        let args = &[style, "--indent-after-parens"];
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+    let expected = "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\n    if( ready )\n    {\n    use(value);\n    }\n    else\n    {\n    use(other);\n    }\n)\n";
+    let args = &["--style=whitesmith", "--indent-after-parens"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
 fn rewritten_file_scope_control_bodies_keep_definition_brace_layout() {
     let cases = [
         (
@@ -22884,6 +22899,10 @@ fn rewritten_file_scope_control_bodies_keep_definition_brace_layout() {
         (
             "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\ntry {\nuse(value);\n} catch(...) {\nuse(other);\n}\n)\n",
             "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\n    try\n{   use(value); }\n    catch(...)\n{   use(other); }\n)\n",
+        ),
+        (
+            "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\nif( ready ) {\nuse(value);\n} else {\nuse(other);\n}\n)\n",
+            "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\n    if( ready )\n{   use(value); }\n    else\n{   use(other); }\n)\n",
         ),
     ];
     let args = &["--style=pico", "--indent-after-parens"];

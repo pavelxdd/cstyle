@@ -1053,7 +1053,13 @@ impl FormatEngine<'_> {
     /// A `{` alone after an `else` line stands at least where the style
     /// puts it, from the adjusted `else` line.
     pub(crate) fn align_else_opening_brace_after_adjustment(&self, line: String) -> String {
-        if line.trimmed() != "{" {
+        if line.trimmed() != "{"
+            || self
+                .layout
+                .frame_stack
+                .active_brace()
+                .is_some_and(|frame| frame.semantic_kind == BraceSemanticKind::Definition)
+        {
             return line;
         }
         let Some(else_indent) = self
