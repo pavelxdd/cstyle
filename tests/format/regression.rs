@@ -15,6 +15,20 @@ fn check(input: &str, args: &[&str], expected: &str) {
 }
 
 #[test]
+fn wrapped_test_macro_headers_keep_the_body_comment_indent() {
+    let input = "TEST(Item, calculates_the_expected_result_for_the_current_value)\n{\n    // details\n    run();\n}\n";
+    let expected = "TEST(Item,\n     calculates_the_expected_result_for_the_current_value) {\n    // details\n    run();\n}\n";
+    let args = &[
+        "--style=google",
+        "--max-code-length=50",
+        "--break-after-logical",
+    ];
+    check(input, args, expected);
+    check(expected, args, expected);
+    check(expected, &["--style=google"], expected);
+}
+
+#[test]
 fn wrapped_parameters_after_a_return_type_macro_keep_the_first_body_indent() {
     let input = "PUBLIC_API(int) helper(int first_value, int second_value)\n{\n    int result;\n    return result;\n}\n";
     let expected = "PUBLIC_API(int) helper(int first_value,\n                       int second_value) {\n    int result;\n    return result;\n}\n";

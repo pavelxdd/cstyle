@@ -727,14 +727,17 @@ impl FormatEngine<'_> {
         }
         self.layout.indentation.exit_paren();
         // An operator no statement starts with continues the call's value.
-        let continued = self
+        let following_code = self
             .current
             .active_token()
-            .and_then(|close| next_code_token(&self.tree.tokens, close + 1))
-            .is_some_and(|next| continues_expression(&self.tree.tokens[next]));
+            .and_then(|close| next_code_token(&self.tree.tokens, close + 1));
+        let continued =
+            following_code.is_some_and(|next| continues_expression(&self.tree.tokens[next]));
         if self.layout.nesting.paren_depth == 0
             && !matches!(next, Some(Token::Symbol(';')))
             && !continued
+            && !following_code
+                .is_some_and(|next| matches!(self.tree.tokens[next], Token::Symbol('{')))
             && let Some(spaces) = closes_semicolonless_macro_call_indent
         {
             self.layout
