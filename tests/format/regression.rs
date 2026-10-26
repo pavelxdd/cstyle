@@ -15,6 +15,83 @@ fn check(input: &str, args: &[&str], expected: &str) {
 }
 
 #[test]
+fn pico_dictionary_function_header_text_keeps_its_body_brace_line() {
+    let input = "@ {\nvoid helperTask(void)\n{\n  runTask();\n}\n}\n";
+    let expected = "@ {\n    void helperTask(void)\n    {   runTask(); } }\n";
+    let args = &["--style=pico"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn dictionary_function_header_text_keeps_function_body_layout() {
+    let input = "@ {\nvoid helperTask(void)\n{ runTask(); }\n}\n";
+    for args in [
+        &[][..],
+        &["--style=allman"][..],
+        &["--style=kr"][..],
+        &["--style=gnu"][..],
+        &["--style=1tbs"][..],
+    ] {
+        let expected = "@ {\n    void helperTask(void)\n    {\n        runTask();\n    }\n}\n";
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+    for (style, expected) in [
+        (
+            "horstmann",
+            "@ {\n    void helperTask(void)\n    {   runTask();\n    }\n}\n",
+        ),
+        (
+            "pico",
+            "@ {\n    void helperTask(void)\n    {   runTask(); } }\n",
+        ),
+        (
+            "whitesmith",
+            "@ {\n    void helperTask(void)\n        {\n        runTask();\n        }\n    }\n",
+        ),
+        (
+            "vtk",
+            "@ {\n    void helperTask(void)\n        {\n        runTask();\n        }\n}\n",
+        ),
+        (
+            "ratliff",
+            "@ {\n    void helperTask(void) {\n        runTask();\n        }\n    }\n",
+        ),
+        (
+            "lisp",
+            "@ {\n    void helperTask(void) {\n        runTask(); } }\n",
+        ),
+    ] {
+        let arg = format!("--style={style}");
+        let args = &[arg.as_str()];
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
+fn initializer_after_macro_rows_follows_the_brace_style() {
+    let header =
+        "#define VALUE_ROWS(ROW) ROW(1)\n#define ROW(value) {value,value},\nint values[][2] =\n";
+    let input = format!("{header}{{\nVALUE_ROWS(ROW)\n{{0,0}}\n}};\n");
+    for (style, body) in [
+        ("pico", "{   VALUE_ROWS(ROW)\n    {   0,0} };\n"),
+        ("horstmann", "{   VALUE_ROWS(ROW)\n    {   0,0\n    }\n};\n"),
+        (
+            "vtk",
+            "{\n    VALUE_ROWS(ROW)\n        {\n        0,0\n        }\n};\n",
+        ),
+    ] {
+        let expected = format!("{header}{body}");
+        let arg = format!("--style={style}");
+        let args = &[arg.as_str()];
+        check(&input, args, &expected);
+        check(&expected, args, &expected);
+    }
+}
+
+#[test]
 fn wrapped_test_macro_headers_keep_the_body_comment_indent() {
     let input = "TEST(Item, calculates_the_expected_result_for_the_current_value)\n{\n    // details\n    run();\n}\n";
     let expected = "TEST(Item,\n     calculates_the_expected_result_for_the_current_value) {\n    // details\n    run();\n}\n";

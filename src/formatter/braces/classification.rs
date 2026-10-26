@@ -339,6 +339,7 @@ impl FormatEngine<'_> {
                 .is_some_and(|brace_type| {
                     matches!(brace_type, BraceType::Array | BraceType::CompoundLiteral)
                 })
+                && !self.current_ends_definition_header()
             || (self.layout.command_state.previous_command_char == Some('{')
                 && !self.token_input.token_begins_source_line
                 && matches!(

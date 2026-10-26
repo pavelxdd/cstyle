@@ -3952,6 +3952,29 @@ impl FormatEngine<'_> {
         }
         match self.options.brace_style {
             BraceStyle::Vtk => {
+                let definition_in_list = brace_type == BraceType::Definition
+                    && self
+                        .layout
+                        .frame_stack
+                        .active_brace()
+                        .filter(|frame| frame.brace_type == BraceType::Definition)
+                        .or_else(|| {
+                            self.layout
+                                .nesting
+                                .brace_type_stack
+                                .iter()
+                                .rposition(|kind| *kind == BraceType::Definition)
+                                .and_then(|depth| self.layout.frame_stack.brace_at_depth(depth + 1))
+                        })
+                        .and_then(|frame| frame.open_token)
+                        .and_then(|open| self.tree.groups.opened_at(open))
+                        .and_then(|body| self.tree.groups.get(body).parent)
+                        .is_some_and(|parent| {
+                            matches!(
+                                self.tree.blocks.kind(parent),
+                                Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                            )
+                        });
                 // A function's try block stands as its body does.
                 brace_type == BraceType::Command
                     && self
@@ -3964,6 +3987,7 @@ impl FormatEngine<'_> {
                     || (brace_type == BraceType::Array
                         && self.layout.indentation.indent() > 0
                         && !self.active_brace_in_vtk_flush_scope())
+                    || definition_in_list
                     || vtk_indents_declaration_brace(
                         brace_type,
                         &self.layout.nesting.brace_type_stack,

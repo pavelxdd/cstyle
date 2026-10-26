@@ -1422,6 +1422,7 @@ impl FormatEngine<'_> {
                     matches!(header, "@autoreleasepool" | "@try" | "@catch" | "@finally")
                 })
             || self.inferred_definition_brace(tokens, start)
+            || self.current_ends_definition_header() && !self.current_ends_compound_literal_type()
             || tokens.len() == self.tree.tokens.len() && self.opens_body_after_base_clause(start)
         {
             return None;
