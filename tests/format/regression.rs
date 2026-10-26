@@ -24,6 +24,17 @@ fn pico_dictionary_function_header_text_keeps_its_body_brace_line() {
 }
 
 #[test]
+fn pico_dictionary_function_bodies_keep_tab_run_in_alignment() {
+    let input = "@ {\nvoid helperTask(void)\n{\n  runTask();\n}\n}\n";
+    let inline = "@ {\nvoid helperTask(void)\n{ runTask(); }\n}\n";
+    let expected = "@ {\n\tvoid helperTask(void)\n\t{\trunTask(); } }\n";
+    let args = &["--style=pico", "--indent=tab=4"];
+    check(input, args, expected);
+    check(expected, args, expected);
+    check(inline, args, expected);
+}
+
+#[test]
 fn dictionary_function_header_text_keeps_function_body_layout() {
     let input = "@ {\nvoid helperTask(void)\n{ runTask(); }\n}\n";
     for args in [
@@ -89,6 +100,10 @@ fn initializer_after_macro_rows_follows_the_brace_style() {
         check(&input, args, &expected);
         check(&expected, args, &expected);
     }
+    let expected = format!("{header}{{\tVALUE_ROWS(ROW)\n\t{{\t0,0}} }};\n");
+    let args = &["--style=pico", "--indent=tab=4"];
+    check(&input, args, &expected);
+    check(&expected, args, &expected);
 }
 
 #[test]

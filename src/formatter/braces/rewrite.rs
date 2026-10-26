@@ -1702,7 +1702,7 @@ impl FormatEngine<'_> {
             opening_body_gap,
         );
         self.current.record_token_range(start, close_index);
-        self.record_one_line_lambda_body(start, opens_line);
+        self.record_one_line_block(start, opens_line, brace_type);
         if brace_type == BraceType::CompoundLiteral {
             self.layout.compound_literal.just_closed = true;
         }
@@ -2094,7 +2094,7 @@ impl FormatEngine<'_> {
             opening_body_gap,
         );
         self.current.record_token_range(start, close_index);
-        self.record_one_line_lambda_body(start, opens_line);
+        self.record_one_line_block(start, opens_line, brace_type);
         let closes_do = self.layout.command_state.current_header.as_deref() == Some("do");
         if closes_do {
             self.layout.nesting.last_closed_brace_header = Some("do".to_string());
@@ -2329,9 +2329,12 @@ impl FormatEngine<'_> {
         )
     }
 
-    /// Records a lambda's body kept on the line its `{` at `open` stands
-    /// on, which `opens_line` when the brace begins it.
-    fn record_one_line_lambda_body(&mut self, open: usize, opens_line: bool) {
+    /// Records a block kept on the line its `{` at `open` stands on,
+    /// which `opens_line` when the brace begins it.
+    fn record_one_line_block(&mut self, open: usize, opens_line: bool, brace_type: BraceType) {
+        if brace_type == BraceType::Definition {
+            self.rewritten_definition_braces.insert(open);
+        }
         if self
             .tree
             .groups

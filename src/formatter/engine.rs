@@ -400,6 +400,8 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) block_spacing: BlockSpacingState,
     pub(crate) comments: CommentState,
     pub(crate) source_run_in_brace_lines: Vec<usize>,
+    /// Source openers whose one-line rewrite classified them as function bodies.
+    pub(crate) rewritten_definition_braces: IndexSet<usize>,
     /// Padding lines before closers the run-in styles join to the row
     /// before them.
     pub(crate) joined_closer_padding_lines: Vec<usize>,
@@ -597,6 +599,7 @@ impl<'a> FormatEngine<'a> {
             block_spacing: BlockSpacingState::default(),
             comments: CommentState::default(),
             source_run_in_brace_lines: Vec::new(),
+            rewritten_definition_braces: IndexSet::default(),
             joined_closer_padding_lines: Vec::new(),
             empty_body_closer_lines: Vec::new(),
             published_line_shift: 0,

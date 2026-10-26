@@ -184,15 +184,17 @@ impl FormatEngine<'_> {
 
     fn starts_with_block_brace(&self, index: usize) -> bool {
         let groups = &self.tree.groups;
-        self.output
-            .line_tokens(index)
-            .and_then(|span| groups.opened_at(span.first))
-            .is_some_and(|group| {
+        self.output.line_tokens(index).is_some_and(|span| {
+            if self.rewritten_definition_braces.contains(&span.first) {
+                return true;
+            }
+            groups.opened_at(span.first).is_some_and(|group| {
                 !matches!(
                     self.tree.blocks.kind(group),
                     Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
                 )
             })
+        })
     }
 
     /// Whether output line `index` leads with a brace whose elements go on
