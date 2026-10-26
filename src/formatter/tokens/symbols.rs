@@ -1124,10 +1124,34 @@ impl FormatEngine<'_> {
             && self.header_paren.depth.is_none()
             && !closing_header_follows;
         if completed_header_in_outer_delimiter {
+            let header_parent = self
+                .layout
+                .frame_stack
+                .active_header()
+                .and_then(|header| header.parent_delimiter);
+            let parent_column = self
+                .layout
+                .frame_stack
+                .active_delimiter_with_id()
+                .filter(|(id, _)| Some(*id) == header_parent)
+                .and_then(|(_, delimiter)| delimiter.continuation_indent_column);
             self.layout.command_state.current_header = None;
             self.layout.command_state.preprocessor_after_header = false;
             self.layout.frame_stack.clear_header();
             self.layout.continuation_indent.clear_next_line();
+            // A braced body can clear the transient column while its enclosing
+            // delimiter still owns the argument column.
+            if self
+                .layout
+                .nesting
+                .current_paren_continuation_column()
+                .is_none()
+                && let Some(column) = parent_column
+            {
+                self.layout
+                    .nesting
+                    .register_continuation_indent_spaces(column);
+            }
             if let Some((base, delta)) = self.layout.indentation.last_braceless_block()
                 && self.layout.indentation.indent() == base + delta
             {

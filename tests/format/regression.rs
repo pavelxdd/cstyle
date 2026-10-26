@@ -22857,6 +22857,32 @@ fn vtk_definition_bodies_in_macro_arguments_indent_past_their_braces() {
 }
 
 #[test]
+fn completed_control_headers_restore_enclosing_argument_columns() {
+    let cases = [
+        (
+            "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\nRUN_ROWS(\ndo {\nuse(value);\n} while(ready);\nuse(other);\n)\n}\n",
+            "--style=pico",
+            "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{   RUN_ROWS(\n        do\n        {   use(value); }\n        while(ready);\n        use(other);\n    ) }\n",
+        ),
+        (
+            "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\ndo {\nuse(value);\n} while(ready);\nuse(other);\n)\n",
+            "--style=pico",
+            "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\n    do\n{   use(value); }\n    while(ready);\n    use(other);\n)\n",
+        ),
+        (
+            "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\nRUN_ROWS(\ndo {\nuse(value);\n} while(ready);\nuse(other);\n)\n}\n",
+            "--style=allman",
+            "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\n    RUN_ROWS(\n        do\n        {\n            use(value);\n        }\n        while(ready);\n        use(other);\n    )\n}\n",
+        ),
+    ];
+    for (input, style, expected) in cases {
+        let args = &[style, "--indent-after-parens"];
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
 fn one_line_else_bodies_in_macro_arguments_end_their_statement() {
     let input = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\nRUN_ROWS(\nif( ready ) {\nuse(value);\n} else {\nuse(other);\n}\nuse(next);\n)\n}\n";
     let expected = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{   RUN_ROWS(\n        if( ready )\n        {   use(value); }\n        else\n        {   use(other); }\n    use(next);\n    ) }\n";
