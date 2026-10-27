@@ -200,6 +200,28 @@ fn file_scope_switch_definition_does_not_add_command_body_indent() {
 }
 
 #[test]
+fn file_scope_pico_places_a_leading_default_like_a_leading_case() {
+    // The reference runs a leading default in one level deeper than a leading
+    // case, though both labels stand at the same position of the same switch.
+    let options = options_from_args(&["--style=pico"]);
+    for (label, expected) in [
+        (
+            "case 1:",
+            "switch (value)\n{   case 1:\n    use(value); }\n",
+        ),
+        (
+            "default:",
+            "switch (value)\n{   default:\n    use(value); }\n",
+        ),
+    ] {
+        let source = format!("switch (value)\n{{\n{label}\nuse(value);\n}}\n");
+        let output = format_exact(&source, &options);
+        assert_eq!(output, expected, "label {label}");
+        assert_eq!(format_exact(expected, &options), expected, "label {label}");
+    }
+}
+
+#[test]
 fn file_scope_switch_definition_does_not_add_nested_body_indent() {
     let options = options_from_args(&["--style=allman", "--indent-switches"]);
     let source = "switch (value)\n{\nif (value)\n{\nuse(value);\n}\n}\n";
@@ -2076,4 +2098,22 @@ fn a_pico_one_line_switch_block_runs_a_statement_in_at_the_case_body() {
         "    return u(err); }",
     );
     assert_eq!(format_exact(input, &options), expected);
+}
+
+#[test]
+fn a_run_in_switch_body_keeps_an_empty_statement_at_the_statement_column() {
+    // The reference runs a leading empty statement in at the brace's body
+    // column, yet places the same empty statement after another one at the
+    // switch body column. Both stand where any other statement does.
+    let options = options_from_args(&["--style=pico"]);
+    let source = "void outer(void)\n{\nswitch (value)\n{\n;\nuse(value);\n;\n}\n}\n";
+    let expected = fixture!(
+        "void outer(void)",
+        "{   switch (value)",
+        "    {       ;",
+        "            use(value);",
+        "            ; } }",
+    );
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
 }
