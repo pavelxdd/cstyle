@@ -9140,15 +9140,13 @@ fn lisp_break_blocks_keeps_an_else_with_its_if() {
 }
 
 #[test]
-fn indented_labels_leave_a_run_in_brace_at_its_block() {
-    // The label run into a block's brace takes the brace's column with it,
-    // not the brace to the label's.
+fn indented_labels_keep_run_in_statements_at_logical_body_column() {
     let input = "void f()\n{\n    if (ready) {\n    again:\n        value=0;\n        goto again;\n    }\n}\n";
-    check(
-        input,
-        &["--style=horstmann", "--indent-labels"],
-        "void f()\n{   if (ready)\n    {   again:\n        value=0;\n        goto again;\n    }\n}\n",
-    );
+    let expected =
+        "void f()\n{   if (ready)\n{   again:\n        value=0;\n        goto again;\n    }\n}\n";
+    let args = &["--style=horstmann", "--indent-labels"];
+    check(input, args, expected);
+    check(expected, args, expected);
 }
 
 #[test]
@@ -25222,14 +25220,17 @@ fn an_enumeration_brace_takes_its_style_whatever_comments_its_body_holds() {
 }
 
 #[test]
-fn indent_labels_leaves_a_block_brace_run_into_its_label_at_the_block() {
-    // The label runs in after the brace; indenting labels moves neither the
-    // brace nor the rows after it.
+fn indent_labels_moves_run_in_brace_without_moving_block_body_or_closer() {
     let input = "void g(void)\n{\n    {\n    inner:\n        go();\n    }\n}\n";
-    let expected = "void g(void)\n{\n    {   inner:\n        go();\n    }\n}\n";
-    for args in [
-        &["--style=horstmann"][..],
-        &["--style=horstmann", "--indent-labels"],
+    for (args, expected) in [
+        (
+            &["--style=horstmann"][..],
+            "void g(void)\n{\n    {   inner:\n        go();\n    }\n}\n",
+        ),
+        (
+            &["--style=horstmann", "--indent-labels"][..],
+            "void g(void)\n{\n{   inner:\n        go();\n    }\n}\n",
+        ),
     ] {
         check(input, args, expected);
         check(expected, args, expected);

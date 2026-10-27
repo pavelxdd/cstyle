@@ -82,18 +82,20 @@ pub(crate) struct ElseChainHead {
 pub(crate) enum BodyAnchor {
     /// The lead of the line that the block's `{` starts.
     BraceLine(usize),
+    /// An indented statement label stands a level before its body.
+    LabelLine(usize),
     /// The column past the block's header, when its line is known.
     Header(Option<usize>),
 }
 
 /// The last block body anchor read: the tokens' address, the block, the
-/// output version then, the line of the `{`, and the anchor.
+/// output version then, the last line it reads, and the anchor.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct BlockBodyAnchor {
     address: usize,
     block: GroupId,
     version: u64,
-    brace_line: usize,
+    anchor_line: usize,
     anchor: BodyAnchor,
 }
 
@@ -3216,6 +3218,12 @@ impl FormatEngine<'_> {
             return line;
         }
         let spaces = self.output.lead_width(header_line, self.options.tab_width);
+        if self
+            .run_in_label_opening_brace_indent_spaces(&LineView::new(&line), open, spaces)
+            .is_some()
+        {
+            return line;
+        }
         let current = leading_visual_width(&line, self.options.tab_width);
         // Run-in styles only lift a brace left behind its header.
         if current == spaces || self.options.brace_style != BraceStyle::Allman && current > spaces {
@@ -7652,7 +7660,23 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        Some(self.output.lead_width(line, self.options.tab_width) + self.case_unindent_spaces())
+        let mut lead = self.output.lead_width(line, self.options.tab_width);
+        if self
+            .run_in_label_opening_brace_indent_spaces(
+                &LineView::new(&self.output[line]),
+                open,
+                lead,
+            )
+            .is_some()
+        {
+            if let Some((header, levels)) = self.header_chain_before(open) {
+                lead = self.output.lead_width(header, self.options.tab_width)
+                    + (levels - 1) * self.options.indent_width;
+            } else if let Some(BodyAnchor::LabelLine(column)) = self.block_body_anchor(block) {
+                lead = column;
+            }
+        }
+        Some(lead + self.case_unindent_spaces())
     }
 
     /// Styles that indent braces put the first statement of a case block
@@ -8324,6 +8348,7 @@ impl FormatEngine<'_> {
                     self.options.indent_width
                 }
             }
+            BodyAnchor::LabelLine(lead) => lead + self.options.indent_width,
             BodyAnchor::Header(column) => column?,
         };
         Some(column + self.case_unindent_spaces())
@@ -8337,8 +8362,8 @@ impl FormatEngine<'_> {
         let tokens = &self.tree.tokens;
         let open = self.tree.groups.get(block).open;
         let address = tokens.as_ptr() as usize;
-        // The anchor reads no line past the `{` line, so it holds while no
-        // line up to that one changes and later lines start past the `{`.
+        // An anchor holds while none of the lines it reads changes and
+        // later lines start past the block's opening brace.
         let mut anchors = self.block_body_anchor_cache.borrow_mut();
         let slot = anchors
             .iter()
@@ -8351,8 +8376,8 @@ impl FormatEngine<'_> {
             && self
                 .output
                 .lowest_change_since(cached.version)
-                .is_some_and(|lowest| lowest > cached.brace_line)
-            && self.output.lines_after_start_past(cached.brace_line, open)
+                .is_some_and(|lowest| lowest > cached.anchor_line)
+            && self.output.lines_after_start_past(cached.anchor_line, open)
         {
             bring_to_front(&mut anchors[..=slot]);
             return Some(cached.anchor);
@@ -8373,7 +8398,19 @@ impl FormatEngine<'_> {
         let brace_line = self.output.line_with_token(open)?;
         // A comment leading the brace's line leaves the brace of a header no
         // line of its own; a bare block's brace has no header to follow.
-        let anchor = if self.output.line_tokens(brace_line)?.first == open
+        let mut anchor_line = brace_line;
+        let anchor = if self
+            .run_in_label_opening_brace_indent_spaces(
+                &LineView::new(&self.output[brace_line]),
+                open,
+                self.output.lead_width(brace_line, self.options.tab_width),
+            )
+            .is_some()
+        {
+            let label = next_code_token(tokens, open + 1)?;
+            anchor_line = self.output.line_with_token(label)?;
+            BodyAnchor::LabelLine(self.output.lead_width(anchor_line, self.options.tab_width))
+        } else if self.output.line_tokens(brace_line)?.first == open
             && (self.output.trimmed(brace_line).starts_with('{')
                 || self.tree.blocks.kind(block) == Some(BlockKind::Block))
         {
@@ -8422,7 +8459,7 @@ impl FormatEngine<'_> {
             address,
             block,
             version: self.output.version(),
-            brace_line,
+            anchor_line,
             anchor,
         });
         bring_to_front(&mut anchors[..=slot]);

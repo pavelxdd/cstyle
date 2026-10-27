@@ -9,6 +9,7 @@ use crate::formatter::output::LineDelimiters;
 use crate::formatter::output::buffer::OpenBraceShape;
 use crate::formatter::state::BraceType;
 use crate::formatter::state::indentation::LineKind;
+use crate::formatter::structure::blocks::{BlockKind, next_code_token};
 use crate::formatter::syntax::language;
 use crate::formatter::text::columns::leading_visual_width;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
@@ -192,6 +193,71 @@ pub(crate) fn access_label_body_indent_spaces(
 }
 
 impl FormatEngine<'_> {
+    pub(crate) fn run_in_label_opening_brace_indent_spaces(
+        &self,
+        line: &LineView<'_>,
+        open: usize,
+        spaces: usize,
+    ) -> Option<usize> {
+        if !self.options.indent_labels
+            || !matches!(
+                self.options.brace_style,
+                BraceStyle::Horstmann | BraceStyle::Pico
+            )
+            || !line.trimmed_start().starts_with('{')
+        {
+            return None;
+        }
+        let tokens = &self.tree.tokens;
+        if !matches!(tokens[open], Token::Symbol('{')) {
+            return None;
+        }
+        let group = self.tree.groups.opened_at(open)?;
+        if !matches!(
+            self.tree.blocks.kind(group),
+            Some(
+                BlockKind::FunctionBody
+                    | BlockKind::Control
+                    | BlockKind::Lambda
+                    | BlockKind::Block
+                    | BlockKind::StatementExpression
+            )
+        ) {
+            return None;
+        }
+        let label = next_code_token(tokens, open + 1)?;
+        let colon = next_code_token(tokens, label + 1)?;
+        if !self.ends_user_label(colon) || self.ends_access_label(colon) {
+            return None;
+        }
+        if tokens[label + 1..colon].iter().any(|token| {
+            matches!(token, Token::Newline)
+                || matches!(token, Token::Comment(_, text) if text.contains('\n'))
+        }) {
+            return None;
+        }
+        let mut newlines = 0;
+        let mut saw_comment = false;
+        for token in &tokens[open + 1..label] {
+            match token {
+                Token::Newline
+                    if saw_comment || newlines > 0 && !self.options.delete_empty_lines =>
+                {
+                    return None;
+                }
+                Token::Newline => newlines += 1,
+                Token::Comment(_, text) => {
+                    if text.contains('\n') {
+                        return None;
+                    }
+                    saw_comment = true;
+                }
+                _ => {}
+            }
+        }
+        Some(spaces.saturating_sub(self.options.indent_width))
+    }
+
     pub(crate) fn run_in_switch_body_label_indent_spaces(
         &self,
         kind: LineKind,

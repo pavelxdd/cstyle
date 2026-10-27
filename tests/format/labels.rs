@@ -365,7 +365,7 @@ fn allman_malformed_label_continuation_brace_indent_is_idempotent() {
 }
 
 #[test]
-fn horstmann_indent_labels_does_not_move_the_enclosing_brace() {
+fn horstmann_indented_run_in_label_keeps_logical_block_columns() {
     let mut options = FormatOptions::default();
     apply_command_line_args(
         &mut options,
@@ -373,10 +373,10 @@ fn horstmann_indent_labels_does_not_move_the_enclosing_brace() {
     )
     .expect("valid options");
 
-    assert_eq!(
-        format_exact("void run(){\nif(ready){\nagain:\ncall();\n}\n}\n", &options,),
-        "void run()\n{   if(ready)\n    {   again:\n        call();\n    }\n}\n",
-    );
+    let source = "void run(){\nif(ready){\nagain:\ncall();\n}\n}\n";
+    let expected = "void run()\n{   if(ready)\n{   again:\n        call();\n    }\n}\n";
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
 }
 
 #[test]
@@ -576,6 +576,74 @@ fn horstmann_first_switch_body_label_keeps_run_in_column() {
         "{   switch (value)",
         "    {       next:",
         "            use(value);",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn pico_indented_run_in_label_moves_opening_brace_outward() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=pico".to_owned(), "--indent-labels".to_owned()],
+    )
+    .expect("valid options");
+    let source = "void outer(void)\n{\nif (value)\n{\nnext:\nuse(value);\n}\n}\n";
+    let expected = fixture!(
+        "void outer(void)",
+        "{   if (value)",
+        "{   next:",
+        "        use(value); } }",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn pico_deleted_empty_line_before_label_does_not_change_brace_layout() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=pico".to_owned(),
+            "--indent-labels".to_owned(),
+            "--delete-empty-lines".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let source = "void outer(void)\n{\nif (value)\n{\n\nnext:\nuse(value);\n}\n}\n";
+    let expected = fixture!(
+        "void outer(void)",
+        "{   if (value)",
+        "{   next:",
+        "        use(value); } }",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn horstmann_indented_run_in_label_keeps_anonymous_closer_at_body_column() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=horstmann".to_owned(), "--indent-labels".to_owned()],
+    )
+    .expect("valid options");
+    let source = "void outer(void)\n{\nswitch (value)\n{\n{\nnext:\nuse(value);\n}\n}\n}\n";
+    let expected = fixture!(
+        "void outer(void)",
+        "{   switch (value)",
+        "    {",
+        "        {   next:",
+        "                use(value);",
+        "            }",
         "    }",
         "}",
     );
