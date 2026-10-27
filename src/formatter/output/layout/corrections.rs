@@ -432,7 +432,9 @@ impl FormatEngine<'_> {
             if let Some(spaces) = self.lambda_closing_brace_indent_spaces(line) {
                 exact_indent_spaces = Some(spaces);
             }
-            if let Some(spaces) = self.lambda_body_indent_spaces_after_opening_brace(line) {
+            if line_kind == LineKind::Normal
+                && let Some(spaces) = self.lambda_body_indent_spaces_after_opening_brace(line)
+            {
                 exact_indent_spaces = Some(spaces);
             }
         }

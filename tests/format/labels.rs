@@ -417,6 +417,42 @@ fn java_indent_labels_uses_the_parent_scope_column() {
 }
 
 #[test]
+fn indented_lambda_labels_use_the_enclosing_body_column() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=horstmann".to_owned(), "--indent-labels".to_owned()],
+    )
+    .expect("valid options");
+
+    let source = "void outer(void)\n{\nauto helper = [&]\n{\nnext:\nuse(value);\n};\n}\n";
+    let expected =
+        "void outer(void)\n{   auto helper = [&]\n{   next:\n        use(value);\n    };\n}\n";
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn lambda_labels_follow_the_label_indentation_option() {
+    let source = "void outer(void)\n{\nauto helper = [&]\n{\nnext:\nuse(value);\n};\n}\n";
+    for (indent_labels, expected) in [
+        (
+            false,
+            "void outer(void)\n{\n    auto helper = [&]\n    {\nnext:\n        use(value);\n    };\n}\n",
+        ),
+        (
+            true,
+            "void outer(void)\n{\n    auto helper = [&]\n    {\n    next:\n        use(value);\n    };\n}\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        options.indent_labels = indent_labels;
+        assert_eq!(format_exact(source, &options), expected);
+        assert_eq!(format_exact(expected, &options), expected);
+    }
+}
+
+#[test]
 fn user_label_inside_indented_switch_stays_at_column_zero_by_default() {
     let mut options = FormatOptions::default();
     apply_command_line_args(
