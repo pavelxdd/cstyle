@@ -417,6 +417,52 @@ fn java_indent_labels_uses_the_parent_scope_column() {
 }
 
 #[test]
+fn comments_leading_lambda_labels_stand_with_the_label_row() {
+    let source =
+        "void outer(void)\n{\nauto helper = [&]\n{\n/* marker */ next:\nuse(value);\n};\n}\n";
+    for (style, expected) in [
+        (
+            "pico",
+            "void outer(void)\n{   auto helper = [&]\n{   /* marker */ next:\n        use(value); }; }\n",
+        ),
+        (
+            "horstmann",
+            "void outer(void)\n{   auto helper = [&]\n{   /* marker */ next:\n        use(value);\n    };\n}\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(
+            &mut options,
+            &[format!("--style={style}"), "--indent-labels".to_owned()],
+        )
+        .expect("valid options");
+        assert_eq!(format_exact(source, &options), expected);
+        assert_eq!(format_exact(expected, &options), expected);
+    }
+}
+
+#[test]
+fn deleted_blank_lines_before_a_lambda_label_clean_up_as_in_a_function() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=pico".to_owned(),
+            "--indent-labels".to_owned(),
+            "--delete-empty-lines".to_owned(),
+        ],
+    )
+    .expect("valid options");
+
+    // The reference keeps a blank row only after a lambda's brace, where it
+    // deletes one after a function's or a control block's equivalent brace.
+    let source = "void outer(void)\n{\nauto helper = [&]\n{\n\nnext:\nuse(value);\n};\n}\n";
+    let expected = "void outer(void)\n{   auto helper = [&]\n{   next:\n        use(value); }; }\n";
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
 fn indented_lambda_labels_use_the_enclosing_body_column() {
     let mut options = FormatOptions::default();
     apply_command_line_args(

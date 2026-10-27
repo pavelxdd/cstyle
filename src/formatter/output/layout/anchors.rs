@@ -2412,6 +2412,14 @@ impl FormatEngine<'_> {
         {
             return None;
         }
+        // A label places its own row, which the row's comment shares.
+        if labels::line_kind(
+            trimmed[close + 2..].trimmed_start(),
+            &self.options.access_labels,
+        ) == LineKind::Label
+        {
+            return None;
+        }
         let spaces = self
             .braceless_body_indent(code)
             .or_else(|| self.lambda_body_indent_spaces_after_opening_brace(&LineView::new(trimmed)))
