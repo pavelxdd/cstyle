@@ -310,6 +310,11 @@ impl FormatEngine<'_> {
         ) {
             exact_indent_spaces = Some(label_layout.indent_spaces);
         }
+        if let Some(spaces) =
+            self.run_in_switch_body_label_indent_spaces(line_kind, self.output.len())
+        {
+            exact_indent_spaces = Some(spaces);
+        }
         if let Some(spaces) = self.lambda_opening_brace_indent_spaces(line) {
             exact_indent_spaces = Some(spaces);
         }

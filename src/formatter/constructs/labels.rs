@@ -1,4 +1,4 @@
-use crate::config::FormatOptions;
+use crate::config::{BraceStyle, FormatOptions};
 use crate::formatter::braces::classification::is_class_like_brace_type;
 use crate::formatter::constructs::headers::{is_header, starts_header_word};
 use crate::formatter::constructs::switch_cases::{find_case_colon, is_case_label_start};
@@ -192,6 +192,35 @@ pub(crate) fn access_label_body_indent_spaces(
 }
 
 impl FormatEngine<'_> {
+    pub(crate) fn run_in_switch_body_label_indent_spaces(
+        &self,
+        kind: LineKind,
+        label_line: usize,
+    ) -> Option<usize> {
+        if kind != LineKind::Label
+            || self.options.indent_labels
+            || !matches!(
+                self.options.brace_style,
+                BraceStyle::Horstmann | BraceStyle::Pico
+            )
+        {
+            return None;
+        }
+        let frame = self
+            .layout
+            .frame_stack
+            .brace_at_depth(self.layout.nesting.brace_header_stack.len())?;
+        let previous = label_line.checked_sub(1)?;
+        let tokens = self.output.line_tokens(previous)?;
+        if tokens.first != tokens.last
+            || frame.open_token != Some(tokens.first)
+            || self.output.comment_token(previous).is_some()
+        {
+            return None;
+        }
+        self.direct_switch_body_indent_spaces()
+    }
+
     pub(crate) fn candidate_label_body_indent_spaces(&self, previous: &str) -> Option<usize> {
         let previous_code = self.output.code_trimmed_of(previous);
         (is_user_label_candidate(previous_code, &self.options.access_labels)
@@ -393,7 +422,12 @@ impl FormatEngine<'_> {
         }
         // Outside any block a label stands out from nothing.
         let label_level = usize::from(self.layout.indentation.indent() > 0);
-        let mut next_spaces = line_indent_spaces + label_level * self.options.indent_width;
+        let mut next_spaces = self
+            .output
+            .len()
+            .checked_sub(1)
+            .and_then(|label_line| self.run_in_switch_body_label_indent_spaces(kind, label_line))
+            .unwrap_or(line_indent_spaces + label_level * self.options.indent_width);
         if kind == LineKind::Label {
             next_spaces = next_spaces.max(
                 (self

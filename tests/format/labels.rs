@@ -538,13 +538,50 @@ fn pico_inline_label_block_starts_at_switch_body_column() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=pico".to_owned()]).expect("valid options");
     let source = "void outer(void)\n{\nswitch (value)\n{\nnext: {\nuse(value);\n}\n}\n}\n";
-    let output = format_exact(source, &options);
-
-    assert_eq!(
-        output.lines().nth(3),
-        Some("            {   use(value); } } }")
+    let expected = fixture!(
+        "void outer(void)",
+        "{   switch (value)",
+        "    {       next:",
+        "            {   use(value); } } }",
     );
-    assert_eq!(format_exact(&output, &options), output);
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn pico_first_switch_body_label_keeps_statement_column() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=pico".to_owned()]).expect("valid options");
+    let source = "void outer(void)\n{\nswitch (value)\n{\nnext:\nuse(value);\n}\n}\n";
+    let expected = fixture!(
+        "void outer(void)",
+        "{   switch (value)",
+        "    {       next:",
+        "            use(value); } }",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn horstmann_first_switch_body_label_keeps_run_in_column() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=horstmann".to_owned()])
+        .expect("valid options");
+    let source = "void outer(void)\n{\nswitch (value)\n{\nnext:\nuse(value);\n}\n}\n";
+    let expected = fixture!(
+        "void outer(void)",
+        "{   switch (value)",
+        "    {       next:",
+        "            use(value);",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
 }
 
 #[test]
