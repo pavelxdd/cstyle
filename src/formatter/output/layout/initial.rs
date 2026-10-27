@@ -25,6 +25,7 @@ use crate::formatter::structure::TokenSpan;
 use crate::formatter::structure::blocks::is_code_token;
 use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::text::columns::{column_after, leading_visual_width, visual_width_from};
+use crate::formatter::text::labels::after_user_label;
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::after_leading_comments;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
@@ -868,7 +869,7 @@ impl FormatEngine<'_> {
                     .next()
                     .is_some_and(|ch| is_identifier_start(ch) || ch.is_ascii_digit())
                 && !previous_code.ends_with_any(b"{(,=:")
-                && !line_is_control_body_header(labels::after_user_label(previous_code))
+                && !line_is_control_body_header(after_user_label(previous_code))
                 && leading_visual_width(previous, self.options.tab_width)
                     <= self.options.indent_width / 2
                 // A directive's rows hold no code closer.

@@ -1,9 +1,8 @@
 //! Splits normalized source text into tokens.
 
 use crate::formatter::constructs::assembly::AssemblyMacroLines;
-use crate::formatter::constructs::labels;
-use crate::formatter::constructs::switch_cases::find_case_colon;
 use crate::formatter::syntax::language;
+use crate::formatter::text::labels::{after_user_label, find_case_colon};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::preprocessor_directive;
 use crate::formatter::text::trim::Trimmed;
@@ -93,7 +92,7 @@ fn hash_after_statement_opens_preprocessor(source: &str, line_start: usize, hash
                 let after_label = if let Some(colon) = find_case_colon(remaining) {
                     &remaining[colon + 1..]
                 } else {
-                    labels::after_user_label(remaining)
+                    after_user_label(remaining)
                 };
                 if after_label.len() == remaining.len() {
                     break false;

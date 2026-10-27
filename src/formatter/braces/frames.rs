@@ -15,7 +15,6 @@ use crate::formatter::text::line_scan::{
     ContainsAnyByte, after_leading_comments, holds_code_after_leading_comments,
     is_comment_only_line, trailing_comment_split_limit,
 };
-use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::is_word_char;
 
@@ -654,19 +653,12 @@ impl FormatEngine<'_> {
             return;
         }
         let sibling = leading_visual_width(line, self.options.tab_width);
-        if self.layout.frame_stack.active_brace().is_some_and(|frame| {
-            frame.label_block
-                || frame.case_block
-                || sibling < frame.header_indent_column
-                    && frame.open_token.is_some_and(|open| {
-                        self.run_in_label_opening_brace_indent_spaces(
-                            &LineView::new(line),
-                            open,
-                            frame.header_indent_column,
-                        )
-                        .is_some()
-                    })
-        }) {
+        if self
+            .layout
+            .frame_stack
+            .active_brace()
+            .is_some_and(|frame| frame.label_block || frame.case_block)
+        {
             return;
         }
         // A list nested in a list opened on its line keeps that list's body.

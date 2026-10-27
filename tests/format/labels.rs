@@ -365,7 +365,7 @@ fn allman_malformed_label_continuation_brace_indent_is_idempotent() {
 }
 
 #[test]
-fn horstmann_indented_run_in_label_keeps_logical_block_columns() {
+fn horstmann_indent_labels_does_not_move_the_enclosing_brace() {
     let mut options = FormatOptions::default();
     apply_command_line_args(
         &mut options,
@@ -373,10 +373,10 @@ fn horstmann_indented_run_in_label_keeps_logical_block_columns() {
     )
     .expect("valid options");
 
-    let source = "void run(){\nif(ready){\nagain:\ncall();\n}\n}\n";
-    let expected = "void run()\n{   if(ready)\n{   again:\n        call();\n    }\n}\n";
-    assert_eq!(format_exact(source, &options), expected);
-    assert_eq!(format_exact(expected, &options), expected);
+    assert_eq!(
+        format_exact("void run(){\nif(ready){\nagain:\ncall();\n}\n}\n", &options,),
+        "void run()\n{   if(ready)\n    {   again:\n        call();\n    }\n}\n",
+    );
 }
 
 #[test]
@@ -423,11 +423,11 @@ fn comments_leading_lambda_labels_stand_with_the_label_row() {
     for (style, expected) in [
         (
             "pico",
-            "void outer(void)\n{   auto helper = [&]\n{   /* marker */ next:\n        use(value); }; }\n",
+            "void outer(void)\n{   auto helper = [&]\n    {   /* marker */ next:\n        use(value); }; }\n",
         ),
         (
             "horstmann",
-            "void outer(void)\n{   auto helper = [&]\n{   /* marker */ next:\n        use(value);\n    };\n}\n",
+            "void outer(void)\n{   auto helper = [&]\n    {   /* marker */ next:\n        use(value);\n    };\n}\n",
         ),
     ] {
         let mut options = FormatOptions::default();
@@ -457,7 +457,8 @@ fn deleted_blank_lines_before_a_lambda_label_clean_up_as_in_a_function() {
     // The reference keeps a blank row only after a lambda's brace, where it
     // deletes one after a function's or a control block's equivalent brace.
     let source = "void outer(void)\n{\nauto helper = [&]\n{\n\nnext:\nuse(value);\n};\n}\n";
-    let expected = "void outer(void)\n{   auto helper = [&]\n{   next:\n        use(value); }; }\n";
+    let expected =
+        "void outer(void)\n{   auto helper = [&]\n    {   next:\n        use(value); }; }\n";
     assert_eq!(format_exact(source, &options), expected);
     assert_eq!(format_exact(expected, &options), expected);
 }
@@ -553,7 +554,7 @@ fn indented_lambda_labels_use_the_enclosing_body_column() {
 
     let source = "void outer(void)\n{\nauto helper = [&]\n{\nnext:\nuse(value);\n};\n}\n";
     let expected =
-        "void outer(void)\n{   auto helper = [&]\n{   next:\n        use(value);\n    };\n}\n";
+        "void outer(void)\n{   auto helper = [&]\n    {   next:\n        use(value);\n    };\n}\n";
     assert_eq!(format_exact(source, &options), expected);
     assert_eq!(format_exact(expected, &options), expected);
 }
@@ -747,7 +748,7 @@ fn horstmann_first_switch_body_label_keeps_run_in_column() {
 }
 
 #[test]
-fn pico_indented_run_in_label_moves_opening_brace_outward() {
+fn pico_indented_run_in_label_keeps_the_brace_at_its_block() {
     let mut options = FormatOptions::default();
     apply_command_line_args(
         &mut options,
@@ -758,7 +759,7 @@ fn pico_indented_run_in_label_moves_opening_brace_outward() {
     let expected = fixture!(
         "void outer(void)",
         "{   if (value)",
-        "{   next:",
+        "    {   next:",
         "        use(value); } }",
     );
 
@@ -767,7 +768,7 @@ fn pico_indented_run_in_label_moves_opening_brace_outward() {
 }
 
 #[test]
-fn pico_deleted_empty_line_before_label_does_not_change_brace_layout() {
+fn pico_deleted_empty_line_before_label_keeps_the_brace_at_its_block() {
     let mut options = FormatOptions::default();
     apply_command_line_args(
         &mut options,
@@ -782,7 +783,7 @@ fn pico_deleted_empty_line_before_label_does_not_change_brace_layout() {
     let expected = fixture!(
         "void outer(void)",
         "{   if (value)",
-        "{   next:",
+        "    {   next:",
         "        use(value); } }",
     );
 
@@ -791,7 +792,7 @@ fn pico_deleted_empty_line_before_label_does_not_change_brace_layout() {
 }
 
 #[test]
-fn horstmann_indented_run_in_label_keeps_anonymous_closer_at_body_column() {
+fn horstmann_indented_run_in_label_keeps_anonymous_block_columns() {
     let mut options = FormatOptions::default();
     apply_command_line_args(
         &mut options,
@@ -803,7 +804,7 @@ fn horstmann_indented_run_in_label_keeps_anonymous_closer_at_body_column() {
         "void outer(void)",
         "{   switch (value)",
         "    {",
-        "        {   next:",
+        "            {   next:",
         "                use(value);",
         "            }",
         "    }",

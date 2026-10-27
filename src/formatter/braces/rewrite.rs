@@ -958,10 +958,12 @@ impl FormatEngine<'_> {
         let Some(header) = self.layout.command_state.current_header.as_deref() else {
             return false;
         };
-        if !is_standard_add_braces_header(header) || is_defer_header(header) {
+        // A braceless switch body keeps its own row, but takes no braces.
+        let switch_header = header == "switch";
+        if !switch_header && (!is_standard_add_braces_header(header) || is_defer_header(header)) {
             return false;
         }
-        if matches!(header, "if" | "for" | "while") {
+        if matches!(header, "if" | "for" | "while" | "switch") {
             let open_parens_are_outside_current_block = self
                 .layout
                 .nesting
@@ -1025,7 +1027,7 @@ impl FormatEngine<'_> {
         // a line after a macro call that ends the header line.
         let body_is_empty = matches!(tokens[body_index], Token::Symbol(';'))
             || !self.follows_header_end(tokens, body_index, header);
-        if adding_braces && !body_is_nested_header && !body_is_empty {
+        if adding_braces && !switch_header && !body_is_nested_header && !body_is_empty {
             // A body with no `;` of its own, as a macro loop over a block,
             // gets no braces either.
             let body_is_multi_line = find_statement_semicolon(tokens, body_index, tokens.len())
@@ -1094,14 +1096,17 @@ impl FormatEngine<'_> {
         if ends_empty_line && self.should_preserve_input_empty_line() {
             self.push_empty_line();
         }
+        // A braceless switch keeps its body, the labels and their
+        // statements, at the header's column.
+        let body_level = header_indent + usize::from(!switch_header);
         if let Some(spaces) = exact_body_indent {
             self.layout.continuation_indent.set_next_line_spaces(spaces);
             self.layout.pending_braceless_block_bias = Some(spaces / self.options.indent_width);
         } else {
             self.layout
                 .continuation_indent
-                .set_next_line_level(header_indent + 1);
-            self.layout.pending_braceless_block_bias = Some(header_indent + 1);
+                .set_next_line_level(body_level);
+            self.layout.pending_braceless_block_bias = Some(body_level);
         }
         self.layout.command_state.current_header = None;
         self.previous_was_newline = true;

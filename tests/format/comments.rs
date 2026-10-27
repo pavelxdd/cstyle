@@ -787,15 +787,17 @@ fn run_in_switch_brace_comment_keeps_the_brace_body_column() {
 
 #[test]
 fn run_in_switch_label_comment_keeps_the_inline_label_column() {
+    // The brace keeps its block and the label takes the column after it. The
+    // reference moves the brace out and leaves the closer at the block.
     let source = "void outer(void)\n{\nswitch (value)\n{\n/* marker */ next:\nuse(value);\n}\n}\n";
     for (style, expected) in [
         (
             "--style=pico",
-            "void outer(void)\n{   switch (value)\n{   /* marker */ next:\n            use(value); } }\n",
+            "void outer(void)\n{   switch (value)\n    {   /* marker */ next:\n            use(value); } }\n",
         ),
         (
             "--style=horstmann",
-            "void outer(void)\n{   switch (value)\n{   /* marker */ next:\n            use(value);\n    }\n}\n",
+            "void outer(void)\n{   switch (value)\n    {   /* marker */ next:\n            use(value);\n    }\n}\n",
         ),
     ] {
         let mut options = FormatOptions::default();

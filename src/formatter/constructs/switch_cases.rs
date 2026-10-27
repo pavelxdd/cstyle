@@ -15,22 +15,18 @@ use crate::formatter::structure::blocks::next_code_token;
 use crate::formatter::structure::groups::GroupId;
 use crate::formatter::text::columns::{leading_visual_width, leading_whitespace_len};
 use crate::formatter::text::line_scan::{
-    ContainsAnyByte, advance_quoted_literal, after_leading_comments,
-    holds_code_after_leading_comments, is_bare_comment_line, is_comment_line,
-    preprocessor_directive, trailing_comment_split_limit, unmatched_open_paren_column,
+    ContainsAnyByte, after_leading_comments, holds_code_after_leading_comments,
+    is_bare_comment_line, is_comment_line, preprocessor_directive, trailing_comment_split_limit,
+    unmatched_open_paren_column,
 };
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{is_identifier_continue, is_identifier_start};
 
-pub(crate) fn find_case_colon(line: &str) -> Option<usize> {
-    let trimmed = line.trimmed_start();
-    if !(is_case_label_start(trimmed) || is_default_label_start(trimmed)) {
-        return None;
-    }
-    let start = line.len() - trimmed.len();
-    find_case_colon_from(line, start)
-}
+pub(crate) use crate::formatter::text::labels::{
+    find_case_colon, is_case_label_start, is_default_label_start,
+};
+use crate::formatter::text::labels::{find_case_colon_from, is_byte_digit_separator};
 
 pub(crate) fn split_switch_label_statement(line: &str) -> Option<(String, String)> {
     let colon = find_case_colon(line)?;
@@ -95,102 +91,6 @@ pub(crate) fn multiline_switch_label_colon(
         }
         offset += token_text(token).len();
     }
-    None
-}
-
-pub(crate) fn is_case_label_start(line: &str) -> bool {
-    line.strip_prefix("case")
-        .and_then(|rest| rest.chars().next())
-        .is_some_and(|ch| !is_identifier_continue(ch))
-}
-
-pub(crate) fn is_default_label_start(line: &str) -> bool {
-    line.strip_prefix("default").is_some_and(|rest| {
-        rest.chars()
-            .next()
-            .is_none_or(|ch| !is_identifier_continue(ch))
-    })
-}
-
-fn find_case_colon_from(line: &str, start: usize) -> Option<usize> {
-    // Every byte that matters is ASCII, and no byte of a wider character
-    // equals one.
-    let bytes = line.as_bytes();
-    let mut index = start;
-    while index < bytes.len() && !line.is_char_boundary(index) {
-        index += 1;
-    }
-    let mut quote: Option<char> = None;
-    let mut escaped = false;
-    let mut in_block_comment = false;
-    let mut paren_depth = 0usize;
-    let mut bracket_depth = 0usize;
-    let mut brace_depth = 0usize;
-    let mut ternary_contexts = Vec::new();
-
-    while let Some(&byte) = bytes.get(index) {
-        let next = bytes.get(index + 1).copied();
-
-        if in_block_comment {
-            if byte == b'*' && next == Some(b'/') {
-                in_block_comment = false;
-                index += 2;
-            } else {
-                index += 1;
-            }
-            continue;
-        }
-
-        if quote.is_some() {
-            advance_quoted_literal(char::from(byte), &mut quote, &mut escaped);
-            index += 1;
-            continue;
-        }
-
-        if byte == b'/' && next == Some(b'/') {
-            return None;
-        }
-        if byte == b'/' && next == Some(b'*') {
-            in_block_comment = true;
-            index += 2;
-            continue;
-        }
-        if matches!(byte, b'u' | b'L' | b'U' | b'R')
-            && let Some(end) = raw_strings::end(line, index)
-        {
-            index = end;
-            continue;
-        }
-        if byte == b'"' || (byte == b'\'' && !is_byte_digit_separator(bytes, index)) {
-            quote = Some(char::from(byte));
-            index += 1;
-            continue;
-        }
-        match byte {
-            b'(' => paren_depth += 1,
-            b')' => paren_depth = paren_depth.saturating_sub(1),
-            b'[' => bracket_depth += 1,
-            b']' => bracket_depth = bracket_depth.saturating_sub(1),
-            b'{' => brace_depth += 1,
-            b'}' => brace_depth = brace_depth.saturating_sub(1),
-            b'?' => ternary_contexts.push((paren_depth, bracket_depth, brace_depth)),
-            b':' if next == Some(b':') => {
-                index += 2;
-                continue;
-            }
-            b':' if ternary_contexts.last().copied()
-                == Some((paren_depth, bracket_depth, brace_depth)) =>
-            {
-                ternary_contexts.pop();
-            }
-            b':' if paren_depth == 0 && bracket_depth == 0 && brace_depth == 0 => {
-                return Some(index);
-            }
-            _ => {}
-        }
-        index += 1;
-    }
-
     None
 }
 
@@ -328,13 +228,6 @@ const DELIMITER_INERT: [bool; 256] = {
     }
     inert
 };
-
-/// Whether the `'` at byte `index` separates digits of a number.
-fn is_byte_digit_separator(bytes: &[u8], index: usize) -> bool {
-    index > 0
-        && bytes[index - 1].is_ascii_hexdigit()
-        && bytes.get(index + 1).is_some_and(u8::is_ascii_hexdigit)
-}
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
 pub(crate) struct SwitchCaseObserver {
@@ -1894,6 +1787,51 @@ impl FormatEngine<'_> {
         None
     }
 
+    /// The column of a label of a switch body written without braces: the
+    /// column of the `switch` header, a level left for a label after the
+    /// first.
+    fn braceless_switch_label_indent_spaces(&self) -> Option<usize> {
+        let label = self.output.pending_tokens()?.first;
+        if !matches!(&self.tree.tokens[label], Token::Word(word) if word == "case" || word == "default")
+        {
+            return None;
+        }
+        let first = self.tree.statements.braceless_header(label).filter(
+            |&header| matches!(&self.tree.tokens[header], Token::Word(word) if word == "switch"),
+        );
+        if let Some(header) = first {
+            let line = self.output.line_with_token(header)?;
+            return Some(self.output.lead_width(line, self.options.tab_width));
+        }
+        // A label after the first stands a level left of the header, as the
+        // switch's labels do. A block that opens a switch body holds its
+        // labels through that body instead.
+        let group = self.tree.groups.enclosing(label)?;
+        if self.group_opens_switch_body(group) {
+            return None;
+        }
+        let first = self
+            .tree
+            .groups
+            .members_before(Some(group), label)
+            .filter(|&token| {
+                self.tree
+                    .statements
+                    .braceless_header(token)
+                    .is_some_and(|header| {
+                        matches!(&self.tree.tokens[header], Token::Word(word) if word == "switch")
+                    })
+            })
+            .last()?;
+        let header = self.tree.statements.braceless_header(first)?;
+        let line = self.output.line_with_token(header)?;
+        Some(
+            self.output
+                .lead_width(line, self.options.tab_width)
+                .saturating_sub(self.options.indent_width),
+        )
+    }
+
     /// The column of a label in the innermost open switch, when the
     /// switch line sets it.
     pub(crate) fn switch_label_indent_spaces(&self) -> Option<usize> {
@@ -1925,10 +1863,10 @@ impl FormatEngine<'_> {
     /// body or in a block a label of that body opens. A label nested in
     /// another block labels that block's statements.
     fn pending_label_stands_in_switch_body(&self) -> bool {
-        self.layout
-            .frame_stack
-            .brace_at_depth(self.layout.nesting.brace_header_stack.len())
-            .is_some_and(|frame| frame.semantic_kind == BraceSemanticKind::Command)
+        // A braceless switch owns its labels, and their case body, through
+        // its header; the block holding it is no switch body.
+        self.braceless_switch_label_indent_spaces().is_none()
+            && self.directly_in_switch_body()
             && self.pending_nested_label().is_none()
     }
 
@@ -1940,21 +1878,14 @@ impl FormatEngine<'_> {
             matches!(&self.tree.tokens[first], Token::Word(word) if word == "case" || word == "default")
         })?;
         let group = self.tree.groups.enclosing(label)?;
-        let opens_switch_body = |group| {
-            let open = self.tree.groups.get(group).open;
-            let Some(close) = self.tree.previous_code_token(open) else {
-                return false;
-            };
-            self.tree
-                .groups
-                .closed_at(close)
-                .map(|condition| self.tree.groups.get(condition).open)
-                .and_then(|condition| self.tree.previous_code_token(condition))
-                .is_some_and(
-                    |word| matches!(&self.tree.tokens[word], Token::Word(word) if word == "switch"),
-                )
-        };
-        if opens_switch_body(group) {
+        if self.group_opens_switch_body(group) {
+            return None;
+        }
+        // A switch without braces owns its labels through its header, not
+        // through the block that holds it.
+        if self.tree.statements.braceless_header(label).is_some_and(
+            |header| matches!(&self.tree.tokens[header], Token::Word(word) if word == "switch"),
+        ) {
             return None;
         }
         let open = self.tree.groups.get(group).open;
@@ -1967,8 +1898,25 @@ impl FormatEngine<'_> {
                 .groups
                 .get(group)
                 .parent
-                .is_some_and(opens_switch_body);
+                .is_some_and(|parent| self.group_opens_switch_body(parent));
         (!opens_case_block).then_some((label, group))
+    }
+
+    /// Whether the block `group` is the body of a switch, which owns the
+    /// labels directly in it.
+    fn group_opens_switch_body(&self, group: GroupId) -> bool {
+        let open = self.tree.groups.get(group).open;
+        let Some(close) = self.tree.previous_code_token(open) else {
+            return false;
+        };
+        self.tree
+            .groups
+            .closed_at(close)
+            .map(|condition| self.tree.groups.get(condition).open)
+            .and_then(|condition| self.tree.previous_code_token(condition))
+            .is_some_and(
+                |word| matches!(&self.tree.tokens[word], Token::Word(word) if word == "switch"),
+            )
     }
 
     /// The column of a nested label: with the labels before it in its
@@ -2007,6 +1955,9 @@ impl FormatEngine<'_> {
         mut exact_indent_spaces: Option<usize>,
     ) -> Option<usize> {
         if line_kind == LineKind::SwitchLabel {
+            if let Some(spaces) = self.braceless_switch_label_indent_spaces() {
+                return Some(spaces);
+            }
             if let Some((label, group)) = self.pending_nested_label() {
                 return Some(self.nested_label_indent_spaces(label, group));
             }

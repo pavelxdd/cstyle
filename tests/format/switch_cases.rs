@@ -200,6 +200,53 @@ fn file_scope_switch_definition_does_not_add_command_body_indent() {
 }
 
 #[test]
+fn a_braceless_switch_body_keeps_its_own_row() {
+    let options = options_from_args(&["--style=allman"]);
+    for (body, expected_body) in [("use(value);", "        use(value);"), (";", "        ;")] {
+        let source = format!("void outer(void)\n{{\nswitch (value)\n{body}\n}}\n");
+        let expected = format!("void outer(void)\n{{\n    switch (value)\n{expected_body}\n}}\n");
+        let output = format_exact(&source, &options);
+        assert_eq!(output, expected, "body {body}");
+        assert_eq!(format_exact(&expected, &options), expected, "body {body}");
+    }
+}
+
+#[test]
+fn whitesmith_braceless_case_block_nests_from_its_label() {
+    // The reference draws the block's opener and body at the label's column
+    // and its closer one level in, which no Whitesmith block does. The block
+    // here nests from the label like every other Whitesmith block.
+    let options = options_from_args(&["--style=whitesmith"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "switch (value)",
+        "case 1:",
+        "{",
+        "use(value);",
+        "}",
+        "default:",
+        "use(other);",
+        "}",
+    );
+    let expected = fixture!(
+        "void f(void)",
+        "    {",
+        "    switch (value)",
+        "    case 1:",
+        "        {",
+        "        use(value);",
+        "        }",
+        "default:",
+        "    use(other);",
+        "    }",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
 fn file_scope_pico_places_a_leading_default_like_a_leading_case() {
     // The reference runs a leading default in one level deeper than a leading
     // case, though both labels stand at the same position of the same switch.

@@ -209,17 +209,6 @@ impl FormatEngine<'_> {
         } else {
             self.apply_tree_anchor_layout(line, layout)
         };
-        if let Some(open) = self.output.pending_tokens().map(|span| span.first)
-            && let Some(spaces) = self.run_in_label_opening_brace_indent_spaces(
-                line,
-                open,
-                layout
-                    .exact_indent_spaces
-                    .unwrap_or(layout.indent * self.options.indent_width),
-            )
-        {
-            layout.exact_indent_spaces = Some(spaces);
-        }
         self.plain_statement_line = false;
         if self.preprocessor.group_blocks.contains(&true)
             && layout.line_kind == LineKind::Normal

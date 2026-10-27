@@ -2238,6 +2238,9 @@ impl FormatEngine<'_> {
             // closing paren starts no body.
             let trimmed = after_leading_comments(code.trimmed_start());
             if !line_start.starts_with_any(b"{}#)")
+                // A switch label takes its column from the switch, not from
+                // the header's body; its own body still takes this floor.
+                && layout.line_kind != LineKind::SwitchLabel
                 && ((code.ends_with('{')
                     && (starts_header_word(trimmed, "if")
                         || starts_header_word(trimmed, "while")
