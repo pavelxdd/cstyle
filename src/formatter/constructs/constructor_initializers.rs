@@ -627,7 +627,11 @@ impl FormatEngine<'_> {
         // So do the arguments of a member whose name ends the row before.
         let member_arguments =
             trimmed.starts_with('(') && previous_code.ends_with(is_identifier_continue);
-        if !previous_code.ends_with(',') && previous_code.trimmed() != ":" && !member_arguments {
+        if !previous_code.ends_with(',')
+            && !(previous_code.trimmed() == ":"
+                && self.line_holds_initializer_colon(previous_index))
+            && !member_arguments
+        {
             return None;
         }
         // The constructor's body may open on the last member's row.

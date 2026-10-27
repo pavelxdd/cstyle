@@ -463,6 +463,86 @@ fn deleted_blank_lines_before_a_lambda_label_clean_up_as_in_a_function() {
 }
 
 #[test]
+fn split_label_colons_follow_the_label_indentation() {
+    let source = "void outer(void)\n{\nif (ready)\n{\nnext\n:\nuse(value);\n}\n}\n";
+    for (style, indent_labels, expected) in [
+        (
+            "pico",
+            true,
+            "void outer(void)\n{   if (ready)\n    {   next\n    :\n        use(value); } }\n",
+        ),
+        (
+            "pico",
+            false,
+            "void outer(void)\n{   if (ready)\n    {   next\n:\n        use(value); } }\n",
+        ),
+        (
+            "allman",
+            true,
+            "void outer(void)\n{\n    if (ready)\n    {\n        next\n    :\n        use(value);\n    }\n}\n",
+        ),
+        (
+            "allman",
+            false,
+            "void outer(void)\n{\n    if (ready)\n    {\n        next\n:\n        use(value);\n    }\n}\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        let mut arguments = vec![format!("--style={style}")];
+        if indent_labels {
+            arguments.push("--indent-labels".to_owned());
+        }
+        apply_command_line_args(&mut options, &arguments).expect("valid options");
+        let output = format_exact(source, &options);
+        assert_eq!(
+            output, expected,
+            "style {style}, indent labels {indent_labels}"
+        );
+        assert_eq!(format_exact(&output, &options), expected);
+    }
+}
+
+#[test]
+fn split_label_colons_inside_a_lambda_keep_the_label_body_column() {
+    let source = "void outer(void)\n{\nauto helper = [&]\n{\nnext\n:\nuse(value);\n};\n}\n";
+    for (style, indent_labels, expected) in [
+        (
+            "pico",
+            true,
+            "void outer(void)\n{   auto helper = [&]\n    {   next\n    :\n        use(value); }; }\n",
+        ),
+        (
+            "pico",
+            false,
+            "void outer(void)\n{   auto helper = [&]\n    {   next\n:\n        use(value); }; }\n",
+        ),
+        (
+            "horstmann",
+            true,
+            "void outer(void)\n{   auto helper = [&]\n    {   next\n    :\n        use(value);\n    };\n}\n",
+        ),
+        (
+            "horstmann",
+            false,
+            "void outer(void)\n{   auto helper = [&]\n    {   next\n:\n        use(value);\n    };\n}\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        let mut arguments = vec![format!("--style={style}")];
+        if indent_labels {
+            arguments.push("--indent-labels".to_owned());
+        }
+        apply_command_line_args(&mut options, &arguments).expect("valid options");
+        let output = format_exact(source, &options);
+        assert_eq!(
+            output, expected,
+            "style {style}, indent labels {indent_labels}"
+        );
+        assert_eq!(format_exact(&output, &options), expected);
+    }
+}
+
+#[test]
 fn indented_lambda_labels_use_the_enclosing_body_column() {
     let mut options = FormatOptions::default();
     apply_command_line_args(

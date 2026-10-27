@@ -54,9 +54,11 @@ pub(crate) fn reconcile_line_kind<'a>(
     enclosing_brace: Option<BraceType>,
     label_context: impl FnOnce() -> LabelContext<'a>,
 ) -> LineKind {
+    let context = label_context();
     if kind == LineKind::Normal
         && line.contains(':')
         && (is_attached_user_label(line)
+            || is_split_label_colon(line, context.previous_line)
             || is_user_label_candidate(line, access_labels)
             || (starts_access_label(line, access_labels)
                 && enclosing_brace.is_some_and(is_class_like_brace_type)))
@@ -66,7 +68,6 @@ pub(crate) fn reconcile_line_kind<'a>(
     if kind != LineKind::Label {
         return kind;
     }
-    let context = label_context();
     if context.in_initializer || context.in_ternary {
         kind = LineKind::Normal;
     }
@@ -721,6 +722,14 @@ pub(crate) fn is_attached_user_label(line: &str) -> bool {
     }
     let rest = rest.trimmed_start();
     rest.starts_with('{') && !rest.starts_with("::")
+}
+
+/// Whether the line holds only the colon the label's name was split from.
+fn is_split_label_colon(line: &str, previous_line: Option<&str>) -> bool {
+    line[..trailing_comment_split_limit(line)].trimmed() == ":"
+        && previous_line.is_some_and(|previous| {
+            is_single_identifier(previous[..trailing_comment_split_limit(previous)].trimmed())
+        })
 }
 
 fn is_user_label_candidate(line: &str, access_labels: &[String]) -> bool {
