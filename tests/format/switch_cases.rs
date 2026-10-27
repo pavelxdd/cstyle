@@ -1996,6 +1996,74 @@ fn a_header_block_kept_after_a_case_label_closes_at_the_header() {
 }
 
 #[test]
+fn pico_places_the_switch_brace_for_case_and_default_alike() {
+    // The reference drops the switch brace and pads the label as a statement
+    // only for a leading default, while a leading case leaves both alone.
+    let case_source = fixture!(
+        "void outer(void)",
+        "{",
+        "switch (value)",
+        "{",
+        "case 1:",
+        "{",
+        "use(value);",
+        "}",
+        "}",
+        "}",
+    );
+    let default_source = case_source.replace("case 1:", "default:");
+    for (extra, expected) in [
+        (
+            &[][..],
+            "void outer(void)\n{   switch (value)\n    {   case 1:\n        {   use(value); } } }\n",
+        ),
+        (
+            &["--indent-switches"],
+            "void outer(void)\n{   switch (value)\n    {   case 1:\n        {   use(value); } } }\n",
+        ),
+        (
+            &["--indent-cases"],
+            "void outer(void)\n{   switch (value)\n    {   case 1:\n            {   use(value); } } }\n",
+        ),
+    ] {
+        let mut arguments = vec!["--style=pico"];
+        arguments.extend_from_slice(extra);
+        let options = options_from_args(&arguments);
+        let case_output = format_exact(case_source, &options);
+        assert_eq!(case_output, expected, "style pico with {extra:?}");
+        let default_output = format_exact(&default_source, &options);
+        assert_eq!(
+            default_output,
+            expected.replace("case 1:", "default:"),
+            "style pico with {extra:?}"
+        );
+        assert_eq!(format_exact(&default_output, &options), default_output);
+    }
+}
+
+#[test]
+fn pico_pads_a_file_scope_default_like_a_case() {
+    let case_source = fixture!("switch (value)", "{", "case 1:", "use(value);", "}",);
+    let default_source = case_source.replace("case 1:", "default:");
+    for extra in [&[][..], &["--indent-switches"], &["--indent-cases"]] {
+        let mut arguments = vec!["--style=pico"];
+        arguments.extend_from_slice(extra);
+        let options = options_from_args(&arguments);
+        let case_output = format_exact(case_source, &options);
+        assert_eq!(
+            case_output, "switch (value)\n{   case 1:\n    use(value); }\n",
+            "style pico with {extra:?}"
+        );
+        let default_output = format_exact(&default_source, &options);
+        assert_eq!(
+            default_output, "switch (value)\n{   default:\n    use(value); }\n",
+            "style pico with {extra:?}"
+        );
+        assert_eq!(format_exact(&default_output, &options), default_output);
+    }
+}
+
+#[test]
 fn a_pico_one_line_switch_block_runs_a_statement_in_at_the_case_body() {
     let options = options_from_args(&["--style=pico"]);
     let input = "int f(int err)\n{   switch (err)\n    {  M(G) }\n    switch (err)\n    {  case 1: x(); }\n    return u(err); }\n";
