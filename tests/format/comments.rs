@@ -760,6 +760,88 @@ fn horstmann_runs_switch_line_comment_into_switch_brace() {
 }
 
 #[test]
+fn run_in_switch_brace_comment_keeps_the_brace_body_column() {
+    let source = "void outer(void)\n{\nswitch (value)\n{ // marker\nnext:\nuse(value);\n}\n}\n";
+    let separate = "void outer(void)\n{\nswitch (value)\n{\n// marker\nnext:\nuse(value);\n}\n}\n";
+    for (style, expected) in [
+        (
+            "--style=pico",
+            "void outer(void)\n{   switch (value)\n    {   // marker\nnext:\n            use(value); } }\n",
+        ),
+        (
+            "--style=horstmann",
+            "void outer(void)\n{   switch (value)\n    {   // marker\nnext:\n            use(value);\n    }\n}\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[style.to_owned()]).expect("valid options");
+
+        assert_eq!(format_exact(source, &options), expected);
+        assert_eq!(format_exact(expected, &options), expected);
+
+        options.indent_col1_comments = true;
+        assert_eq!(format_exact(separate, &options), expected);
+        assert_eq!(format_exact(expected, &options), expected);
+    }
+}
+
+#[test]
+fn run_in_switch_label_comment_keeps_the_inline_label_column() {
+    let source = "void outer(void)\n{\nswitch (value)\n{\n/* marker */ next:\nuse(value);\n}\n}\n";
+    for (style, expected) in [
+        (
+            "--style=pico",
+            "void outer(void)\n{   switch (value)\n{   /* marker */ next:\n            use(value); } }\n",
+        ),
+        (
+            "--style=horstmann",
+            "void outer(void)\n{   switch (value)\n{   /* marker */ next:\n            use(value);\n    }\n}\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(
+            &mut options,
+            &[style.to_owned(), "--indent-labels".to_owned()],
+        )
+        .expect("valid options");
+
+        assert_eq!(format_exact(source, &options), expected);
+        assert_eq!(format_exact(expected, &options), expected);
+    }
+}
+
+#[test]
+fn run_in_switch_label_comment_respects_preserved_empty_lines() {
+    let source = "void outer(void)\n{\nswitch (value)\n{\n\n// marker\nnext:\nuse(value);\n}\n}\n";
+    for (style, preserved, deleted) in [
+        (
+            "--style=pico",
+            "void outer(void)\n{   switch (value)\n    {\n\n            // marker\nnext:\n            use(value); } }\n",
+            "void outer(void)\n{   switch (value)\n    {   // marker\nnext:\n            use(value); } }\n",
+        ),
+        (
+            "--style=horstmann",
+            "void outer(void)\n{   switch (value)\n    {\n\n            // marker\nnext:\n            use(value);\n    }\n}\n",
+            "void outer(void)\n{   switch (value)\n    {   // marker\nnext:\n            use(value);\n    }\n}\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(
+            &mut options,
+            &[style.to_owned(), "--indent-col1-comments".to_owned()],
+        )
+        .expect("valid options");
+
+        assert_eq!(format_exact(source, &options), preserved);
+        assert_eq!(format_exact(preserved, &options), preserved);
+
+        options.delete_empty_lines = true;
+        assert_eq!(format_exact(source, &options), deleted);
+        assert_eq!(format_exact(deleted, &options), deleted);
+    }
+}
+
+#[test]
 fn horstmann_runs_switch_block_comment_into_switch_brace() {
     let mut options = FormatOptions::default();
     apply_command_line_args(&mut options, &["--style=horstmann".to_owned()])

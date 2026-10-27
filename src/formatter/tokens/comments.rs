@@ -812,6 +812,46 @@ impl FormatEngine<'_> {
         }
     }
 
+    fn run_in_switch_label_comment_indent_spaces(
+        &self,
+        kind: CommentKind,
+        index: usize,
+    ) -> Option<usize> {
+        if !matches!(
+            self.options.brace_style,
+            BraceStyle::Horstmann | BraceStyle::Pico
+        ) || (kind == CommentKind::Line
+            && self.layout.line_state.column1_line_comment
+            && !self.options.indent_col1_comments)
+        {
+            return None;
+        }
+        let frame = self.layout.frame_stack.active_brace()?;
+        let open = self.tree.previous_code_token(index)?;
+        if frame.header.as_deref() != Some("switch") || frame.open_token != Some(open) {
+            return None;
+        }
+        let tokens = &self.tree.tokens;
+        let mut newlines = 0;
+        for token in &tokens[open + 1..index] {
+            match token {
+                Token::Whitespace(_) => {}
+                Token::Newline if newlines == 0 || self.options.delete_empty_lines => newlines += 1,
+                _ => return None,
+            }
+        }
+        let label = next_code_token(tokens, index + 1)?;
+        let colon = next_code_token(tokens, label + 1)?;
+        if !self.ends_user_label(colon)
+            || self.ends_access_label(colon)
+            || next_code_token(tokens, colon + 1)
+                .is_some_and(|after| matches!(tokens[after], Token::Symbol(':')))
+        {
+            return None;
+        }
+        Some(frame.body_indent_column)
+    }
+
     pub(crate) fn active_body_comment_indent_spaces(&self) -> Option<usize> {
         let frame = self.layout.frame_stack.active_brace()?;
         let unindented_extern_c =
@@ -1046,6 +1086,18 @@ impl FormatEngine<'_> {
                     .as_deref()
                     .is_some_and(|whitespace| whitespace.contains('\n')));
         self.position_comment_start(kind, comment, &indents);
+        if self.current.trimmed().is_empty()
+            && indents.label_line.is_none()
+            && let Some(spaces) = self.run_in_switch_label_comment_indent_spaces(kind, index)
+        {
+            let prefix = self
+                .options
+                .continuation_indent_prefix(spaces / self.options.indent_width.max(1), spaces);
+            self.clear_current();
+            self.current.push_str(&prefix);
+            self.current_is_preindented = true;
+            self.comments.comment_keeps_line_column = true;
+        }
         self.push_positioned_comment(kind, comment, &indents);
         if trails_code && !self.current_is_blank() {
             self.layout.previous = previous_before;
