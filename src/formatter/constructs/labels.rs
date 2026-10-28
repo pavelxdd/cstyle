@@ -11,12 +11,12 @@ use crate::formatter::state::BraceType;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::language;
 use crate::formatter::text::columns::leading_visual_width;
-use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{ContainsAnyByte, after_leading_comments};
 use crate::formatter::text::line_scan::{
     find_byte, is_comment_line, line_paren_imbalance, trailing_comment_split_limit,
     unmatched_open_paren_column,
 };
+use crate::formatter::text::line_scan::{has_hash_outside_literals, has_unmatched_open_brace};
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{is_identifier_continue, is_identifier_start, leading_identifier};
@@ -384,7 +384,9 @@ impl FormatEngine<'_> {
         if delimiters().continues() {
             return None;
         }
-        let target = if line_start.starts_with('{') {
+        // A block the line closes itself is a statement of the body, not
+        // the label's own brace.
+        let target = if line_start.starts_with('{') && has_unmatched_open_brace(line_start) {
             frame.sibling_indent_column
         } else {
             frame.body_indent_column

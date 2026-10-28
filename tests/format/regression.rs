@@ -26995,3 +26995,23 @@ fn a_comment_led_argument_row_wrapped_by_length_continues_at_its_own_column_afte
     check(input, args, expected);
     check(expected, args, expected);
 }
+
+#[test]
+fn a_statement_after_an_added_one_line_block_ending_a_broken_else_if_in_a_case_returns_to_the_case_body()
+ {
+    let input =
+        "switch (value) {\ncase 1:\n    if (a) f();\n    else if (b) f();\n    result = 1;\n}\n";
+    let expected = "switch (value) {\ncase 1:\n    if (a) { f(); }\n    else\n        if (b) { f(); }\n    result = 1;\n}\n";
+    let args = &["--add-one-line-braces", "--break-elseifs"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn an_added_one_line_block_in_a_run_in_label_block_stands_at_its_header() {
+    let input = "void f() {\n    l: {\n        if (a)\n            g();\n    }\n}\n";
+    let expected = "void f() {\nl: {\n        if (a)\n        { g(); }\n    }\n}\n";
+    let args = &["--add-one-line-braces"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}

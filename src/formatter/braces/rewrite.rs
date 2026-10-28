@@ -369,7 +369,13 @@ impl FormatEngine<'_> {
             let broken_else_if = header_is_if && {
                 let lines = self.output.scoped();
                 let mut rows = lines.iter().rev().filter(|line| !line.trimmed().is_empty());
-                rows.nth(2).is_some_and(|line| line.trimmed() == "else")
+                let last = rows.next();
+                let before = rows.next();
+                // The block stands on the `if` row or on one of its own.
+                before.is_some_and(|line| {
+                    line.trimmed() == "else"
+                        && last.is_some_and(|row| row.trimmed_start().starts_with("if"))
+                }) || rows.next().is_some_and(|line| line.trimmed() == "else")
             };
             let else_follows = tokens[semicolon + 1..]
                 .iter()
