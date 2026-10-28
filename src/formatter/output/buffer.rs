@@ -2190,6 +2190,12 @@ impl OutputBuffer {
         from
     }
 
+    /// Whether line `index` is comment text: a comment row, or a row a block
+    /// comment's text starts.
+    fn is_comment_row_at(&self, index: usize, trimmed: &str) -> bool {
+        is_comment_row(trimmed) || self.comments[index].get().lead.is_some()
+    }
+
     /// The comment rows that end the lines in scope; see [`CommentRun`].
     pub(crate) fn comment_run(&self) -> CommentRun {
         let range = self.scoped_range();
@@ -2204,7 +2210,7 @@ impl OutputBuffer {
                     if trimmed.is_empty() {
                         continue;
                     }
-                    if !is_comment_row(trimmed) {
+                    if !self.is_comment_row_at(index, trimmed) {
                         run = CommentRun {
                             before: Some(index),
                             ..CommentRun::default()
@@ -2224,7 +2230,7 @@ impl OutputBuffer {
                     if trimmed.is_empty() {
                         continue;
                     }
-                    if !is_comment_row(trimmed) {
+                    if !self.is_comment_row_at(index, trimmed) {
                         run.before = Some(index);
                         break;
                     }

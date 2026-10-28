@@ -26796,3 +26796,12 @@ fn break_blocks_separates_a_function_head_whose_return_type_breaks() {
     assert_eq!(output, expected);
     assert_eq!(format_exact(&output, &options), expected);
 }
+
+#[test]
+fn a_block_comment_row_reading_else_leaves_the_next_statement_at_its_column() {
+    let options = FormatOptions::default();
+    let source = "/*\n else\n */\nstatic int helper(int value)\n{\n}\n";
+    let output = format_exact(source, &options);
+    assert_eq!(output, source);
+    assert_eq!(format_exact(&output, &options), source);
+}

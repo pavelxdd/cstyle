@@ -304,6 +304,7 @@ impl FormatEngine<'_> {
             return None;
         }
         let mut comment_indent = None;
+        let mut inside_block_comment = false;
         for previous in self
             .output
             .scoped()
@@ -311,8 +312,15 @@ impl FormatEngine<'_> {
             .rev()
             .filter(|line| !line.trimmed().is_empty())
         {
-            if is_comment_line(previous.trimmed_start()) {
+            // A row inside a block comment is comment text, whatever it reads.
+            if inside_block_comment || is_comment_line(previous.trimmed_start()) {
                 comment_indent = Some(leading_visual_width(previous, self.options.tab_width));
+                let text = previous.trimmed();
+                inside_block_comment = if inside_block_comment {
+                    text.rfind("/*") <= text.rfind("*/")
+                } else {
+                    text.ends_with("*/") && !text.contains("/*")
+                };
                 continue;
             }
             let previous_trimmed = previous.trimmed();
