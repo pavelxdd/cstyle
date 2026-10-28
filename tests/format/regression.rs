@@ -26829,3 +26829,25 @@ fn convert_tabs_ends_an_unterminated_literal_at_its_line() {
         "\"value\n/* note\n *  text\n */\n",
     );
 }
+
+#[test]
+fn indent_after_parens_keeps_a_closing_paren_before_a_one_line_block_at_its_header() {
+    let args = &["--indent-after-parens", "--keep-one-line-blocks"];
+    for (input, expected) in [
+        (
+            "if (value\n&& result\n) { helper(); }\n",
+            "if (value\n    && result\n) { helper(); }\n",
+        ),
+        (
+            "while (value\n&& result\n) { helper(); }\n",
+            "while (value\n    && result\n) { helper(); }\n",
+        ),
+        (
+            "void helper(int value,\nint result\n) { value = result; }\n",
+            "void helper(int value,\n    int result\n) { value = result; }\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}

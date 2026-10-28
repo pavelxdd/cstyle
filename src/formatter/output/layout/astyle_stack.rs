@@ -477,7 +477,17 @@ impl FormatEngine<'_> {
             {
                 return true;
             }
-            from = at + 1;
+            // The block opened after the paren closes on the row with it.
+            from = groups
+                .opened_at(at)
+                .and_then(|block| groups.get(block).close)
+                .filter(|&close| {
+                    close < limit
+                        && !tokens[at..close]
+                            .iter()
+                            .any(|token| matches!(token, Token::Newline))
+                })
+                .map_or(at + 1, |close| close + 1);
         }
     }
 
