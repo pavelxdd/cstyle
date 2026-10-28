@@ -219,9 +219,11 @@ fn to_spaces_stateful(
         if byte == b'\n' && raw_delimiter.is_none() {
             column = 0;
             in_line_comment = false;
+            // An escaped newline never reaches here; a quote still open ends.
+            quote = None;
             at_indent = true;
-            braces_lead = !in_block_comment && quote.is_none();
-            code_on_line = in_block_comment || quote.is_some();
+            braces_lead = !in_block_comment;
+            code_on_line = in_block_comment;
             if enables_after_line {
                 disabled = false;
                 enables_after_line = false;

@@ -26805,3 +26805,27 @@ fn a_block_comment_row_reading_else_leaves_the_next_statement_at_its_column() {
     assert_eq!(output, source);
     assert_eq!(format_exact(&output, &options), source);
 }
+
+#[test]
+fn convert_tabs_ends_an_unterminated_literal_at_its_line() {
+    check(
+        "\"value\nint\tresult;\n",
+        &["--convert-tabs"],
+        "\"value\nint result;\n",
+    );
+    check(
+        "'v\nint\tresult;\n",
+        &["--convert-tabs"],
+        "'v\nint result;\n",
+    );
+    check(
+        "\"value\\\nint\tresult;\n",
+        &["--convert-tabs"],
+        "\"value\\\nint\tresult;\n",
+    );
+    check(
+        "\"value\n/* note\n *\ttext\n */\n",
+        &["--convert-tabs"],
+        "\"value\n/* note\n *  text\n */\n",
+    );
+}
