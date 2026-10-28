@@ -104,7 +104,8 @@ impl FormatEngine<'_> {
         // keeps, when its body is on that line too.
         let follows_statement = header == "if"
             && self.options.keeps_multi_statement_line()
-            && if_follows_statement_on_line(tokens, start);
+            && if_follows_statement_on_line(tokens, start)
+            && !self.in_broken_one_line_block(start);
         let header_is_else = header == "else";
         let header_is_if = header == "if";
         let header_is_do = header == "do";

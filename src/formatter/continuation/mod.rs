@@ -1708,6 +1708,10 @@ impl FormatEngine<'_> {
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
             }
+            // A block comment's body holds no statement.
+            if self.output.comment_start_index(index) != index {
+                continue;
+            }
             let code = self.output.code_trimmed_of(trimmed);
             if code.starts_with("return ") && !code.ends_with(';') {
                 return Some(

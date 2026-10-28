@@ -1874,6 +1874,29 @@ impl FormatEngine<'_> {
             && self.pending_nested_label().is_none()
     }
 
+    /// Whether the label the pending line starts with stands in the block a
+    /// label of a switch body opens.
+    fn pending_label_in_case_block(&self) -> bool {
+        let Some(label) = self.output.pending_tokens().map(|span| span.first).filter(|&first| {
+            matches!(&self.tree.tokens[first], Token::Word(word) if word == "case" || word == "default")
+        }) else {
+            return false;
+        };
+        let Some(group) = self.tree.groups.enclosing(label) else {
+            return false;
+        };
+        let open = self.tree.groups.get(group).open;
+        self.tree
+            .previous_code_token(open)
+            .is_some_and(|colon| matches!(self.tree.tokens[colon], Token::Symbol(':')))
+            && self
+                .tree
+                .groups
+                .get(group)
+                .parent
+                .is_some_and(|parent| self.group_opens_switch_body(parent))
+    }
+
     /// The label the pending line starts with and the block holding it,
     /// when that block is neither a switch's body nor a block a label of
     /// that body opens.
@@ -2463,15 +2486,16 @@ impl FormatEngine<'_> {
         // A block given to a braceless header is its body, not a sibling.
         let header_body_column = self
             .output
-            .last_line_outside_comment()
-            .filter(|previous| {
-                let header = previous
+            .last_line_outside_comment_index()
+            .map(|previous| self.statement_start_line(previous))
+            .filter(|&start| {
+                let header = self.output[start]
                     .trimmed_start()
                     .trim_start_matches('}')
                     .trimmed_start();
                 line_is_control_body_header(header) || header.trimmed_end() == "do"
             })
-            .map(|previous| leading_visual_width(previous, self.options.tab_width));
+            .map(|start| self.output.lead_width(start, self.options.tab_width));
         let target = if line_start.starts_with('{')
             && let Some(header_column) = header_body_column
         {
@@ -2680,10 +2704,16 @@ impl FormatEngine<'_> {
                 .frame_stack
                 .active_brace()
                 .is_some_and(|frame| frame.case_block && frame.case_header_pending == 0);
+        // The statements of a label in a case block stand a level inside the
+        // label, which the block's own levels already count; Whitesmith
+        // counts them by case body depth instead.
+        let label_in_case_block = self.options.brace_style != BraceStyle::Whitesmith
+            && self.pending_label_in_case_block();
         // A label nested in another block leaves its statements at that
         // block's level.
         if (line_kind == LineKind::SwitchLabel || statement_in_switch_body)
             && !label_in_indented_case_block
+            && !(line_kind == LineKind::SwitchLabel && label_in_case_block)
             && (line_kind != LineKind::SwitchLabel || self.pending_label_stands_in_switch_body())
         {
             self.register_case_body_indent();

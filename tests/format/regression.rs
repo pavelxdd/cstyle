@@ -26707,6 +26707,17 @@ fn a_label_in_a_case_block_keeps_the_statements_after_the_first_in_its_block() {
 }
 
 #[test]
+fn a_label_opening_a_case_block_adds_no_level_to_the_statements_of_its_nested_labels() {
+    let input = "switch(op)\n{\ncase 1: {\ncase 2:\n  if( a ){\n    n = 1;\n  }\n}\n}\n";
+    let allman = "switch(op)\n{\ncase 1:\n{\n    case 2:\n        if( a )\n        {\n            n = 1;\n        }\n}\n}\n";
+    check(input, &["--style=allman", "--indent-switches"], allman);
+    check(allman, &["--style=allman", "--indent-switches"], allman);
+    let pico = "switch(op)\n{   case 1:\n{   case 2:\n        if( a )\n        {   n = 1; } } }\n";
+    check(input, &["--style=pico"], pico);
+    check(pico, &["--style=pico"], pico);
+}
+
+#[test]
 fn a_constructor_initializer_split_inside_its_arguments_stays_one_pass_stable() {
     let mut options = FormatOptions::default();
     apply_command_line_args(
@@ -27063,4 +27074,141 @@ fn broken_else_if_after_an_empty_statement_body_indents_a_leading_comment_as_its
     let args = &["--break-elseifs", "--add-braces"];
     check(input, args, expected);
     check(expected, args, expected);
+}
+
+#[test]
+fn deleted_empty_lines_before_a_run_in_closer_count_toward_the_maximum_code_length() {
+    let input = "if (d) {\n    if (dupSearchDict != NULL) dictRelease(dupSearchDict);\n\n}\n";
+    let expected = "if ( d ) {\n    if ( dupSearchDict != NULL ) dictRelease (\n            dupSearchDict ); }\n";
+    let args = &[
+        "--style=lisp",
+        "--pad-paren",
+        "--delete-empty-lines",
+        "--max-code-length=60",
+    ];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn added_block_braces_within_a_broken_else_if_block_keep_the_vtk_brace_level() {
+    let input = "void f() {\n    if (a) {\n        g();\n    } else if (b) {\n        if (c) h();\n    }\n}\n";
+    let expected = "void f()\n{\n    if (a)\n        {\n        g();\n        }\n    else\n        if (b)\n            {\n            if (c)\n                {\n                h();\n                }\n            }\n}\n";
+    let args = &["--style=vtk", "--break-elseifs", "--add-braces"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn added_block_braces_within_a_broken_else_if_block_keep_the_whitesmith_brace_level() {
+    let input = "void f() {\n    if (a) {\n        g();\n    } else if (b) {\n        if (c) h();\n    }\n}\n";
+    let expected = "void f()\n    {\n    if (a)\n        {\n        g();\n        }\n    else\n        if (b)\n            {\n            if (c)\n                {\n                h();\n                }\n            }\n    }\n";
+    let args = &["--style=whitesmith", "--break-elseifs", "--add-braces"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn a_star_run_leading_its_row_keeps_the_source_gap_before_the_name() {
+    let input = "char\n**    foo(int x)\n{\n    return 0;\n}\n";
+    for alignment in ["--align-pointer=type", "--align-pointer=middle"] {
+        check(input, &[alignment], input);
+    }
+}
+
+#[test]
+fn a_declarator_star_wrapped_after_a_struct_close_stays_at_the_statement_column() {
+    let input = "struct Item {\n    int value;\n} ItemCodeHelperAliasWithAnExtremelyLongNameIndeed *result;\n";
+    let expected = "struct Item {\n    int value;\n} ItemCodeHelperAliasWithAnExtremelyLongNameIndeed\n*result;\n";
+    let args = &["--max-code-length=50"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn an_empty_list_split_over_rows_in_a_call_joins_with_a_space_in_run_in_styles() {
+    let input = "int z;\nvoid f() {\n    g({\n    });\n}\n";
+    for (style, expected) in [
+        ("--style=lisp", "int z;\nvoid f() {\n    g({ }); }\n"),
+        ("--style=pico", "int z;\nvoid f()\n{   g(\n    { }); }\n"),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn a_split_return_type_keeps_the_indent_after_parens_columns() {
+    let input = "void f(int a,\ndo\nint b);\n";
+    let expected = "void\nf(int a,\n        do\n                int b);\n";
+    let options = [
+        "--indent=spaces=8",
+        "--indent-after-parens",
+        "--break-return-type-decl",
+    ];
+    check(input, &options, expected);
+    check(expected, &options, expected);
+}
+
+#[test]
+fn a_directive_after_a_brace_following_a_stray_closing_paren_starts_its_line() {
+    let input = "a) { #ifdef X\n";
+    let expected = "a) {\n#ifdef X\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+}
+
+#[test]
+fn a_return_in_a_block_comment_does_not_continue_the_declaration_after_it() {
+    let input = "/*\n return x\n*/\nstatic void *\nfill(int min);\n";
+    check(input, &[], input);
+}
+
+#[test]
+fn add_braces_covers_an_if_after_a_statement_in_a_broken_one_line_block() {
+    check(
+        "void f() { x(); if (a) b(); }\n",
+        &["--add-braces", "--keep-one-line-statements"],
+        "void f() {\n    x();\n    if (a) {\n        b();\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_whitespace_only_last_line_without_a_terminator_ends_the_output_with_a_line_break() {
+    check("int a;\n  ", &[], "int a;\n");
+    check("int a;\n\n  ", &[], "int a;\n\n");
+    check("{\n  a;\n}\n\t", &[], "{\n    a;\n}\n");
+}
+
+#[test]
+fn gnu_braces_added_after_a_file_scope_header_stand_a_level_in() {
+    check(
+        "if (a) b();\n",
+        &["--style=gnu", "--break-one-line-headers", "--add-braces"],
+        "if (a)\n    {\n        b();\n    }\n",
+    );
+}
+
+#[test]
+fn a_statement_with_open_parens_in_a_gnu_case_block_keeps_the_body_level() {
+    check(
+        "switch (x) {\ncase 1: {\n\tf(a,\n b);\n\tg();\n}}\n",
+        &["--style=gnu"],
+        "switch (x)\n    {\n    case 1:\n    {\n        f(a,\n          b);\n        g();\n    }\n    }\n",
+    );
+}
+
+#[test]
+fn an_added_block_after_a_broken_header_in_a_case_block_stands_at_the_header() {
+    let input = "switch (x) {\ncase 1: {\n\tif (a &&\n b)\n\t\t\treturn false;\n}}\n";
+    check(
+        input,
+        &["--add-one-line-braces"],
+        "switch (x) {\ncase 1: {\n    if (a &&\n            b)\n    { return false; }\n}\n}\n",
+    );
+    check(
+        input,
+        &["--style=gnu", "--add-one-line-braces"],
+        "switch (x)\n    {\n    case 1:\n    {\n        if (a &&\n                b)\n            { return false; }\n    }\n    }\n",
+    );
 }

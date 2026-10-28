@@ -12,7 +12,7 @@ use crate::config::{BraceStyle, FormatOptions, IndentStyle};
 use crate::formatter::braces::postprocess::postprocess_brace_style;
 use crate::formatter::constructs::class_declarations;
 use crate::formatter::engine::FormatEngine;
-use crate::formatter::lexer::{Token, tokenize_owned};
+use crate::formatter::lexer::{Token, tokenize, tokenize_owned};
 use crate::formatter::output::finish::EmptyFillSource;
 use crate::formatter::text::line_scan::preprocessor_directive;
 use crate::formatter::text::tabs;
@@ -38,6 +38,17 @@ mod tests;
 
 pub(crate) fn format(source: &str, options: &FormatOptions) -> String {
     format_owned(source.to_owned(), options)
+}
+
+/// Whether `source` ends in blanks that follow a line break as a token of
+/// their own, rather than as text of a literal or comment.
+pub(crate) fn ends_in_blank_line(source: &str) -> bool {
+    let normalized = line_endings::normalize(source);
+    let tokens = tokenize(&normalized);
+    matches!(
+        tokens.as_slice(),
+        [.., Token::Newline, Token::Whitespace(_)]
+    )
 }
 
 /// `format` of a source it takes, which becomes the text its tokens share.

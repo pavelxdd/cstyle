@@ -15,6 +15,7 @@ pub(crate) struct DecodedSource {
     text: String,
     encoding: TextEncoding,
     had_final_line_break: bool,
+    ends_in_blank_fragment: bool,
     observed_line_ending: ObservedLineEnding,
 }
 
@@ -46,11 +47,19 @@ impl DecodedSource {
             }
         };
         let had_final_line_break = text.ends_with('\n') || text.ends_with('\r');
+        let ends_in_blank_fragment = text
+            .rfind(['\n', '\r'])
+            .is_some_and(|index| index + 1 < text.len())
+            && text
+                .rsplit(['\n', '\r'])
+                .next()
+                .is_some_and(|line| line.bytes().all(|byte| matches!(byte, b' ' | b'\t')));
         let observed_line_ending = preferred_line_ending(&text);
         Ok(Self {
             text,
             encoding,
             had_final_line_break,
+            ends_in_blank_fragment,
             observed_line_ending,
         })
     }
@@ -62,6 +71,11 @@ impl DecodedSource {
 
     pub(crate) fn had_final_line_break(&self) -> bool {
         self.had_final_line_break
+    }
+
+    /// Whether the text ends in a line of blanks without a terminator.
+    pub(crate) fn ends_in_blank_fragment(&self) -> bool {
+        self.ends_in_blank_fragment
     }
 
     pub(crate) fn observed_line_ending(&self) -> ObservedLineEnding {

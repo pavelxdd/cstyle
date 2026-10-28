@@ -1250,8 +1250,12 @@ fn continuation_indent_for_split(
                             )
                     })
         });
-    // Member access registers nothing.
-    let unaccessed_head = declaration.replace("->", ".");
+    // Member access registers nothing, and the declarators after an
+    // aggregate's closing brace are a declaration too.
+    let unaccessed_head = declaration
+        .strip_prefix('}')
+        .unwrap_or(declaration)
+        .replace("->", ".");
     let commas_in_angles = commas_within_angles(&unaccessed_head);
     if !following_split
         && !leads_statement_continuation(leading_operator(split.tail))

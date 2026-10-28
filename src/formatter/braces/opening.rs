@@ -1434,6 +1434,16 @@ impl FormatEngine<'_> {
         let inline_nested_header_level = self.layout.inline_nested_header_braceless_bias.take();
         let block_indent_extra =
             block_indent_extra(brace_header.as_deref(), brace_type, self.options);
+        // GNU indents the block an added brace opens at file scope, as the
+        // block of any other control header there.
+        let block_indent_extra = if token_index == usize::MAX
+            && brace_type == BraceType::Definition
+            && self.options.brace_style == BraceStyle::Gnu
+        {
+            1
+        } else {
+            block_indent_extra
+        };
         let class_block_indent_extra = self.class_block_indent_extra(brace_type, token_index);
         self.push_brace_frame(
             brace_header.as_ref(),
@@ -3188,7 +3198,8 @@ impl FormatEngine<'_> {
                     .unwrap_or_else(|| {
                         (self.layout.indentation.indent()
                             + 1
-                            + self.case_body_indent_extra(LineKind::Normal))
+                            + self.case_body_indent_extra(LineKind::Normal)
+                            + self.else_if_break_extra())
                             * self.options.indent_width
                     })
             });

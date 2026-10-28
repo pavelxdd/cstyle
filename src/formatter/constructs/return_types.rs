@@ -523,12 +523,15 @@ impl FormatEngine<'_> {
                 .lead_width(function_line, self.options.tab_width);
             let shift = new_lead as isize - name_column as isize;
             let base = self.continuation_base_indent() * self.options.indent_width;
-            self.layout.nesting.shift_columns_from(
-                name_column,
-                shift,
-                base,
-                self.options.max_continuation_indent,
-            );
+            // Columns that indent past a paren do not follow the name.
+            if !self.options.indent_after_parens {
+                self.layout.nesting.shift_columns_from(
+                    name_column,
+                    shift,
+                    base,
+                    self.options.max_continuation_indent,
+                );
+            }
             self.layout.frame_stack.move_split_line_frames(
                 return_type_line,
                 function_line,

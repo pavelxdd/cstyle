@@ -139,12 +139,8 @@ impl FormatEngine<'_> {
             ']' => self.push_close_bracket(),
             ';' => {
                 let added_brace_follows = self.added_brace_follows(token_index);
-                let following_closer_suffix = closer_width_after_semicolon(
-                    &self.tree.tokens,
-                    token_index,
-                    self.options.attach_closing_while,
-                )
-                .1;
+                let following_closer_suffix =
+                    closer_width_after_semicolon(&self.tree.tokens, token_index, self.options).1;
                 self.push_semicolon(
                     next,
                     following_closer_width,

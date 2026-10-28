@@ -345,7 +345,10 @@ impl FormatEngine<'_> {
             let (closing_parens, opening_parens) = line.paren_imbalance();
             LineDelimiters {
                 closes_outer: closing_parens > opening_parens.len(),
-                owned_continuation: self.layout.frame_stack.active_delimiter().is_some()
+                owned_continuation: self
+                    .layout
+                    .frame_stack
+                    .has_delimiter_opened_before(self.output.len())
                     || self.operator_chain_owns_continuation(line),
             }
         })

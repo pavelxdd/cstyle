@@ -390,6 +390,20 @@ impl FormatEngine<'_> {
             .is_none_or(|previous| !matches!(self.tree.tokens[previous], Token::Symbol(';' | ')')))
     }
 
+    /// Whether the brace closing is the list of an initializer, as one an
+    /// argument holds.
+    fn closes_initializer_list(&self) -> bool {
+        self.current
+            .active_token()
+            .and_then(|closer| self.tree.groups.closed_at(closer))
+            .is_some_and(|block| {
+                matches!(
+                    self.tree.blocks.kind(block),
+                    Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                )
+            })
+    }
+
     pub(crate) fn push_close_brace(&mut self, next: Option<&Token>, next_is_adjacent: bool) {
         let closing_lambda_body = self.current_open_brace_is_lambda_body();
         // A `}` that only comments precede leads its row.
@@ -450,7 +464,8 @@ impl FormatEngine<'_> {
                         | BraceType::CompoundLiteral
                         | BraceType::Enum
                 )
-            ) || self.closes_headerless_file_scope_block())
+            ) || self.closes_headerless_file_scope_block()
+                || self.closes_initializer_list())
             && let Some(previous) = self.output.last_mut()
             && previous.trimmed_end().ends_with('{')
             && !line_ends_with_comment(previous)

@@ -1427,8 +1427,7 @@ impl<'a> FormatEngine<'a> {
             && self.bracket_chain_designator(tokens, index, line.end);
         let inferred_definition_brace = matches!(tokens[index], Token::Symbol('{'))
             && self.inferred_definition_brace(tokens, index);
-        let following_closer_width =
-            closer_width_after_semicolon(tokens, index, self.options.attach_closing_while).0;
+        let following_closer_width = closer_width_after_semicolon(tokens, index, self.options).0;
         TokenPushContext {
             next,
             next_is_adjacent,
@@ -2946,8 +2945,9 @@ fn leading_formatting_markers(tokens: &[Token]) -> (bool, bool) {
 pub(crate) fn closer_width_after_semicolon(
     tokens: &[Token],
     index: usize,
-    attach_while: bool,
+    options: &FormatOptions,
 ) -> (usize, Option<String>) {
+    let attach_while = options.attach_closing_while;
     if !matches!(tokens.get(index), Some(Token::Symbol(';'))) {
         return (0, None);
     }
@@ -2963,8 +2963,11 @@ pub(crate) fn closer_width_after_semicolon(
             newlines += usize::from(matches!(tokens[cursor], Token::Newline));
             cursor += 1;
         }
-        // A brace past an empty line stays on a line of its own.
-        if newlines > 1 || !matches!(tokens.get(cursor), Some(Token::Symbol('}'))) {
+        // A brace past an empty line stays on a line of its own, unless
+        // the empty lines go.
+        if (newlines > 1 && !options.delete_empty_lines)
+            || !matches!(tokens.get(cursor), Some(Token::Symbol('}')))
+        {
             break;
         }
         width += 2;

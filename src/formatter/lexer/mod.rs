@@ -73,8 +73,8 @@ fn hash_after_statement_opens_preprocessor(source: &str, line_start: usize, hash
     if line.contains_any_byte(b"{}")
         || line[1..].contains('#')
         || prefix.contains('#')
-        || has_unclosed_grouping(prefix)
-        || has_unclosed_grouping(line)
+        || has_unclosed_grouping(prefix, false)
+        || has_unclosed_grouping(line, true)
     {
         return false;
     }
@@ -107,7 +107,7 @@ fn hash_after_statement_opens_preprocessor(source: &str, line_start: usize, hash
     }
 }
 
-fn has_unclosed_grouping(text: &str) -> bool {
+fn has_unclosed_grouping(text: &str, stray_closer_counts: bool) -> bool {
     let mut paren_depth = 0;
     let mut bracket_depth = 0;
     for byte in text.bytes() {
@@ -115,9 +115,12 @@ fn has_unclosed_grouping(text: &str) -> bool {
             b'(' => paren_depth += 1,
             b')' => {
                 if paren_depth == 0 {
-                    return true;
+                    if stray_closer_counts {
+                        return true;
+                    }
+                } else {
+                    paren_depth -= 1;
                 }
-                paren_depth -= 1;
             }
             b'[' => bracket_depth += 1,
             b']' => {
