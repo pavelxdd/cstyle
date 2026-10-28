@@ -26952,3 +26952,12 @@ fn a_row_in_a_subscript_stands_at_the_content_past_the_blanks_after_its_bracket(
         "return tab[ (size)\n            + N];\n",
     );
 }
+
+// INTENTIONAL DIVERGENCE: an initializer continuing a declaration stands one
+// level past it whether or not the declared type is introduced by `struct`
+// or `union`.
+#[test]
+fn a_declaration_initializer_continues_one_level_past_it_for_every_type_keyword() {
+    let input = "void f(void)\n{\n    struct w w =\n        c(r);\n    union w u =\n        c(r);\n    enum w e =\n        c(r);\n    w x =\n        c(r);\n}\n";
+    check(input, &["--mode=c"], input);
+}
