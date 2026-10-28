@@ -493,6 +493,9 @@ impl FormatEngine<'_> {
             last: span.last,
         };
         self.output.set_pending_tokens(Some(return_type_span));
+        if self.take_block_spacing_blank(line) {
+            self.push_empty_line_before_pending();
+        }
         let return_type_line = self.output.len();
         if let Some(spaces) = exact_indent_spaces {
             self.push_formatted_line_exact(&return_type, indent, spaces);
