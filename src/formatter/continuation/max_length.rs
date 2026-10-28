@@ -990,7 +990,12 @@ impl FormatEngine<'_> {
         let tail_spaces = if ends_statement_before_comment(&split.head) {
             lead_width
         } else if self.options.indent_after_parens {
-            lead_width + step * (1 + usize::from(stacked_assignment))
+            // A row in parens opened before it goes on at its own column.
+            if line_paren_imbalance(&blanked).0 == 0 && self.pending_row_in_earlier_parens() {
+                lead_width
+            } else {
+                lead_width + step * (1 + usize::from(stacked_assignment))
+            }
         } else {
             // A row in parens opened before it goes on at its own column.
             let fallback =

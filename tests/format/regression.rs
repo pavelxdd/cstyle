@@ -26986,3 +26986,12 @@ fn a_conditional_block_opening_the_file_with_a_blank_line_or_comment_stays_unind
         check(input, &["--indent-preproc-block"], input);
     }
 }
+
+#[test]
+fn a_comment_led_argument_row_wrapped_by_length_continues_at_its_own_column_after_parens() {
+    let input = "void f() {\n    h = g(\n        /*c*/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, bbbbbbbbbbbbbbbbbbbbbbbbbbbbb,\n        nullptr);\n}\n";
+    let expected = "void f() {\n    h = g(\n            /*c*/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,\n            bbbbbbbbbbbbbbbbbbbbbbbbbbbbb,\n            nullptr);\n}\n";
+    let args = &["--indent-after-parens", "--max-code-length=60"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
