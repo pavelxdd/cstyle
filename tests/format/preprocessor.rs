@@ -628,14 +628,26 @@ fn indent_preproc_block_column_one_comment_does_not_disable_code_indent() {
     let mut options = FormatOptions::default();
     options.indent_preproc_block = true;
     let actual = format_with(
-        fixture!("#if ENABLED", "// comment", "int value;", "#endif",),
+        fixture!(
+            "int first;",
+            "#if ENABLED",
+            "// comment",
+            "int value;",
+            "#endif",
+        ),
         &options,
     );
 
     // Column-one comments indent with the block and do not suppress it.
     assert_eq!(
         actual,
-        fixture!("#if ENABLED", "    // comment", "    int value;", "#endif",)
+        fixture!(
+            "int first;",
+            "#if ENABLED",
+            "    // comment",
+            "    int value;",
+            "#endif",
+        )
     );
 }
 
@@ -3244,7 +3256,7 @@ fn indent_preproc_block_preserves_padded_pound_outside_block() {
 }
 
 #[test]
-fn indent_preproc_block_indents_balanced_multiline_parameters() {
+fn indent_preproc_block_skips_block_with_multiline_balanced_parameters() {
     let mut options = FormatOptions::default();
     options.indent_preproc_block = true;
     let actual = format_with(
@@ -3262,8 +3274,8 @@ fn indent_preproc_block_indents_balanced_multiline_parameters() {
         actual,
         fixture!(
             "#ifdef ALPHA",
-            "    int helper(int alpha,",
-            "               int beta);",
+            "int helper(int alpha,",
+            "           int beta);",
             "#endif",
             "int after;",
         )

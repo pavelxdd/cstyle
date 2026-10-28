@@ -247,7 +247,7 @@ fn ratliff_wrapped_assignment_in_a_nested_case_if_keeps_its_body_column() {
 #[test]
 fn a_preprocessor_block_preserves_a_string_initializer_closer_column() {
     let input = "#if FEATURE\nstatic const char text[] = MARK_(\n            \"alpha\"\n            \"beta\"\n        );\n#endif\n";
-    let expected = "#if FEATURE\n    static const char text[] = MARK_(\n                                   \"alpha\"\n                                   \"beta\"\n                               );\n#endif\n";
+    let expected = "#if FEATURE\nstatic const char text[] = MARK_(\n                               \"alpha\"\n                               \"beta\"\n                           );\n#endif\n";
     let args = &["--indent-preproc-block"];
     check(input, args, expected);
     check(expected, args, expected);
@@ -17552,9 +17552,10 @@ fn indent_preproc_block_indents_a_block_whatever_blank_or_comment_lines_open_it(
     // A blank or comment line after the directive leaves the code its
     // level.
     for opening in ["", "\n", "// note\n"] {
-        let input = format!("#ifdef FEATURE\n{opening}int value;\n#endif\n");
+        let input = format!("int first;\n#ifdef FEATURE\n{opening}int value;\n#endif\n");
         let indented_opening = opening.replace("// note", "    // note");
-        let expected = format!("#ifdef FEATURE\n{indented_opening}    int value;\n#endif\n");
+        let expected =
+            format!("int first;\n#ifdef FEATURE\n{indented_opening}    int value;\n#endif\n");
         check(&input, &["--style=kr", "--indent-preproc-block"], &expected);
     }
 }
@@ -26960,4 +26961,28 @@ fn a_row_in_a_subscript_stands_at_the_content_past_the_blanks_after_its_bracket(
 fn a_declaration_initializer_continues_one_level_past_it_for_every_type_keyword() {
     let input = "void f(void)\n{\n    struct w w =\n        c(r);\n    union w u =\n        c(r);\n    enum w e =\n        c(r);\n    w x =\n        c(r);\n}\n";
     check(input, &["--mode=c"], input);
+}
+
+#[test]
+fn a_conditional_block_with_a_line_leaving_a_paren_open_stays_unindented() {
+    let input = "#ifdef FEATURE\nint helper(value,\n           result);\n#endif\n";
+    check(input, &["--indent-preproc-block"], input);
+    let input = "int value;\n#ifdef FEATURE\nhelper(value,\n       result);\n#endif\n";
+    check(input, &["--indent-preproc-block"], input);
+    check(
+        "#ifdef FEATURE\nhelper(value);\n#endif\n",
+        &["--indent-preproc-block"],
+        "#ifdef FEATURE\n    helper(value);\n#endif\n",
+    );
+}
+
+#[test]
+fn a_conditional_block_opening_the_file_with_a_blank_line_or_comment_stays_unindented() {
+    for input in [
+        "#ifdef FEATURE\n/* note */\nint value;\n#endif\n",
+        "#ifdef FEATURE\n// note\nint value;\n#endif\n",
+        "#ifdef FEATURE\n\nint value;\n#endif\n",
+    ] {
+        check(input, &["--indent-preproc-block"], input);
+    }
 }

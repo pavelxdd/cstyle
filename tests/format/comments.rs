@@ -2233,8 +2233,20 @@ fn indent_col1_comment_in_formatted_preprocessor_block_uses_code_column() {
         ],
     )
     .expect("valid options");
-    let input = fixture!("#if ENABLED", "// note", "int value;", "#endif");
-    let expected = fixture!("#if ENABLED", "    // note", "    int value;", "#endif",);
+    let input = fixture!(
+        "int first;",
+        "#if ENABLED",
+        "// note",
+        "int value;",
+        "#endif"
+    );
+    let expected = fixture!(
+        "int first;",
+        "#if ENABLED",
+        "    // note",
+        "    int value;",
+        "#endif",
+    );
 
     let first = format_exact(input, &options);
     assert_eq!(first, expected);

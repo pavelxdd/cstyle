@@ -776,7 +776,8 @@ impl<'a> FormatEngine<'a> {
                 .count()
                 + 1,
         );
-        self.preprocessor.indentable_blocks = preprocessor_block_indentability(tokens);
+        self.preprocessor.indentable_blocks =
+            preprocessor_block_indentability(tokens, self.options.max_code_length.is_some());
         self.access_modified_braces = syntax::access_modified_brace_indices(tokens);
         self.inline_array.list_rows = std::rc::Rc::new(syntax::brace_list_rows(
             tokens,
