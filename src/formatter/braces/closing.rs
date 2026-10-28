@@ -444,7 +444,12 @@ impl FormatEngine<'_> {
             && self.current_is_blank()
             && (matches!(
                 self.layout.nesting.brace_type_stack.last(),
-                Some(BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral)
+                Some(
+                    BraceType::Array
+                        | BraceType::Initializer
+                        | BraceType::CompoundLiteral
+                        | BraceType::Enum
+                )
             ) || self.closes_headerless_file_scope_block())
             && let Some(previous) = self.output.last_mut()
             && previous.trimmed_end().ends_with('{')

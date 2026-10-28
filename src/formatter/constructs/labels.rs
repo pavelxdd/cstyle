@@ -169,8 +169,9 @@ pub(crate) fn access_label_body_indent_spaces(
     enclosing_brace: Option<BraceType>,
     options: &FormatOptions,
 ) -> Option<usize> {
-    // An access label ends with its colon.
+    // An access label ends with its colon, and a block holds its body.
     find_byte(previous.as_bytes(), b':')?;
+    enclosing_brace?;
     let current = line.trimmed_start();
     let previous_trimmed = previous[..trailing_comment_split_limit(previous)]
         .trimmed_end()

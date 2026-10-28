@@ -26898,3 +26898,38 @@ fn a_function_head_row_after_a_braceless_header_places_its_brace_by_the_style() 
         "while (a)\n    int\n    f (L)\n{}\n",
     );
 }
+
+#[test]
+fn pico_keeps_the_gap_inside_an_empty_enum_joined_from_separate_rows() {
+    check("enum e {\n} x;\n", &["--style=pico"], "enum e\n{ } x;\n");
+    check(
+        "typedef enum {\n} x;\n",
+        &["--style=pico"],
+        "typedef enum\n{ } x;\n",
+    );
+    check("struct s {\n} x;\n", &["--style=pico"], "struct s\n{} x;\n");
+}
+
+#[test]
+fn a_brace_after_a_macro_call_row_under_a_braceless_header_stands_at_the_header() {
+    check(
+        "else\nTEST(CRC, S)\n{\n}\n",
+        &["--style=kr"],
+        "else\n    TEST(CRC, S)\n{\n}\n",
+    );
+    check(
+        "else\nTEST(CRC, S) {\n}\n",
+        &["--style=linux"],
+        "else\n    TEST(CRC, S)\n{\n}\n",
+    );
+}
+
+#[test]
+fn an_access_label_at_file_scope_leaves_the_next_row_at_its_column() {
+    check("public:\nint x;\n", &[], "public:\nint x;\n");
+    check(
+        "public:\nif (a) return -1;\n",
+        &["--style=kr", "--add-braces"],
+        "public:\nif (a)\n{\n    return -1;\n}\n",
+    );
+}
