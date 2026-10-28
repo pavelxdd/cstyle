@@ -26671,3 +26671,36 @@ fn max_code_length_leaves_the_rows_it_does_not_split_where_they_stand_without_it
     check(input, &["--style=kr"], expected);
     check(input, &["--style=kr", "--max-code-length=60"], expected);
 }
+
+#[test]
+fn declaration_continuation_column_ignores_the_position_of_an_initialized_declarator() {
+    // The reference aligns the line after one holding an initializer with
+    // its second declarator, yet leaves it at the continuation column when
+    // the initialized declarator leads the line. Both stand at the
+    // continuation column.
+    let source = "void f(void)\n{\n\tint bbits, b2,\n\t\tj, j1=0, k,\n\t\tspec_case, try_quick;\n\tint flag = 0,\n\t\tother;\n}\n";
+    let expected = "void f(void)\n{\n    int bbits, b2,\n        j, j1=0, k,\n        spec_case, try_quick;\n    int flag = 0,\n        other;\n}\n";
+    check(source, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+}
+
+#[test]
+fn an_else_after_an_unmatched_closing_brace_ignores_an_if_before_it() {
+    // The brace opened in the `#else` branch counts for nothing, so the first
+    // `}` ends the function and the `else` stands in the first column, not
+    // with the braceless `if` that precedes it.
+    let input = "void f(void)\n{\n#ifdef A\n    i = 1;\n#else\n    if (g()) {\n#endif\n#ifdef IBM\n    if (j)\n        use(j);\n#endif\n#ifndef A\n    denorm = 0; }\n    else {\n        i = 2; }\n#endif\n    use(i);\n}\n";
+    let expected = "void f(void)\n{\n#ifdef A\n    i = 1;\n#else\n    if (g())\n    {\n#endif\n#ifdef IBM\n    if (j)\n        use(j);\n#endif\n#ifndef A\n    denorm = 0;\n}\nelse\n{\n    i = 2;\n}\n#endif\nuse(i);\n}\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+}
+
+#[test]
+fn a_label_in_a_case_block_keeps_the_statements_after_the_first_in_its_block() {
+    // The brace of the case block keeps its opener and closer on the block's
+    // column, unlike the reference, which moves the closer a level inward.
+    let input = "void g(void)\n{\n  switch( b ){\n  case 1: {\n  x = 1;\n  case 3:\n  if( f ){\n    y = 2;\n    if( h ){\n    }\n  }\n  }\n  }\n}\n";
+    let expected = "void g(void)\n    {\n    switch( b )\n        {\n        case 1:\n            {\n            x = 1;\n            case 3:\n                if( f )\n                    {\n                    y = 2;\n                    if( h )\n                        {\n                        }\n                    }\n            }\n        }\n    }\n";
+    check(input, &["--style=whitesmith"], expected);
+    check(expected, &["--style=whitesmith"], expected);
+}

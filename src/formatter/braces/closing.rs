@@ -511,6 +511,10 @@ impl FormatEngine<'_> {
         let closing_frame_indent = self.closing_brace_sibling_indent_column();
         self.exit_brace_state();
         let depth = self.layout.indentation.brace_block_depth();
+        if depth == 0 {
+            // No `if` before the end of a top-level block pairs with an `else` after it.
+            self.layout.frame_stack.clear_header();
+        }
         if depth == 0
             || matches!(self.extern_c_guard, ExternCGuard::InsideBlock(opened) if depth <= opened)
         {

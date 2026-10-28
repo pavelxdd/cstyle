@@ -1866,7 +1866,11 @@ impl FormatEngine<'_> {
         // A braceless switch owns its labels, and their case body, through
         // its header; the block holding it is no switch body.
         self.braceless_switch_label_indent_spaces().is_none()
-            && self.directly_in_switch_body()
+            && self
+                .layout
+                .frame_stack
+                .brace_at_depth(self.layout.nesting.brace_header_stack.len())
+                .is_some_and(|frame| frame.semantic_kind == BraceSemanticKind::Command)
             && self.pending_nested_label().is_none()
     }
 
