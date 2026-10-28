@@ -2164,3 +2164,22 @@ fn a_run_in_switch_body_keeps_an_empty_statement_at_the_statement_column() {
     assert_eq!(format_exact(source, &options), expected);
     assert_eq!(format_exact(expected, &options), expected);
 }
+
+#[test]
+fn a_braceless_switch_with_an_inline_label_keeps_the_statement_column() {
+    // The reference moves such a `switch` to the first column inside a
+    // function, though it indents the same `switch` when its label has its
+    // own row. The statement keeps the column of every other statement and
+    // the label keeps its source line.
+    let options = options_from_args(&[]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    int a;",
+        "    switch (value) case 1:use(value);",
+        "    switch (value) default:use(value);",
+        "    a = 1;",
+        "}",
+    );
+    assert_eq!(format_exact(source, &options), source);
+}
