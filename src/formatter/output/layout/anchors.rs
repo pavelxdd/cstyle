@@ -6863,7 +6863,17 @@ impl FormatEngine<'_> {
         let groups = &self.tree.groups;
         let close = self.tree.previous_code_token(open)?;
         let condition = groups.closed_at(close)?;
-        let keyword = self.tree.previous_code_token(groups.get(condition).open)?;
+        let mut keyword = self.tree.previous_code_token(groups.get(condition).open)?;
+        // A macro, or `constexpr`, may stand between the keyword and the
+        // parens of its condition.
+        if matches!(&self.tree.tokens[keyword], Token::Word(word)
+            if !matches!(word.as_str(), "if" | "for" | "while" | "switch" | "foreach" | "catch"))
+            && let Some(before) = self.tree.previous_code_token(keyword)
+            && matches!(&self.tree.tokens[before], Token::Word(word)
+                if matches!(word.as_str(), "if" | "for" | "while" | "switch" | "foreach"))
+        {
+            keyword = before;
+        }
         matches!(&self.tree.tokens[keyword], Token::Word(word)
             if matches!(word.as_str(), "if" | "for" | "while" | "switch" | "foreach")
                 || word == "catch" && groups.opened_at(open)

@@ -27037,3 +27037,12 @@ fn a_kept_one_line_block_with_a_trailing_comment_ends_a_broken_else_if_chain() {
     check(input, args, expected);
     check(expected, args, expected);
 }
+
+#[test]
+fn a_kept_block_after_a_macro_condition_stands_in_the_header_body() {
+    let input = "void f() {\n    if FMT_C (x)\n        { return 1; }\n}\n";
+    let expected = "void f() {\n    if FMT_C (x)\n        { return 1; }\n    }\n";
+    let args = &["--style=ratliff", "--add-one-line-braces"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
