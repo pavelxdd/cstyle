@@ -1167,10 +1167,15 @@ impl FormatEngine<'_> {
         let case_block_comment_indent =
             self.case_block_comment_indent_spaces(kind, switch_label_block_comment_indent);
         let definition_header_comment_indent = self.definition_header_comment_indent_spaces();
-        let case_label_comment_indent = (kind == CommentKind::Block
-            && self.current.trimmed().is_empty())
-        .then(|| self.previous_case_label_body_indent_spaces())
-        .flatten();
+        // A label outside any block or in a namespace leads no body.
+        let label_has_body = !matches!(
+            self.layout.nesting.brace_type_stack.last(),
+            None | Some(BraceType::Namespace)
+        );
+        let case_label_comment_indent =
+            (kind == CommentKind::Block && label_has_body && self.current.trimmed().is_empty())
+                .then(|| self.previous_case_label_body_indent_spaces())
+                .flatten();
         let column1_case_label_comment_indent = (kind == CommentKind::Line
             && self.current.trimmed().is_empty())
         .then(|| self.previous_case_label_body_indent_spaces())

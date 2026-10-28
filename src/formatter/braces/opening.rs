@@ -4081,8 +4081,10 @@ impl FormatEngine<'_> {
             return false;
         };
         let last = last.trimmed_end();
-        // A directive line takes no brace.
-        if last.trimmed_start().starts_with('#') {
+        // A directive or a comment line takes no brace.
+        if last.trimmed_start().starts_with('#')
+            || line_scan::is_bare_comment_line(last.trimmed_start())
+        {
             return false;
         }
         // A brace that would take the line past the maximum length stays on
@@ -4263,6 +4265,10 @@ impl FormatEngine<'_> {
                 return false;
             }
             if comment_start == last.len() {
+                // A splice after the head keeps the brace below.
+                if trimmed.ends_with('\\') {
+                    return false;
+                }
                 return code_ends_definition_header(trimmed)
                     || is_lambda_body_header(trimmed)
                     // A closure's head may list no parameters, and a

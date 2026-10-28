@@ -1172,6 +1172,30 @@ impl FormatEngine<'_> {
     }
 }
 
+/// Where a part split inside the initializers goes: one past the argument
+/// the open paren holds, or past the head with no paren open or too deep.
+fn initializer_split_indent(
+    options: &FormatOptions,
+    head: &str,
+    base_indent_width: usize,
+    arguments_indent: ContinuationIndent,
+) -> ContinuationIndent {
+    let head_indent = base_indent_width + options.indent_width;
+    if unmatched_open_paren_columns(head).is_empty() {
+        return ContinuationIndent::Spaces(head_indent);
+    }
+    let held = arguments_indent.columns(options.indent_width);
+    if head.trimmed_end().ends_with('(') {
+        return arguments_indent;
+    }
+    let held = held + options.indent_width;
+    if held.saturating_sub(base_indent_width) <= options.max_continuation_indent {
+        ContinuationIndent::Spaces(held)
+    } else {
+        arguments_indent
+    }
+}
+
 pub(crate) fn start_max_length_constructor_replay(
     options: &FormatOptions,
     line: &str,
@@ -1203,7 +1227,7 @@ pub(crate) fn start_max_length_constructor_replay(
     if constructor_lambda_tail && let Some(open) = unmatched_open_paren_columns(head).last() {
         next_indent = ContinuationIndent::Spaces(base_indent_width + open + 1);
     } else if replay.in_constructor_initializer && !split_ends_lambda_parameter_opener {
-        next_indent = ContinuationIndent::Spaces(base_indent_width + options.indent_width);
+        next_indent = initializer_split_indent(options, head, base_indent_width, next_indent);
     }
     replay.lambda_call_indent = if constructor_lambda_tail {
         Some(next_indent)

@@ -1041,3 +1041,9 @@ fn a_label_body_after_an_unmatched_closing_brace_stands_with_the_statements_befo
     assert_eq!(output, expected);
     assert_eq!(format_exact(&output, &options), expected);
 }
+
+#[test]
+fn a_block_comment_after_a_case_label_outside_a_block_stays_flush() {
+    let source = "case 1:\n/*c*/\nint x;\n\nnamespace n {\ncase 2:\n/*c*/\nint y;\n}\n";
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
+}

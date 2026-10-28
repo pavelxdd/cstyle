@@ -1,4 +1,4 @@
-use crate::common::format;
+use crate::common::{format, format_exact};
 use cstyle::api::format_bytes;
 use cstyle::config::{FormatOptions, apply_command_line_args};
 
@@ -26703,4 +26703,32 @@ fn a_label_in_a_case_block_keeps_the_statements_after_the_first_in_its_block() {
     let expected = "void g(void)\n    {\n    switch( b )\n        {\n        case 1:\n            {\n            x = 1;\n            case 3:\n                if( f )\n                    {\n                    y = 2;\n                    if( h )\n                        {\n                        }\n                    }\n            }\n        }\n    }\n";
     check(input, &["--style=whitesmith"], expected);
     check(expected, &["--style=whitesmith"], expected);
+}
+
+#[test]
+fn a_constructor_initializer_split_inside_its_arguments_stays_one_pass_stable() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--pad-oper".to_owned(), "--max-code-length=60".to_owned()],
+    )
+    .expect("valid options");
+    for (source, expected) in [
+        (
+            "Item::Item( Config * config ) : Base( config ),\n",
+            "Item::Item( Config * config ) : Base( config ),\n",
+        ),
+        (
+            "ElementItem::ElementItem( DocumentRoot * doc ) : NodeBase( doc ),\n",
+            "ElementItem::ElementItem( DocumentRoot * doc ) : NodeBase(\n        doc ),\n",
+        ),
+        (
+            "Item::Item() : Node(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, cccccccccccccccccccccccccccccccccccccccc) {\n",
+            "Item::Item() : Node(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,\n                        bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,\n                        cccccccccccccccccccccccccccccccccccccccc) {\n",
+        ),
+    ] {
+        let output = format_exact(source, &options);
+        assert_eq!(output, expected);
+        assert_eq!(format_exact(&output, &options), expected);
+    }
 }

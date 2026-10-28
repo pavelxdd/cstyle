@@ -2690,3 +2690,31 @@ fn a_comment_on_a_list_brace_keeps_the_nested_list_row_running_in() {
     assert_eq!(output, expected);
     assert_eq!(format_exact(expected, &options), expected);
 }
+
+#[test]
+fn a_brace_after_a_line_comment_ending_in_parens_stays_on_its_own_row() {
+    let source = "int x;\n// (value)\n{\n    use(x);\n}\n";
+    for style in ["kr", "1tbs", "linux", "stroustrup", "java"] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[format!("--style={style}")])
+            .expect("valid options");
+        assert_eq!(format_exact(source, &options), source, "style {style}");
+    }
+}
+
+#[test]
+fn a_spliced_function_head_keeps_its_brace_on_the_next_row() {
+    let source = "void f(void) \\\n{\n    int i;\n}\n";
+    for (style, expected) in [
+        ("google", source),
+        ("kr", source),
+        ("ratliff", "void f(void) \\\n    {\n    int i;\n    }\n"),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[format!("--style={style}")])
+            .expect("valid options");
+        let output = format_exact(source, &options);
+        assert_eq!(output, expected, "style {style}");
+        assert_eq!(format_exact(&output, &options), expected, "style {style}");
+    }
+}
