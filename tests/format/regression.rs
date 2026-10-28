@@ -27252,3 +27252,45 @@ fn a_broken_brace_after_a_semicolonless_macro_body_stands_at_the_statement() {
     );
     check(expected, &["--style=allman"], expected);
 }
+
+#[test]
+fn a_kept_one_line_block_after_a_semicolonless_macro_body_stands_at_the_statement() {
+    let expected = "void f()\n{   if (a)\n        FOREACH(x)\n    {   q(); } }\n";
+    check(
+        "void f()\n{\n    if (a)\n        FOREACH(x)\n    { q(); }\n}\n",
+        &["--style=pico"],
+        expected,
+    );
+    check(expected, &["--style=pico"], expected);
+}
+
+#[test]
+fn a_block_run_onto_a_semicolonless_macro_body_stands_at_its_header_statement() {
+    let cases = [
+        (
+            "--style=gnu",
+            "void f()\n{\n    while (a)\n        FOREACH(x)\n        {\n            q();\n        }\n}\n",
+        ),
+        (
+            "--style=vtk",
+            "void f()\n{\n    while (a)\n        FOREACH(x)\n        {\n        q();\n        }\n}\n",
+        ),
+        (
+            "--style=kr",
+            "void f()\n{\n    while (a)\n        FOREACH(x) {\n        q();\n    }\n}\n",
+        ),
+        (
+            "--style=ratliff",
+            "void f() {\n    while (a)\n        FOREACH(x) {\n        q();\n        }\n    }\n",
+        ),
+    ];
+    for (style, expected) in cases {
+        for input in [
+            "void f() {\n\twhile (a)\n\t\tFOREACH(x) {\n\t\t\tq();\n\t\t}\n}\n",
+            "void f()\n{\n    while (a)\n        FOREACH(x)\n    {\n        q();\n    }\n}\n",
+        ] {
+            check(input, &[style], expected);
+        }
+        check(expected, &[style], expected);
+    }
+}

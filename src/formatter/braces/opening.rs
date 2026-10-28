@@ -38,7 +38,7 @@ use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::operators::head_ends_binary_operator;
 use crate::source::lex::{is_identifier_start, is_word_char, leading_identifier, trailing_word};
 
-fn is_semicolonless_call_line(line: &str) -> bool {
+pub(crate) fn is_semicolonless_call_line(line: &str) -> bool {
     let trimmed = line.trimmed();
     let Some(open) = trimmed.find('(') else {
         return false;
@@ -1420,6 +1420,17 @@ impl FormatEngine<'_> {
             next,
             inferred_definition_brace || self.brace_follows_parameter_declarations(token_index),
         );
+        if brace_header.is_none()
+            && brace_type == BraceType::Command
+            && !self.token_input.token_begins_source_line
+            && self.line_is_header_less_call()
+        {
+            if self.should_attach_opening_brace(brace_type, next) {
+                self.leave_braceless_body_for_call_block();
+            } else {
+                self.break_line_before_call_block();
+            }
+        }
         let lambda = self.open_brace_lambda_context();
         self.prepare_continuation_for_open_brace(brace_header.as_deref(), brace_type);
         // A list a range-for header's range opens on a line of its own is no
@@ -1670,21 +1681,34 @@ impl FormatEngine<'_> {
         }
         if self.token_input.token_begins_source_line
             && self.pushed_brace_kind() != Some(BlockKind::FunctionBody)
-            && is_semicolonless_call_line(&self.current)
+            && self.line_is_header_less_call()
+        {
+            self.break_line_before_call_block();
+        }
+    }
+
+    fn line_is_header_less_call(&self) -> bool {
+        is_semicolonless_call_line(&self.current)
             && !is_header(
                 self.options,
                 leading_identifier(self.current.trimmed_start()),
             )
-        {
-            self.finish_line();
+    }
+
+    /// A block after a macro call stands at the statement the call's
+    /// braceless body belongs to, except where the style indents braces
+    /// to their statement, which keeps the call's own column.
+    fn break_line_before_call_block(&mut self) {
+        self.finish_line();
+        if self.options.brace_style != BraceStyle::Gnu {
             self.leave_braceless_body_for_call_block();
-            self.previous_was_newline = true;
         }
+        self.previous_was_newline = true;
     }
 
     /// A block after a macro call that ends no statement stands at the
     /// statement the call's braceless body belongs to.
-    fn leave_braceless_body_for_call_block(&mut self) {
+    pub(super) fn leave_braceless_body_for_call_block(&mut self) {
         self.layout.pending_braceless_block_bias = None;
         if self.layout.indentation.last_braceless_block().is_some() {
             self.layout.indentation.exit_braceless_block();
@@ -3094,10 +3118,6 @@ impl FormatEngine<'_> {
         let inline_initializer_command_brace_spaces = (!objc_method_brace)
             .then_some(headerless_inline_command_column)
             .flatten();
-        let call_block_after_source_attached_brace = brace_type == BraceType::Command
-            && brace.header.is_none()
-            && !self.token_input.token_begins_source_line
-            && is_semicolonless_call_line(&self.current);
         let else_while_header =
             brace_type == BraceType::Command && header_text.starts_with("else while");
         let else_nested_loop_header = brace_type == BraceType::Command
@@ -3117,12 +3137,7 @@ impl FormatEngine<'_> {
                     + usize::from(self.options.indent_namespaces) * self.options.indent_width
             });
         self.finish_line();
-        if call_block_after_source_attached_brace {
-            self.layout.inline_nested_header_braceless_bias = None;
-            self.leave_braceless_body_for_call_block();
-        }
         if let Some(level) = inline_nested_header_level
-            .filter(|_| !call_block_after_source_attached_brace)
             .or_else(|| self.layout.inline_nested_header_braceless_bias.take())
             && brace.header.as_deref() != Some("else")
             && matches!(brace_type, BraceType::Command | BraceType::Definition)
@@ -3203,6 +3218,19 @@ impl FormatEngine<'_> {
                     .map(|line| leading_visual_width(line, self.options.tab_width))
             })
             .flatten();
+        let call_block_brace_spaces = (self.current_is_blank()
+            && brace_type == BraceType::Command
+            && matches!(self.options.brace_style, BraceStyle::Gnu | BraceStyle::Vtk))
+        .then(|| {
+            self.output
+                .last_non_empty_scoped()
+                .filter(|line| {
+                    is_semicolonless_call_line(line)
+                        && !is_header(self.options, leading_identifier(line.trimmed_start()))
+                })
+                .map(|line| leading_visual_width(line, self.options.tab_width))
+        })
+        .flatten();
         let closing_header_broken_brace_spaces = previous_else_indent_spaces
             .filter(|_| matches!(self.options.brace_style, BraceStyle::Gnu | BraceStyle::Vtk))
             .map(|spaces| spaces + self.options.indent_width);
@@ -3343,7 +3371,8 @@ impl FormatEngine<'_> {
                 .continuation_indent
                 .set_next_line_level(self.statement_level() + 1);
         }
-        if let Some(spaces) = inline_initializer_command_brace_spaces
+        if let Some(spaces) = call_block_brace_spaces
+            .or(inline_initializer_command_brace_spaces)
             .or(standalone_colon_brace_spaces)
             .or(inline_preprocessor_header_brace_spaces)
             .or(whitesmith_namespace_brace_spaces)

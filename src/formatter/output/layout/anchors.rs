@@ -8,6 +8,7 @@
 
 use super::astyle_stack::literal_closed;
 use crate::config::BraceStyle;
+use crate::formatter::braces::opening::is_semicolonless_call_line;
 use crate::formatter::constructs::headers::starts_header_word;
 use crate::formatter::constructs::labels;
 use crate::formatter::continuation::{
@@ -6176,7 +6177,9 @@ impl FormatEngine<'_> {
         {
             return None;
         }
-        let (line, levels) = self.header_chain_before(first)?;
+        let (line, levels) = self
+            .header_chain_before(first)
+            .or_else(|| self.macro_body_header_chain_before(first))?;
         // A closer leading the header's line stands at its own block's brace:
         // the header stands at the statement that block belongs to.
         let tokens = &self.tree.tokens;
@@ -6862,6 +6865,17 @@ impl FormatEngine<'_> {
             inner = outer;
         }
         Some((self.line_led_by_header(inner)?, levels))
+    }
+
+    /// The line and level count of the control header whose braceless body
+    /// is the macro call the `{` at `open` follows.
+    fn macro_body_header_chain_before(&self, open: usize) -> Option<(usize, usize)> {
+        let groups = &self.tree.groups;
+        let close = self.tree.previous_code_token(open)?;
+        let call = groups.closed_at(close)?;
+        let name = self.tree.previous_code_token(groups.get(call).open)?;
+        let header = self.tree.statements.braceless_header(name)?;
+        Some((self.line_led_by_header(header)?, 1))
     }
 
     /// The line that the header keyword `token` leads, or that the `if` of
@@ -7652,6 +7666,23 @@ impl FormatEngine<'_> {
             {
                 header = outer;
                 levels += 1;
+            }
+            // A block run onto a macro call closes at the statement the
+            // call's braceless body belongs to.
+            if levels == 0
+                && header == line_first
+                && matches!(&tokens[header], Token::Word(word) if !is_header(word))
+                && self
+                    .output
+                    .code_of(&self.output.as_slice()[line])
+                    .trimmed()
+                    .strip_suffix('{')
+                    .is_some_and(is_semicolonless_call_line)
+                && let Some(outer) = self.tree.statements.braceless_header(header)
+                && !same_line(outer, header)
+                && let Some(outer_line) = self.line_led_by_header(outer)
+            {
+                line = outer_line;
             }
             if levels > 0
                 && header == line_first

@@ -4,6 +4,7 @@ use crate::formatter::braces::classification::{
 };
 use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::braces::initializers::bracket_starts_initializer_designator;
+use crate::formatter::braces::opening::is_semicolonless_call_line;
 use crate::formatter::braces::postprocess::horstmann_run_in_fill;
 use crate::formatter::constructs::assembly::is_asm_block_header;
 use crate::formatter::constructs::headers::is_header;
@@ -2109,6 +2110,14 @@ impl FormatEngine<'_> {
                         && !inferred_capture_lambda
                         && self.options.brace_style == BraceStyle::Ratliff,
             );
+            if brace_type == BraceType::Command
+                && self
+                    .output
+                    .last_non_empty_scoped()
+                    .is_some_and(|line| is_semicolonless_call_line(line))
+            {
+                self.leave_braceless_body_for_call_block();
+            }
             self.layout
                 .continuation_indent
                 .set_next_line_level(self.statement_level() + brace_indent);
