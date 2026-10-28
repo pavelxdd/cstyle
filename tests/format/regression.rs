@@ -26732,3 +26732,25 @@ fn a_constructor_initializer_split_inside_its_arguments_stays_one_pass_stable() 
         assert_eq!(format_exact(&output, &options), expected);
     }
 }
+
+#[test]
+fn a_function_head_opening_its_brace_after_an_open_call_stands_at_the_statement() {
+    let source = "f(a,\nvoid g(int v) {\n    h();\n}\n";
+    for (style, expected) in [
+        ("none", source),
+        ("lisp", "f(a,\nvoid g(int v) {\n    h(); }\n"),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(
+            &mut options,
+            &[
+                format!("--style={style}"),
+                "--indent-after-parens".to_owned(),
+            ],
+        )
+        .expect("valid options");
+        let output = format_exact(source, &options);
+        assert_eq!(output, expected, "style {style}");
+        assert_eq!(format_exact(&output, &options), expected, "style {style}");
+    }
+}

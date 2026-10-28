@@ -3174,9 +3174,10 @@ impl FormatEngine<'_> {
                         .any(|outer| groups.get(outer).delimiter == Delimiter::Paren)
             })
         });
-        // A row opening a lambda's body stands with the body, as when parens
-        // align.
-        let opens_lambda_body = self.pending_line_opens_lambda_body();
+        // A row opening a lambda's body or a block among the arguments
+        // stands with the body, as when parens align.
+        let opens_lambda_body =
+            self.pending_line_opens_lambda_body() || self.line_opens_block_argument(line);
         if self.options.indent_after_parens
             && layout.line_kind == LineKind::Normal
             && !line_start.starts_with_any(b"#{})")

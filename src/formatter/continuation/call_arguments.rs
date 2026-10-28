@@ -2234,7 +2234,7 @@ impl FormatEngine<'_> {
     /// Whether the pending line ends with the brace of a block among a
     /// call's arguments, which sets the row at the statement as a lambda's
     /// body does.
-    fn line_opens_block_argument(&self, line: &str) -> bool {
+    pub(crate) fn line_opens_block_argument(&self, line: &str) -> bool {
         if !line.as_bytes().contains(&b'{') {
             return false;
         }
