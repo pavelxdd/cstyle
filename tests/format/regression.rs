@@ -27024,3 +27024,16 @@ fn an_added_one_line_block_after_a_broken_else_if_with_a_split_condition_ends_th
     check(input, args, expected);
     check(expected, args, expected);
 }
+
+#[test]
+fn a_kept_one_line_block_with_a_trailing_comment_ends_a_broken_else_if_chain() {
+    let input = "int f() {\n    if (a)\n        { i = 1; }\n    else\n        if (b)\n            { x = 1; }\n        else\n            { return 0; }  /* c */\n    if (d) {\n        y = 1;\n        return 1;\n    }\n}\n";
+    let expected = "int f() {\n    if (a)\n        { i = 1; }\n    else\n        if (b)\n            { x = 1; }\n        else\n            { return 0; }  /* c */\n    if (d) {\n        y = 1;\n        return 1;\n        }\n    }\n";
+    let args = &[
+        "--style=ratliff",
+        "--break-elseifs",
+        "--keep-one-line-blocks",
+    ];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
