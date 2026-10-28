@@ -2188,12 +2188,12 @@ impl FormatEngine<'_> {
         }
         let indent = self.current_line_indent_spaces();
         let lead = self.current.len() - self.current.trimmed_start().len();
+        // Blanks after the bracket keep the content past them, as after a
+        // paren.
+        let after = open + 1;
+        let content = after + (line[after..].len() - line[after..].trimmed_start().len());
         let column = indent
-            + visual_width_from(
-                &self.current[lead..open + 1],
-                indent,
-                self.options.tab_width,
-            );
+            + visual_width_from(&self.current[lead..content], indent, self.options.tab_width);
         // Past the maximum it continues two levels past its row, as a paren
         // does, and no nearer than the column the parens around it hold.
         let statement_base = self.continuation_base_indent() * self.options.indent_width;

@@ -26933,3 +26933,22 @@ fn an_access_label_at_file_scope_leaves_the_next_row_at_its_column() {
         "public:\nif (a)\n{\n    return -1;\n}\n",
     );
 }
+
+#[test]
+fn a_row_in_a_subscript_stands_at_the_content_past_the_blanks_after_its_bracket() {
+    check(
+        "x = tab[ size\n + N];\n",
+        &[],
+        "x = tab[ size\n         + N];\n",
+    );
+    check(
+        "x = tab[  (size)\n + N];\n",
+        &[],
+        "x = tab[  (size)\n          + N];\n",
+    );
+    check(
+        "return tab[(size)\n + N];\n",
+        &["--pad-paren-out"],
+        "return tab[ (size)\n            + N];\n",
+    );
+}
