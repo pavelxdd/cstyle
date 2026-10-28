@@ -2483,7 +2483,8 @@ impl FormatEngine<'_> {
                 self.current.push_str(source_gap.unwrap_or_default());
             }
             None if self.should_space_before_one_line_block(brace_type) => match source_gap {
-                Some(gap) if gap.len() > 1 || gap.contains('\t') => {
+                // Before a block opening its line the gap is the line's indent.
+                Some(gap) if !self.current_is_blank() && (gap.len() > 1 || gap.contains('\t')) => {
                     self.trim_current_end_horizontal_space();
                     self.current.push_str(gap);
                 }

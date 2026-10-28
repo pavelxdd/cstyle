@@ -26851,3 +26851,17 @@ fn indent_after_parens_keeps_a_closing_paren_before_a_one_line_block_at_its_head
         check(expected, args, expected);
     }
 }
+
+#[test]
+fn a_row_after_a_file_scope_one_line_block_list_ignores_the_blocks_source_indent() {
+    check(
+        "  {value, result},\n    helper;\n",
+        &[],
+        "{value, result},\nhelper;\n",
+    );
+    check(
+        "{value, result},\nhelper;\n",
+        &[],
+        "{value, result},\nhelper;\n",
+    );
+}
