@@ -3995,23 +3995,7 @@ fn format_one_line_block_tokens(
             .is_some_and(|token| !matches!(token, Token::Whitespace(_) | Token::Newline));
         let following_operator =
             following_operator_after_next_word(tokens, index + 1, tokens.len());
-        formatter.token_input.previous_input_was_adjacent = index > 0
-            && tokens
-                .get(index - 1)
-                .is_some_and(|token| !matches!(token, Token::Whitespace(_) | Token::Newline));
-        formatter.token_input.previous_input_whitespace = (index > 0)
-            .then(|| tokens.get(index - 1))
-            .flatten()
-            .and_then(|token| match token {
-                Token::Whitespace(ws) => Some(String::from(ws.clone()).into()),
-                _ => None,
-            })
-            .filter(|_| !matches!(tokens.get(index.wrapping_sub(2)), Some(Token::Newline)));
-        formatter.token_input.next_input_whitespace =
-            tokens.get(index + 1).and_then(|token| match token {
-                Token::Whitespace(ws) => Some(String::from(ws.clone()).into()),
-                _ => None,
-            });
+        formatter.set_input_whitespace(tokens, index, 0);
         formatter.token_input.token_begins_source_line = tokens[..index]
             .iter()
             .all(|token| matches!(token, Token::Whitespace(_) | Token::Newline));

@@ -27046,3 +27046,12 @@ fn a_kept_block_after_a_macro_condition_stands_in_the_header_body() {
     check(input, args, expected);
     check(expected, args, expected);
 }
+
+#[test]
+fn middle_pointer_alignment_keeps_stars_of_a_declarator_in_a_kept_block_together() {
+    let input = "void f() { int **p; int ***q; }\n";
+    let expected = "void f() { int ** p; int *** q; }\n";
+    let args = &["--align-pointer=middle", "--keep-one-line-blocks"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
