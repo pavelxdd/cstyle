@@ -26884,3 +26884,17 @@ fn a_function_head_row_after_a_braceless_header_stays_with_its_return_type() {
         "while (a)\n    int\n    f (L)\n{\n}\n",
     );
 }
+
+#[test]
+fn a_function_head_row_after_a_braceless_header_places_its_brace_by_the_style() {
+    check(
+        "if (a)\nvoid\nf (int L) {\n}\n",
+        &["--style=gnu"],
+        "if (a)\n    void\n    f (int L)\n    {\n    }\n",
+    );
+    check(
+        "while (a)\nint\nf (L)\n{\n}\n",
+        &["--style=pico"],
+        "while (a)\n    int\n    f (L)\n{}\n",
+    );
+}

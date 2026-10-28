@@ -310,9 +310,14 @@ impl FormatEngine<'_> {
         if spaces.is_some() && opens_lambda_block {
             spaces = None;
         }
-        // A block's own opening brace stands at the level of the header
-        // whose body the bias would indent.
-        let bias = if line_start.starts_with('{') {
+        // The bias indents the rows of a header's body up to its brace; at
+        // file scope the brace's own row is placed by the style, GNU
+        // indenting it with the body.
+        let bias = if line_start.starts_with('{')
+            && self.layout.nesting.brace_type_stack.is_empty()
+            && self.options.brace_style != BraceStyle::Gnu
+        {
+            self.layout.pending_braceless_block_bias.take();
             0
         } else {
             self.layout.pending_braceless_block_bias.unwrap_or(0)
