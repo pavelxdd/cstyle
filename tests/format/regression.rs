@@ -27055,3 +27055,12 @@ fn middle_pointer_alignment_keeps_stars_of_a_declarator_in_a_kept_block_together
     check(input, args, expected);
     check(expected, args, expected);
 }
+
+#[test]
+fn broken_else_if_after_an_empty_statement_body_indents_a_leading_comment_as_its_body() {
+    let input = "void f() {\n    if (e)\n        ;\n    else if (e == 1)\n    /* c */\n        return 1;\n}\n";
+    let expected = "void f() {\n    if (e)\n        ;\n    else\n        if (e == 1)\n            /* c */\n        {\n            return 1;\n        }\n}\n";
+    let args = &["--break-elseifs", "--add-braces"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}

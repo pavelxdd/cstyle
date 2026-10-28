@@ -1356,7 +1356,14 @@ impl FormatEngine<'_> {
             .layout
             .inline_nested_header_braceless_bias
             .filter(|_| word == "else" || !self.token_input.token_begins_source_line)
-            .map(|level| level * self.options.indent_width);
+            .map(|level| {
+                let broken_levels = if word == "else" {
+                    0
+                } else {
+                    self.layout.else_if_break_depths.len()
+                };
+                (level + broken_levels) * self.options.indent_width
+            });
         // A header after `case X:` on its line stands in the case body.
         let case_label_body_indent = (!self.current_is_blank())
             .then(|| self.output.code_of(&self.current))
