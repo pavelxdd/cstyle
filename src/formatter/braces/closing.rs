@@ -368,6 +368,28 @@ impl FormatEngine<'_> {
             })
     }
 
+    /// Whether the brace closing is a block standing alone outside any
+    /// function, after no statement or call, which reads as a list.
+    fn closes_headerless_file_scope_block(&self) -> bool {
+        let nesting = &self.layout.nesting;
+        if !matches!(
+            nesting.brace_type_stack.as_slice(),
+            [BraceType::Command | BraceType::NonStatement]
+        ) || !nesting
+            .brace_header_stack
+            .last()
+            .is_some_and(Option::is_none)
+        {
+            return false;
+        }
+        let groups = &self.tree.groups;
+        self.current
+            .active_token()
+            .and_then(|closer| groups.closed_at(closer))
+            .and_then(|block| self.tree.previous_code_token(groups.get(block).open))
+            .is_none_or(|previous| !matches!(self.tree.tokens[previous], Token::Symbol(';' | ')')))
+    }
+
     pub(crate) fn push_close_brace(&mut self, next: Option<&Token>, next_is_adjacent: bool) {
         let closing_lambda_body = self.current_open_brace_is_lambda_body();
         // A `}` that only comments precede leads its row.
@@ -412,6 +434,24 @@ impl FormatEngine<'_> {
                 self.current.push_str(source_gap);
                 self.preserve_run_in_join_space = true;
             }
+        }
+        // An empty list keeps the gap between its braces when the closer
+        // joins.
+        if matches!(
+            self.options.brace_style,
+            BraceStyle::Pico | BraceStyle::Lisp
+        ) && self.token_input.token_begins_source_line
+            && self.current_is_blank()
+            && (matches!(
+                self.layout.nesting.brace_type_stack.last(),
+                Some(BraceType::Array | BraceType::Initializer | BraceType::CompoundLiteral)
+            ) || self.closes_headerless_file_scope_block())
+            && let Some(previous) = self.output.last_mut()
+            && previous.trimmed_end().ends_with('{')
+            && !line_ends_with_comment(previous)
+        {
+            previous.truncate(previous.trimmed_end().len());
+            previous.push(' ');
         }
         if self.options.brace_style == BraceStyle::Whitesmith
             && self.layout.nesting.brace_type_stack.is_empty()
