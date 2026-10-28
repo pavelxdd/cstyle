@@ -27015,3 +27015,12 @@ fn an_added_one_line_block_in_a_run_in_label_block_stands_at_its_header() {
     check(input, args, expected);
     check(expected, args, expected);
 }
+
+#[test]
+fn an_added_one_line_block_after_a_broken_else_if_with_a_split_condition_ends_the_chain() {
+    let input = "void f() {\n    if (a)\n        g();\n    else if (b &&\n         c)\n        g();\n    if (y)\n        g();\n}\n";
+    let expected = "void f() {\n    if (a)\n    { g(); }\n    else\n        if (b &&\n                c)\n        { g(); }\n    if (y)\n    { g(); }\n}\n";
+    let args = &["--break-elseifs", "--add-one-line-braces"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}

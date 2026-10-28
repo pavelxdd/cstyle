@@ -366,17 +366,21 @@ impl FormatEngine<'_> {
             }
             // The block of a chain's last `else`, or of its last broken
             // `else if`, ends the chain.
-            let broken_else_if = header_is_if && {
-                let lines = self.output.scoped();
-                let mut rows = lines.iter().rev().filter(|line| !line.trimmed().is_empty());
-                let last = rows.next();
-                let before = rows.next();
-                // The block stands on the `if` row or on one of its own.
-                before.is_some_and(|line| {
-                    line.trimmed() == "else"
-                        && last.is_some_and(|row| row.trimmed_start().starts_with("if"))
-                }) || rows.next().is_some_and(|line| line.trimmed() == "else")
-            };
+            let broken_else_if = header_is_if
+                && self.options.break_else_ifs
+                && self
+                    .tree
+                    .statements
+                    .braceless_header(statement_start)
+                    .and_then(|keyword| {
+                        tokens[..keyword].iter().rev().find(|token| {
+                            !matches!(
+                                token,
+                                Token::Whitespace(_) | Token::Newline | Token::Comment(..)
+                            )
+                        })
+                    })
+                    .is_some_and(|token| matches!(token, Token::Word(word) if word == "else"));
             let else_follows = tokens[semicolon + 1..]
                 .iter()
                 .find(|token| {
