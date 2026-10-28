@@ -1485,6 +1485,14 @@ impl FormatEngine<'_> {
             );
             return;
         }
+        // A compound literal's brace on the line after its cast opens its
+        // rows from the cast's line, as one written on that line does.
+        if self.compound_literal_brace_follows_cast_line(brace_type, next) {
+            let (line, tokens) = self.output.pop_with_tokens().unwrap_or_default();
+            self.current.replace(line);
+            self.current.restore_tokens(tokens);
+            self.token_input.token_begins_source_line = false;
+        }
         // A comment leading the rest of the brace's line opens the body.
         let comment_leads_body = if matches!(brace_type, BraceType::Array | BraceType::Initializer)
         {
@@ -3924,6 +3932,34 @@ impl FormatEngine<'_> {
                 .output
                 .last()
                 .is_some_and(|line| line.trimmed().ends_with(':'))
+    }
+
+    fn compound_literal_brace_follows_cast_line(
+        &self,
+        brace_type: BraceType,
+        next: Option<&Token>,
+    ) -> bool {
+        brace_type == BraceType::CompoundLiteral
+            && self.token_input.token_begins_source_line
+            && self.current_is_blank()
+            && matches!(next, None | Some(Token::Newline))
+            && !matches!(
+                self.options.brace_style,
+                BraceStyle::Allman
+                    | BraceStyle::Whitesmith
+                    | BraceStyle::Vtk
+                    | BraceStyle::Gnu
+                    | BraceStyle::Horstmann
+                    | BraceStyle::Pico
+                    | BraceStyle::None
+            )
+            && !self.opens_compound_literal_in_list(brace_type)
+            && self.style_attaches_opening_brace(brace_type, next)
+            && self.output.last().is_some_and(|line| {
+                let code = self.output.code_of(line);
+                code.len() == line.trimmed_end().len()
+                    && line_ends_compound_literal_cast(code.trimmed_end())
+            })
     }
 
     fn class_block_indent_extra(&self, brace_type: BraceType, token_index: usize) -> usize {
