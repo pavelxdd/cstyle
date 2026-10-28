@@ -1980,16 +1980,19 @@ impl FormatEngine<'_> {
 
     fn realign_compound_literal_cast_brace(&mut self, brace_type: BraceType) {
         if brace_type == BraceType::CompoundLiteral
-            && self.layout.nesting.paren_depth > 0
             && line_ends_compound_literal_cast(self.current.trimmed_end())
             && self
                 .current
                 .tokens()
                 .is_none_or(|span| !self.token_in_parens(span.first))
-            && self
-                .output
-                .last_non_empty_scoped()
-                .is_some_and(|line| self.output.code_trimmed_of(line).ends_with(','))
+            && self.output.last_non_empty_scoped().is_some_and(|line| {
+                let code = self.output.code_trimmed_of(line);
+                if self.layout.nesting.paren_depth > 0 {
+                    code.ends_with(',')
+                } else {
+                    code.ends_with('=')
+                }
+            })
         {
             let spaces = self.statement_level_spaces();
             if self.current_line_indent_spaces() > spaces {

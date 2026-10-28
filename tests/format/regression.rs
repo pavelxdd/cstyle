@@ -26718,18 +26718,32 @@ fn a_label_opening_a_case_block_adds_no_level_to_the_statements_of_its_nested_la
 }
 
 #[test]
-fn a_compound_literal_brace_after_its_cast_line_opens_rows_past_the_continuation() {
+fn a_compound_literal_brace_after_its_cast_line_attaches_to_it() {
     let input = "x =\n    (S)\n{\n  a, b\n};\n";
-    let expected = "x =\n    (S) {\n        a, b\n    };\n";
-    for style in ["--style=java", "--style=google", "--style=stroustrup"] {
+    let expected = "x =\n(S) {\n    a, b\n};\n";
+    for style in ["--style=java", "--style=google"] {
         check(input, &[style], expected);
         check(expected, &[style], expected);
     }
-    check(
-        "x =\n    (S)\n{\n  a, b\n};\n",
-        &["--style=lisp"],
-        "x =\n    (S) {\n        a, b };\n",
-    );
+    check(input, &["--style=lisp"], "x =\n(S) {\n    a, b };\n");
+}
+
+#[test]
+fn a_compound_literal_after_an_assignment_break_stands_at_its_statement() {
+    let options = ["--style=java"];
+    for (input, expected) in [
+        (
+            "void f()\n{\n    x =\n        (int) {1};\n}\n",
+            "void f() {\n    x =\n    (int) {1};\n}\n",
+        ),
+        (
+            "void f()\n{\n    x =\n        (int) {1,\n 2};\n}\n",
+            "void f() {\n    x =\n    (int) {1,\n        2\n    };\n}\n",
+        ),
+    ] {
+        check(input, &options, expected);
+        check(expected, &options, expected);
+    }
 }
 
 #[test]

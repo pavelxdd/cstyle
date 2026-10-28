@@ -85,6 +85,42 @@ impl FormatEngine<'_> {
         })
     }
 
+    /// Whether the line led by the token at `first` holds the brace of a
+    /// compound literal after its cast, which a continued statement's line
+    /// stands at the statement with.
+    pub(crate) fn line_opens_cast_compound_literal(&self, first: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        let mut index = first;
+        while index < tokens.len() {
+            match &tokens[index] {
+                Token::Symbol('{') => {
+                    return self.tree.groups.opened_at(index).is_some_and(|group| {
+                        self.tree.blocks.kind(group) == Some(BlockKind::CompoundLiteral)
+                    }) && self
+                        .tree
+                        .previous_code_token(index)
+                        .is_some_and(|before| matches!(tokens[before], Token::Symbol(')')));
+                }
+                Token::Symbol(';' | '}') => return false,
+                Token::Newline => {
+                    let next = next_code_token(tokens, index + 1);
+                    if !next.is_some_and(|next| matches!(tokens[next], Token::Symbol('{'))) {
+                        return false;
+                    }
+                }
+                _ => {}
+            }
+            index = match self.tree.groups.opened_at(index) {
+                Some(group) => match self.tree.groups.get(group).close {
+                    Some(close) => close + 1,
+                    None => return false,
+                },
+                None => index + 1,
+            };
+        }
+        false
+    }
+
     /// Whether the pending line opens a lambda whose parameters go on past
     /// it to the row that opens the lambda's body.
     pub(crate) fn pending_line_opens_split_lambda_parameters(&self) -> bool {

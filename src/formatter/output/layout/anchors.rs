@@ -294,6 +294,12 @@ impl FormatEngine<'_> {
         })
         .or_else(|| {
             when(
+                !brace && matches!(previous, Some(Token::Operator(_))),
+                || self.cast_compound_literal_row_indent(first),
+            )
+        })
+        .or_else(|| {
+            when(
                 !brace
                     && previous.is_some_and(|previous| {
                         !matches!(previous, Token::Symbol(',' | ';' | '{' | '}'))
@@ -2074,6 +2080,27 @@ impl FormatEngine<'_> {
                 + closer_indent
                 + self.case_unindent_spaces()
         })
+    }
+
+    /// A line holding a compound literal's brace after its cast stands at
+    /// its statement, not at the continuation the statement's earlier rows
+    /// keep.
+    fn cast_compound_literal_row_indent(&self, first: usize) -> Option<usize> {
+        let group = self.tree.groups.enclosing(first);
+        if group.is_some_and(|group| {
+            !matches!(
+                self.tree.blocks.kind(group),
+                Some(BlockKind::FunctionBody | BlockKind::Control | BlockKind::Block)
+            )
+        }) || !self.line_opens_cast_compound_literal(first)
+        {
+            return None;
+        }
+        let previous = self
+            .output
+            .line_with_token(self.tree.previous_code_token(first)?)?;
+        let start = self.statement_start_line(previous);
+        Some(self.output.lead_width(start, self.options.tab_width) + self.case_unindent_spaces())
     }
 
     /// The line after a statement's first line holding assignments stands
