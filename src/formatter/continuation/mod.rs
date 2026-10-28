@@ -100,7 +100,9 @@ pub(crate) fn declaration_comma_continuation_width(
     visual_width_from(&line[..bytes], start_column, tab_width)
 }
 
-fn declaration_comma_continuation_column(line: &str) -> usize {
+/// The column of the first declarator of a declaration row `line` ending at
+/// its `,`; zero when the row leads with no type and name.
+pub(crate) fn declaration_comma_continuation_column(line: &str) -> usize {
     let chars: Vec<char> = line.chars().collect();
     let comma = match chars.len().checked_sub(1) {
         Some(comma) if comma > 0 => comma,

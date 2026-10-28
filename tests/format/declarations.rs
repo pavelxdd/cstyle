@@ -2977,3 +2977,32 @@ fn enum_parameter_leaves_an_empty_function_body_closed() {
 
     assert_eq!(format_exact(input, &options), input);
 }
+
+#[test]
+fn a_declarator_with_a_direct_initializer_continues_at_the_second_word() {
+    let options = FormatOptions::default();
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "int a, b(0),",
+        "c;",
+        "int a, b(0), d(1),",
+        "c;",
+        "}",
+        "int a, b(0),",
+        "c;",
+    );
+    let expected = fixture!(
+        "void f(void)",
+        "{",
+        "    int a, b(0),",
+        "        c;",
+        "    int a, b(0), d(1),",
+        "        c;",
+        "}",
+        "int a, b(0),",
+        "    c;",
+    );
+    assert_eq!(format_with(source, &options), expected);
+    assert_eq!(format_with(expected, &options), expected);
+}

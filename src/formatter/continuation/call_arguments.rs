@@ -5,6 +5,7 @@ use crate::formatter::braces::classification::{
 };
 use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::constructs::headers::{line_is_control_body_header, starts_header_word};
+use crate::formatter::continuation::declaration_comma_continuation_column;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::preprocessor::output_has_active_preprocessor_branch;
@@ -2139,6 +2140,7 @@ impl FormatEngine<'_> {
             || current.contains('>')
             || current.starts_with_any(b"#{})")
             || self.open_paren_column_of(previous_code).is_some()
+            || declaration_comma_continuation_column(previous_trimmed) > 0
             || !previous_code
                 .strip_suffix(',')
                 .is_some_and(has_top_level_comma_text)
