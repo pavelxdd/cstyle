@@ -1677,15 +1677,21 @@ impl FormatEngine<'_> {
             )
         {
             self.finish_line();
-            self.layout.pending_braceless_block_bias = None;
-            if self.layout.indentation.last_braceless_block().is_some() {
-                self.layout.indentation.exit_braceless_block();
-            }
-            self.layout
-                .continuation_indent
-                .set_next_line_level(self.statement_level());
+            self.leave_braceless_body_for_call_block();
             self.previous_was_newline = true;
         }
+    }
+
+    /// A block after a macro call that ends no statement stands at the
+    /// statement the call's braceless body belongs to.
+    fn leave_braceless_body_for_call_block(&mut self) {
+        self.layout.pending_braceless_block_bias = None;
+        if self.layout.indentation.last_braceless_block().is_some() {
+            self.layout.indentation.exit_braceless_block();
+        }
+        self.layout
+            .continuation_indent
+            .set_next_line_level(self.statement_level());
     }
 
     fn classify_pushed_open_brace(
@@ -1890,12 +1896,7 @@ impl FormatEngine<'_> {
                     .last_non_empty_scoped()
                     .is_some_and(|line| is_semicolonless_call_line(line)));
         if block_after_semicolonless_call {
-            self.layout.pending_braceless_block_bias = None;
-            if self.layout.indentation.last_braceless_block().is_some() {
-                self.layout.indentation.exit_braceless_block();
-            }
-            self.layout.continuation_indent.next_line_indent = Some(self.statement_level());
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.leave_braceless_body_for_call_block();
         }
         // A brace after an `else` and a comment is the else's own body.
         let else_keyword = self
@@ -3093,6 +3094,10 @@ impl FormatEngine<'_> {
         let inline_initializer_command_brace_spaces = (!objc_method_brace)
             .then_some(headerless_inline_command_column)
             .flatten();
+        let call_block_after_source_attached_brace = brace_type == BraceType::Command
+            && brace.header.is_none()
+            && !self.token_input.token_begins_source_line
+            && is_semicolonless_call_line(&self.current);
         let else_while_header =
             brace_type == BraceType::Command && header_text.starts_with("else while");
         let else_nested_loop_header = brace_type == BraceType::Command
@@ -3112,7 +3117,12 @@ impl FormatEngine<'_> {
                     + usize::from(self.options.indent_namespaces) * self.options.indent_width
             });
         self.finish_line();
+        if call_block_after_source_attached_brace {
+            self.layout.inline_nested_header_braceless_bias = None;
+            self.leave_braceless_body_for_call_block();
+        }
         if let Some(level) = inline_nested_header_level
+            .filter(|_| !call_block_after_source_attached_brace)
             .or_else(|| self.layout.inline_nested_header_braceless_bias.take())
             && brace.header.as_deref() != Some("else")
             && matches!(brace_type, BraceType::Command | BraceType::Definition)

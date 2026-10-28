@@ -27241,3 +27241,14 @@ fn an_added_block_after_a_broken_header_in_a_case_block_stands_at_the_header() {
         "switch (x)\n    {\n    case 1:\n    {\n        if (a &&\n                b)\n            { return false; }\n    }\n    }\n",
     );
 }
+
+#[test]
+fn a_broken_brace_after_a_semicolonless_macro_body_stands_at_the_statement() {
+    let expected = "void f()\n{\n    if (a)\n        FOREACH(x)\n    {\n        q();\n    }\n}\n";
+    check(
+        "void f() {\n\tif (a)\n\t\tFOREACH(x) {\n\t\t\tq();\n\t\t}\n}\n",
+        &["--style=allman"],
+        expected,
+    );
+    check(expected, &["--style=allman"], expected);
+}
