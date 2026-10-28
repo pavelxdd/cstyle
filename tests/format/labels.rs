@@ -995,3 +995,49 @@ fn a_header_after_a_label_owns_the_block_it_opens() {
     let input = "void f()\n{\n    while (x) {\nagain:  switch (c) {\n        case 1:\n            x();\n            break;\n        }\n    }\n}\n";
     assert_eq!(format_args(input, &["--style=kr", "-o"]), input);
 }
+
+#[test]
+fn a_label_body_after_an_unmatched_closing_brace_stands_with_the_statements_before_it() {
+    // A brace opened in an `#else` branch counts for nothing, so the `}`
+    // after the branches ends the function in the reference and what follows
+    // stands in the first column, a label's body with it.
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "#ifdef A",
+        "    i = 1;",
+        "#else",
+        "    if (g()) {",
+        "#endif",
+        "    use(i);",
+        "#ifndef A",
+        "    denorm = 0; }",
+        "#endif",
+        "    use(i);",
+        "ret:",
+        "    done(i);",
+        "}",
+    );
+    let expected = fixture!(
+        "void f(void) {",
+        "#ifdef A",
+        "    i = 1;",
+        "#else",
+        "    if (g()) {",
+        "#endif",
+        "    use(i);",
+        "#ifndef A",
+        "    denorm = 0;",
+        "}",
+        "#endif",
+        "use(i);",
+        "ret:",
+        "done(i);",
+        "}",
+    );
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=java".to_owned()]).expect("valid options");
+    let output = format_exact(source, &options);
+    assert_eq!(output, expected);
+    assert_eq!(format_exact(&output, &options), expected);
+}

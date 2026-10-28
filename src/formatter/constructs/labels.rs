@@ -226,6 +226,8 @@ impl FormatEngine<'_> {
         let previous_code = self.output.code_trimmed_of(previous);
         (is_user_label_candidate(previous_code, &self.options.access_labels)
             && leading_visual_width(previous, self.options.tab_width) == 0
+            // After an unmatched `}` no block is open to indent a body in.
+            && !self.layout.nesting.brace_type_stack.is_empty()
             && self.layout.pending_braceless_block_bias.is_none()
             && !self.in_initializer_brace()
             && self.current_inline_array_column().is_none())
