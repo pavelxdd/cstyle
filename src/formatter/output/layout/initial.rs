@@ -310,7 +310,14 @@ impl FormatEngine<'_> {
         if spaces.is_some() && opens_lambda_block {
             spaces = None;
         }
-        let mut level = level.max(self.layout.pending_braceless_block_bias.unwrap_or(0));
+        // A block's own opening brace stands at the level of the header
+        // whose body the bias would indent.
+        let bias = if line_start.starts_with('{') {
+            0
+        } else {
+            self.layout.pending_braceless_block_bias.unwrap_or(0)
+        };
+        let mut level = level.max(bias);
         if opens_lambda_block {
             level = normal_indent;
         }

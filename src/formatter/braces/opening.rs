@@ -1936,8 +1936,8 @@ impl FormatEngine<'_> {
                 self.layout.indentation.enter_braceless_block(delta);
             }
         }
-        if let Some(level) = self.layout.pending_braceless_block_bias.take()
-            && brace_type == BraceType::Command
+        if brace_type == BraceType::Command
+            && let Some(level) = self.layout.pending_braceless_block_bias.take()
             && !else_body_brace
         {
             // The bias counts the case body level the indentation lacks.

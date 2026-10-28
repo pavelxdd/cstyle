@@ -26865,3 +26865,22 @@ fn a_row_after_a_file_scope_one_line_block_list_ignores_the_blocks_source_indent
         "{value, result},\nhelper;\n",
     );
 }
+
+#[test]
+fn a_function_head_row_after_a_braceless_header_stays_with_its_return_type() {
+    check(
+        "if (a)\nvoid\nf (int L) {\n}\n",
+        &[],
+        "if (a)\n    void\n    f (int L) {\n}\n",
+    );
+    check(
+        "if (a)\nvoid\nf (int L) {\nx;\n}\n",
+        &["--style=allman"],
+        "if (a)\n    void\n    f (int L)\n{\n    x;\n}\n",
+    );
+    check(
+        "while (a)\nint\nf (L)\n{\n}\n",
+        &[],
+        "while (a)\n    int\n    f (L)\n{\n}\n",
+    );
+}
