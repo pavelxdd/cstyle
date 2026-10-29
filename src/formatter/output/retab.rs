@@ -27,6 +27,27 @@ impl FormatEngine<'_> {
         output_options.indent_style = self.output_indent_style;
         let tab_width = self.options.tab_width.max(1);
         let indent_width = self.options.indent_width.max(1);
+        // The code lines before and after each line, past directives and
+        // blank lines.
+        let is_code = |index: usize| {
+            !self.output.trimmed(index).is_empty() && !self.output.is_directive_line(index)
+        };
+        let mut next_code = vec![None; self.output.len()];
+        let mut next = None;
+        for (index, slot) in next_code.iter_mut().enumerate().rev() {
+            *slot = next;
+            if is_code(index) {
+                next = Some(index);
+            }
+        }
+        let mut previous_code = vec![None; self.output.len()];
+        let mut previous = None;
+        for (index, slot) in previous_code.iter_mut().enumerate() {
+            *slot = previous;
+            if is_code(index) {
+                previous = Some(index);
+            }
+        }
         // Widths come from the untouched spaced lines: once a line holds
         // tabs, its bytes stop being columns.
         let rows: Vec<Option<(usize, usize)>> = (0..self.output.len())
@@ -80,6 +101,14 @@ impl FormatEngine<'_> {
                     }
                 }
                 let width = self.output.lead_width(index, tab_width);
+                // A directive standing where a code row beside it stands,
+                // the one after it first, writes the column as that row does.
+                let row_at_directive = [next_code[index], previous_code[index]]
+                    .into_iter()
+                    .flatten()
+                    .find(|&row| {
+                        text.starts_with('#') && self.output.lead_width(row, tab_width) == width
+                    });
                 let tab_columns = match self.output_indent_style {
                     // A standalone comment's rows keep the tabs of its first
                     // line and align past them in spaces.
@@ -94,7 +123,7 @@ impl FormatEngine<'_> {
                     _ if indented_conditional => width / indent_width * indent_width,
                     // A filled empty line holds its level's indent.
                     _ if text.is_empty() => width / indent_width * indent_width,
-                    _ => self.tab_columns(index, width),
+                    _ => self.tab_columns(row_at_directive.unwrap_or(index), width),
                 };
                 Some((width, tab_columns))
             })
@@ -184,15 +213,26 @@ impl FormatEngine<'_> {
 
     fn starts_with_block_brace(&self, index: usize) -> bool {
         let groups = &self.tree.groups;
-        self.output
-            .line_tokens(index)
-            .and_then(|span| groups.opened_at(span.first))
-            .is_some_and(|group| {
+        let tokens = &self.tree.tokens;
+        self.output.line_tokens(index).is_some_and(|span| {
+            if self.rewritten_definition_braces.contains(&span.first) {
+                return true;
+            }
+            // A brace before the line's first token is one added around the
+            // statement it leads, a block's.
+            if !(span.first..=span.last)
+                .find(|&token| is_code_token(&tokens[token]))
+                .is_some_and(|token| matches!(tokens[token], Token::Symbol('{')))
+            {
+                return true;
+            }
+            groups.opened_at(span.first).is_some_and(|group| {
                 !matches!(
                     self.tree.blocks.kind(group),
                     Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
                 )
             })
+        })
     }
 
     /// Whether output line `index` leads with a brace whose elements go on
@@ -638,6 +678,19 @@ impl FormatEngine<'_> {
         };
         let start = self.statement_start(from);
         let line = self.output.line_with_token(start)?;
+        // A row of a macro block starts a statement at the block's level,
+        // whatever the line opening the block leaves unfinished.
+        if self.output.in_macro_block_body(index) && !self.output.in_macro_block_body(line) {
+            let mut row = from;
+            while let Some(group) = groups.enclosing(row)
+                && groups.get(group).delimiter != Delimiter::Brace
+            {
+                row = groups.get(group).open;
+            }
+            let row_line = self.output.line_with_token(row)?;
+            return (row_line < index)
+                .then(|| self.output.lead_width(row_line, self.options.tab_width));
+        }
         // A case label's rows take levels.
         if line >= index || matches!(&self.tree.tokens[start], Token::Word(word) if word == "case")
         {

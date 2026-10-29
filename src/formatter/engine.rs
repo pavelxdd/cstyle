@@ -198,10 +198,19 @@ pub(crate) struct FormatEngine<'a> {
     /// tab-indented style in spaces.
     pub(crate) output_indent_style: IndentStyle,
     pub(crate) output: buffer::OutputBuffer,
-    /// The last constructor initializer scan.
+    /// The last constructor initializer scan, keyed by the output it read.
     pub(crate) constructor_scan_cache: std::cell::Cell<
-        Option<crate::formatter::constructs::constructor_initializers::ConstructorScanCache>,
+        Option<(
+            OutputKey,
+            crate::formatter::constructs::constructor_initializers::ConstructorScan,
+        )>,
     >,
+    /// The look back for the line that decides the constructor initializer
+    /// scan.
+    pub(crate) constructor_scan_look: crate::formatter::output::buffer::LineLook,
+    /// The parens the output lines from a constructor initializer's on left
+    /// open when last counted: that line, the output counted, and the count.
+    pub(crate) constructor_open_depth_cache: std::cell::Cell<Option<(usize, OutputKey, isize)>>,
     /// The last reads past blanks and newlines after a line and after the
     /// token that follows it: the token each started at and the first
     /// token after them.
@@ -216,6 +225,9 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) open_paren_scan_cache: std::cell::Cell<Option<(OutputKey, Option<OpenParenLine>)>>,
     /// Whether the output last read holds a constructor initializer colon.
     pub(crate) constructor_colon_cache: std::cell::Cell<Option<(OutputKey, bool)>>,
+    /// The look back for the line that settles whether a constructor
+    /// initializer colon stands open.
+    pub(crate) constructor_colon_look: crate::formatter::output::buffer::LineLook,
     /// Whether the output last read stands inside a macro call's arguments.
     pub(crate) macro_call_context_cache: std::cell::Cell<Option<(OutputKey, bool)>>,
     /// The look back for a line ending a macro call's split opener.
@@ -400,6 +412,8 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) block_spacing: BlockSpacingState,
     pub(crate) comments: CommentState,
     pub(crate) source_run_in_brace_lines: Vec<usize>,
+    /// Source openers whose one-line rewrite classified them as function bodies.
+    pub(crate) rewritten_definition_braces: IndexSet<usize>,
     /// Padding lines before closers the run-in styles join to the row
     /// before them.
     pub(crate) joined_closer_padding_lines: Vec<usize>,
@@ -490,6 +504,8 @@ impl<'a> FormatEngine<'a> {
             output_indent_style: options.indent_style,
             output: buffer::OutputBuffer::default(),
             constructor_scan_cache: std::cell::Cell::new(None),
+            constructor_scan_look: Default::default(),
+            constructor_open_depth_cache: std::cell::Cell::new(None),
             layout_runs: [None; 2],
             open_paren_arg_cache: std::cell::Cell::new(None),
             open_paren_scan_cache: std::cell::Cell::new(None),
@@ -557,6 +573,7 @@ impl<'a> FormatEngine<'a> {
             statement_group_closes: std::cell::OnceCell::new(),
             constructor_initializer_separators: std::cell::OnceCell::new(),
             constructor_colon_cache: std::cell::Cell::new(None),
+            constructor_colon_look: Default::default(),
             layout: LayoutState {
                 indentation: IndentationState::default(),
                 command_state: CommandState::default(),
@@ -597,6 +614,7 @@ impl<'a> FormatEngine<'a> {
             block_spacing: BlockSpacingState::default(),
             comments: CommentState::default(),
             source_run_in_brace_lines: Vec::new(),
+            rewritten_definition_braces: IndexSet::default(),
             joined_closer_padding_lines: Vec::new(),
             empty_body_closer_lines: Vec::new(),
             published_line_shift: 0,
@@ -773,7 +791,8 @@ impl<'a> FormatEngine<'a> {
                 .count()
                 + 1,
         );
-        self.preprocessor.indentable_blocks = preprocessor_block_indentability(tokens);
+        self.preprocessor.indentable_blocks =
+            preprocessor_block_indentability(tokens, self.options.max_code_length.is_some());
         self.access_modified_braces = syntax::access_modified_brace_indices(tokens);
         self.inline_array.list_rows = std::rc::Rc::new(syntax::brace_list_rows(
             tokens,
@@ -1423,8 +1442,7 @@ impl<'a> FormatEngine<'a> {
             && self.bracket_chain_designator(tokens, index, line.end);
         let inferred_definition_brace = matches!(tokens[index], Token::Symbol('{'))
             && self.inferred_definition_brace(tokens, index);
-        let following_closer_width =
-            closer_width_after_semicolon(tokens, index, self.options.attach_closing_while).0;
+        let following_closer_width = closer_width_after_semicolon(tokens, index, self.options).0;
         TokenPushContext {
             next,
             next_is_adjacent,
@@ -2942,13 +2960,26 @@ fn leading_formatting_markers(tokens: &[Token]) -> (bool, bool) {
 pub(crate) fn closer_width_after_semicolon(
     tokens: &[Token],
     index: usize,
-    attach_while: bool,
+    options: &FormatOptions,
 ) -> (usize, Option<String>) {
+    closers_after_statement(tokens, index, 0, options)
+}
+
+/// The width the closers joining the row of the statement the `;` at
+/// `index` ends take after it, `added` of them braces the layout adds, and
+/// the text joining the row past them.
+pub(crate) fn closers_after_statement(
+    tokens: &[Token],
+    index: usize,
+    added: usize,
+    options: &FormatOptions,
+) -> (usize, Option<String>) {
+    let attach_while = options.attach_closing_while;
     if !matches!(tokens.get(index), Some(Token::Symbol(';'))) {
         return (0, None);
     }
     let mut cursor = index + 1;
-    let mut width = 0;
+    let mut width = 2 * added;
     let mut after_last = cursor;
     loop {
         let mut newlines = 0;
@@ -2959,8 +2990,11 @@ pub(crate) fn closer_width_after_semicolon(
             newlines += usize::from(matches!(tokens[cursor], Token::Newline));
             cursor += 1;
         }
-        // A brace past an empty line stays on a line of its own.
-        if newlines > 1 || !matches!(tokens.get(cursor), Some(Token::Symbol('}'))) {
+        // A brace past an empty line stays on a line of its own, unless
+        // the empty lines go.
+        if (newlines > 1 && !options.delete_empty_lines)
+            || !matches!(tokens.get(cursor), Some(Token::Symbol('}')))
+        {
             break;
         }
         width += 2;

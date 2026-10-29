@@ -70,6 +70,357 @@ fn kr_c_options() -> FormatOptions {
 }
 
 #[test]
+fn indent_switches_does_not_indent_file_scope_case_statements() {
+    let options = options_from_args(&["--indent-switches"]);
+    let expected = "case 1:\nuse(value);\n";
+
+    assert_eq!(format_exact("case 1: use(value);\n", &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn indented_switch_body_includes_an_initial_anonymous_block() {
+    let options = options_from_args(&["--style=allman", "--indent-switches"]);
+    let source = "void outer(void)\n{\nswitch (value)\n{\n{\nuse(value);\n}\n}\n}\n";
+    let expected = fixture!(
+        "void outer(void)",
+        "{",
+        "    switch (value)",
+        "    {",
+        "            {",
+        "                use(value);",
+        "            }",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn kr_initial_switch_block_keeps_case_body_level() {
+    let options = options_from_args(&["--style=kr", "--indent-switches"]);
+    let source = "void outer(void)\n{\nswitch (value)\n{\n{\nuse(value);\n}\n}\n}\n";
+    let expected = fixture!(
+        "void outer(void)",
+        "{",
+        "    switch (value) {",
+        "            {",
+        "                use(value);",
+        "            }",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn pico_initial_switch_block_keeps_level_on_reformat() {
+    let options = options_from_args(&["--style=pico"]);
+    let source = "void outer(void)\n{\nswitch (value)\n{\n{\nuse(value);\n}\n}\n}\n";
+    let expected = fixture!(
+        "void outer(void)",
+        "{   switch (value)",
+        "    {",
+        "            {   use(value); } } }",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn indented_case_body_keeps_initial_anonymous_block_level() {
+    let options = options_from_args(&["--style=kr", "--indent-cases"]);
+    let source = "void outer(void)\n{\nswitch (value)\n{\ncase 1:\n{\n{\nuse(value);\n}\n}\n}\n}\n";
+    let expected = fixture!(
+        "void outer(void)",
+        "{",
+        "    switch (value) {",
+        "    case 1: {",
+        "            {",
+        "                use(value);",
+        "            }",
+        "        }",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn first_nested_switch_keeps_enclosing_switch_body_level() {
+    let options = options_from_args(&["--style=lisp", "--indent-switches"]);
+    let source =
+        "void outer(void)\n{\nswitch (value)\n{\nswitch (value)\n{\nuse(value);\n}\n}\n}\n";
+    let expected = fixture!(
+        "void outer(void) {",
+        "    switch (value) {",
+        "            switch (value) {",
+        "                    use(value); } } }",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn pico_nested_switch_keeps_run_in_body_level_on_reformat() {
+    let options = options_from_args(&["--style=pico", "--indent-switches"]);
+    let source =
+        "void outer(void)\n{\nswitch (value)\n{\nswitch (value)\n{\nuse(value);\n}\n}\n}\n";
+    let expected = fixture!(
+        "void outer(void)",
+        "{   switch (value)",
+        "    {       switch (value)",
+        "            {       use(value); } } }",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn file_scope_switch_definition_does_not_add_command_body_indent() {
+    let options = options_from_args(&["--style=lisp", "--indent-switches"]);
+    let source = "switch (value)\n{\nif (value)\n{\nuse(value);\n}\n}\n";
+    let expected = fixture!(
+        "switch (value) {",
+        "    if (value) {",
+        "        use(value); } }",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn a_braceless_switch_body_keeps_its_own_row() {
+    let options = options_from_args(&["--style=allman"]);
+    for (body, expected_body) in [("use(value);", "        use(value);"), (";", "        ;")] {
+        let source = format!("void outer(void)\n{{\nswitch (value)\n{body}\n}}\n");
+        let expected = format!("void outer(void)\n{{\n    switch (value)\n{expected_body}\n}}\n");
+        let output = format_exact(&source, &options);
+        assert_eq!(output, expected, "body {body}");
+        assert_eq!(format_exact(&expected, &options), expected, "body {body}");
+    }
+}
+
+#[test]
+fn whitesmith_braceless_case_block_nests_from_its_label() {
+    // The reference draws the block's opener and body at the label's column
+    // and its closer one level in, which no Whitesmith block does. The block
+    // here nests from the label like every other Whitesmith block.
+    let options = options_from_args(&["--style=whitesmith"]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "switch (value)",
+        "case 1:",
+        "{",
+        "use(value);",
+        "}",
+        "default:",
+        "use(other);",
+        "}",
+    );
+    let expected = fixture!(
+        "void f(void)",
+        "    {",
+        "    switch (value)",
+        "    case 1:",
+        "        {",
+        "        use(value);",
+        "        }",
+        "default:",
+        "    use(other);",
+        "    }",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn file_scope_pico_places_a_leading_default_like_a_leading_case() {
+    // The reference runs a leading default in one level deeper than a leading
+    // case, though both labels stand at the same position of the same switch.
+    let options = options_from_args(&["--style=pico"]);
+    for (label, expected) in [
+        (
+            "case 1:",
+            "switch (value)\n{   case 1:\n    use(value); }\n",
+        ),
+        (
+            "default:",
+            "switch (value)\n{   default:\n    use(value); }\n",
+        ),
+    ] {
+        let source = format!("switch (value)\n{{\n{label}\nuse(value);\n}}\n");
+        let output = format_exact(&source, &options);
+        assert_eq!(output, expected, "label {label}");
+        assert_eq!(format_exact(expected, &options), expected, "label {label}");
+    }
+}
+
+#[test]
+fn file_scope_switch_definition_does_not_add_nested_body_indent() {
+    let options = options_from_args(&["--style=allman", "--indent-switches"]);
+    let source = "switch (value)\n{\nif (value)\n{\nuse(value);\n}\n}\n";
+    let expected = fixture!(
+        "switch (value)",
+        "{",
+        "    if (value)",
+        "    {",
+        "        use(value);",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn pico_file_scope_definition_keeps_control_columns_consistent() {
+    let options = options_from_args(&["--style=pico", "--indent-switches"]);
+    let source = "switch (value)\n{\nif (value)\n{\nuse(value);\n}\n}\n";
+    let expected = fixture!(
+        "switch (value)",
+        "{   if (value)",
+        "    {   use(value); } }",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn gnu_definition_keeps_body_column_after_a_statement() {
+    let options = options_from_args(&["--style=gnu", "--indent-switches"]);
+    let source = "switch (value)\n{\n;\nswitch (value)\n{\nuse(value);\n}\n}\n";
+    let expected = fixture!(
+        "switch (value)",
+        "    {",
+        "        ;",
+        "        switch (value)",
+        "            {",
+        "                    use(value);",
+        "            }",
+        "    }",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn file_scope_switch_definition_keeps_case_label_before_body() {
+    let options = options_from_args(&["--style=lisp", "--indent-switches"]);
+    let source = "switch (value)\n{\ncase 1:\nswitch (value)\n{\nuse(value);\n}\n}\n";
+    let expected = fixture!(
+        "switch (value) {",
+        "case 1:",
+        "    switch (value) {",
+        "            use(value); } }",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn gnu_definition_case_labels_follow_body_column() {
+    let options = options_from_args(&["--style=gnu", "--indent-switches"]);
+    let source = "switch (value)\n{\ncase 1:\nswitch (value)\n{\nuse(value);\n}\n}\n";
+    let expected = fixture!(
+        "switch (value)",
+        "    {",
+        "    case 1:",
+        "        switch (value)",
+        "            {",
+        "                    use(value);",
+        "            }",
+        "    }",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn lisp_definition_case_blocks_keep_body_column_on_reformat() {
+    let options = options_from_args(&["--style=lisp", "--indent-switches", "--indent-cases"]);
+    let source = "switch (value)\n{\ncase 1:\n{\nuse(value);\n}\n}\n";
+    let expected = fixture!("switch (value) {", "case 1: {", "        use(value); } }",);
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn case_blocks_outside_switch_keep_the_enclosing_body_indent() {
+    let options = FormatOptions::default();
+    let source = "void outer(void)\n{\ncase 1:\n{\nuse(value);\n}\n}\n";
+    let expected = fixture!(
+        "void outer(void)",
+        "{",
+        "case 1:",
+        "    {",
+        "        use(value);",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn attached_case_blocks_outside_switch_keep_the_enclosing_body_indent() {
+    let options = options_from_args(&["--style=kr"]);
+    let source = "void outer(void)\n{\ncase 1:\n{\nuse(value);\n}\n}\n";
+    let expected = fixture!(
+        "void outer(void)",
+        "{",
+        "case 1: {",
+        "        use(value);",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn vtk_file_scope_case_blocks_keep_one_body_indent() {
+    let options = options_from_args(&["--style=vtk"]);
+    let expected = "case 1:\n{\n    use(value);\n}\n";
+
+    assert_eq!(
+        format_exact("case 1:\n{\nuse(value);\n}\n", &options),
+        expected
+    );
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn file_scope_case_blocks_follow_attached_definition_style() {
+    let options = options_from_args(&["--style=google"]);
+    let source = "case 1:\n{\nuse(value);\n}\n";
+    let expected = "case 1: {\n    use(value);\n}\n";
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
 fn nested_switch_keeps_block_indent_inside_case_brace() {
     let source = fixture!(
         "void helper(int value)",
@@ -1714,6 +2065,74 @@ fn a_header_block_kept_after_a_case_label_closes_at_the_header() {
 }
 
 #[test]
+fn pico_places_the_switch_brace_for_case_and_default_alike() {
+    // The reference drops the switch brace and pads the label as a statement
+    // only for a leading default, while a leading case leaves both alone.
+    let case_source = fixture!(
+        "void outer(void)",
+        "{",
+        "switch (value)",
+        "{",
+        "case 1:",
+        "{",
+        "use(value);",
+        "}",
+        "}",
+        "}",
+    );
+    let default_source = case_source.replace("case 1:", "default:");
+    for (extra, expected) in [
+        (
+            &[][..],
+            "void outer(void)\n{   switch (value)\n    {   case 1:\n        {   use(value); } } }\n",
+        ),
+        (
+            &["--indent-switches"],
+            "void outer(void)\n{   switch (value)\n    {   case 1:\n        {   use(value); } } }\n",
+        ),
+        (
+            &["--indent-cases"],
+            "void outer(void)\n{   switch (value)\n    {   case 1:\n            {   use(value); } } }\n",
+        ),
+    ] {
+        let mut arguments = vec!["--style=pico"];
+        arguments.extend_from_slice(extra);
+        let options = options_from_args(&arguments);
+        let case_output = format_exact(case_source, &options);
+        assert_eq!(case_output, expected, "style pico with {extra:?}");
+        let default_output = format_exact(&default_source, &options);
+        assert_eq!(
+            default_output,
+            expected.replace("case 1:", "default:"),
+            "style pico with {extra:?}"
+        );
+        assert_eq!(format_exact(&default_output, &options), default_output);
+    }
+}
+
+#[test]
+fn pico_pads_a_file_scope_default_like_a_case() {
+    let case_source = fixture!("switch (value)", "{", "case 1:", "use(value);", "}",);
+    let default_source = case_source.replace("case 1:", "default:");
+    for extra in [&[][..], &["--indent-switches"], &["--indent-cases"]] {
+        let mut arguments = vec!["--style=pico"];
+        arguments.extend_from_slice(extra);
+        let options = options_from_args(&arguments);
+        let case_output = format_exact(case_source, &options);
+        assert_eq!(
+            case_output, "switch (value)\n{   case 1:\n    use(value); }\n",
+            "style pico with {extra:?}"
+        );
+        let default_output = format_exact(&default_source, &options);
+        assert_eq!(
+            default_output, "switch (value)\n{   default:\n    use(value); }\n",
+            "style pico with {extra:?}"
+        );
+        assert_eq!(format_exact(&default_output, &options), default_output);
+    }
+}
+
+#[test]
 fn a_pico_one_line_switch_block_runs_a_statement_in_at_the_case_body() {
     let options = options_from_args(&["--style=pico"]);
     let input = "int f(int err)\n{   switch (err)\n    {  M(G) }\n    switch (err)\n    {  case 1: x(); }\n    return u(err); }\n";
@@ -1726,4 +2145,41 @@ fn a_pico_one_line_switch_block_runs_a_statement_in_at_the_case_body() {
         "    return u(err); }",
     );
     assert_eq!(format_exact(input, &options), expected);
+}
+
+#[test]
+fn a_run_in_switch_body_keeps_an_empty_statement_at_the_statement_column() {
+    // The reference runs a leading empty statement in at the brace's body
+    // column, yet places the same empty statement after another one at the
+    // switch body column. Both stand where any other statement does.
+    let options = options_from_args(&["--style=pico"]);
+    let source = "void outer(void)\n{\nswitch (value)\n{\n;\nuse(value);\n;\n}\n}\n";
+    let expected = fixture!(
+        "void outer(void)",
+        "{   switch (value)",
+        "    {       ;",
+        "            use(value);",
+        "            ; } }",
+    );
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn a_braceless_switch_with_an_inline_label_keeps_the_statement_column() {
+    // The reference moves such a `switch` to the first column inside a
+    // function, though it indents the same `switch` when its label has its
+    // own row. The statement keeps the column of every other statement and
+    // the label keeps its source line.
+    let options = options_from_args(&[]);
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "    int a;",
+        "    switch (value) case 1:use(value);",
+        "    switch (value) default:use(value);",
+        "    a = 1;",
+        "}",
+    );
+    assert_eq!(format_exact(source, &options), source);
 }

@@ -221,7 +221,14 @@ fn is_ndef_preprocessor_statement(line: &str, directive: &str) -> bool {
     }
 }
 
-pub(crate) fn preprocessor_block_indentability(tokens: &[Token]) -> VecDeque<bool> {
+/// Which conditional blocks indent under `--indent-preproc-block`. A line
+/// leaving a paren open keeps its block flush, unless `wrapped_by_length`:
+/// the lines `--max-code-length` breaks would flip the verdict on the next
+/// pass.
+pub(crate) fn preprocessor_block_indentability(
+    tokens: &[Token],
+    wrapped_by_length: bool,
+) -> VecDeque<bool> {
     // Each conditional, with the `#endif` that closes it.
     let mut conditionals: Vec<(usize, Option<usize>)> = Vec::new();
     let mut open_stack: Vec<usize> = Vec::new();
@@ -242,12 +249,12 @@ pub(crate) fn preprocessor_block_indentability(tokens: &[Token]) -> VecDeque<boo
             _ => {}
         }
     }
-    let breakers = (conditionals.len() > 1).then(|| BlockBreakers::new(tokens));
+    let breakers = (conditionals.len() > 1).then(|| BlockBreakers::new(tokens, wrapped_by_length));
     let mut result = VecDeque::new();
     for (position, &(index, endif)) in conditionals.iter().enumerate() {
         result.push_back(endif.is_some_and(|endif| match &breakers {
             Some(breakers) if position > 0 => breakers.indentable(index, endif),
-            _ => is_indentable_preprocessor_block(tokens, index, position == 0),
+            _ => is_indentable_preprocessor_block(tokens, index, position == 0, wrapped_by_length),
         }));
     }
     result
@@ -267,23 +274,31 @@ struct BlockBreakers {
     endif_words: Vec<usize>,
     /// Parens, with the count of those open after each.
     parens: Vec<(usize, isize)>,
+    /// Line ends, and preprocessor lines, that follow a line leaving a paren
+    /// open or closed more than it opened.
+    unbalanced_lines: Vec<usize>,
 }
 
 impl BlockBreakers {
-    fn new(tokens: &[Token]) -> Self {
+    fn new(tokens: &[Token], wrapped_by_length: bool) -> Self {
         let mut breakers = Self {
             unbalanced_conditions: Vec::new(),
             braces_and_colons: Vec::new(),
             continued_defines: Vec::new(),
             endif_words: Vec::new(),
             parens: Vec::new(),
+            unbalanced_lines: Vec::new(),
         };
         let mut open_parens = 0isize;
+        let mut line_parens = 0isize;
         let mut line_endif_words = Vec::new();
         for (index, token) in tokens.iter().enumerate() {
             match token {
                 Token::Preprocessor(preprocessor) => {
                     line_endif_words.clear();
+                    if std::mem::take(&mut line_parens) != 0 && !wrapped_by_length {
+                        breakers.unbalanced_lines.push(index);
+                    }
                     let line = &preprocessor.text;
                     match preprocessor_directive(line) {
                         Some("if" | "elif")
@@ -304,10 +319,17 @@ impl BlockBreakers {
                 Token::Symbol('#') => breakers.endif_words.append(&mut line_endif_words),
                 Token::Symbol('{' | '}' | ':') => breakers.braces_and_colons.push(index),
                 Token::Symbol(paren @ ('(' | ')')) => {
-                    open_parens += if *paren == '(' { 1 } else { -1 };
+                    let step = if *paren == '(' { 1 } else { -1 };
+                    open_parens += step;
+                    line_parens += step;
                     breakers.parens.push((index, open_parens));
                 }
-                Token::Newline => line_endif_words.clear(),
+                Token::Newline => {
+                    line_endif_words.clear();
+                    if std::mem::take(&mut line_parens) != 0 && !wrapped_by_length {
+                        breakers.unbalanced_lines.push(index);
+                    }
+                }
                 _ => {}
             }
         }
@@ -340,6 +362,7 @@ impl BlockBreakers {
                 )
                 .copied(),
         ) || inside(Self::first_after(&self.braces_and_colons, start))
+            || inside(Self::first_after(&self.unbalanced_lines, start))
         {
             return false;
         }
@@ -359,26 +382,17 @@ fn is_indentable_preprocessor_block(
     tokens: &[Token],
     start: usize,
     is_first_conditional: bool,
+    wrapped_by_length: bool,
 ) -> bool {
-    // astyle reads `#error`, `#warning`, and `#line` as comments; one that
-    // opens a block on the first line of the file leaves it unindented.
-    if start == 0
-        && tokens
-            .iter()
-            .skip(start + 1)
-            .find(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
-            .is_some_and(|token| {
-                matches!(token, Token::Preprocessor(preprocessor)
-                if matches!(
-                    preprocessor_directive(&preprocessor.text),
-                    Some("error" | "warning" | "line" | "region" | "endregion")
-                ))
-            })
-    {
+    // astyle reads `#error`, `#warning`, and `#line` as comments; a blank
+    // line, a comment or one of those that follows the directive opening the
+    // file leaves its block unindented.
+    if start == 0 && opens_unindented_block(tokens) {
         return false;
     }
     let mut depth = 0usize;
     let mut paren_depth = 0isize;
+    let mut line_parens = 0isize;
     let mut saw_conditional = false;
     let mut potential_header_guard = false;
     let mut potential_header_guard_define = false;
@@ -439,8 +453,19 @@ fn is_indentable_preprocessor_block(
                 saw_endif_hash_line = true;
             }
             Token::Symbol('{' | '}') if depth > 0 => return false,
-            Token::Symbol('(') if depth > 0 => paren_depth += 1,
-            Token::Symbol(')') if depth > 0 => paren_depth -= 1,
+            Token::Symbol('(') if depth > 0 => {
+                paren_depth += 1;
+                line_parens += 1;
+            }
+            Token::Symbol(')') if depth > 0 => {
+                paren_depth -= 1;
+                line_parens -= 1;
+            }
+            Token::Newline
+                if depth > 0 && std::mem::take(&mut line_parens) != 0 && !wrapped_by_length =>
+            {
+                return false;
+            }
             Token::Symbol(':') if depth > 0 => return false,
             _ => {}
         }
@@ -455,6 +480,30 @@ fn is_indentable_preprocessor_block(
         return false;
     }
     true
+}
+
+/// Whether the directive at the start of `tokens` is followed by a blank
+/// line, a comment, or a directive astyle reads as one.
+fn opens_unindented_block(tokens: &[Token]) -> bool {
+    let mut newlines = 0;
+    for token in &tokens[1..] {
+        match token {
+            Token::Whitespace(_) => {}
+            Token::Newline => newlines += 1,
+            Token::Comment(_, _) => return true,
+            Token::Preprocessor(preprocessor) => {
+                return matches!(
+                    preprocessor_directive(&preprocessor.text),
+                    Some("error" | "warning" | "line" | "region" | "endregion")
+                );
+            }
+            _ => return false,
+        }
+        if newlines > 1 {
+            return true;
+        }
+    }
+    false
 }
 
 /// Whether a `#define` goes on past its line: astyle reads only a
@@ -1713,7 +1762,7 @@ mod tests {
         ];
         for source in sources {
             let tokens = tokenize(source);
-            let breakers = BlockBreakers::new(&tokens);
+            let breakers = BlockBreakers::new(&tokens, false);
             let mut open = Vec::new();
             for (index, token) in tokens.iter().enumerate() {
                 let Token::Preprocessor(preprocessor) = token else {
@@ -1725,7 +1774,7 @@ mod tests {
                         let start = open.pop().expect("open conditional");
                         assert_eq!(
                             breakers.indentable(start, index),
-                            super::is_indentable_preprocessor_block(&tokens, start, false),
+                            super::is_indentable_preprocessor_block(&tokens, start, false, false),
                             "block at {start} in {source:?}"
                         );
                     }

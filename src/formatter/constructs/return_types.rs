@@ -493,6 +493,9 @@ impl FormatEngine<'_> {
             last: span.last,
         };
         self.output.set_pending_tokens(Some(return_type_span));
+        if self.take_block_spacing_blank(line) {
+            self.push_empty_line_before_pending();
+        }
         let return_type_line = self.output.len();
         if let Some(spaces) = exact_indent_spaces {
             self.push_formatted_line_exact(&return_type, indent, spaces);
@@ -520,12 +523,15 @@ impl FormatEngine<'_> {
                 .lead_width(function_line, self.options.tab_width);
             let shift = new_lead as isize - name_column as isize;
             let base = self.continuation_base_indent() * self.options.indent_width;
-            self.layout.nesting.shift_columns_from(
-                name_column,
-                shift,
-                base,
-                self.options.max_continuation_indent,
-            );
+            // Columns that indent past a paren do not follow the name.
+            if !self.options.indent_after_parens {
+                self.layout.nesting.shift_columns_from(
+                    name_column,
+                    shift,
+                    base,
+                    self.options.max_continuation_indent,
+                );
+            }
             self.layout.frame_stack.move_split_line_frames(
                 return_type_line,
                 function_line,

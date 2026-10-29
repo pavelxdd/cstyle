@@ -120,6 +120,12 @@ impl FormatEngine<'_> {
         if self.take_block_spacing_blank(trimmed) {
             self.push_empty_line();
         }
+        // The row takes the level a header before it set for its body.
+        self.layout.continuation_indent.next_line_indent.take();
+        self.layout
+            .continuation_indent
+            .next_line_indent_spaces
+            .take();
         if let Some(spaces) = exact_indent_spaces {
             self.push_formatted_line_exact(trimmed, self.layout.indentation.indent(), spaces);
         } else {

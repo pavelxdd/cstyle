@@ -477,7 +477,17 @@ impl FormatEngine<'_> {
             {
                 return true;
             }
-            from = at + 1;
+            // The block opened after the paren closes on the row with it.
+            from = groups
+                .opened_at(at)
+                .and_then(|block| groups.get(block).close)
+                .filter(|&close| {
+                    close < limit
+                        && !tokens[at..close]
+                            .iter()
+                            .any(|token| matches!(token, Token::Newline))
+                })
+                .map_or(at + 1, |close| close + 1);
         }
     }
 
@@ -1330,15 +1340,40 @@ impl FormatEngine<'_> {
     /// Whether the code token `before` ends what a statement after it
     /// continues: a `;` or a brace of a block, a control header, or `else`
     /// and `do`.
+    /// Whether the token `before`, the one before the token at `index` that
+    /// starts a line, ends what astyle stacks for that line: a statement's
+    /// `;` among a call's arguments ends the statements in them, not the
+    /// call the paren closing them goes on with.
+    pub(super) fn ends_stack_statement_before(&self, before: usize, index: usize) -> bool {
+        let groups = &self.tree.groups;
+        self.ends_stack_statement(before)
+            && !(matches!(self.tree.tokens[before], Token::Symbol(';'))
+                && groups
+                    .enclosing(before)
+                    .is_some_and(|group| groups.closed_at(index) == Some(group)))
+    }
+
     pub(super) fn ends_stack_statement(&self, before: usize) -> bool {
         let groups = &self.tree.groups;
         match &self.tree.tokens[before] {
-            Token::Symbol(';') => groups
-                .enclosing(before)
-                .is_none_or(|group| groups.get(group).delimiter == Delimiter::Brace),
+            Token::Symbol(';') => {
+                let mut enclosing = groups.enclosing(before);
+                while let Some(parent) = enclosing {
+                    let group = groups.get(parent);
+                    if group.delimiter == Delimiter::Brace {
+                        return true;
+                    }
+                    if group.delimiter == Delimiter::Paren && self.closes_control_header(parent) {
+                        return false;
+                    }
+                    enclosing = group.parent;
+                }
+                true
+            }
             Token::Symbol('{') => groups
                 .opened_at(before)
                 .is_some_and(|group| self.is_stack_block(group)),
+            Token::Symbol('}') if groups.closed_at(before).is_none() => true,
             Token::Symbol(')' | ']' | '}') => groups.closed_at(before).is_some_and(|closed| {
                 self.is_stack_block(closed) || self.closes_control_header(closed)
             }),
@@ -1382,7 +1417,7 @@ impl FormatEngine<'_> {
         if self
             .tree
             .previous_code_token_in_first_branches(index)
-            .is_none_or(|before| self.ends_stack_statement(before))
+            .is_none_or(|before| self.ends_stack_statement_before(before, index))
         {
             return None;
         }
@@ -1409,6 +1444,14 @@ impl FormatEngine<'_> {
                 break Some(at);
             }
             passed.push(start as u32);
+            // A paren closing a line goes on with what its opener does,
+            // whatever statements the arguments between them hold.
+            if let Some(closed) = groups.closed_at(start)
+                && groups.get(closed).delimiter != Delimiter::Brace
+            {
+                start = groups.get(closed).open;
+                continue;
+            }
             let Some(before) = self.tree.previous_code_token_in_first_branches(start) else {
                 break None;
             };
@@ -1426,6 +1469,9 @@ impl FormatEngine<'_> {
                             })
                     })
             {
+                break None;
+            }
+            if matches!(tokens[before], Token::Symbol('}')) && self.ends_stack_statement(before) {
                 break None;
             }
             if let Some(closed) = groups.closed_at(before) {
@@ -1464,9 +1510,7 @@ impl FormatEngine<'_> {
                         .is_some_and(|group| row_array(group) || enum_body(group))
                 // The `;` of a `for` header stays inside its statement.
                 || matches!(tokens[before], Token::Symbol(';'))
-                    && groups
-                        .enclosing(before)
-                        .is_none_or(|group| groups.get(group).delimiter == Delimiter::Brace)
+                    && self.ends_stack_statement(before)
                 || matches!(&tokens[before], Token::Word(word) if word == "else" || word == "do")
                 || matches!(tokens[before], Token::Symbol(':'))
                     && (self.ends_case_label(before)

@@ -1679,6 +1679,25 @@ fn max_code_length_sets_selector_rows_split_off_a_receiver_past_its_bracket() {
 }
 
 #[test]
+fn max_code_length_sets_a_selector_row_split_off_nested_messages_where_a_source_row_stands() {
+    // The part after a split takes the column a row the source broke there
+    // takes: past the receiver of the one message the head leaves open, or
+    // past the innermost bracket of several.
+    let mut options = FormatOptions::default();
+    options.max_code_length = Some(60);
+    assert_stable_max_length_format(
+        "void f()\n{\n    result = [[[[[[[item value] next] next] next] next] next] next];\n}\n",
+        &options,
+        "void f()\n{\n    result = [[[[[[[item value] next] next] next] next] next]\n                                next];\n}\n",
+    );
+    assert_stable_max_length_format(
+        "void f()\n{\n    result = [[[[[[[[[item value] next] next] next] next] next] next] next] next];\n}\n",
+        &options,
+        "void f()\n{\n    result = [[[[[[[[[item value] next] next] next] next] next]\n                next] next] next];\n}\n",
+    );
+}
+
+#[test]
 fn max_code_length_horstmann_objc_message_does_not_split_at_bracket() {
     let mut options = FormatOptions::default();
     options.brace_style = BraceStyle::Horstmann;
@@ -2016,6 +2035,99 @@ fn max_code_length_lisp_reserves_attached_closing_brace_suffix() {
             "                ||epsilonValue>=zetaValue; }",
         ),
     );
+}
+
+#[test]
+fn max_code_length_lisp_reserves_the_closer_one_line_braces_add_on_the_statement_row() {
+    // The added closer joins the statement's row as a source closer does,
+    // with the closers after it, so the row splits as it does once the
+    // braces stand in the source.
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Lisp;
+    options.add_one_line_braces = true;
+    options.max_code_length = Some(60);
+    for (source, expected) in [
+        (
+            fixture!(
+                "void f()",
+                "{",
+                "    if (ready)",
+                "        result = compute(result, \"a value for the result items\");",
+                "}",
+            ),
+            fixture!(
+                "void f() {",
+                "    if (ready) {",
+                "        result = compute(result,",
+                "                         \"a value for the result items\"); } }",
+            ),
+        ),
+        (
+            fixture!(
+                "void f()",
+                "{",
+                "    if (ready)",
+                "        result = compute(result, \"a value for the result entries\");",
+                "    done();",
+                "}",
+            ),
+            fixture!(
+                "void f() {",
+                "    if (ready) {",
+                "        result = compute(result,",
+                "                         \"a value for the result entries\"); }",
+                "    done(); }",
+            ),
+        ),
+        (
+            fixture!(
+                "void f()",
+                "{",
+                "    if (ready)",
+                "        result = compute(result, \"a value for the result item\");",
+                "}",
+            ),
+            fixture!(
+                "void f() {",
+                "    if (ready) {",
+                "        result = compute(result, \"a value for the result item\"); } }",
+            ),
+        ),
+    ] {
+        assert_stable_max_length_format(source, &options, expected);
+    }
+}
+
+#[test]
+fn max_code_length_pico_splits_a_body_added_braces_enclose_as_the_braced_body() {
+    // A body on a line of its own splits in the braces added around it as
+    // in braces of the source, wherever the source set the body.
+    let mut options = FormatOptions::default();
+    let args = [
+        "--style=pico",
+        "--add-braces",
+        "--break-one-line-headers",
+        "--max-code-length=60",
+    ]
+    .map(str::to_owned);
+    apply_command_line_args(&mut options, &args).expect("valid options");
+    let statement = "result = compute(result, \"a value for the result entries and more\", other);";
+    let expected = fixture!(
+        "void f()",
+        "{   if (ready)",
+        "    {   result = compute(result,",
+        "                         \"a value for the result entries and more\", other); }",
+        "    done(); }",
+    );
+    for source in [
+        format!("void f()\n{{\n    if (ready)\n        {statement}\n    done();\n}}\n"),
+        format!("void f()\n{{\n    if (ready) {statement}\n    done();\n}}\n"),
+        format!(
+            "void f()\n{{\n    if (ready)\n    {{\n        {statement}\n    }}\n    done();\n}}\n"
+        ),
+    ] {
+        assert_stable_max_length_format(&source, &options, expected);
+    }
 }
 
 #[test]

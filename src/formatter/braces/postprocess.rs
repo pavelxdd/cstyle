@@ -20,20 +20,27 @@ pub(crate) struct MaxLengthBraceRowLayout {
 }
 
 /// `run_in_list_braces` are the output lines holding a list's lone brace
-/// that the row closing the list runs into.
+/// that the row closing the list runs into; `lone_list_braces` are the
+/// output lines holding only a list's `{`.
 pub(crate) fn postprocess_brace_style(
     output: String,
     options: &FormatOptions,
     run_in_list_braces: &[usize],
+    lone_list_braces: &[usize],
 ) -> String {
     match options.brace_style {
         BraceStyle::Pico => {
-            let run_in = run_in_horstmann_opening_braces(&output, options, run_in_list_braces);
+            let run_in = run_in_horstmann_opening_braces(
+                &output,
+                options,
+                run_in_list_braces,
+                lone_list_braces,
+            );
             attach_lisp_closing_braces(&run_in, options)
         }
         BraceStyle::Lisp => attach_lisp_closing_braces(&output, options),
         BraceStyle::Horstmann => {
-            run_in_horstmann_opening_braces(&output, options, run_in_list_braces)
+            run_in_horstmann_opening_braces(&output, options, run_in_list_braces, lone_list_braces)
         }
         _ => output,
     }
@@ -346,6 +353,7 @@ fn run_in_horstmann_opening_braces(
     output: &str,
     options: &FormatOptions,
     run_in_list_braces: &[usize],
+    lone_list_braces: &[usize],
 ) -> String {
     let line_break = options.line_break();
     // The gap before a row closing its list on the brace's line is no
@@ -369,11 +377,17 @@ fn run_in_horstmann_opening_braces(
         let opens_aggregate = |brace_at: usize| {
             input[..brace_at]
                 .iter()
+                .enumerate()
                 .rev()
-                .find(|line| !line.trimmed().is_empty() && !is_bare_comment_line(line.trimmed()))
-                .is_some_and(|line| {
+                .find(|(_, line)| {
+                    !line.trimmed().is_empty() && !is_bare_comment_line(line.trimmed())
+                })
+                .is_some_and(|(line_row, line)| {
                     let code = line[..trailing_comment_split_limit(line)].trimmed_end();
-                    code.ends_with_any(b"=,({") || line_ends_compound_literal_cast(code)
+                    // A row holding only a list's brace opens an aggregate; a
+                    // row holding only a block's brace does not.
+                    (code.trimmed() != "{" || lone_list_braces.binary_search(&line_row).is_ok())
+                        && (code.ends_with_any(b"=,({") || line_ends_compound_literal_cast(code))
                 })
         };
         let runs_in = |brace: &str, at: usize| {

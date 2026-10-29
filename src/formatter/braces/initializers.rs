@@ -890,6 +890,16 @@ impl FormatEngine<'_> {
             && !nested
             && !break_first
             && self.layout.nesting.paren_depth == 0;
+        // A compound literal on the line after an assignment's `=` sets its
+        // rows a level past its statement, whatever its elements' column.
+        if leveled_literal
+            && self
+                .output
+                .last_non_empty_scoped()
+                .is_some_and(|line| self.output.code_trimmed_of(line).ends_with('='))
+        {
+            column = statement_base + self.options.indent_width;
+        }
         // Elements after a brace past the maximum continuation indent stand
         // two levels past their line, or at the parens or list around them;
         // an assigned value's list keeps them at its brace.

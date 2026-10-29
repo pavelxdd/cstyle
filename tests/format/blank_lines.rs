@@ -907,6 +907,70 @@ fn vtk_break_all_blocks_keeps_closing_header_body_at_brace_indent() {
 }
 
 #[test]
+fn break_blocks_finishes_headers_with_declaration_like_bodies() {
+    let source = "void helper(void)\n{\nif (ready)\nstatic char* item(void)\n{\nuse(value);\n}\nresult = 0;\n}\n";
+    let cases = [
+        (
+            "--style=pico",
+            fixture!(
+                "void helper(void)",
+                "{   if (ready)",
+                "        static char* item(void)",
+                "        {   use(value); }",
+                "",
+                "    result = 0; }",
+            ),
+        ),
+        (
+            "--style=allman",
+            fixture!(
+                "void helper(void)",
+                "{",
+                "    if (ready)",
+                "        static char* item(void)",
+                "        {",
+                "            use(value);",
+                "        }",
+                "",
+                "    result = 0;",
+                "}",
+            ),
+        ),
+    ];
+    for (style, expected) in cases {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(
+            &mut options,
+            &[style.to_owned(), "--break-blocks=all".to_owned()],
+        )
+        .expect("valid options");
+        assert_eq!(format_exact(source, &options), expected);
+        assert_eq!(format_exact(expected, &options), expected);
+    }
+}
+
+#[test]
+fn pico_break_blocks_keeps_statement_led_declaration_bodies_unpadded() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=pico".to_owned(), "--break-blocks=all".to_owned()],
+    )
+    .expect("valid options");
+    let source = "void helper(void)\n{\nsetup(); if (ready)\nstatic char* item(void)\n{\nuse(value);\n}\nresult = 0;\n}\n";
+    let expected = fixture!(
+        "void helper(void)",
+        "{   setup(); if (ready)",
+        "        static char* item(void)",
+        "        {   use(value); }",
+        "    result = 0; }",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
 fn pico_break_blocks_does_not_separate_do_from_closing_while() {
     let mut options = FormatOptions::default();
     options.brace_style = BraceStyle::Pico;
@@ -1926,4 +1990,21 @@ fn break_blocks_parts_a_comment_before_a_case_after_an_else_in_the_switch() {
 
     assert_eq!(first, expected);
     assert_eq!(format_exact(&first, &options), first);
+}
+
+#[test]
+fn break_blocks_pads_a_block_whatever_parens_its_condition_quotes() {
+    // A paren in a literal of the header's condition is text, so the block
+    // takes the blank lines it takes without it.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--break-blocks".to_owned()]).expect("valid options");
+    for literal in ["'x'", "'('", "\"(\"[0]"] {
+        let source = format!(
+            "void f()\n{{\n    prepare();\n    while (item[1] != {literal}) {{\n        advance();\n    }}\n    finish();\n}}\n"
+        );
+        let expected = format!(
+            "void f()\n{{\n    prepare();\n\n    while (item[1] != {literal}) {{\n        advance();\n    }}\n\n    finish();\n}}\n"
+        );
+        assert_eq!(format_exact(&source, &options), expected, "{literal}");
+    }
 }

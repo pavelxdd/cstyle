@@ -85,6 +85,42 @@ impl FormatEngine<'_> {
         })
     }
 
+    /// Whether the line led by the token at `first` holds the brace of a
+    /// compound literal after its cast, which a continued statement's line
+    /// stands at the statement with.
+    pub(crate) fn line_opens_cast_compound_literal(&self, first: usize) -> bool {
+        let tokens = &self.tree.tokens;
+        let mut index = first;
+        while index < tokens.len() {
+            match &tokens[index] {
+                Token::Symbol('{') => {
+                    return self.tree.groups.opened_at(index).is_some_and(|group| {
+                        self.tree.blocks.kind(group) == Some(BlockKind::CompoundLiteral)
+                    }) && self
+                        .tree
+                        .previous_code_token(index)
+                        .is_some_and(|before| matches!(tokens[before], Token::Symbol(')')));
+                }
+                Token::Symbol(';' | '}') => return false,
+                Token::Newline => {
+                    let next = next_code_token(tokens, index + 1);
+                    if !next.is_some_and(|next| matches!(tokens[next], Token::Symbol('{'))) {
+                        return false;
+                    }
+                }
+                _ => {}
+            }
+            index = match self.tree.groups.opened_at(index) {
+                Some(group) => match self.tree.groups.get(group).close {
+                    Some(close) => close + 1,
+                    None => return false,
+                },
+                None => index + 1,
+            };
+        }
+        false
+    }
+
     /// Whether the pending line opens a lambda whose parameters go on past
     /// it to the row that opens the lambda's body.
     pub(crate) fn pending_line_opens_split_lambda_parameters(&self) -> bool {
@@ -2238,6 +2274,9 @@ impl FormatEngine<'_> {
             // closing paren starts no body.
             let trimmed = after_leading_comments(code.trimmed_start());
             if !line_start.starts_with_any(b"{}#)")
+                // A switch label takes its column from the switch, not from
+                // the header's body; its own body still takes this floor.
+                && layout.line_kind != LineKind::SwitchLabel
                 && ((code.ends_with('{')
                     && (starts_header_word(trimmed, "if")
                         || starts_header_word(trimmed, "while")
@@ -3046,7 +3085,9 @@ impl FormatEngine<'_> {
         {
             layout.exact_indent_spaces = Some(spaces);
         }
-        if let Some(floor) = self.call_shaped_brace_body_indent_floor(line, layout.normal_indent)
+        if layout.line_kind != LineKind::SwitchLabel
+            && let Some(floor) =
+                self.call_shaped_brace_body_indent_floor(line, layout.normal_indent)
             && layout.exact_indent_spaces.unwrap_or(0) < floor
         {
             layout.exact_indent_spaces = Some(floor);
@@ -3169,9 +3210,10 @@ impl FormatEngine<'_> {
                         .any(|outer| groups.get(outer).delimiter == Delimiter::Paren)
             })
         });
-        // A row opening a lambda's body stands with the body, as when parens
-        // align.
-        let opens_lambda_body = self.pending_line_opens_lambda_body();
+        // A row opening a lambda's body or a block among the arguments
+        // stands with the body, as when parens align.
+        let opens_lambda_body =
+            self.pending_line_opens_lambda_body() || self.line_opens_block_argument(line);
         if self.options.indent_after_parens
             && layout.line_kind == LineKind::Normal
             && !line_start.starts_with_any(b"#{})")

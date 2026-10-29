@@ -1,5 +1,5 @@
 use crate::common::{format_exact, format_with};
-use cstyle::config::FormatOptions;
+use cstyle::config::{FormatOptions, apply_command_line_args};
 
 #[test]
 fn default_message_map_body_rows_are_indented() {
@@ -181,4 +181,58 @@ fn default_macro_block_define_indents_continued_body_lines() {
         ),
         "#define wxBEGIN_EVENT_TABLE(theClass, baseClass) \\\n        const int value = 1; \\\n        const int other = 2;\n#define wxEND_EVENT_TABLE()\n",
     );
+}
+
+#[test]
+fn tab_indentation_indents_macro_block_rows_with_tabs_and_aligns_their_arguments_in_spaces() {
+    // A row of a macro block stands at the block's level, which tab
+    // indentation writes as a tab; an argument split from its row aligns
+    // past that tab in spaces.
+    for (args, source, expected) in [
+        (
+            &["--indent=tab=4"][..],
+            "BEGIN_MESSAGE_MAP(Item, Base)\n    ON_COMMAND(ID_FIRST, OnFirst)\n    ON_RANGE(ID_FIRST, ID_LAST,\n             OnRange)\nEND_MESSAGE_MAP()\n",
+            "BEGIN_MESSAGE_MAP(Item, Base)\n\tON_COMMAND(ID_FIRST, OnFirst)\n\tON_RANGE(ID_FIRST, ID_LAST,\n\t         OnRange)\nEND_MESSAGE_MAP()\n",
+        ),
+        (
+            &["--indent=tab=4", "--indent-namespaces"][..],
+            "namespace Config\n{\nBEGIN_MESSAGE_MAP(Item, Base)\n    ON_COMMAND(ID_FIRST, OnFirst)\nEND_MESSAGE_MAP()\n}\n",
+            "namespace Config\n{\n\tBEGIN_MESSAGE_MAP(Item, Base)\n\t\tON_COMMAND(ID_FIRST, OnFirst)\n\tEND_MESSAGE_MAP()\n}\n",
+        ),
+        (
+            &["--indent=tab=4"][..],
+            "wxBEGIN_EVENT_TABLE(Item, Base)\n    EVT_SIZE(Item::OnSize)\n#if X\n    EVT_HELP(ID_HELP, Item::OnHelp)\n#endif\nwxEND_EVENT_TABLE()\n",
+            "wxBEGIN_EVENT_TABLE(Item, Base)\n\tEVT_SIZE(Item::OnSize)\n#if X\n\tEVT_HELP(ID_HELP, Item::OnHelp)\n#endif\nwxEND_EVENT_TABLE()\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        let args = args.iter().map(|arg| arg.to_string()).collect::<Vec<_>>();
+        apply_command_line_args(&mut options, &args).expect("valid options");
+        assert_eq!(format_exact(source, &options), expected);
+        assert_eq!(format_exact(expected, &options), expected);
+    }
+}
+
+#[test]
+fn rows_of_a_block_comment_in_a_macro_block_keep_their_offset_from_its_opener() {
+    // The block's level moves a comment's rows with its first line.
+    let expected = "BEGIN_MESSAGE_MAP(Item, Base)\n    /* first row\n       second row */\n    ON_COMMAND(ID_FIRST, OnFirst)\nEND_MESSAGE_MAP()\n";
+    let unindented = "BEGIN_MESSAGE_MAP(Item, Base)\n/* first row\n   second row */\nON_COMMAND(ID_FIRST, OnFirst)\nEND_MESSAGE_MAP()\n";
+    for source in [expected, unindented] {
+        assert_eq!(format_exact(source, &FormatOptions::default()), expected);
+    }
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--indent=tab=4".to_owned()]).expect("valid options");
+    assert_eq!(
+        format_exact(expected, &options),
+        "BEGIN_MESSAGE_MAP(Item, Base)\n\t/* first row\n\t   second row */\n\tON_COMMAND(ID_FIRST, OnFirst)\nEND_MESSAGE_MAP()\n"
+    );
+}
+
+#[test]
+fn a_split_argument_of_a_macro_block_opener_aligns_under_its_paren() {
+    // The opener's own arguments belong to its call, not to the block it
+    // opens, so they align past its paren as any call's do.
+    let source = "BEGIN_MESSAGE_MAP(Item,\n                  Base)\n    ON_COMMAND(ID_FIRST, OnFirst)\nEND_MESSAGE_MAP()\n";
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }

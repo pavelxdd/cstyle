@@ -708,9 +708,9 @@ impl FormatEngine<'_> {
     }
 
     /// The finished text, where the fill of each of its whitespace-only
-    /// lines came from, and its lines holding a list's lone brace that the
-    /// row closing the list runs into.
-    pub(crate) fn finish(mut self) -> (String, Vec<EmptyFillSource>, Vec<usize>) {
+    /// lines came from, its lines holding a list's lone brace that the row
+    /// closing the list runs into, and its lines holding only a list's `{`.
+    pub(crate) fn finish(mut self) -> (String, Vec<EmptyFillSource>, Vec<usize>, Vec<usize>) {
         // Whole-output passes look at every construct.
         self.output.clear_scope();
         self.flush_backslash_body_parts();
@@ -722,6 +722,7 @@ impl FormatEngine<'_> {
         self.attach_statement_expression_braces();
         self.align_comments_before_case_labels();
         let run_in_list_braces = self.run_in_list_brace_lines();
+        let lone_list_braces = self.lone_list_brace_lines();
         self.retab_output();
         let fill_sources = self.fill_empty_lines();
         let line_break = self.options.line_break();
@@ -729,12 +730,45 @@ impl FormatEngine<'_> {
         let lines = std::mem::take(&mut self.output).into_lines();
         drop(self);
         if lines.is_empty() {
-            (String::new(), fill_sources, run_in_list_braces)
+            (
+                String::new(),
+                fill_sources,
+                run_in_list_braces,
+                lone_list_braces,
+            )
         } else {
             let mut output = lines.join(line_break);
             output.push_str(line_break);
-            (output, fill_sources, run_in_list_braces)
+            (output, fill_sources, run_in_list_braces, lone_list_braces)
         }
+    }
+
+    /// The lines holding only a list's `{`, with or without a trailing
+    /// comment, which a brace nested in the list runs into.
+    fn lone_list_brace_lines(&self) -> Vec<usize> {
+        if !matches!(
+            self.options.brace_style,
+            BraceStyle::Horstmann | BraceStyle::Pico
+        ) {
+            return Vec::new();
+        }
+        let groups = &self.tree.groups;
+        (0..self.output.len())
+            .filter(|&index| {
+                let line = &self.output[index];
+                line[..trailing_comment_split_limit(line)].trimmed() == "{"
+                    && self
+                        .output
+                        .line_tokens(index)
+                        .and_then(|span| groups.opened_at(span.first))
+                        .is_some_and(|group| {
+                            matches!(
+                                self.tree.blocks.kind(group),
+                                Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                            )
+                        })
+            })
+            .collect()
     }
 
     /// The lines holding only a list's `{` whose list closes on the next

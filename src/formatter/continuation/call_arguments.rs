@@ -5,6 +5,7 @@ use crate::formatter::braces::classification::{
 };
 use crate::formatter::braces::compound_literals::line_ends_compound_literal_cast;
 use crate::formatter::constructs::headers::{line_is_control_body_header, starts_header_word};
+use crate::formatter::continuation::declaration_comma_continuation_column;
 use crate::formatter::engine::FormatEngine;
 use crate::formatter::lexer::Token;
 use crate::formatter::preprocessor::output_has_active_preprocessor_branch;
@@ -1500,7 +1501,11 @@ impl FormatEngine<'_> {
     /// paren opens past the maximum continuation indent.
     fn holds_over_max_new_call(&self, index: usize) -> bool {
         let code = self.output.code_before_comment_trimmed(index);
-        if !code.ends_with(',') || !code.contains("new ") {
+        // A row of a block comment opened before it holds no code.
+        if !code.ends_with(',')
+            || !code.contains("new ")
+            || self.output.comment_start_index(index) != index
+        {
             return false;
         }
         let base = leading_visual_width(&self.output[index], self.options.tab_width);
@@ -1627,10 +1632,11 @@ impl FormatEngine<'_> {
     /// Whether output line `index` ends with the `(` of a `new` call no
     /// paren comes before.
     fn opens_empty_new_call(&self, index: usize) -> bool {
-        let trimmed = self.output[index].trimmed_end();
+        let trimmed = self.output.code_before_comment_trimmed(index);
         if !trimmed.ends_with('(')
             || !trimmed.contains(" new ")
             || trimmed.trimmed_start().starts_with("return ")
+            || self.output.comment_start_index(index) != index
         {
             return false;
         }
@@ -2139,6 +2145,7 @@ impl FormatEngine<'_> {
             || current.contains('>')
             || current.starts_with_any(b"#{})")
             || self.open_paren_column_of(previous_code).is_some()
+            || declaration_comma_continuation_column(previous_trimmed) > 0
             || !previous_code
                 .strip_suffix(',')
                 .is_some_and(has_top_level_comma_text)
@@ -2232,7 +2239,7 @@ impl FormatEngine<'_> {
     /// Whether the pending line ends with the brace of a block among a
     /// call's arguments, which sets the row at the statement as a lambda's
     /// body does.
-    fn line_opens_block_argument(&self, line: &str) -> bool {
+    pub(crate) fn line_opens_block_argument(&self, line: &str) -> bool {
         if !line.as_bytes().contains(&b'{') {
             return false;
         }

@@ -20,6 +20,7 @@ pub struct LineAdjuster {
     case_processing_enabled: bool,
     line_observe_enabled: bool,
     last_line_case_unindent: usize,
+    last_line_macro_block_levels: usize,
 }
 
 impl LineAdjuster {
@@ -37,6 +38,7 @@ impl LineAdjuster {
             case_processing_enabled: true,
             line_observe_enabled: true,
             last_line_case_unindent: 0,
+            last_line_macro_block_levels: 0,
         }
     }
 
@@ -114,6 +116,11 @@ impl LineAdjuster {
         self.last_line_case_unindent
     }
 
+    /// The levels of macro blocks the last adjusted line stands in.
+    pub fn last_line_macro_block_levels(&self) -> usize {
+        self.last_line_macro_block_levels
+    }
+
     pub fn adjust_raw_literal_line(&mut self, line: String) -> String {
         self.switch_case_transformer.begin_line();
         self.last_line_case_unindent = 0;
@@ -138,6 +145,7 @@ impl LineAdjuster {
     }
 
     fn adjust_macro_block_line(&mut self, line: String) -> String {
+        self.last_line_macro_block_levels = 0;
         if self.macro_blocks.is_empty() {
             return line;
         }
@@ -154,6 +162,7 @@ impl LineAdjuster {
         } else {
             self.macro_block_depth
         };
+        self.last_line_macro_block_levels = extra_levels;
         let mut line = line;
         if extra_levels > 0 {
             self.indent_line(&mut line, extra_levels);

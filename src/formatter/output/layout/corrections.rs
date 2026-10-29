@@ -310,6 +310,11 @@ impl FormatEngine<'_> {
         ) {
             exact_indent_spaces = Some(label_layout.indent_spaces);
         }
+        if let Some(spaces) =
+            self.run_in_switch_body_label_indent_spaces(line_kind, self.output.len())
+        {
+            exact_indent_spaces = Some(spaces);
+        }
         if let Some(spaces) = self.lambda_opening_brace_indent_spaces(line) {
             exact_indent_spaces = Some(spaces);
         }
@@ -340,7 +345,10 @@ impl FormatEngine<'_> {
             let (closing_parens, opening_parens) = line.paren_imbalance();
             LineDelimiters {
                 closes_outer: closing_parens > opening_parens.len(),
-                owned_continuation: self.layout.frame_stack.active_delimiter().is_some()
+                owned_continuation: self
+                    .layout
+                    .frame_stack
+                    .has_delimiter_opened_before(self.output.len())
                     || self.operator_chain_owns_continuation(line),
             }
         })
@@ -427,7 +435,9 @@ impl FormatEngine<'_> {
             if let Some(spaces) = self.lambda_closing_brace_indent_spaces(line) {
                 exact_indent_spaces = Some(spaces);
             }
-            if let Some(spaces) = self.lambda_body_indent_spaces_after_opening_brace(line) {
+            if line_kind == LineKind::Normal
+                && let Some(spaces) = self.lambda_body_indent_spaces_after_opening_brace(line)
+            {
                 exact_indent_spaces = Some(spaces);
             }
         }
@@ -442,7 +452,6 @@ impl FormatEngine<'_> {
         }
         if line_kind == LineKind::Normal
             && !line_start.starts_with_any(b"{}")
-            && !starts_header_word(line_start, "switch")
             && let Some(spaces) = self.direct_switch_body_indent_spaces()
         {
             let current = exact_indent_spaces.unwrap_or(indent * self.options.indent_width);

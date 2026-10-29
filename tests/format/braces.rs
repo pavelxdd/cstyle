@@ -2641,3 +2641,80 @@ fn breaking_styles_break_a_list_brace_on_the_first_line_as_on_any_line() {
     assert_eq!(format_exact(source, &options), expected);
     assert_eq!(format_exact(expected, &options), expected);
 }
+
+#[test]
+fn run_in_styles_keep_a_nested_block_brace_on_its_own_row() {
+    // The reference runs only the inner block's brace into its statement; an
+    // outer block's brace keeps the row it was written on.
+    let nested = "void outer(void)\n{\n{\n{\nuse(value);\n}\n}\n}\n";
+    let case_nested =
+        "void outer(void)\n{\nswitch (value)\n{\ncase 1:\n{\n{\n{\nuse(value);\n}\n}\n}\n}\n}\n";
+    for (style, source, expected) in [
+        (
+            "pico",
+            nested,
+            "void outer(void)\n{\n    {\n        {   use(value); } } }\n",
+        ),
+        (
+            "horstmann",
+            nested,
+            "void outer(void)\n{\n    {\n        {   use(value);\n        }\n    }\n}\n",
+        ),
+        (
+            "pico",
+            case_nested,
+            "void outer(void)\n{   switch (value)\n    {   case 1:\n        {\n            {\n                {   use(value); } } } } }\n",
+        ),
+        (
+            "horstmann",
+            case_nested,
+            "void outer(void)\n{   switch (value)\n    {   case 1:\n        {\n            {\n                {   use(value);\n                }\n            }\n        }\n    }\n}\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[format!("--style={style}")])
+            .expect("valid options");
+        let output = format_exact(source, &options);
+        assert_eq!(output, expected, "style {style}");
+        assert_eq!(format_exact(&output, &options), expected);
+    }
+}
+
+#[test]
+fn a_comment_on_a_list_brace_keeps_the_nested_list_row_running_in() {
+    let source = "static const int values[2][2] =\n{\n    /* 0 */\n    {\n        {1, 2}, {3, 4},\n        {5, 6}, {7, 8},\n        {9, 10}, {11, 12}\n    },\n    {\n        {13, 14}, {15, 16}\n    }\n};\n";
+    let expected = "static const int values[2][2] =\n{   /* 0 */\n    {   {1, 2 }, {3, 4 },\n        {5, 6 }, {7, 8 },\n        {9, 10 }, {11, 12 } },\n    {   {13, 14 }, {15, 16 } } };\n";
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=pico".to_owned()]).expect("valid options");
+    let output = format_exact(source, &options);
+    assert_eq!(output, expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn a_brace_after_a_line_comment_ending_in_parens_stays_on_its_own_row() {
+    let source = "int x;\n// (value)\n{\n    use(x);\n}\n";
+    for style in ["kr", "1tbs", "linux", "stroustrup", "java"] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[format!("--style={style}")])
+            .expect("valid options");
+        assert_eq!(format_exact(source, &options), source, "style {style}");
+    }
+}
+
+#[test]
+fn a_spliced_function_head_keeps_its_brace_on_the_next_row() {
+    let source = "void f(void) \\\n{\n    int i;\n}\n";
+    for (style, expected) in [
+        ("google", source),
+        ("kr", source),
+        ("ratliff", "void f(void) \\\n    {\n    int i;\n    }\n"),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[format!("--style={style}")])
+            .expect("valid options");
+        let output = format_exact(source, &options);
+        assert_eq!(output, expected, "style {style}");
+        assert_eq!(format_exact(&output, &options), expected, "style {style}");
+    }
+}

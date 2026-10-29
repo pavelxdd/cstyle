@@ -1016,6 +1016,11 @@ impl FormatEngine<'_> {
         }
         let mut question_indent = None;
         for scan_index in self.output.scoped_range().rev().take(12) {
+            if self.output.comment_token(scan_index).is_some()
+                && self.output.line_tokens(scan_index).is_none()
+            {
+                continue;
+            }
             let raw = &self.output[scan_index];
             let code = self.output.code_before_comment(scan_index).trimmed_end();
             // A macro's body continues no statement after it.

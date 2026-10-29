@@ -1678,3 +1678,35 @@ fn a_paren_row_after_a_name_aligns_under_it_only_in_constructor_initializers() {
     assert_eq!(format_exact(source, &options), expected);
     assert_eq!(format_exact(expected, &options), expected);
 }
+
+#[test]
+fn constructor_initializer_rows_stand_at_one_column_however_many_rows_precede_them() {
+    // Every row of a long member list stands where its first rows do,
+    // whatever continuation indent rows of other statements take.
+    let rows = |indent: &str| {
+        (0..70)
+            .map(|index| format!("{indent}value{index}(0),\n"))
+            .collect::<String>()
+    };
+    let body = "    {\n    }\n};\n";
+    let trailing_colon = format!(
+        "class Item\n{{\npublic:\n    Item() :\n{}        last(0)\n{body}",
+        rows("        ")
+    );
+    let colon_alone = format!(
+        "class Item\n{{\npublic:\n    Item()\n        :\n{}        last(0)\n{body}",
+        rows("        ")
+    );
+    let same_line = format!(
+        "class Item\n{{\npublic:\n    Item() : first(0),\n{}        last(0)\n{body}",
+        rows("        ")
+    );
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--indent-continuation=3".to_owned()])
+        .expect("valid options");
+    for expected in [&trailing_colon, &colon_alone, &same_line] {
+        assert_eq!(&format_exact(expected, &options), expected);
+    }
+    let same_line_source = same_line.replace("\n        value", "\n             value");
+    assert_eq!(format_exact(&same_line_source, &options), same_line);
+}

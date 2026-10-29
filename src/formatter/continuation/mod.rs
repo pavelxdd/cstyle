@@ -100,7 +100,9 @@ pub(crate) fn declaration_comma_continuation_width(
     visual_width_from(&line[..bytes], start_column, tab_width)
 }
 
-fn declaration_comma_continuation_column(line: &str) -> usize {
+/// The column of the first declarator of a declaration row `line` ending at
+/// its `,`; zero when the row leads with no type and name.
+pub(crate) fn declaration_comma_continuation_column(line: &str) -> usize {
     let chars: Vec<char> = line.chars().collect();
     let comma = match chars.len().checked_sub(1) {
         Some(comma) if comma > 0 => comma,
@@ -1706,6 +1708,10 @@ impl FormatEngine<'_> {
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
             }
+            // A block comment's body holds no statement.
+            if self.output.comment_start_index(index) != index {
+                continue;
+            }
             let code = self.output.code_trimmed_of(trimmed);
             if code.starts_with("return ") && !code.ends_with(';') {
                 return Some(
@@ -2186,12 +2192,12 @@ impl FormatEngine<'_> {
         }
         let indent = self.current_line_indent_spaces();
         let lead = self.current.len() - self.current.trimmed_start().len();
+        // Blanks after the bracket keep the content past them, as after a
+        // paren.
+        let after = open + 1;
+        let content = after + (line[after..].len() - line[after..].trimmed_start().len());
         let column = indent
-            + visual_width_from(
-                &self.current[lead..open + 1],
-                indent,
-                self.options.tab_width,
-            );
+            + visual_width_from(&self.current[lead..content], indent, self.options.tab_width);
         // Past the maximum it continues two levels past its row, as a paren
         // does, and no nearer than the column the parens around it hold.
         let statement_base = self.continuation_base_indent() * self.options.indent_width;

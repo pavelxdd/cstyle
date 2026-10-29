@@ -385,6 +385,8 @@ pub(crate) struct OutputBuffer {
     /// Lines that a comment on them left a level past a code line in a
     /// case body.
     comment_kept_case_level: Vec<bool>,
+    /// Whether each line stands in the body of a macro block.
+    macro_block_body: Vec<bool>,
     /// Comments of the current line just taken, for the next pushed line.
     pending_comments: Option<LineComments>,
     /// Block comment token being pushed; lines pushed without a current line
@@ -915,6 +917,17 @@ impl OutputBuffer {
             .unwrap_or(false)
     }
 
+    pub(crate) fn mark_macro_block_body(&mut self, index: usize) {
+        if let Some(line) = self.macro_block_body.get_mut(index) {
+            *line = true;
+        }
+    }
+
+    /// Whether line `index` stands in the body of a macro block.
+    pub(crate) fn in_macro_block_body(&self, index: usize) -> bool {
+        self.macro_block_body.get(index).copied().unwrap_or(false)
+    }
+
     pub(crate) fn is_indented_directive_continuation(&self, index: usize) -> bool {
         self.indented_directive_continuation
             .get(index)
@@ -934,6 +947,7 @@ impl OutputBuffer {
         self.verbatim.reserve(lines);
         self.indented_directive_continuation.reserve(lines);
         self.comment_kept_case_level.reserve(lines);
+        self.macro_block_body.reserve(lines);
     }
 
     fn push_pending_sources(&mut self, blank: bool) {
@@ -946,6 +960,7 @@ impl OutputBuffer {
         self.verbatim.push(false);
         self.indented_directive_continuation.push(false);
         self.comment_kept_case_level.push(false);
+        self.macro_block_body.push(false);
         if blank {
             self.tokens.push(PackedSpan::NONE);
             self.comments
@@ -984,6 +999,7 @@ impl OutputBuffer {
         self.verbatim.pop();
         self.indented_directive_continuation.pop();
         self.comment_kept_case_level.pop();
+        self.macro_block_body.pop();
         let line = self.lines.pop();
         if line.is_some() {
             self.last_non_empty_dirty.set(true);
@@ -1038,6 +1054,7 @@ impl OutputBuffer {
         self.verbatim.swap(a, b);
         self.indented_directive_continuation.swap(a, b);
         self.comment_kept_case_level.swap(a, b);
+        self.macro_block_body.swap(a, b);
         self.last_non_empty_dirty.set(true);
         self.record_change(a.min(b));
     }
@@ -1050,6 +1067,7 @@ impl OutputBuffer {
         self.verbatim.remove(index);
         self.indented_directive_continuation.remove(index);
         self.comment_kept_case_level.remove(index);
+        self.macro_block_body.remove(index);
         self.last_non_empty_dirty.set(true);
         self.record_change(index);
         self.lines.remove(index)
@@ -2190,6 +2208,12 @@ impl OutputBuffer {
         from
     }
 
+    /// Whether line `index` is comment text: a comment row, or a row a block
+    /// comment's text starts.
+    fn is_comment_row_at(&self, index: usize, trimmed: &str) -> bool {
+        is_comment_row(trimmed) || self.comments[index].get().lead.is_some()
+    }
+
     /// The comment rows that end the lines in scope; see [`CommentRun`].
     pub(crate) fn comment_run(&self) -> CommentRun {
         let range = self.scoped_range();
@@ -2204,7 +2228,7 @@ impl OutputBuffer {
                     if trimmed.is_empty() {
                         continue;
                     }
-                    if !is_comment_row(trimmed) {
+                    if !self.is_comment_row_at(index, trimmed) {
                         run = CommentRun {
                             before: Some(index),
                             ..CommentRun::default()
@@ -2224,7 +2248,7 @@ impl OutputBuffer {
                     if trimmed.is_empty() {
                         continue;
                     }
-                    if !is_comment_row(trimmed) {
+                    if !self.is_comment_row_at(index, trimmed) {
                         run.before = Some(index);
                         break;
                     }

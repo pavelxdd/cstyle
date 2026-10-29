@@ -2,6 +2,7 @@
 
 use crate::formatter::constructs::assembly::AssemblyMacroLines;
 use crate::formatter::syntax::language;
+use crate::formatter::text::labels::{after_user_label, find_case_colon};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::preprocessor_directive;
 use crate::formatter::text::trim::Trimmed;
@@ -72,8 +73,8 @@ fn hash_after_statement_opens_preprocessor(source: &str, line_start: usize, hash
     if line.contains_any_byte(b"{}")
         || line[1..].contains('#')
         || prefix.contains('#')
-        || has_unclosed_grouping(prefix)
-        || has_unclosed_grouping(line)
+        || has_unclosed_grouping(prefix, false)
+        || has_unclosed_grouping(line, true)
     {
         return false;
     }
@@ -83,14 +84,30 @@ fn hash_after_statement_opens_preprocessor(source: &str, line_start: usize, hash
     if !is_known_hash_directive(directive) {
         return false;
     }
-    prefix
-        .trim_end()
-        .chars()
-        .next_back()
-        .is_some_and(|ch| matches!(ch, '{' | '}' | ';'))
+    match prefix.trim_end().chars().next_back() {
+        Some('{' | '}' | ';') => true,
+        Some(':') => {
+            let mut remaining = prefix.trimmed_start();
+            loop {
+                let after_label = if let Some(colon) = find_case_colon(remaining) {
+                    &remaining[colon + 1..]
+                } else {
+                    after_user_label(remaining)
+                };
+                if after_label.len() == remaining.len() {
+                    break false;
+                }
+                remaining = after_label.trimmed_start();
+                if remaining.is_empty() {
+                    break true;
+                }
+            }
+        }
+        _ => false,
+    }
 }
 
-fn has_unclosed_grouping(text: &str) -> bool {
+fn has_unclosed_grouping(text: &str, stray_closer_counts: bool) -> bool {
     let mut paren_depth = 0;
     let mut bracket_depth = 0;
     for byte in text.bytes() {
@@ -98,9 +115,12 @@ fn has_unclosed_grouping(text: &str) -> bool {
             b'(' => paren_depth += 1,
             b')' => {
                 if paren_depth == 0 {
-                    return true;
+                    if stray_closer_counts {
+                        return true;
+                    }
+                } else {
+                    paren_depth -= 1;
                 }
-                paren_depth -= 1;
             }
             b'[' => bracket_depth += 1,
             b']' => {
@@ -898,6 +918,40 @@ mod tests {
         assert_eq!(held(lines[1]), Some(true));
         assert_eq!(held(lines[12]), None);
         assert_eq!(held(lines[13]), None);
+    }
+
+    #[test]
+    fn directives_after_colons_require_a_label_at_the_hash_boundary() {
+        let cases = [
+            ("case 1: #else\n", true),
+            ("case Item::Value: #else\n", true),
+            ("case ready ? first : second: #else\n", true),
+            ("default: #else\n", true),
+            ("next: #else\n", true),
+            ("case 1: case 2: #else\n", true),
+            ("next: case 1: #else\n", true),
+            ("value = ready ? first : #else\n", false),
+            ("case 1: value = ready ? first : #else\n", false),
+            ("next: value = ready ? first : #else\n", false),
+            ("Item:: #else\n", false),
+            ("unsigned value: #else\n", false),
+            ("next: #value\n", false),
+        ];
+        for (source, is_directive) in cases {
+            let tokens = tokenize(source);
+            assert_eq!(
+                tokens
+                    .iter()
+                    .any(|token| matches!(token, Token::Preprocessor(_))),
+                is_directive,
+                "{source}"
+            );
+            assert_eq!(
+                tokens.contains(&Token::Symbol('#')),
+                !is_directive,
+                "{source}"
+            );
+        }
     }
 
     #[test]

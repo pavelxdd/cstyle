@@ -38,7 +38,7 @@ use crate::formatter::text::trim::Trimmed;
 use crate::formatter::tokens::operators::head_ends_binary_operator;
 use crate::source::lex::{is_identifier_start, is_word_char, leading_identifier, trailing_word};
 
-fn is_semicolonless_call_line(line: &str) -> bool {
+pub(crate) fn is_semicolonless_call_line(line: &str) -> bool {
     let trimmed = line.trimmed();
     let Some(open) = trimmed.find('(') else {
         return false;
@@ -1053,7 +1053,13 @@ impl FormatEngine<'_> {
     /// A `{` alone after an `else` line stands at least where the style
     /// puts it, from the adjusted `else` line.
     pub(crate) fn align_else_opening_brace_after_adjustment(&self, line: String) -> String {
-        if line.trimmed() != "{" {
+        if line.trimmed() != "{"
+            || self
+                .layout
+                .frame_stack
+                .active_brace()
+                .is_some_and(|frame| frame.semantic_kind == BraceSemanticKind::Definition)
+        {
             return line;
         }
         let Some(else_indent) = self
@@ -1414,6 +1420,17 @@ impl FormatEngine<'_> {
             next,
             inferred_definition_brace || self.brace_follows_parameter_declarations(token_index),
         );
+        if brace_header.is_none()
+            && brace_type == BraceType::Command
+            && !self.token_input.token_begins_source_line
+            && self.line_is_header_less_call()
+        {
+            if self.should_attach_opening_brace(brace_type, next) {
+                self.leave_braceless_body_for_call_block();
+            } else {
+                self.break_line_before_call_block();
+            }
+        }
         let lambda = self.open_brace_lambda_context();
         self.prepare_continuation_for_open_brace(brace_header.as_deref(), brace_type);
         // A list a range-for header's range opens on a line of its own is no
@@ -1428,6 +1445,16 @@ impl FormatEngine<'_> {
         let inline_nested_header_level = self.layout.inline_nested_header_braceless_bias.take();
         let block_indent_extra =
             block_indent_extra(brace_header.as_deref(), brace_type, self.options);
+        // GNU indents the block an added brace opens at file scope, as the
+        // block of any other control header there.
+        let block_indent_extra = if token_index == usize::MAX
+            && brace_type == BraceType::Definition
+            && self.options.brace_style == BraceStyle::Gnu
+        {
+            1
+        } else {
+            block_indent_extra
+        };
         let class_block_indent_extra = self.class_block_indent_extra(brace_type, token_index);
         self.push_brace_frame(
             brace_header.as_ref(),
@@ -1468,6 +1495,14 @@ impl FormatEngine<'_> {
                 None,
             );
             return;
+        }
+        // A compound literal's brace on the line after its cast opens its
+        // rows from the cast's line, as one written on that line does.
+        if self.compound_literal_brace_follows_cast_line(brace_type, next) {
+            let (line, tokens) = self.output.pop_with_tokens().unwrap_or_default();
+            self.current.replace(line);
+            self.current.restore_tokens(tokens);
+            self.token_input.token_begins_source_line = false;
         }
         // A comment leading the rest of the brace's line opens the body.
         let comment_leads_body = if matches!(brace_type, BraceType::Array | BraceType::Initializer)
@@ -1645,22 +1680,42 @@ impl FormatEngine<'_> {
             self.previous_was_newline = true;
         }
         if self.token_input.token_begins_source_line
-            && is_semicolonless_call_line(&self.current)
+            && self.pushed_brace_kind() != Some(BlockKind::FunctionBody)
+            && self.line_is_header_less_call()
+        {
+            self.break_line_before_call_block();
+        }
+    }
+
+    fn line_is_header_less_call(&self) -> bool {
+        is_semicolonless_call_line(&self.current)
             && !is_header(
                 self.options,
                 leading_identifier(self.current.trimmed_start()),
             )
-        {
-            self.finish_line();
-            self.layout.pending_braceless_block_bias = None;
-            if self.layout.indentation.last_braceless_block().is_some() {
-                self.layout.indentation.exit_braceless_block();
-            }
-            self.layout
-                .continuation_indent
-                .set_next_line_level(self.statement_level());
-            self.previous_was_newline = true;
+    }
+
+    /// A block after a macro call stands at the statement the call's
+    /// braceless body belongs to, except where the style indents braces
+    /// to their statement, which keeps the call's own column.
+    fn break_line_before_call_block(&mut self) {
+        self.finish_line();
+        if self.options.brace_style != BraceStyle::Gnu {
+            self.leave_braceless_body_for_call_block();
         }
+        self.previous_was_newline = true;
+    }
+
+    /// A block after a macro call that ends no statement stands at the
+    /// statement the call's braceless body belongs to.
+    pub(super) fn leave_braceless_body_for_call_block(&mut self) {
+        self.layout.pending_braceless_block_bias = None;
+        if self.layout.indentation.last_braceless_block().is_some() {
+            self.layout.indentation.exit_braceless_block();
+        }
+        self.layout
+            .continuation_indent
+            .set_next_line_level(self.statement_level());
     }
 
     fn classify_pushed_open_brace(
@@ -1865,12 +1920,7 @@ impl FormatEngine<'_> {
                     .last_non_empty_scoped()
                     .is_some_and(|line| is_semicolonless_call_line(line)));
         if block_after_semicolonless_call {
-            self.layout.pending_braceless_block_bias = None;
-            if self.layout.indentation.last_braceless_block().is_some() {
-                self.layout.indentation.exit_braceless_block();
-            }
-            self.layout.continuation_indent.next_line_indent = Some(self.statement_level());
-            self.layout.continuation_indent.next_line_indent_spaces = None;
+            self.leave_braceless_body_for_call_block();
         }
         // A brace after an `else` and a comment is the else's own body.
         let else_keyword = self
@@ -1929,8 +1979,8 @@ impl FormatEngine<'_> {
                 self.layout.indentation.enter_braceless_block(delta);
             }
         }
-        if let Some(level) = self.layout.pending_braceless_block_bias.take()
-            && brace_type == BraceType::Command
+        if brace_type == BraceType::Command
+            && let Some(level) = self.layout.pending_braceless_block_bias.take()
             && !else_body_brace
         {
             // The bias counts the case body level the indentation lacks.
@@ -1955,16 +2005,19 @@ impl FormatEngine<'_> {
 
     fn realign_compound_literal_cast_brace(&mut self, brace_type: BraceType) {
         if brace_type == BraceType::CompoundLiteral
-            && self.layout.nesting.paren_depth > 0
             && line_ends_compound_literal_cast(self.current.trimmed_end())
             && self
                 .current
                 .tokens()
                 .is_none_or(|span| !self.token_in_parens(span.first))
-            && self
-                .output
-                .last_non_empty_scoped()
-                .is_some_and(|line| self.output.code_trimmed_of(line).ends_with(','))
+            && self.output.last_non_empty_scoped().is_some_and(|line| {
+                let code = self.output.code_trimmed_of(line);
+                if self.layout.nesting.paren_depth > 0 {
+                    code.ends_with(',')
+                } else {
+                    code.ends_with('=')
+                }
+            })
         {
             let spaces = self.statement_level_spaces();
             if self.current_line_indent_spaces() > spaces {
@@ -3165,6 +3218,19 @@ impl FormatEngine<'_> {
                     .map(|line| leading_visual_width(line, self.options.tab_width))
             })
             .flatten();
+        let call_block_brace_spaces = (self.current_is_blank()
+            && brace_type == BraceType::Command
+            && matches!(self.options.brace_style, BraceStyle::Gnu | BraceStyle::Vtk))
+        .then(|| {
+            self.output
+                .last_non_empty_scoped()
+                .filter(|line| {
+                    is_semicolonless_call_line(line)
+                        && !is_header(self.options, leading_identifier(line.trimmed_start()))
+                })
+                .map(|line| leading_visual_width(line, self.options.tab_width))
+        })
+        .flatten();
         let closing_header_broken_brace_spaces = previous_else_indent_spaces
             .filter(|_| matches!(self.options.brace_style, BraceStyle::Gnu | BraceStyle::Vtk))
             .map(|spaces| spaces + self.options.indent_width);
@@ -3181,7 +3247,8 @@ impl FormatEngine<'_> {
                     .unwrap_or_else(|| {
                         (self.layout.indentation.indent()
                             + 1
-                            + self.case_body_indent_extra(LineKind::Normal))
+                            + self.case_body_indent_extra(LineKind::Normal)
+                            + self.else_if_break_extra())
                             * self.options.indent_width
                     })
             });
@@ -3304,7 +3371,8 @@ impl FormatEngine<'_> {
                 .continuation_indent
                 .set_next_line_level(self.statement_level() + 1);
         }
-        if let Some(spaces) = inline_initializer_command_brace_spaces
+        if let Some(spaces) = call_block_brace_spaces
+            .or(inline_initializer_command_brace_spaces)
             .or(standalone_colon_brace_spaces)
             .or(inline_preprocessor_header_brace_spaces)
             .or(whitesmith_namespace_brace_spaces)
@@ -3821,6 +3889,10 @@ impl FormatEngine<'_> {
         let opened_in_block = self.layout.nesting.paren_depth
             > self.layout.nesting.current_brace_paren_depth().unwrap_or(0);
         if !opened_in_block
+            || !self
+                .current
+                .active_token()
+                .is_some_and(|token| self.token_in_for_header(token))
             || !matches!(
                 self.options.brace_style,
                 BraceStyle::OneTrueBrace
@@ -3904,6 +3976,34 @@ impl FormatEngine<'_> {
                 .is_some_and(|line| line.trimmed().ends_with(':'))
     }
 
+    fn compound_literal_brace_follows_cast_line(
+        &self,
+        brace_type: BraceType,
+        next: Option<&Token>,
+    ) -> bool {
+        brace_type == BraceType::CompoundLiteral
+            && self.token_input.token_begins_source_line
+            && self.current_is_blank()
+            && matches!(next, None | Some(Token::Newline))
+            && !matches!(
+                self.options.brace_style,
+                BraceStyle::Allman
+                    | BraceStyle::Whitesmith
+                    | BraceStyle::Vtk
+                    | BraceStyle::Gnu
+                    | BraceStyle::Horstmann
+                    | BraceStyle::Pico
+                    | BraceStyle::None
+            )
+            && !self.opens_compound_literal_in_list(brace_type)
+            && self.style_attaches_opening_brace(brace_type, next)
+            && self.output.last().is_some_and(|line| {
+                let code = self.output.code_of(line);
+                code.len() == line.trimmed_end().len()
+                    && line_ends_compound_literal_cast(code.trimmed_end())
+            })
+    }
+
     fn class_block_indent_extra(&self, brace_type: BraceType, token_index: usize) -> usize {
         if !self.options.indent_classes {
             return 0;
@@ -3951,6 +4051,29 @@ impl FormatEngine<'_> {
         }
         match self.options.brace_style {
             BraceStyle::Vtk => {
+                let definition_in_list = brace_type == BraceType::Definition
+                    && self
+                        .layout
+                        .frame_stack
+                        .active_brace()
+                        .filter(|frame| frame.brace_type == BraceType::Definition)
+                        .or_else(|| {
+                            self.layout
+                                .nesting
+                                .brace_type_stack
+                                .iter()
+                                .rposition(|kind| *kind == BraceType::Definition)
+                                .and_then(|depth| self.layout.frame_stack.brace_at_depth(depth + 1))
+                        })
+                        .and_then(|frame| frame.open_token)
+                        .and_then(|open| self.tree.groups.opened_at(open))
+                        .and_then(|body| self.tree.groups.get(body).parent)
+                        .is_some_and(|parent| {
+                            matches!(
+                                self.tree.blocks.kind(parent),
+                                Some(BlockKind::Initializer | BlockKind::CompoundLiteral)
+                            )
+                        });
                 // A function's try block stands as its body does.
                 brace_type == BraceType::Command
                     && self
@@ -3963,6 +4086,7 @@ impl FormatEngine<'_> {
                     || (brace_type == BraceType::Array
                         && self.layout.indentation.indent() > 0
                         && !self.active_brace_in_vtk_flush_scope())
+                    || definition_in_list
                     || vtk_indents_declaration_brace(
                         brace_type,
                         &self.layout.nesting.brace_type_stack,
@@ -3985,7 +4109,10 @@ impl FormatEngine<'_> {
 
     fn should_attach_output_case_label_brace(&self, brace_type: BraceType) -> bool {
         if !self.current_is_blank()
-            || !matches!(brace_type, BraceType::NonStatement | BraceType::Command)
+            || !matches!(
+                brace_type,
+                BraceType::NonStatement | BraceType::Command | BraceType::Definition
+            )
         {
             return false;
         }
@@ -4001,6 +4128,9 @@ impl FormatEngine<'_> {
         });
         if !after_case_label {
             return false;
+        }
+        if brace_type == BraceType::Definition {
+            return self.style_attaches_opening_brace(brace_type, None);
         }
         match self.options.brace_style {
             BraceStyle::None => !self.token_input.token_begins_source_line,
@@ -4040,8 +4170,10 @@ impl FormatEngine<'_> {
             return false;
         };
         let last = last.trimmed_end();
-        // A directive line takes no brace.
-        if last.trimmed_start().starts_with('#') {
+        // A directive or a comment line takes no brace.
+        if last.trimmed_start().starts_with('#')
+            || line_scan::is_bare_comment_line(last.trimmed_start())
+        {
             return false;
         }
         // A brace that would take the line past the maximum length stays on
@@ -4222,6 +4354,10 @@ impl FormatEngine<'_> {
                 return false;
             }
             if comment_start == last.len() {
+                // A splice after the head keeps the brace below.
+                if trimmed.ends_with('\\') {
+                    return false;
+                }
                 return code_ends_definition_header(trimmed)
                     || is_lambda_body_header(trimmed)
                     // A closure's head may list no parameters, and a

@@ -98,7 +98,22 @@ impl FormatEngine<'_> {
             return self.declares_pack();
         }
         // A parameter list continues no expression of the line before it.
-        if self.tree_declaration_context() != Some(true)
+        let in_declaration = self.tree_declaration_context() == Some(true);
+        if !in_declaration
+            && ["&&", "||"]
+                .iter()
+                .any(|operator| self.current.trimmed_start().starts_with(operator))
+            && matches!(
+                self.layout.previous,
+                PreviousToken::Word
+                    | PreviousToken::Literal
+                    | PreviousToken::CloseParen
+                    | PreviousToken::CloseBracket
+            )
+        {
+            return false;
+        }
+        if !in_declaration
             && self.continues_operator_expression()
             && matches!(
                 self.layout.previous,
@@ -1108,7 +1123,15 @@ impl FormatEngine<'_> {
             if !(resolved_pointer_align(self.options, operator) == PointerAlign::Name
                 && self.pointer_run.next_is_name_like)
             {
-                self.emit_trailing_source_space();
+                // The last star of a run emits the gap itself for no alignment.
+                if self.pointer_run.skip_adjacent_pointer_operators > 0
+                    && resolved_pointer_align(self.options, operator) != PointerAlign::None
+                {
+                    self.current
+                        .push_str(self.pointer_run.trailing_ws.as_deref().unwrap_or_default());
+                } else {
+                    self.emit_trailing_source_space();
+                }
             }
             return;
         }

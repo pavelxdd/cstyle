@@ -25,6 +25,7 @@ use crate::formatter::structure::TokenSpan;
 use crate::formatter::structure::blocks::is_code_token;
 use crate::formatter::structure::groups::Delimiter;
 use crate::formatter::text::columns::{column_after, leading_visual_width, visual_width_from};
+use crate::formatter::text::labels::after_user_label;
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::after_leading_comments;
 use crate::formatter::text::line_scan::has_hash_outside_literals;
@@ -309,7 +310,19 @@ impl FormatEngine<'_> {
         if spaces.is_some() && opens_lambda_block {
             spaces = None;
         }
-        let mut level = level.max(self.layout.pending_braceless_block_bias.unwrap_or(0));
+        // The bias indents the rows of a header's body up to its brace; at
+        // file scope the brace's own row is placed by the style, GNU
+        // indenting it with the body.
+        let bias = if line_start.starts_with('{')
+            && self.layout.nesting.brace_type_stack.is_empty()
+            && self.options.brace_style != BraceStyle::Gnu
+        {
+            self.layout.pending_braceless_block_bias.take();
+            0
+        } else {
+            self.layout.pending_braceless_block_bias.unwrap_or(0)
+        };
+        let mut level = level.max(bias);
         if opens_lambda_block {
             level = normal_indent;
         }
@@ -868,7 +881,7 @@ impl FormatEngine<'_> {
                     .next()
                     .is_some_and(|ch| is_identifier_start(ch) || ch.is_ascii_digit())
                 && !previous_code.ends_with_any(b"{(,=:")
-                && !line_is_control_body_header(labels::after_user_label(previous_code))
+                && !line_is_control_body_header(after_user_label(previous_code))
                 && leading_visual_width(previous, self.options.tab_width)
                     <= self.options.indent_width / 2
                 // A directive's rows hold no code closer.
@@ -1598,8 +1611,17 @@ impl FormatEngine<'_> {
                 } else {
                     self.options.indent_width
                 };
-                layout.exact_indent_spaces =
-                    Some(leading_visual_width(previous, self.options.tab_width) + extra);
+                let case_body_column = self
+                    .layout
+                    .frame_stack
+                    .brace_at_depth(self.layout.nesting.brace_header_stack.len())
+                    .filter(|frame| frame.case_block)
+                    .map_or(0, |frame| frame.body_indent_column);
+                layout.exact_indent_spaces = Some(
+                    (leading_visual_width(previous, self.options.tab_width) + extra)
+                        .max(case_body_column)
+                        + self.direct_switch_body_indent_extra() * self.options.indent_width,
+                );
             } else if previous_code.ends_with('/')
                 && self
                     .output

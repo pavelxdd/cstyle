@@ -1,4 +1,4 @@
-use crate::config::FormatOptions;
+use crate::config::{BraceStyle, FormatOptions};
 use crate::formatter::braces::classification::is_class_like_brace_type;
 use crate::formatter::constructs::headers::{is_header, starts_header_word};
 use crate::formatter::constructs::switch_cases::{find_case_colon, is_case_label_start};
@@ -11,12 +11,12 @@ use crate::formatter::state::BraceType;
 use crate::formatter::state::indentation::LineKind;
 use crate::formatter::syntax::language;
 use crate::formatter::text::columns::leading_visual_width;
-use crate::formatter::text::line_scan::has_hash_outside_literals;
 use crate::formatter::text::line_scan::{ContainsAnyByte, after_leading_comments};
 use crate::formatter::text::line_scan::{
     find_byte, is_comment_line, line_paren_imbalance, trailing_comment_split_limit,
     unmatched_open_paren_column,
 };
+use crate::formatter::text::line_scan::{has_hash_outside_literals, has_unmatched_open_brace};
 use crate::formatter::text::line_view::LineView;
 use crate::formatter::text::trim::Trimmed;
 use crate::source::lex::{is_identifier_continue, is_identifier_start, leading_identifier};
@@ -53,9 +53,11 @@ pub(crate) fn reconcile_line_kind<'a>(
     enclosing_brace: Option<BraceType>,
     label_context: impl FnOnce() -> LabelContext<'a>,
 ) -> LineKind {
+    let context = label_context();
     if kind == LineKind::Normal
         && line.contains(':')
         && (is_attached_user_label(line)
+            || is_split_label_colon(line, context.previous_line)
             || is_user_label_candidate(line, access_labels)
             || (starts_access_label(line, access_labels)
                 && enclosing_brace.is_some_and(is_class_like_brace_type)))
@@ -65,7 +67,6 @@ pub(crate) fn reconcile_line_kind<'a>(
     if kind != LineKind::Label {
         return kind;
     }
-    let context = label_context();
     if context.in_initializer || context.in_ternary {
         kind = LineKind::Normal;
     }
@@ -168,8 +169,9 @@ pub(crate) fn access_label_body_indent_spaces(
     enclosing_brace: Option<BraceType>,
     options: &FormatOptions,
 ) -> Option<usize> {
-    // An access label ends with its colon.
+    // An access label ends with its colon, and a block holds its body.
     find_byte(previous.as_bytes(), b':')?;
+    enclosing_brace?;
     let current = line.trimmed_start();
     let previous_trimmed = previous[..trailing_comment_split_limit(previous)]
         .trimmed_end()
@@ -192,10 +194,41 @@ pub(crate) fn access_label_body_indent_spaces(
 }
 
 impl FormatEngine<'_> {
+    pub(crate) fn run_in_switch_body_label_indent_spaces(
+        &self,
+        kind: LineKind,
+        label_line: usize,
+    ) -> Option<usize> {
+        if kind != LineKind::Label
+            || self.options.indent_labels
+            || !matches!(
+                self.options.brace_style,
+                BraceStyle::Horstmann | BraceStyle::Pico
+            )
+        {
+            return None;
+        }
+        let frame = self
+            .layout
+            .frame_stack
+            .brace_at_depth(self.layout.nesting.brace_header_stack.len())?;
+        let previous = label_line.checked_sub(1)?;
+        let tokens = self.output.line_tokens(previous)?;
+        if tokens.first != tokens.last
+            || frame.open_token != Some(tokens.first)
+            || self.output.comment_token(previous).is_some()
+        {
+            return None;
+        }
+        self.direct_switch_body_indent_spaces()
+    }
+
     pub(crate) fn candidate_label_body_indent_spaces(&self, previous: &str) -> Option<usize> {
         let previous_code = self.output.code_trimmed_of(previous);
         (is_user_label_candidate(previous_code, &self.options.access_labels)
             && leading_visual_width(previous, self.options.tab_width) == 0
+            // After an unmatched `}` no block is open to indent a body in.
+            && !self.layout.nesting.brace_type_stack.is_empty()
             && self.layout.pending_braceless_block_bias.is_none()
             && !self.in_initializer_brace()
             && self.current_inline_array_column().is_none())
@@ -351,7 +384,9 @@ impl FormatEngine<'_> {
         if delimiters().continues() {
             return None;
         }
-        let target = if line_start.starts_with('{') {
+        // A block the line closes itself is a statement of the body, not
+        // the label's own brace.
+        let target = if line_start.starts_with('{') && has_unmatched_open_brace(line_start) {
             frame.sibling_indent_column
         } else {
             frame.body_indent_column
@@ -393,7 +428,12 @@ impl FormatEngine<'_> {
         }
         // Outside any block a label stands out from nothing.
         let label_level = usize::from(self.layout.indentation.indent() > 0);
-        let mut next_spaces = line_indent_spaces + label_level * self.options.indent_width;
+        let mut next_spaces = self
+            .output
+            .len()
+            .checked_sub(1)
+            .and_then(|label_line| self.run_in_switch_body_label_indent_spaces(kind, label_line))
+            .unwrap_or(line_indent_spaces + label_level * self.options.indent_width);
         if kind == LineKind::Label {
             next_spaces = next_spaces.max(
                 (self
@@ -583,27 +623,6 @@ fn leads_statement_after_label(rest: &str) -> bool {
         }
 }
 
-/// `line` past a user label that leads it, as `done:` in `done: if (x)`.
-pub(crate) fn after_user_label(line: &str) -> &str {
-    let trimmed = line.trimmed_start();
-    let Some(colon) = find_byte(trimmed.as_bytes(), b':') else {
-        return trimmed;
-    };
-    let (label, rest) = (&trimmed[..colon], &trimmed[colon + 1..]);
-    if label.is_empty()
-        || rest.starts_with(':')
-        || matches!(
-            label,
-            "case" | "default" | "public" | "protected" | "private"
-        )
-        || label.contains(|ch: char| !is_identifier_continue(ch))
-        || !label.starts_with(is_identifier_start)
-    {
-        return trimmed;
-    }
-    rest.trimmed_start()
-}
-
 pub(crate) fn is_attached_user_label(line: &str) -> bool {
     let trimmed = line.trimmed_start();
     let Some(colon) = find_byte(trimmed.as_bytes(), b':') else {
@@ -621,6 +640,14 @@ pub(crate) fn is_attached_user_label(line: &str) -> bool {
     }
     let rest = rest.trimmed_start();
     rest.starts_with('{') && !rest.starts_with("::")
+}
+
+/// Whether the line holds only the colon the label's name was split from.
+fn is_split_label_colon(line: &str, previous_line: Option<&str>) -> bool {
+    line[..trailing_comment_split_limit(line)].trimmed() == ":"
+        && previous_line.is_some_and(|previous| {
+            is_single_identifier(previous[..trailing_comment_split_limit(previous)].trimmed())
+        })
 }
 
 fn is_user_label_candidate(line: &str, access_labels: &[String]) -> bool {

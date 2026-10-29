@@ -417,6 +417,169 @@ fn java_indent_labels_uses_the_parent_scope_column() {
 }
 
 #[test]
+fn comments_leading_lambda_labels_stand_with_the_label_row() {
+    let source =
+        "void outer(void)\n{\nauto helper = [&]\n{\n/* marker */ next:\nuse(value);\n};\n}\n";
+    for (style, expected) in [
+        (
+            "pico",
+            "void outer(void)\n{   auto helper = [&]\n    {   /* marker */ next:\n        use(value); }; }\n",
+        ),
+        (
+            "horstmann",
+            "void outer(void)\n{   auto helper = [&]\n    {   /* marker */ next:\n        use(value);\n    };\n}\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(
+            &mut options,
+            &[format!("--style={style}"), "--indent-labels".to_owned()],
+        )
+        .expect("valid options");
+        assert_eq!(format_exact(source, &options), expected);
+        assert_eq!(format_exact(expected, &options), expected);
+    }
+}
+
+#[test]
+fn deleted_blank_lines_before_a_lambda_label_clean_up_as_in_a_function() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=pico".to_owned(),
+            "--indent-labels".to_owned(),
+            "--delete-empty-lines".to_owned(),
+        ],
+    )
+    .expect("valid options");
+
+    // The reference keeps a blank row only after a lambda's brace, where it
+    // deletes one after a function's or a control block's equivalent brace.
+    let source = "void outer(void)\n{\nauto helper = [&]\n{\n\nnext:\nuse(value);\n};\n}\n";
+    let expected =
+        "void outer(void)\n{   auto helper = [&]\n    {   next:\n        use(value); }; }\n";
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn split_label_colons_follow_the_label_indentation() {
+    let source = "void outer(void)\n{\nif (ready)\n{\nnext\n:\nuse(value);\n}\n}\n";
+    for (style, indent_labels, expected) in [
+        (
+            "pico",
+            true,
+            "void outer(void)\n{   if (ready)\n    {   next\n    :\n        use(value); } }\n",
+        ),
+        (
+            "pico",
+            false,
+            "void outer(void)\n{   if (ready)\n    {   next\n:\n        use(value); } }\n",
+        ),
+        (
+            "allman",
+            true,
+            "void outer(void)\n{\n    if (ready)\n    {\n        next\n    :\n        use(value);\n    }\n}\n",
+        ),
+        (
+            "allman",
+            false,
+            "void outer(void)\n{\n    if (ready)\n    {\n        next\n:\n        use(value);\n    }\n}\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        let mut arguments = vec![format!("--style={style}")];
+        if indent_labels {
+            arguments.push("--indent-labels".to_owned());
+        }
+        apply_command_line_args(&mut options, &arguments).expect("valid options");
+        let output = format_exact(source, &options);
+        assert_eq!(
+            output, expected,
+            "style {style}, indent labels {indent_labels}"
+        );
+        assert_eq!(format_exact(&output, &options), expected);
+    }
+}
+
+#[test]
+fn split_label_colons_inside_a_lambda_keep_the_label_body_column() {
+    let source = "void outer(void)\n{\nauto helper = [&]\n{\nnext\n:\nuse(value);\n};\n}\n";
+    for (style, indent_labels, expected) in [
+        (
+            "pico",
+            true,
+            "void outer(void)\n{   auto helper = [&]\n    {   next\n    :\n        use(value); }; }\n",
+        ),
+        (
+            "pico",
+            false,
+            "void outer(void)\n{   auto helper = [&]\n    {   next\n:\n        use(value); }; }\n",
+        ),
+        (
+            "horstmann",
+            true,
+            "void outer(void)\n{   auto helper = [&]\n    {   next\n    :\n        use(value);\n    };\n}\n",
+        ),
+        (
+            "horstmann",
+            false,
+            "void outer(void)\n{   auto helper = [&]\n    {   next\n:\n        use(value);\n    };\n}\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        let mut arguments = vec![format!("--style={style}")];
+        if indent_labels {
+            arguments.push("--indent-labels".to_owned());
+        }
+        apply_command_line_args(&mut options, &arguments).expect("valid options");
+        let output = format_exact(source, &options);
+        assert_eq!(
+            output, expected,
+            "style {style}, indent labels {indent_labels}"
+        );
+        assert_eq!(format_exact(&output, &options), expected);
+    }
+}
+
+#[test]
+fn indented_lambda_labels_use_the_enclosing_body_column() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=horstmann".to_owned(), "--indent-labels".to_owned()],
+    )
+    .expect("valid options");
+
+    let source = "void outer(void)\n{\nauto helper = [&]\n{\nnext:\nuse(value);\n};\n}\n";
+    let expected =
+        "void outer(void)\n{   auto helper = [&]\n    {   next:\n        use(value);\n    };\n}\n";
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn lambda_labels_follow_the_label_indentation_option() {
+    let source = "void outer(void)\n{\nauto helper = [&]\n{\nnext:\nuse(value);\n};\n}\n";
+    for (indent_labels, expected) in [
+        (
+            false,
+            "void outer(void)\n{\n    auto helper = [&]\n    {\nnext:\n        use(value);\n    };\n}\n",
+        ),
+        (
+            true,
+            "void outer(void)\n{\n    auto helper = [&]\n    {\n    next:\n        use(value);\n    };\n}\n",
+        ),
+    ] {
+        let mut options = FormatOptions::default();
+        options.indent_labels = indent_labels;
+        assert_eq!(format_exact(source, &options), expected);
+        assert_eq!(format_exact(expected, &options), expected);
+    }
+}
+
+#[test]
 fn user_label_inside_indented_switch_stays_at_column_zero_by_default() {
     let mut options = FormatOptions::default();
     apply_command_line_args(
@@ -478,6 +641,178 @@ fn tab_indented_label_inside_indented_case_uses_structural_tabs() {
         ),
         "void run(int value)\n{\n\tswitch(value)\n\t{\n\t\tcase 1:\n\t\tretry:\n\t\t\tcall();\n\t\t\tbreak;\n\t\tdefault:\n\t\t\tbreak;\n\t}\n}\n",
     );
+}
+
+#[test]
+fn vtk_file_scope_labels_keep_the_root_block_indent() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=vtk".to_owned()]).expect("valid options");
+    let source = "next:\n{\nuse(value);\n}\n";
+    let expected = "next:\n{\n    use(value);\n}\n";
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn file_scope_labels_keep_broken_definition_braces() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=kr".to_owned()]).expect("valid options");
+    let source = "next:\n{\nuse(value);\n}\n";
+    let expected = "next:\n{\n    use(value);\n}\n";
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn lisp_label_block_keeps_switch_body_indent_on_reformat() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=lisp".to_owned(), "--indent-switches".to_owned()],
+    )
+    .expect("valid options");
+    let source = "void outer(void)\n{\nswitch (value)\n{\nnext:\n{\nuse(value);\n}\n}\n}\n";
+    let expected =
+        "void outer(void) {\n    switch (value) {\nnext: {\n                use(value); } } }\n";
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn lisp_nested_label_block_counts_its_own_switch_body() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=lisp".to_owned(), "--indent-switches".to_owned()],
+    )
+    .expect("valid options");
+    let source = "void outer(void)\n{\nswitch (value)\n{\ncase 1:\nswitch (value)\n{\nnext:\n{\nuse(value);\n}\n}\n}\n}\n";
+    let expected = "void outer(void) {\n    switch (value) {\n        case 1:\n            switch (value) {\nnext: {\n                        use(value); } } } }\n";
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn pico_inline_label_block_starts_at_switch_body_column() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=pico".to_owned()]).expect("valid options");
+    let source = "void outer(void)\n{\nswitch (value)\n{\nnext: {\nuse(value);\n}\n}\n}\n";
+    let expected = fixture!(
+        "void outer(void)",
+        "{   switch (value)",
+        "    {       next:",
+        "            {   use(value); } } }",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn pico_first_switch_body_label_keeps_statement_column() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=pico".to_owned()]).expect("valid options");
+    let source = "void outer(void)\n{\nswitch (value)\n{\nnext:\nuse(value);\n}\n}\n";
+    let expected = fixture!(
+        "void outer(void)",
+        "{   switch (value)",
+        "    {       next:",
+        "            use(value); } }",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn horstmann_first_switch_body_label_keeps_run_in_column() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=horstmann".to_owned()])
+        .expect("valid options");
+    let source = "void outer(void)\n{\nswitch (value)\n{\nnext:\nuse(value);\n}\n}\n";
+    let expected = fixture!(
+        "void outer(void)",
+        "{   switch (value)",
+        "    {       next:",
+        "            use(value);",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn pico_indented_run_in_label_keeps_the_brace_at_its_block() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=pico".to_owned(), "--indent-labels".to_owned()],
+    )
+    .expect("valid options");
+    let source = "void outer(void)\n{\nif (value)\n{\nnext:\nuse(value);\n}\n}\n";
+    let expected = fixture!(
+        "void outer(void)",
+        "{   if (value)",
+        "    {   next:",
+        "        use(value); } }",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn pico_deleted_empty_line_before_label_keeps_the_brace_at_its_block() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--style=pico".to_owned(),
+            "--indent-labels".to_owned(),
+            "--delete-empty-lines".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let source = "void outer(void)\n{\nif (value)\n{\n\nnext:\nuse(value);\n}\n}\n";
+    let expected = fixture!(
+        "void outer(void)",
+        "{   if (value)",
+        "    {   next:",
+        "        use(value); } }",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
+
+#[test]
+fn horstmann_indented_run_in_label_keeps_anonymous_block_columns() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--style=horstmann".to_owned(), "--indent-labels".to_owned()],
+    )
+    .expect("valid options");
+    let source = "void outer(void)\n{\nswitch (value)\n{\n{\nnext:\nuse(value);\n}\n}\n}\n";
+    let expected = fixture!(
+        "void outer(void)",
+        "{   switch (value)",
+        "    {",
+        "            {   next:",
+        "                use(value);",
+        "            }",
+        "    }",
+        "}",
+    );
+
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
 }
 
 #[test]
@@ -659,4 +994,56 @@ fn a_header_after_a_label_owns_the_block_it_opens() {
     // label: its case labels and body keep the switch's levels.
     let input = "void f()\n{\n    while (x) {\nagain:  switch (c) {\n        case 1:\n            x();\n            break;\n        }\n    }\n}\n";
     assert_eq!(format_args(input, &["--style=kr", "-o"]), input);
+}
+
+#[test]
+fn a_label_body_after_an_unmatched_closing_brace_stands_with_the_statements_before_it() {
+    // A brace opened in an `#else` branch counts for nothing, so the `}`
+    // after the branches ends the function in the reference and what follows
+    // stands in the first column, a label's body with it.
+    let source = fixture!(
+        "void f(void)",
+        "{",
+        "#ifdef A",
+        "    i = 1;",
+        "#else",
+        "    if (g()) {",
+        "#endif",
+        "    use(i);",
+        "#ifndef A",
+        "    denorm = 0; }",
+        "#endif",
+        "    use(i);",
+        "ret:",
+        "    done(i);",
+        "}",
+    );
+    let expected = fixture!(
+        "void f(void) {",
+        "#ifdef A",
+        "    i = 1;",
+        "#else",
+        "    if (g()) {",
+        "#endif",
+        "    use(i);",
+        "#ifndef A",
+        "    denorm = 0;",
+        "}",
+        "#endif",
+        "use(i);",
+        "ret:",
+        "done(i);",
+        "}",
+    );
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--style=java".to_owned()]).expect("valid options");
+    let output = format_exact(source, &options);
+    assert_eq!(output, expected);
+    assert_eq!(format_exact(&output, &options), expected);
+}
+
+#[test]
+fn a_block_comment_after_a_case_label_outside_a_block_stays_flush() {
+    let source = "case 1:\n/*c*/\nint x;\n\nnamespace n {\ncase 2:\n/*c*/\nint y;\n}\n";
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
 }

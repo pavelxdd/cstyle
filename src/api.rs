@@ -64,8 +64,16 @@ pub(crate) fn format_owned_bytes(input: Vec<u8>, options: &FormatOptions) -> io:
     }
     let mut source = DecodedSource::from_vec(input)?;
     let options = resolve_preserved_line_ending(options, source.observed_line_ending());
-    let mut output = formatter::format_owned(source.take_text(), &options);
-    if !source.had_final_line_break() {
+    let mut text = source.take_text();
+    let mut had_final_line_break = source.had_final_line_break();
+    // Blanks after the last line break are an empty line unless they are
+    // part of a literal or comment.
+    if source.ends_in_blank_fragment() && formatter::ends_in_blank_line(&text) {
+        text.truncate(text.trim_end_matches([' ', '\t']).len());
+        had_final_line_break = true;
+    }
+    let mut output = formatter::format_owned(text, &options);
+    if !had_final_line_break {
         let line_break = options.line_break();
         if output.ends_with(line_break) {
             output.truncate(output.len() - line_break.len());

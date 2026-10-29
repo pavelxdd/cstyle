@@ -681,6 +681,14 @@ impl FormatEngine<'_> {
         }
         let previous_indent = leading_visual_width(previous, self.options.tab_width);
         if line.trimmed() == "{" {
+            if self
+                .layout
+                .frame_stack
+                .active_brace()
+                .is_some_and(|frame| frame.semantic_kind == BraceSemanticKind::Definition)
+            {
+                return None;
+            }
             return Some(ElseBodyLayout {
                 indent_level: Some(previous_indent / self.options.indent_width),
                 indent_spaces: previous_indent,
@@ -1348,7 +1356,14 @@ impl FormatEngine<'_> {
             .layout
             .inline_nested_header_braceless_bias
             .filter(|_| word == "else" || !self.token_input.token_begins_source_line)
-            .map(|level| level * self.options.indent_width);
+            .map(|level| {
+                let broken_levels = if word == "else" {
+                    0
+                } else {
+                    self.layout.else_if_break_depths.len()
+                };
+                (level + broken_levels) * self.options.indent_width
+            });
         // A header after `case X:` on its line stands in the case body.
         let case_label_body_indent = (!self.current_is_blank())
             .then(|| self.output.code_of(&self.current))
@@ -1393,14 +1408,17 @@ impl FormatEngine<'_> {
                 };
                 let structural_indent = current_indent
                     + self.layout.else_if_break_depths.len() * self.options.indent_width;
-                self.layout
-                    .frame_stack
-                    .active_brace()
-                    .filter(|frame| frame.semantic_kind == BraceSemanticKind::Command)
-                    .map_or(structural_indent, |frame| {
-                        structural_indent
-                            .max(frame.header_indent_column + self.options.indent_width)
-                    })
+                self.layout.frame_stack.active_brace().map_or(
+                    structural_indent,
+                    |frame| match frame.semantic_kind {
+                        BraceSemanticKind::Command => structural_indent
+                            .max(frame.header_indent_column + self.options.indent_width),
+                        BraceSemanticKind::Definition => {
+                            structural_indent.max(frame.body_indent_column)
+                        }
+                        _ => structural_indent,
+                    },
+                )
             });
         let parent_delimiter = self
             .layout

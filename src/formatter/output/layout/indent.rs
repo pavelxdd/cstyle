@@ -1762,7 +1762,9 @@ impl FormatEngine<'_> {
             if previous_code.ends_with('(')
                 && has_inline_constructor_initializer_colon(previous_code)
             {
-                return Some(leading_visual_width(previous, tab_width) + width * 2);
+                return Some(
+                    self.initializer_argument_indent(leading_visual_width(previous, tab_width)),
+                );
             }
             let previous_has_line_comment =
                 || previous[self.output.code_before_comment(previous_index).len()..].contains("//");

@@ -7,7 +7,7 @@ use crate::formatter::constructs::constructor_initializers::constructor_initiali
 use crate::formatter::constructs::headers::is_header;
 use crate::formatter::constructs::labels;
 use crate::formatter::constructs::switch_cases;
-use crate::formatter::engine::{FormatEngine, TokenPushContext, closer_width_after_semicolon};
+use crate::formatter::engine::{FormatEngine, TokenPushContext, closers_after_statement};
 use crate::formatter::lexer::{CommentKind, Token};
 use crate::formatter::state::frame::{
     ArgumentFrame, BraceSemanticKind, BracketFrame, BracketRole, CallFrame, ColonRole, CommaRole,
@@ -139,12 +139,18 @@ impl FormatEngine<'_> {
             ']' => self.push_close_bracket(),
             ';' => {
                 let added_brace_follows = self.added_brace_follows(token_index);
-                let following_closer_suffix = closer_width_after_semicolon(
+                let added_closer = self.token_input.closer_added_after == Some(token_index);
+                let (closers_width, following_closer_suffix) = closers_after_statement(
                     &self.tree.tokens,
                     token_index,
-                    self.options.attach_closing_while,
-                )
-                .1;
+                    usize::from(added_closer),
+                    self.options,
+                );
+                let following_closer_width = if added_closer {
+                    closers_width
+                } else {
+                    following_closer_width
+                };
                 self.push_semicolon(
                     next,
                     following_closer_width,
@@ -727,14 +733,17 @@ impl FormatEngine<'_> {
         }
         self.layout.indentation.exit_paren();
         // An operator no statement starts with continues the call's value.
-        let continued = self
+        let following_code = self
             .current
             .active_token()
-            .and_then(|close| next_code_token(&self.tree.tokens, close + 1))
-            .is_some_and(|next| continues_expression(&self.tree.tokens[next]));
+            .and_then(|close| next_code_token(&self.tree.tokens, close + 1));
+        let continued =
+            following_code.is_some_and(|next| continues_expression(&self.tree.tokens[next]));
         if self.layout.nesting.paren_depth == 0
             && !matches!(next, Some(Token::Symbol(';')))
             && !continued
+            && !following_code
+                .is_some_and(|next| matches!(self.tree.tokens[next], Token::Symbol('{')))
             && let Some(spaces) = closes_semicolonless_macro_call_indent
         {
             self.layout
@@ -1121,10 +1130,34 @@ impl FormatEngine<'_> {
             && self.header_paren.depth.is_none()
             && !closing_header_follows;
         if completed_header_in_outer_delimiter {
+            let header_parent = self
+                .layout
+                .frame_stack
+                .active_header()
+                .and_then(|header| header.parent_delimiter);
+            let parent_column = self
+                .layout
+                .frame_stack
+                .active_delimiter_with_id()
+                .filter(|(id, _)| Some(*id) == header_parent)
+                .and_then(|(_, delimiter)| delimiter.continuation_indent_column);
             self.layout.command_state.current_header = None;
             self.layout.command_state.preprocessor_after_header = false;
             self.layout.frame_stack.clear_header();
             self.layout.continuation_indent.clear_next_line();
+            // A braced body can clear the transient column while its enclosing
+            // delimiter still owns the argument column.
+            if self
+                .layout
+                .nesting
+                .current_paren_continuation_column()
+                .is_none()
+                && let Some(column) = parent_column
+            {
+                self.layout
+                    .nesting
+                    .register_continuation_indent_spaces(column);
+            }
             if let Some((base, delta)) = self.layout.indentation.last_braceless_block()
                 && self.layout.indentation.indent() == base + delta
             {

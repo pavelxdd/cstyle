@@ -1,4 +1,4 @@
-use crate::common::format;
+use crate::common::{format, format_exact};
 use cstyle::api::format_bytes;
 use cstyle::config::{FormatOptions, apply_command_line_args};
 
@@ -12,6 +12,125 @@ fn check(input: &str, args: &[&str], expected: &str) {
     apply_command_line_args(&mut options, &args).expect("valid options");
     let output = format_bytes(input.as_bytes(), &options).expect("format bytes");
     assert_eq!(String::from_utf8(output).expect("utf8"), expected);
+}
+
+#[test]
+fn pico_dictionary_function_header_text_keeps_its_body_brace_line() {
+    let input = "@ {\nvoid helperTask(void)\n{\n  runTask();\n}\n}\n";
+    let expected = "@ {\n    void helperTask(void)\n    {   runTask(); } }\n";
+    let args = &["--style=pico"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn pico_dictionary_function_bodies_keep_tab_run_in_alignment() {
+    let input = "@ {\nvoid helperTask(void)\n{\n  runTask();\n}\n}\n";
+    let inline = "@ {\nvoid helperTask(void)\n{ runTask(); }\n}\n";
+    let expected = "@ {\n\tvoid helperTask(void)\n\t{\trunTask(); } }\n";
+    let args = &["--style=pico", "--indent=tab=4"];
+    check(input, args, expected);
+    check(expected, args, expected);
+    check(inline, args, expected);
+}
+
+#[test]
+fn dictionary_function_header_text_keeps_function_body_layout() {
+    let input = "@ {\nvoid helperTask(void)\n{ runTask(); }\n}\n";
+    for args in [
+        &[][..],
+        &["--style=allman"][..],
+        &["--style=kr"][..],
+        &["--style=gnu"][..],
+        &["--style=1tbs"][..],
+    ] {
+        let expected = "@ {\n    void helperTask(void)\n    {\n        runTask();\n    }\n}\n";
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+    for (style, expected) in [
+        (
+            "horstmann",
+            "@ {\n    void helperTask(void)\n    {   runTask();\n    }\n}\n",
+        ),
+        (
+            "pico",
+            "@ {\n    void helperTask(void)\n    {   runTask(); } }\n",
+        ),
+        (
+            "whitesmith",
+            "@ {\n    void helperTask(void)\n        {\n        runTask();\n        }\n    }\n",
+        ),
+        (
+            "vtk",
+            "@ {\n    void helperTask(void)\n        {\n        runTask();\n        }\n}\n",
+        ),
+        (
+            "ratliff",
+            "@ {\n    void helperTask(void) {\n        runTask();\n        }\n    }\n",
+        ),
+        (
+            "lisp",
+            "@ {\n    void helperTask(void) {\n        runTask(); } }\n",
+        ),
+    ] {
+        let arg = format!("--style={style}");
+        let args = &[arg.as_str()];
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
+fn initializer_after_macro_rows_follows_the_brace_style() {
+    let header =
+        "#define VALUE_ROWS(ROW) ROW(1)\n#define ROW(value) {value,value},\nint values[][2] =\n";
+    let input = format!("{header}{{\nVALUE_ROWS(ROW)\n{{0,0}}\n}};\n");
+    for (style, body) in [
+        ("pico", "{   VALUE_ROWS(ROW)\n    {   0,0} };\n"),
+        ("horstmann", "{   VALUE_ROWS(ROW)\n    {   0,0\n    }\n};\n"),
+        (
+            "vtk",
+            "{\n    VALUE_ROWS(ROW)\n        {\n        0,0\n        }\n};\n",
+        ),
+    ] {
+        let expected = format!("{header}{body}");
+        let arg = format!("--style={style}");
+        let args = &[arg.as_str()];
+        check(&input, args, &expected);
+        check(&expected, args, &expected);
+    }
+    let expected = format!("{header}{{\tVALUE_ROWS(ROW)\n\t{{\t0,0}} }};\n");
+    let args = &["--style=pico", "--indent=tab=4"];
+    check(&input, args, &expected);
+    check(&expected, args, &expected);
+}
+
+#[test]
+fn wrapped_test_macro_headers_keep_the_body_comment_indent() {
+    let input = "TEST(Item, calculates_the_expected_result_for_the_current_value)\n{\n    // details\n    run();\n}\n";
+    let expected = "TEST(Item,\n     calculates_the_expected_result_for_the_current_value) {\n    // details\n    run();\n}\n";
+    let args = &[
+        "--style=google",
+        "--max-code-length=50",
+        "--break-after-logical",
+    ];
+    check(input, args, expected);
+    check(expected, args, expected);
+    check(expected, &["--style=google"], expected);
+}
+
+#[test]
+fn wrapped_parameters_after_a_return_type_macro_keep_the_first_body_indent() {
+    let input = "PUBLIC_API(int) helper(int first_value, int second_value)\n{\n    int result;\n    return result;\n}\n";
+    let expected = "PUBLIC_API(int) helper(int first_value,\n                       int second_value) {\n    int result;\n    return result;\n}\n";
+    let args = &[
+        "--style=google",
+        "--max-code-length=50",
+        "--break-after-logical",
+    ];
+    check(input, args, expected);
+    check(expected, args, expected);
 }
 
 #[test]
@@ -128,7 +247,7 @@ fn ratliff_wrapped_assignment_in_a_nested_case_if_keeps_its_body_column() {
 #[test]
 fn a_preprocessor_block_preserves_a_string_initializer_closer_column() {
     let input = "#if FEATURE\nstatic const char text[] = MARK_(\n            \"alpha\"\n            \"beta\"\n        );\n#endif\n";
-    let expected = "#if FEATURE\n    static const char text[] = MARK_(\n                                   \"alpha\"\n                                   \"beta\"\n                               );\n#endif\n";
+    let expected = "#if FEATURE\nstatic const char text[] = MARK_(\n                               \"alpha\"\n                               \"beta\"\n                           );\n#endif\n";
     let args = &["--indent-preproc-block"];
     check(input, args, expected);
     check(expected, args, expected);
@@ -9023,7 +9142,8 @@ fn lisp_break_blocks_keeps_an_else_with_its_if() {
 #[test]
 fn indented_labels_leave_a_run_in_brace_at_its_block() {
     // The label run into a block's brace takes the brace's column with it,
-    // not the brace to the label's.
+    // not the brace to the label's. The reference moves the brace one level
+    // out and leaves the closer at the block, so its opener and closer part.
     let input = "void f()\n{\n    if (ready) {\n    again:\n        value=0;\n        goto again;\n    }\n}\n";
     check(
         input,
@@ -9251,6 +9371,110 @@ fn pico_one_line_braces_added_before_a_comment_keep_the_unpadded_gap() {
         &["--style=pico", "--unpad-paren", "--add-one-line-braces"],
         "void f()\n{   value=1;\n    if(ready) { value=0; }    // note\n}\n",
     );
+}
+
+#[test]
+fn pico_one_line_braces_added_around_a_body_fill_by_the_indent_style_whatever_its_source_indent() {
+    // The fill after the added brace is the body's indent, in tabs under tab
+    // indentation, wherever the source set the body.
+    let expected = "void f()\n{\tif (ready)\n\t{\tvalue = 0; } }\n";
+    for indent in ["--indent=tab=4", "--indent=force-tab=4"] {
+        let options = ["--style=pico", indent, "--add-one-line-braces"];
+        for input in [
+            "void f()\n{\nif (ready)\nvalue = 0;\n}\n",
+            "void f()\n{\n    if (ready)\n        value = 0;\n}\n",
+        ] {
+            check(input, &options, expected);
+        }
+        check(expected, &options, expected);
+    }
+}
+
+#[test]
+fn a_block_a_macro_opens_after_else_closes_at_the_else() {
+    // A macro word between `else` and a brace is no header of its own: the
+    // block closes where `else` stands, while a header's block closes a
+    // level past it.
+    for style in ["--style=stroustrup", "--style=kr"] {
+        let source = "void f(void)\n{\n    if (ready) {\n        first();\n    }\n    else CHECKED {\n        second();\n    }\n    done();\n}\n";
+        check(
+            source,
+            &[style],
+            &if style == "--style=kr" {
+                "void f(void)\n{\n    if (ready) {\n        first();\n    } else CHECKED {\n        second();\n    }\n    done();\n}\n".to_string()
+            } else {
+                source.to_string()
+            },
+        );
+    }
+    let source = "void f(void)\n{\n    if (ready)\n        first();\n    else CHECKED {\n        second();\n    }\n    done();\n}\n";
+    check(source, &["--style=kr"], source);
+}
+
+#[test]
+fn a_block_a_macro_line_opens_as_a_broken_else_body_closes_at_that_line() {
+    // Broken from its `else`, a line a macro word leads opens its block as
+    // a header's line does: the body a level in, the brace closing at the
+    // line.
+    let args = &["--style=1tbs", "--break-one-line-headers"];
+    for opener in ["CHECKED", "for (;;)"] {
+        let source = format!(
+            "void f(void)\n{{\n    if (ready) {{\n        first();\n    }} else {opener} {{\n        second();\n    }}\n    done();\n}}\n"
+        );
+        let expected = format!(
+            "void f(void)\n{{\n    if (ready) {{\n        first();\n    }} else\n        {opener} {{\n            second();\n        }}\n    done();\n}}\n"
+        );
+        check(&source, args, &expected);
+        check(&expected, args, &expected);
+    }
+}
+
+#[test]
+fn the_paren_closing_a_macro_argument_statement_goes_on_with_the_call_around_it() {
+    // A statement's `;` among a macro call's arguments ends the statements
+    // in the arguments, not the call its closing paren goes on with.
+    let source = "int helper(void)\n{\n    state = &jump;\n    TRY(state, &jump,\n        (*call)(state, data);\n    );\n    state = jump.previous;\n    return jump.status;\n}\n";
+    for args in [
+        &["--indent-after-parens"][..],
+        &["--style=kr", "--indent-after-parens"][..],
+    ] {
+        check(source, args, source);
+    }
+    let expected = source.replace("        (*call)", "            (*call)");
+    let args = &[
+        "--style=allman",
+        "--indent-after-parens",
+        "--indent-continuation=2",
+    ];
+    check(source, args, &expected);
+    check(&expected, args, &expected);
+}
+
+#[test]
+fn ratliff_body_rows_after_a_blank_line_before_the_definition_brace_keep_the_body_level() {
+    // A blank line between a definition's head and its brace leaves the
+    // rows of its blocks at the levels they take without it.
+    let expected = "int helper(int value)\n\n    {\n    if (ready)\n        result = 1;\n    else if (value) {\n        int count = 0;\n        result |= next(&count);\n        }\n    done();\n    }\n";
+    let input = "int helper(int value)\n\n{\n    if (ready)\n        result = 1;\n    else if (value) {\n        int count = 0;\n        result |= next(&count);\n    }\n    done();\n}\n";
+    for style in ["--style=ratliff", "--style=banner"] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn a_new_call_written_in_a_block_comment_leaves_the_code_after_the_comment_at_its_level() {
+    // Text in a comment opens no call, so the declaration after it stands at
+    // its block's level.
+    for input in [
+        "/*\n * result = new Item(\n */\nint helper(void);\n",
+        "/*\n    result = new Item(\n */\nint helper(void);\n",
+        "/*\n * result = make(first, second, third, fourth, new Item(alpha,\n */\nint helper(void);\n",
+        "class Config\n{\n    /*\n     * result = new Item(\n     */\n    int helper(void);\n};\n",
+        "namespace Config\n{\n/*\n * result = new Item(\n */\nint helper(void);\n}\n",
+    ] {
+        check(input, &[], input);
+    }
 }
 
 #[test]
@@ -17432,9 +17656,10 @@ fn indent_preproc_block_indents_a_block_whatever_blank_or_comment_lines_open_it(
     // A blank or comment line after the directive leaves the code its
     // level.
     for opening in ["", "\n", "// note\n"] {
-        let input = format!("#ifdef FEATURE\n{opening}int value;\n#endif\n");
+        let input = format!("int first;\n#ifdef FEATURE\n{opening}int value;\n#endif\n");
         let indented_opening = opening.replace("// note", "    // note");
-        let expected = format!("#ifdef FEATURE\n{indented_opening}    int value;\n#endif\n");
+        let expected =
+            format!("int first;\n#ifdef FEATURE\n{indented_opening}    int value;\n#endif\n");
         check(&input, &["--style=kr", "--indent-preproc-block"], &expected);
     }
 }
@@ -22622,6 +22847,204 @@ fn rows_continuing_a_head_after_an_unmatched_closing_brace_keep_their_columns() 
 }
 
 #[test]
+fn code_length_splits_after_an_unmatched_closing_brace_keep_argument_columns() {
+    let input = "}\nItemInfo result = obj->FirstEntryElement()->LastEntryElement()->FetchIntAttribute( \"option\", &value1 );\n";
+    let expected = "}\nItemInfo result =\n    obj->FirstEntryElement()->LastEntryElement()->FetchIntAttribute( \"option\",\n            &value1 );\n";
+    let args = &["--max-code-length=80"];
+    check(input, args, expected);
+    check(expected, args, expected);
+
+    let input = "\t\t}\n\t\tResult result = item->FirstElement()->LastElement()->ReadAttribute( \"value\", &value );\n";
+    let expected = "}\nResult result = item->FirstElement()->LastElement()->ReadAttribute( \"value\",\n        &value );\n";
+    let args = &["--indent-after-parens", "--max-code-length=80"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn code_length_splits_after_brace_recovery_start_at_the_new_statement() {
+    for head in ["new Item(", "values[", "call((values["] {
+        let input = format!(
+            "{head}\n}}\nitem->AppendChild( values[2] );\nItemInfo result = obj->FirstEntryElement()->LastEntryElement()->FetchIntAttribute( \"option\", &value1 );\n"
+        );
+        let expected = format!(
+            "{head}\n}}\nitem->AppendChild( values[2] );\nItemInfo result =\n    obj->FirstEntryElement()->LastEntryElement()->FetchIntAttribute( \"option\",\n            &value1 );\n"
+        );
+        let args = &["--max-code-length=80"];
+        check(&input, args, &expected);
+        check(&expected, args, &expected);
+    }
+}
+
+#[test]
+fn code_length_replay_starts_after_semicolons_in_unclosed_arguments() {
+    let input = "void helper(void)\n{\nnew Item(\nfor( int i=0; i<3; ++i ) {\n}\nfirst(value);\nRUNTest( \"Declaration test\", \"message\", obj->FirstEntryElement( \"setting\" )->FirstEntry()->Value() );\n}\n";
+    let expected = "void helper(void) {\n    new Item(\n        for( int i=0; i<3; ++i ) {\n            }\n    first(value);\n    RUNTest( \"Declaration test\", \"message\",\n        obj->FirstEntryElement( \"setting\" )->FirstEntry()->Value() );\n    }\n";
+    let args = &[
+        "--style=ratliff",
+        "--indent-after-parens",
+        "--max-code-length=80",
+    ];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn control_bodies_in_macro_arguments_keep_their_scope_during_line_splitting() {
+    let input = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\nRUN_ROWS(\nfor( int i=0; i<3; ++i ) {\n}\nRUNTest( \"Declaration test\", \"message\", obj->FirstEntryElement( \"setting\" )->FirstEntry()->Value() );\n)\n}\n";
+    let expected = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\n    RUN_ROWS(\n        for( int i=0; i<3; ++i ) {\n        }\n    RUNTest( \"Declaration test\", \"message\",\n        obj->FirstEntryElement( \"setting\" )->FirstEntry()->Value() );\n    )\n}\n";
+    let args = &["--indent-after-parens", "--max-code-length=80"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn for_bodies_in_macro_arguments_do_not_continue_the_closed_header() {
+    let input = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\nRUN_ROWS(\nfor( int i=0; i<3; ++i ) {\nuse(value);\n}\n)\n}\n";
+    let expected = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\n    RUN_ROWS(\n        for( int i=0; i<3; ++i ) {\n            use(value);\n        }\n    )\n}\n";
+    let args = &["--style=kr", "--indent-after-parens"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn control_bodies_in_macro_arguments_align_allman_braces_to_the_header() {
+    let input = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\nRUN_ROWS(\nif( ready ) {\nuse(value);\n}\n)\n}\n";
+    let expected = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\n    RUN_ROWS(\n        if( ready )\n        {\n            use(value);\n        }\n    )\n}\n";
+    let args = &["--style=allman", "--indent-after-parens"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn else_bodies_in_macro_arguments_close_at_their_header() {
+    let input = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\nRUN_ROWS(\nif( ready ) {\nuse(value);\n} else {\nuse(other);\n}\n)\n}\n";
+    let expected = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\n    RUN_ROWS(\n        if( ready ) {\n            use(value);\n        } else {\n            use(other);\n        }\n    )\n}\n";
+    let args = &["--indent-after-parens"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn try_bodies_in_macro_arguments_keep_their_body_and_closing_indent() {
+    let input = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\nRUN_ROWS(\ntry {\nuse(value);\n} catch(...) {\nuse(other);\n}\n)\n}\n";
+    let expected = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\n    RUN_ROWS(\n        try {\n            use(value);\n        } catch(...) {\n            use(other);\n        }\n    )\n}\n";
+    let args = &["--indent-after-parens"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn broken_catch_headers_in_macro_arguments_follow_the_try_header() {
+    let input = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\nRUN_ROWS(\ntry {\nuse(value);\n} catch(...) {\nuse(other);\n}\n)\n}\n";
+    let expected = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\n    RUN_ROWS(\n        try\n        {\n            use(value);\n        }\n        catch(...)\n        {\n            use(other);\n        }\n    )\n}\n";
+    let args = &["--style=allman", "--indent-after-parens"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn vtk_definition_bodies_in_macro_arguments_indent_past_their_braces() {
+    let cases = [
+        (
+            "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\nfor(;;) {\nuse(value);\n}\n)\n",
+            "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\n    for(;;)\n{\n    use(value);\n}\n)\n",
+        ),
+        (
+            "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\ntry {\nuse(value);\n} catch(...) {\nuse(other);\n}\n)\n",
+            "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\n    try\n{\n    use(value);\n}\n    catch(...)\n{\n    use(other);\n}\n)\n",
+        ),
+    ];
+    let args = &["--style=vtk", "--indent-after-parens"];
+    for (input, expected) in cases {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
+fn completed_control_headers_restore_enclosing_argument_columns() {
+    let cases = [
+        (
+            "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\nRUN_ROWS(\ndo {\nuse(value);\n} while(ready);\nuse(other);\n)\n}\n",
+            "--style=pico",
+            "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{   RUN_ROWS(\n        do\n        {   use(value); }\n        while(ready);\n        use(other);\n    ) }\n",
+        ),
+        (
+            "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\ndo {\nuse(value);\n} while(ready);\nuse(other);\n)\n",
+            "--style=pico",
+            "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\n    do\n{   use(value); }\n    while(ready);\n    use(other);\n)\n",
+        ),
+        (
+            "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\nRUN_ROWS(\ndo {\nuse(value);\n} while(ready);\nuse(other);\n)\n}\n",
+            "--style=allman",
+            "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\n    RUN_ROWS(\n        do\n        {\n            use(value);\n        }\n        while(ready);\n        use(other);\n    )\n}\n",
+        ),
+    ];
+    for (input, style, expected) in cases {
+        let args = &[style, "--indent-after-parens"];
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
+fn one_line_else_bodies_in_macro_arguments_end_their_statement() {
+    let input = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{\nRUN_ROWS(\nif( ready ) {\nuse(value);\n} else {\nuse(other);\n}\nuse(next);\n)\n}\n";
+    let expected = "#define RUN_ROWS(...) __VA_ARGS__\nvoid helper(void)\n{   RUN_ROWS(\n        if( ready )\n        {   use(value); }\n        else\n        {   use(other); }\n    use(next);\n    ) }\n";
+    let args = &["--style=pico", "--indent-after-parens"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn definition_brace_layout_preserves_a_control_headers_braceless_scope() {
+    let input = "else\nfor(i=1;;i++)\n{\nuse(value);\n}\n";
+    let expected = "else\n    for(i=1;; i++)\n    {\n        use(value);\n    }\n";
+    let args = &["--style=kr"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn definition_brace_layout_is_independent_of_an_else_header() {
+    let input = "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\nif( ready ) {\nuse(value);\n} else {\nuse(other);\n}\n)\n";
+    let expected = "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\n    if( ready )\n{\n    use(value);\n}\n    else\n{\n    use(other);\n}\n)\n";
+    for style in ["--style=allman", "--style=gnu", "--style=vtk"] {
+        let args = &[style, "--indent-after-parens"];
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+    let expected = "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\n    if( ready )\n    {\n    use(value);\n    }\n    else\n    {\n    use(other);\n    }\n)\n";
+    let args = &["--style=whitesmith", "--indent-after-parens"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn rewritten_file_scope_control_bodies_keep_definition_brace_layout() {
+    let cases = [
+        (
+            "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\nfor( int i=0; i<3; ++i ) {\nuse(value);\n}\n)\n",
+            "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\n    for( int i=0; i<3; ++i )\n{   use(value); }\n)\n",
+        ),
+        (
+            "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\ntry {\nuse(value);\n} catch(...) {\nuse(other);\n}\n)\n",
+            "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\n    try\n{   use(value); }\n    catch(...)\n{   use(other); }\n)\n",
+        ),
+        (
+            "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\nif( ready ) {\nuse(value);\n} else {\nuse(other);\n}\n)\n",
+            "#define RUN_ROWS(...) void helper(void) { __VA_ARGS__ }\nRUN_ROWS(\n    if( ready )\n{   use(value); }\n    else\n{   use(other); }\n)\n",
+        ),
+    ];
+    let args = &["--style=pico", "--indent-after-parens"];
+    for (input, expected) in cases {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
 fn a_declarator_after_array_declarators_with_lists_stands_at_the_first_declarator() {
     // As after scalar declarators: an array's bounds and its closed list
     // leave the first name the column.
@@ -24907,7 +25330,8 @@ fn an_enumeration_brace_takes_its_style_whatever_comments_its_body_holds() {
 #[test]
 fn indent_labels_leaves_a_block_brace_run_into_its_label_at_the_block() {
     // The label runs in after the brace; indenting labels moves neither the
-    // brace nor the rows after it.
+    // brace nor the rows after it. The reference moves the brace out and
+    // leaves the closer at the block, so its opener and closer part.
     let input = "void g(void)\n{\n    {\n    inner:\n        go();\n    }\n}\n";
     let expected = "void g(void)\n{\n    {   inner:\n        go();\n    }\n}\n";
     for args in [
@@ -26351,4 +26775,706 @@ fn max_code_length_leaves_the_rows_it_does_not_split_where_they_stand_without_it
     let expected = "class Item\n{\n    static auto check(sequence<Ids...>) -> decltype(all_ready(\n                sequence<Ids...>{},\n                integer_sequence<bool,\n                                 (ready<Ids>::value)...>{}));\n};\n";
     check(input, &["--style=kr"], expected);
     check(input, &["--style=kr", "--max-code-length=60"], expected);
+}
+
+#[test]
+fn declaration_continuation_column_ignores_the_position_of_an_initialized_declarator() {
+    // The reference aligns the line after one holding an initializer with
+    // its second declarator, yet leaves it at the continuation column when
+    // the initialized declarator leads the line. Both stand at the
+    // continuation column.
+    let source = "void f(void)\n{\n\tint bbits, b2,\n\t\tj, j1=0, k,\n\t\tspec_case, try_quick;\n\tint flag = 0,\n\t\tother;\n}\n";
+    let expected = "void f(void)\n{\n    int bbits, b2,\n        j, j1=0, k,\n        spec_case, try_quick;\n    int flag = 0,\n        other;\n}\n";
+    check(source, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+}
+
+#[test]
+fn an_else_after_an_unmatched_closing_brace_ignores_an_if_before_it() {
+    // The brace opened in the `#else` branch counts for nothing, so the first
+    // `}` ends the function and the `else` stands in the first column, not
+    // with the braceless `if` that precedes it.
+    let input = "void f(void)\n{\n#ifdef A\n    i = 1;\n#else\n    if (g()) {\n#endif\n#ifdef IBM\n    if (j)\n        use(j);\n#endif\n#ifndef A\n    denorm = 0; }\n    else {\n        i = 2; }\n#endif\n    use(i);\n}\n";
+    let expected = "void f(void)\n{\n#ifdef A\n    i = 1;\n#else\n    if (g())\n    {\n#endif\n#ifdef IBM\n    if (j)\n        use(j);\n#endif\n#ifndef A\n    denorm = 0;\n}\nelse\n{\n    i = 2;\n}\n#endif\nuse(i);\n}\n";
+    check(input, &["--style=allman"], expected);
+    check(expected, &["--style=allman"], expected);
+}
+
+#[test]
+fn a_label_in_a_case_block_keeps_the_statements_after_the_first_in_its_block() {
+    // The brace of the case block keeps its opener and closer on the block's
+    // column, unlike the reference, which moves the closer a level inward.
+    let input = "void g(void)\n{\n  switch( b ){\n  case 1: {\n  x = 1;\n  case 3:\n  if( f ){\n    y = 2;\n    if( h ){\n    }\n  }\n  }\n  }\n}\n";
+    let expected = "void g(void)\n    {\n    switch( b )\n        {\n        case 1:\n            {\n            x = 1;\n            case 3:\n                if( f )\n                    {\n                    y = 2;\n                    if( h )\n                        {\n                        }\n                    }\n            }\n        }\n    }\n";
+    check(input, &["--style=whitesmith"], expected);
+    check(expected, &["--style=whitesmith"], expected);
+}
+
+#[test]
+fn a_label_opening_a_case_block_adds_no_level_to_the_statements_of_its_nested_labels() {
+    let input = "switch(op)\n{\ncase 1: {\ncase 2:\n  if( a ){\n    n = 1;\n  }\n}\n}\n";
+    let allman = "switch(op)\n{\ncase 1:\n{\n    case 2:\n        if( a )\n        {\n            n = 1;\n        }\n}\n}\n";
+    check(input, &["--style=allman", "--indent-switches"], allman);
+    check(allman, &["--style=allman", "--indent-switches"], allman);
+    let pico = "switch(op)\n{   case 1:\n{   case 2:\n        if( a )\n        {   n = 1; } } }\n";
+    check(input, &["--style=pico"], pico);
+    check(pico, &["--style=pico"], pico);
+}
+
+#[test]
+fn a_compound_literal_brace_after_its_cast_line_attaches_to_it() {
+    let input = "x =\n    (S)\n{\n  a, b\n};\n";
+    let expected = "x =\n(S) {\n    a, b\n};\n";
+    for style in ["--style=java", "--style=google"] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+    check(input, &["--style=lisp"], "x =\n(S) {\n    a, b };\n");
+}
+
+#[test]
+fn a_compound_literal_after_an_assignment_break_stands_at_its_statement() {
+    let options = ["--style=java"];
+    for (input, expected) in [
+        (
+            "void f()\n{\n    x =\n        (int) {1};\n}\n",
+            "void f() {\n    x =\n    (int) {1};\n}\n",
+        ),
+        (
+            "void f()\n{\n    x =\n        (int) {1,\n 2};\n}\n",
+            "void f() {\n    x =\n    (int) {1,\n        2\n    };\n}\n",
+        ),
+    ] {
+        check(input, &options, expected);
+        check(expected, &options, expected);
+    }
+}
+
+#[test]
+fn a_constructor_initializer_split_inside_its_arguments_stays_one_pass_stable() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &["--pad-oper".to_owned(), "--max-code-length=60".to_owned()],
+    )
+    .expect("valid options");
+    for (source, expected) in [
+        (
+            "Item::Item( Config * config ) : Base( config ),\n",
+            "Item::Item( Config * config ) : Base( config ),\n",
+        ),
+        (
+            "ElementItem::ElementItem( DocumentRoot * doc ) : NodeBase( doc ),\n",
+            "ElementItem::ElementItem( DocumentRoot * doc ) : NodeBase(\n        doc ),\n",
+        ),
+        (
+            "Item::Item() : Node(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, cccccccccccccccccccccccccccccccccccccccc) {\n",
+            "Item::Item() : Node(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,\n                        bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,\n                        cccccccccccccccccccccccccccccccccccccccc) {\n",
+        ),
+    ] {
+        let output = format_exact(source, &options);
+        assert_eq!(output, expected);
+        assert_eq!(format_exact(&output, &options), expected);
+    }
+}
+
+#[test]
+fn a_function_head_opening_its_brace_after_an_open_call_stands_at_the_statement() {
+    let source = "f(a,\nvoid g(int v) {\n    h();\n}\n";
+    for (style, expected) in [
+        ("none", source),
+        ("lisp", "f(a,\nvoid g(int v) {\n    h(); }\n"),
+    ] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(
+            &mut options,
+            &[
+                format!("--style={style}"),
+                "--indent-after-parens".to_owned(),
+            ],
+        )
+        .expect("valid options");
+        let output = format_exact(source, &options);
+        assert_eq!(output, expected, "style {style}");
+        assert_eq!(format_exact(&output, &options), expected, "style {style}");
+    }
+}
+
+#[test]
+fn run_in_styles_keep_a_gap_inside_an_empty_list_whose_closer_joins() {
+    for style in ["pico", "lisp"] {
+        let mut options = FormatOptions::default();
+        apply_command_line_args(&mut options, &[format!("--style={style}")])
+            .expect("valid options");
+        for (source, expected) in [
+            ("{\n}\n", "{ }\n"),
+            ("int values[] = {\n};\n", "int values[] =\n{ };\n"),
+            ("void f()\n{\n}\n", "void f()\n{}\n"),
+            ("value;\n{\n}\n", "value;\n{}\n"),
+        ] {
+            let expected = if style == "lisp" {
+                expected.replace("=\n{", "= {").replace("f()\n{", "f() {")
+            } else {
+                expected.to_owned()
+            };
+            let output = format_exact(source, &options);
+            assert_eq!(output, expected, "style {style}");
+            assert_eq!(format_exact(&output, &options), expected, "style {style}");
+        }
+    }
+}
+
+#[test]
+fn break_blocks_separates_a_function_head_whose_return_type_breaks() {
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--break-blocks".to_owned(),
+            "--break-return-type".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let source = "if (value) result();\nvoid helper() {\n}\n";
+    let expected = "\nif (value) result();\n\nvoid\nhelper() {\n}\n";
+    let output = format_exact(source, &options);
+    assert_eq!(output, expected);
+    assert_eq!(format_exact(&output, &options), expected);
+}
+
+#[test]
+fn a_block_comment_row_reading_else_leaves_the_next_statement_at_its_column() {
+    let options = FormatOptions::default();
+    let source = "/*\n else\n */\nstatic int helper(int value)\n{\n}\n";
+    let output = format_exact(source, &options);
+    assert_eq!(output, source);
+    assert_eq!(format_exact(&output, &options), source);
+}
+
+#[test]
+fn convert_tabs_ends_an_unterminated_literal_at_its_line() {
+    check(
+        "\"value\nint\tresult;\n",
+        &["--convert-tabs"],
+        "\"value\nint result;\n",
+    );
+    check(
+        "'v\nint\tresult;\n",
+        &["--convert-tabs"],
+        "'v\nint result;\n",
+    );
+    check(
+        "\"value\\\nint\tresult;\n",
+        &["--convert-tabs"],
+        "\"value\\\nint\tresult;\n",
+    );
+    check(
+        "\"value\n/* note\n *\ttext\n */\n",
+        &["--convert-tabs"],
+        "\"value\n/* note\n *  text\n */\n",
+    );
+}
+
+#[test]
+fn indent_after_parens_keeps_a_closing_paren_before_a_one_line_block_at_its_header() {
+    let args = &["--indent-after-parens", "--keep-one-line-blocks"];
+    for (input, expected) in [
+        (
+            "if (value\n&& result\n) { helper(); }\n",
+            "if (value\n    && result\n) { helper(); }\n",
+        ),
+        (
+            "while (value\n&& result\n) { helper(); }\n",
+            "while (value\n    && result\n) { helper(); }\n",
+        ),
+        (
+            "void helper(int value,\nint result\n) { value = result; }\n",
+            "void helper(int value,\n    int result\n) { value = result; }\n",
+        ),
+    ] {
+        check(input, args, expected);
+        check(expected, args, expected);
+    }
+}
+
+#[test]
+fn a_row_after_a_file_scope_one_line_block_list_ignores_the_blocks_source_indent() {
+    check(
+        "  {value, result},\n    helper;\n",
+        &[],
+        "{value, result},\nhelper;\n",
+    );
+    check(
+        "{value, result},\nhelper;\n",
+        &[],
+        "{value, result},\nhelper;\n",
+    );
+}
+
+#[test]
+fn a_function_head_row_after_a_braceless_header_stays_with_its_return_type() {
+    check(
+        "if (a)\nvoid\nf (int L) {\n}\n",
+        &[],
+        "if (a)\n    void\n    f (int L) {\n}\n",
+    );
+    check(
+        "if (a)\nvoid\nf (int L) {\nx;\n}\n",
+        &["--style=allman"],
+        "if (a)\n    void\n    f (int L)\n{\n    x;\n}\n",
+    );
+    check(
+        "while (a)\nint\nf (L)\n{\n}\n",
+        &[],
+        "while (a)\n    int\n    f (L)\n{\n}\n",
+    );
+}
+
+#[test]
+fn a_function_head_row_after_a_braceless_header_places_its_brace_by_the_style() {
+    check(
+        "if (a)\nvoid\nf (int L) {\n}\n",
+        &["--style=gnu"],
+        "if (a)\n    void\n    f (int L)\n    {\n    }\n",
+    );
+    check(
+        "while (a)\nint\nf (L)\n{\n}\n",
+        &["--style=pico"],
+        "while (a)\n    int\n    f (L)\n{}\n",
+    );
+}
+
+#[test]
+fn pico_keeps_the_gap_inside_an_empty_enum_joined_from_separate_rows() {
+    check("enum e {\n} x;\n", &["--style=pico"], "enum e\n{ } x;\n");
+    check(
+        "typedef enum {\n} x;\n",
+        &["--style=pico"],
+        "typedef enum\n{ } x;\n",
+    );
+    check("struct s {\n} x;\n", &["--style=pico"], "struct s\n{} x;\n");
+}
+
+#[test]
+fn a_brace_after_a_macro_call_row_under_a_braceless_header_stands_at_the_header() {
+    check(
+        "else\nTEST(CRC, S)\n{\n}\n",
+        &["--style=kr"],
+        "else\n    TEST(CRC, S)\n{\n}\n",
+    );
+    check(
+        "else\nTEST(CRC, S) {\n}\n",
+        &["--style=linux"],
+        "else\n    TEST(CRC, S)\n{\n}\n",
+    );
+}
+
+#[test]
+fn an_access_label_at_file_scope_leaves_the_next_row_at_its_column() {
+    check("public:\nint x;\n", &[], "public:\nint x;\n");
+    check(
+        "public:\nif (a) return -1;\n",
+        &["--style=kr", "--add-braces"],
+        "public:\nif (a)\n{\n    return -1;\n}\n",
+    );
+}
+
+#[test]
+fn a_row_in_a_subscript_stands_at_the_content_past_the_blanks_after_its_bracket() {
+    check(
+        "x = tab[ size\n + N];\n",
+        &[],
+        "x = tab[ size\n         + N];\n",
+    );
+    check(
+        "x = tab[  (size)\n + N];\n",
+        &[],
+        "x = tab[  (size)\n          + N];\n",
+    );
+    check(
+        "return tab[(size)\n + N];\n",
+        &["--pad-paren-out"],
+        "return tab[ (size)\n            + N];\n",
+    );
+}
+
+// INTENTIONAL DIVERGENCE: an initializer continuing a declaration stands one
+// level past it whether or not the declared type is introduced by `struct`
+// or `union`.
+#[test]
+fn a_declaration_initializer_continues_one_level_past_it_for_every_type_keyword() {
+    let input = "void f(void)\n{\n    struct w w =\n        c(r);\n    union w u =\n        c(r);\n    enum w e =\n        c(r);\n    w x =\n        c(r);\n}\n";
+    check(input, &["--mode=c"], input);
+}
+
+#[test]
+fn a_conditional_block_with_a_line_leaving_a_paren_open_stays_unindented() {
+    let input = "#ifdef FEATURE\nint helper(value,\n           result);\n#endif\n";
+    check(input, &["--indent-preproc-block"], input);
+    let input = "int value;\n#ifdef FEATURE\nhelper(value,\n       result);\n#endif\n";
+    check(input, &["--indent-preproc-block"], input);
+    check(
+        "#ifdef FEATURE\nhelper(value);\n#endif\n",
+        &["--indent-preproc-block"],
+        "#ifdef FEATURE\n    helper(value);\n#endif\n",
+    );
+}
+
+#[test]
+fn a_conditional_block_opening_the_file_with_a_blank_line_or_comment_stays_unindented() {
+    for input in [
+        "#ifdef FEATURE\n/* note */\nint value;\n#endif\n",
+        "#ifdef FEATURE\n// note\nint value;\n#endif\n",
+        "#ifdef FEATURE\n\nint value;\n#endif\n",
+    ] {
+        check(input, &["--indent-preproc-block"], input);
+    }
+}
+
+#[test]
+fn a_comment_led_argument_row_wrapped_by_length_continues_at_its_own_column_after_parens() {
+    let input = "void f() {\n    h = g(\n        /*c*/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, bbbbbbbbbbbbbbbbbbbbbbbbbbbbb,\n        nullptr);\n}\n";
+    let expected = "void f() {\n    h = g(\n            /*c*/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,\n            bbbbbbbbbbbbbbbbbbbbbbbbbbbbb,\n            nullptr);\n}\n";
+    let args = &["--indent-after-parens", "--max-code-length=60"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn a_statement_after_an_added_one_line_block_ending_a_broken_else_if_in_a_case_returns_to_the_case_body()
+ {
+    let input =
+        "switch (value) {\ncase 1:\n    if (a) f();\n    else if (b) f();\n    result = 1;\n}\n";
+    let expected = "switch (value) {\ncase 1:\n    if (a) { f(); }\n    else\n        if (b) { f(); }\n    result = 1;\n}\n";
+    let args = &["--add-one-line-braces", "--break-elseifs"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn an_added_one_line_block_in_a_run_in_label_block_stands_at_its_header() {
+    let input = "void f() {\n    l: {\n        if (a)\n            g();\n    }\n}\n";
+    let expected = "void f() {\nl: {\n        if (a)\n        { g(); }\n    }\n}\n";
+    let args = &["--add-one-line-braces"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn an_added_one_line_block_after_a_broken_else_if_with_a_split_condition_ends_the_chain() {
+    let input = "void f() {\n    if (a)\n        g();\n    else if (b &&\n         c)\n        g();\n    if (y)\n        g();\n}\n";
+    let expected = "void f() {\n    if (a)\n    { g(); }\n    else\n        if (b &&\n                c)\n        { g(); }\n    if (y)\n    { g(); }\n}\n";
+    let args = &["--break-elseifs", "--add-one-line-braces"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn a_kept_one_line_block_with_a_trailing_comment_ends_a_broken_else_if_chain() {
+    let input = "int f() {\n    if (a)\n        { i = 1; }\n    else\n        if (b)\n            { x = 1; }\n        else\n            { return 0; }  /* c */\n    if (d) {\n        y = 1;\n        return 1;\n    }\n}\n";
+    let expected = "int f() {\n    if (a)\n        { i = 1; }\n    else\n        if (b)\n            { x = 1; }\n        else\n            { return 0; }  /* c */\n    if (d) {\n        y = 1;\n        return 1;\n        }\n    }\n";
+    let args = &[
+        "--style=ratliff",
+        "--break-elseifs",
+        "--keep-one-line-blocks",
+    ];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn a_kept_block_after_a_macro_condition_stands_in_the_header_body() {
+    let input = "void f() {\n    if FMT_C (x)\n        { return 1; }\n}\n";
+    let expected = "void f() {\n    if FMT_C (x)\n        { return 1; }\n    }\n";
+    let args = &["--style=ratliff", "--add-one-line-braces"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn middle_pointer_alignment_keeps_stars_of_a_declarator_in_a_kept_block_together() {
+    let input = "void f() { int **p; int ***q; }\n";
+    let expected = "void f() { int ** p; int *** q; }\n";
+    let args = &["--align-pointer=middle", "--keep-one-line-blocks"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn broken_else_if_after_an_empty_statement_body_indents_a_leading_comment_as_its_body() {
+    let input = "void f() {\n    if (e)\n        ;\n    else if (e == 1)\n    /* c */\n        return 1;\n}\n";
+    let expected = "void f() {\n    if (e)\n        ;\n    else\n        if (e == 1)\n            /* c */\n        {\n            return 1;\n        }\n}\n";
+    let args = &["--break-elseifs", "--add-braces"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn deleted_empty_lines_before_a_run_in_closer_count_toward_the_maximum_code_length() {
+    let input = "if (d) {\n    if (dupSearchDict != NULL) dictRelease(dupSearchDict);\n\n}\n";
+    let expected = "if ( d ) {\n    if ( dupSearchDict != NULL ) dictRelease (\n            dupSearchDict ); }\n";
+    let args = &[
+        "--style=lisp",
+        "--pad-paren",
+        "--delete-empty-lines",
+        "--max-code-length=60",
+    ];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn added_block_braces_within_a_broken_else_if_block_keep_the_vtk_brace_level() {
+    let input = "void f() {\n    if (a) {\n        g();\n    } else if (b) {\n        if (c) h();\n    }\n}\n";
+    let expected = "void f()\n{\n    if (a)\n        {\n        g();\n        }\n    else\n        if (b)\n            {\n            if (c)\n                {\n                h();\n                }\n            }\n}\n";
+    let args = &["--style=vtk", "--break-elseifs", "--add-braces"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn added_block_braces_within_a_broken_else_if_block_keep_the_whitesmith_brace_level() {
+    let input = "void f() {\n    if (a) {\n        g();\n    } else if (b) {\n        if (c) h();\n    }\n}\n";
+    let expected = "void f()\n    {\n    if (a)\n        {\n        g();\n        }\n    else\n        if (b)\n            {\n            if (c)\n                {\n                h();\n                }\n            }\n    }\n";
+    let args = &["--style=whitesmith", "--break-elseifs", "--add-braces"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn a_star_run_leading_its_row_keeps_the_source_gap_before_the_name() {
+    let input = "char\n**    foo(int x)\n{\n    return 0;\n}\n";
+    for alignment in ["--align-pointer=type", "--align-pointer=middle"] {
+        check(input, &[alignment], input);
+    }
+}
+
+#[test]
+fn a_declarator_star_wrapped_after_a_struct_close_stays_at_the_statement_column() {
+    let input = "struct Item {\n    int value;\n} ItemCodeHelperAliasWithAnExtremelyLongNameIndeed *result;\n";
+    let expected = "struct Item {\n    int value;\n} ItemCodeHelperAliasWithAnExtremelyLongNameIndeed\n*result;\n";
+    let args = &["--max-code-length=50"];
+    check(input, args, expected);
+    check(expected, args, expected);
+}
+
+#[test]
+fn an_empty_list_split_over_rows_in_a_call_joins_with_a_space_in_run_in_styles() {
+    let input = "int z;\nvoid f() {\n    g({\n    });\n}\n";
+    for (style, expected) in [
+        ("--style=lisp", "int z;\nvoid f() {\n    g({ }); }\n"),
+        ("--style=pico", "int z;\nvoid f()\n{   g(\n    { }); }\n"),
+    ] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn a_split_return_type_keeps_the_indent_after_parens_columns() {
+    let input = "void f(int a,\ndo\nint b);\n";
+    let expected = "void\nf(int a,\n        do\n                int b);\n";
+    let options = [
+        "--indent=spaces=8",
+        "--indent-after-parens",
+        "--break-return-type-decl",
+    ];
+    check(input, &options, expected);
+    check(expected, &options, expected);
+}
+
+#[test]
+fn a_directive_after_a_brace_following_a_stray_closing_paren_starts_its_line() {
+    let input = "a) { #ifdef X\n";
+    let expected = "a) {\n#ifdef X\n";
+    check(input, &[], expected);
+    check(expected, &[], expected);
+}
+
+#[test]
+fn a_return_in_a_block_comment_does_not_continue_the_declaration_after_it() {
+    let input = "/*\n return x\n*/\nstatic void *\nfill(int min);\n";
+    check(input, &[], input);
+}
+
+#[test]
+fn add_braces_covers_an_if_after_a_statement_in_a_broken_one_line_block() {
+    check(
+        "void f() { x(); if (a) b(); }\n",
+        &["--add-braces", "--keep-one-line-statements"],
+        "void f() {\n    x();\n    if (a) {\n        b();\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_whitespace_only_last_line_without_a_terminator_ends_the_output_with_a_line_break() {
+    check("int a;\n  ", &[], "int a;\n");
+    check("int a;\n\n  ", &[], "int a;\n\n");
+    check("{\n  a;\n}\n\t", &[], "{\n    a;\n}\n");
+}
+
+#[test]
+fn gnu_braces_added_after_a_file_scope_header_stand_a_level_in() {
+    check(
+        "if (a) b();\n",
+        &["--style=gnu", "--break-one-line-headers", "--add-braces"],
+        "if (a)\n    {\n        b();\n    }\n",
+    );
+}
+
+#[test]
+fn a_statement_with_open_parens_in_a_gnu_case_block_keeps_the_body_level() {
+    check(
+        "switch (x) {\ncase 1: {\n\tf(a,\n b);\n\tg();\n}}\n",
+        &["--style=gnu"],
+        "switch (x)\n    {\n    case 1:\n    {\n        f(a,\n          b);\n        g();\n    }\n    }\n",
+    );
+}
+
+#[test]
+fn an_added_block_after_a_broken_header_in_a_case_block_stands_at_the_header() {
+    let input = "switch (x) {\ncase 1: {\n\tif (a &&\n b)\n\t\t\treturn false;\n}}\n";
+    check(
+        input,
+        &["--add-one-line-braces"],
+        "switch (x) {\ncase 1: {\n    if (a &&\n            b)\n    { return false; }\n}\n}\n",
+    );
+    check(
+        input,
+        &["--style=gnu", "--add-one-line-braces"],
+        "switch (x)\n    {\n    case 1:\n    {\n        if (a &&\n                b)\n            { return false; }\n    }\n    }\n",
+    );
+}
+
+#[test]
+fn a_broken_brace_after_a_semicolonless_macro_body_stands_at_the_statement() {
+    let expected = "void f()\n{\n    if (a)\n        FOREACH(x)\n    {\n        q();\n    }\n}\n";
+    check(
+        "void f() {\n\tif (a)\n\t\tFOREACH(x) {\n\t\t\tq();\n\t\t}\n}\n",
+        &["--style=allman"],
+        expected,
+    );
+    check(expected, &["--style=allman"], expected);
+}
+
+#[test]
+fn a_kept_one_line_block_after_a_semicolonless_macro_body_stands_at_the_statement() {
+    let expected = "void f()\n{   if (a)\n        FOREACH(x)\n    {   q(); } }\n";
+    check(
+        "void f()\n{\n    if (a)\n        FOREACH(x)\n    { q(); }\n}\n",
+        &["--style=pico"],
+        expected,
+    );
+    check(expected, &["--style=pico"], expected);
+}
+
+#[test]
+fn a_block_run_onto_a_semicolonless_macro_body_stands_at_its_header_statement() {
+    let cases = [
+        (
+            "--style=gnu",
+            "void f()\n{\n    while (a)\n        FOREACH(x)\n        {\n            q();\n        }\n}\n",
+        ),
+        (
+            "--style=vtk",
+            "void f()\n{\n    while (a)\n        FOREACH(x)\n        {\n        q();\n        }\n}\n",
+        ),
+        (
+            "--style=kr",
+            "void f()\n{\n    while (a)\n        FOREACH(x) {\n        q();\n    }\n}\n",
+        ),
+        (
+            "--style=ratliff",
+            "void f() {\n    while (a)\n        FOREACH(x) {\n        q();\n        }\n    }\n",
+        ),
+    ];
+    for (style, expected) in cases {
+        for input in [
+            "void f() {\n\twhile (a)\n\t\tFOREACH(x) {\n\t\t\tq();\n\t\t}\n}\n",
+            "void f()\n{\n    while (a)\n        FOREACH(x)\n    {\n        q();\n    }\n}\n",
+        ] {
+            check(input, &[style], expected);
+        }
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
+fn a_constructor_initializer_split_by_the_maximum_length_ignores_the_continuation_indent() {
+    let input = "class Item {\n  Item() : first_(1), second_(kDefault), third_(foo) {\n  }\n};\n";
+    let cases = [
+        ("--indent-continuation=0", "    ", "        "),
+        ("--indent-continuation=2", "    ", "        "),
+        ("--indent-continuation=3", "    ", "        "),
+        ("--indent-after-parens", "    ", "        "),
+        ("--indent=spaces=2", "  ", "    "),
+        ("--indent=tab", "\t", "\t\t"),
+    ];
+    for (option, outer, inner) in cases {
+        let expected = format!(
+            "class Item {{\n{outer}Item() : first_(1), second_(kDefault),\n{inner}third_(foo) {{\n{outer}}}\n}};\n"
+        );
+        check(input, &["--max-code-length=50", option], &expected);
+        check(&expected, &["--max-code-length=50", option], &expected);
+    }
+}
+
+#[test]
+fn a_constructor_with_specifiers_splits_its_initializers_by_the_maximum_length() {
+    for specifier in ["explicit ", "constexpr ", "inline "] {
+        let input = format!(
+            "class Item {{\n  {specifier}Item(uint64_t valueaaaaaaaaaaaaaa) : first_aaaa(value) {{}}\n}};\n"
+        );
+        let expected = format!(
+            "class Item {{\n    {specifier}Item(uint64_t valueaaaaaaaaaaaaaa) : first_aaaa(\n            value) {{}}\n}};\n"
+        );
+        check(&input, &["--max-code-length=60"], &expected);
+        check(&expected, &["--max-code-length=60"], &expected);
+    }
+}
+
+#[test]
+fn a_noexcept_constructor_splits_its_initializers_one_indent_in() {
+    let input = "class Item {\n  Item(uint64_t value) noexcept : first_aaaa(value) {}\n};\n";
+    for (option, row) in [
+        ("--indent-continuation=0", "        value) {}"),
+        ("--indent-continuation=1", "            value) {}"),
+    ] {
+        let expected =
+            format!("class Item {{\n    Item(uint64_t value) noexcept : first_aaaa(\n{row}\n}};\n");
+        check(input, &["--max-code-length=50", option], &expected);
+        check(&expected, &["--max-code-length=50", option], &expected);
+    }
+}
+
+#[test]
+fn logical_and_rows_after_an_assignment_stay_logical_operators_under_pointer_alignment() {
+    let input = "void f()\n{\n    x = a\n        && c && d && e;\n}\n";
+    for align in [
+        "--align-pointer=name",
+        "--align-pointer=type",
+        "--align-pointer=middle",
+    ] {
+        check(input, &[align], input);
+    }
+}
+
+#[test]
+fn one_line_braces_after_a_blank_line_follow_the_style_brace_indent() {
+    let input = "void f()\n{\n    if (a)\n        x();\n    else\n\n        y();\n}\n";
+    let expected =
+        "void f() {\n    if (a)\n        { x(); }\n    else\n\n        { y(); }\n    }\n";
+    check(
+        input,
+        &["--style=banner", "--add-one-line-braces"],
+        expected,
+    );
+}
+
+#[test]
+fn a_comment_mentioning_an_empty_new_call_does_not_indent_the_next_line() {
+    for comment in ["// new Item(", "/* new Item(", "// a new Item("] {
+        let input = format!("{comment}\nint f(void);\n");
+        check(&input, &[], &input);
+    }
 }

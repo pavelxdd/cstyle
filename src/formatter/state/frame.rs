@@ -451,6 +451,14 @@ impl FrameStack {
         self.delimiters.last().map(|entry| &entry.frame)
     }
 
+    /// Whether a delimiter opened on an output line before `line` is still
+    /// open.
+    pub(crate) fn has_delimiter_opened_before(&self, line: usize) -> bool {
+        self.delimiters
+            .iter()
+            .any(|entry| entry.frame.opener_output_line < line)
+    }
+
     pub(crate) fn active_delimiter_with_id(&self) -> Option<(FrameId, &DelimiterFrame)> {
         self.delimiters.last().map(|entry| (entry.id, &entry.frame))
     }

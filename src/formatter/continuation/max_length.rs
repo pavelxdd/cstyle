@@ -6,6 +6,7 @@ use crate::formatter::constructs::constructor_initializers::{
 };
 use crate::formatter::constructs::headers::is_conditional_header_line;
 use crate::formatter::constructs::labels::max_length_inline_access_body_indent_extra;
+use crate::formatter::constructs::objc::objc_message_following_keyword_column;
 use crate::formatter::constructs::switch_cases::max_length_inline_case_body_indent_extra;
 use crate::formatter::constructs::template_declarations::after_template_head;
 use crate::formatter::continuation::{
@@ -23,7 +24,7 @@ use crate::formatter::syntax::{
     TemplateAngle, astyle_template_spans, function_name_start, known_template_angle_role,
     scoped_name_is_constructor, template_openers,
 };
-use crate::formatter::text::columns::leading_visual_width;
+use crate::formatter::text::columns::{leading_visual_width, visual_width_from};
 use crate::formatter::text::line_scan::ContainsAnyByte;
 use crate::formatter::text::line_scan::{
     advance_quoted_literal, after_leading_comments, code_contains, has_top_level_char,
@@ -80,11 +81,17 @@ impl MaxLengthLineState {
         self.closer_suffix = suffix;
     }
 
-    /// The column of the rows a split makes in the innermost message it
-    /// splits: its first selector's, or one past its bracket when the split
-    /// comes before that selector; and whether the split moves the first
-    /// selector of a message the line leaves open.
-    fn objc_message_indent_spaces(&self, split_at: usize) -> Option<(usize, bool)> {
+    /// The column of the rows a split of `line` makes in the innermost
+    /// message it splits: its first selector's, or when the split comes
+    /// before that selector the column a row the source broke there takes;
+    /// and whether the split moves the first selector of a message the line
+    /// leaves open.
+    fn objc_message_indent_spaces(
+        &self,
+        line: &str,
+        split_at: usize,
+        tab_width: usize,
+    ) -> Option<(usize, bool)> {
         let rows = self
             .objc_messages
             .iter()
@@ -96,7 +103,7 @@ impl MaxLengthLineState {
         Some(match rows.selector {
             Some((spaces, offset)) if split_at > offset => (spaces, false),
             selector => (
-                rows.bracket_spaces,
+                split_message_row_spaces(line, rows, split_at, tab_width),
                 selector.is_some() && rows.close_offset.is_none(),
             ),
         })
@@ -109,6 +116,25 @@ impl MaxLengthLineState {
     pub(crate) fn take_anchored_part(&mut self) -> bool {
         std::mem::take(&mut self.anchored_part)
     }
+}
+
+/// The column the part of `line` after `split_at` takes in the message
+/// `rows`, as a row following the head there does: past the receiver of the
+/// message the head leaves open, or one past the innermost bracket it leaves
+/// open.
+fn split_message_row_spaces(
+    line: &str,
+    rows: &ObjCMessageRows,
+    split_at: usize,
+    tab_width: usize,
+) -> usize {
+    let head = &line[rows.open_offset..split_at];
+    let bracket = rows.bracket_spaces - 1;
+    objc_message_following_keyword_column(head)
+        .and_then(|index| head.char_indices().nth(index))
+        .map_or(rows.bracket_spaces, |(offset, _)| {
+            bracket + visual_width_from(&head[..offset], bracket, tab_width)
+        })
 }
 
 impl FormatEngine<'_> {
@@ -314,7 +340,7 @@ impl FormatEngine<'_> {
             self.maximum_length_conditional_continuation_floor(line, base_indent_width);
         let objc_message_rows = self
             .max_length_line
-            .objc_message_indent_spaces(split.split_at)
+            .objc_message_indent_spaces(line, split.split_at, self.options.tab_width)
             .map(|(spaces, moves_selector)| {
                 // The message's rows after the line align with the selector
                 // the split moved.
@@ -990,7 +1016,12 @@ impl FormatEngine<'_> {
         let tail_spaces = if ends_statement_before_comment(&split.head) {
             lead_width
         } else if self.options.indent_after_parens {
-            lead_width + step * (1 + usize::from(stacked_assignment))
+            // A row in parens opened before it goes on at its own column.
+            if line_paren_imbalance(&blanked).0 == 0 && self.pending_row_in_earlier_parens() {
+                lead_width
+            } else {
+                lead_width + step * (1 + usize::from(stacked_assignment))
+            }
         } else {
             // A row in parens opened before it goes on at its own column.
             let fallback =
@@ -1245,8 +1276,12 @@ fn continuation_indent_for_split(
                             )
                     })
         });
-    // Member access registers nothing.
-    let unaccessed_head = declaration.replace("->", ".");
+    // Member access registers nothing, and the declarators after an
+    // aggregate's closing brace are a declaration too.
+    let unaccessed_head = declaration
+        .strip_prefix('}')
+        .unwrap_or(declaration)
+        .replace("->", ".");
     let commas_in_angles = commas_within_angles(&unaccessed_head);
     if !following_split
         && !leads_statement_continuation(leading_operator(split.tail))
@@ -1351,6 +1386,11 @@ fn continuation_indent_for_split(
         && split_function_declaration_head(head)
     {
         return Some(configured_indent);
+    }
+    // Initializers split off the head stand one indent in, whatever the
+    // continuation indent.
+    if !has_open_paren && has_inline_constructor_initializer_colon(head) {
+        return Some(ContinuationIndent::Spaces(base_indent_width + indent_width));
     }
     if indent_after_parens {
         if has_open_paren

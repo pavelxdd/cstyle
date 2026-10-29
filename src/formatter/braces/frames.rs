@@ -186,6 +186,11 @@ impl FormatEngine<'_> {
         lambda_header_indent: Option<usize>,
         class_base: bool,
     ) {
+        self.prepare_switch_body_for_open_brace(
+            brace_type,
+            brace_header.map(String::as_str),
+            opens_lambda_body,
+        );
         let current_line_indent = if self.current_is_blank()
             && brace_header.is_some()
             && self
@@ -265,6 +270,11 @@ impl FormatEngine<'_> {
                     && !(header == "if" && header_candidate.starts_with("else if"))
             });
         let semantic_kind = self.brace_semantic_kind(brace_type, opens_lambda_body);
+        let in_switch_body = self
+            .layout
+            .frame_stack
+            .active_brace()
+            .is_some_and(|frame| frame.header.as_deref() == Some("switch") || frame.case_block);
         let current_label = || {
             let line = if self.current.trimmed().is_empty() {
                 self.output
@@ -289,7 +299,8 @@ impl FormatEngine<'_> {
                 }
                 line = rest;
             }
-            labels::line_kind(line, &self.options.access_labels) == LineKind::Label
+            let kind = labels::line_kind(line, &self.options.access_labels);
+            kind == LineKind::Label || kind == LineKind::SwitchLabel && !in_switch_body
         };
         let case_header = brace_header
             .filter(|header| matches!(header.as_str(), "case" | "default"))
@@ -346,13 +357,17 @@ impl FormatEngine<'_> {
                 .active_header()
                 .filter(|frame| frame.header == *header)
         });
-        // A switch label still leading the line opens its body first.
-        // A case body the indent already counts holds no pending label;
-        // without indented switches it counts the body from the label on.
+        // A label kept on the current line starts the switch body before emission.
+        // A published label has already registered that level.
         let pending_case_label = usize::from(
             self.options.indent_switches
-                && find_case_colon(&self.current).is_some()
-                && self.case_body_indent_extra(LineKind::Normal) == 0,
+                && in_switch_body
+                && (find_case_colon(&self.current).is_some()
+                    && self.case_body_indent_extra(LineKind::Normal) == 0
+                    || label_block
+                        && !self.current_is_blank()
+                        && self.directly_in_switch_body()
+                        && !self.has_case_body_at_current_depth()),
         );
         let label_owner_column = label_block.then(|| {
             (self
@@ -365,6 +380,15 @@ impl FormatEngine<'_> {
         });
         // The column of the switch's labels.
         let label_base = || {
+            if let Some(column) = self
+                .layout
+                .frame_stack
+                .active_brace()
+                .filter(|frame| frame.semantic_kind == BraceSemanticKind::Definition)
+                .and_then(|_| self.switch_label_indent_spaces())
+            {
+                return column;
+            }
             // VTK's and Whitesmith's labels stand at their switch's brace.
             let vtk_switch_brace = matches!(
                 self.options.brace_style,
@@ -696,9 +720,13 @@ impl FormatEngine<'_> {
                             frame.semantic_kind,
                             BraceSemanticKind::Array | BraceSemanticKind::Initializer
                         )
-                    // A block's own brace line stands at its body.
+                    // A block's or a definition's own brace line stands at
+                    // its body.
                     || self.options.brace_style == BraceStyle::Ratliff
-                        && frame.semantic_kind == BraceSemanticKind::Command
+                        && matches!(
+                            frame.semantic_kind,
+                            BraceSemanticKind::Command | BraceSemanticKind::Definition
+                        )
             })
             // VTK sets an element's rows by the array around it.
             && !self.layout.frame_stack.active_brace().is_some_and(|frame| {
