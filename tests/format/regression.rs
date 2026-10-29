@@ -9391,6 +9391,21 @@ fn pico_one_line_braces_added_around_a_body_fill_by_the_indent_style_whatever_it
 }
 
 #[test]
+fn a_new_call_written_in_a_block_comment_leaves_the_code_after_the_comment_at_its_level() {
+    // Text in a comment opens no call, so the declaration after it stands at
+    // its block's level.
+    for input in [
+        "/*\n * result = new Item(\n */\nint helper(void);\n",
+        "/*\n    result = new Item(\n */\nint helper(void);\n",
+        "/*\n * result = make(first, second, third, fourth, new Item(alpha,\n */\nint helper(void);\n",
+        "class Config\n{\n    /*\n     * result = new Item(\n     */\n    int helper(void);\n};\n",
+        "namespace Config\n{\n/*\n * result = new Item(\n */\nint helper(void);\n}\n",
+    ] {
+        check(input, &[], input);
+    }
+}
+
+#[test]
 fn a_label_kept_after_a_case_block_closer_opens_its_own_block() {
     // A label kept after the closer of the case block before it opens the
     // block its line ends with, so the closer after that block stands as

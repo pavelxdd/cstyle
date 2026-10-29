@@ -1501,7 +1501,11 @@ impl FormatEngine<'_> {
     /// paren opens past the maximum continuation indent.
     fn holds_over_max_new_call(&self, index: usize) -> bool {
         let code = self.output.code_before_comment_trimmed(index);
-        if !code.ends_with(',') || !code.contains("new ") {
+        // A row of a block comment opened before it holds no code.
+        if !code.ends_with(',')
+            || !code.contains("new ")
+            || self.output.comment_start_index(index) != index
+        {
             return false;
         }
         let base = leading_visual_width(&self.output[index], self.options.tab_width);
@@ -1632,6 +1636,7 @@ impl FormatEngine<'_> {
         if !trimmed.ends_with('(')
             || !trimmed.contains(" new ")
             || trimmed.trimmed_start().starts_with("return ")
+            || self.output.comment_start_index(index) != index
         {
             return false;
         }
