@@ -137,7 +137,7 @@ impl FormatEngine<'_> {
         // astyle's stack holds nothing for a line that starts a statement,
         // and drops what it held for one that opens a lambda's body.
         let continues_stack =
-            previous_index.is_some_and(|before| !self.ends_stack_statement(before));
+            previous_index.is_some_and(|before| !self.ends_stack_statement_before(before, first));
         if continues_stack && self.pending_line_opens_lambda() {
             return None;
         }

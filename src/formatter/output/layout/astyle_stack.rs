@@ -1340,6 +1340,19 @@ impl FormatEngine<'_> {
     /// Whether the code token `before` ends what a statement after it
     /// continues: a `;` or a brace of a block, a control header, or `else`
     /// and `do`.
+    /// Whether the token `before`, the one before the token at `index` that
+    /// starts a line, ends what astyle stacks for that line: a statement's
+    /// `;` among a call's arguments ends the statements in them, not the
+    /// call the paren closing them goes on with.
+    pub(super) fn ends_stack_statement_before(&self, before: usize, index: usize) -> bool {
+        let groups = &self.tree.groups;
+        self.ends_stack_statement(before)
+            && !(matches!(self.tree.tokens[before], Token::Symbol(';'))
+                && groups
+                    .enclosing(before)
+                    .is_some_and(|group| groups.closed_at(index) == Some(group)))
+    }
+
     pub(super) fn ends_stack_statement(&self, before: usize) -> bool {
         let groups = &self.tree.groups;
         match &self.tree.tokens[before] {
@@ -1404,7 +1417,7 @@ impl FormatEngine<'_> {
         if self
             .tree
             .previous_code_token_in_first_branches(index)
-            .is_none_or(|before| self.ends_stack_statement(before))
+            .is_none_or(|before| self.ends_stack_statement_before(before, index))
         {
             return None;
         }
@@ -1431,6 +1444,14 @@ impl FormatEngine<'_> {
                 break Some(at);
             }
             passed.push(start as u32);
+            // A paren closing a line goes on with what its opener does,
+            // whatever statements the arguments between them hold.
+            if let Some(closed) = groups.closed_at(start)
+                && groups.get(closed).delimiter != Delimiter::Brace
+            {
+                start = groups.get(closed).open;
+                continue;
+            }
             let Some(before) = self.tree.previous_code_token_in_first_branches(start) else {
                 break None;
             };

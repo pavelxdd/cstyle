@@ -9391,6 +9391,27 @@ fn pico_one_line_braces_added_around_a_body_fill_by_the_indent_style_whatever_it
 }
 
 #[test]
+fn the_paren_closing_a_macro_argument_statement_goes_on_with_the_call_around_it() {
+    // A statement's `;` among a macro call's arguments ends the statements
+    // in the arguments, not the call its closing paren goes on with.
+    let source = "int helper(void)\n{\n    state = &jump;\n    TRY(state, &jump,\n        (*call)(state, data);\n    );\n    state = jump.previous;\n    return jump.status;\n}\n";
+    for args in [
+        &["--indent-after-parens"][..],
+        &["--style=kr", "--indent-after-parens"][..],
+    ] {
+        check(source, args, source);
+    }
+    let expected = source.replace("        (*call)", "            (*call)");
+    let args = &[
+        "--style=allman",
+        "--indent-after-parens",
+        "--indent-continuation=2",
+    ];
+    check(source, args, &expected);
+    check(&expected, args, &expected);
+}
+
+#[test]
 fn ratliff_body_rows_after_a_blank_line_before_the_definition_brace_keep_the_body_level() {
     // A blank line between a definition's head and its brace leaves the
     // rows of its blocks at the levels they take without it.
