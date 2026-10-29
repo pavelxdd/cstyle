@@ -9391,6 +9391,27 @@ fn pico_one_line_braces_added_around_a_body_fill_by_the_indent_style_whatever_it
 }
 
 #[test]
+fn a_block_a_macro_opens_after_else_closes_at_the_else() {
+    // A macro word between `else` and a brace is no header of its own: the
+    // block closes where `else` stands, while a header's block closes a
+    // level past it.
+    for style in ["--style=stroustrup", "--style=kr"] {
+        let source = "void f(void)\n{\n    if (ready) {\n        first();\n    }\n    else CHECKED {\n        second();\n    }\n    done();\n}\n";
+        check(
+            source,
+            &[style],
+            &if style == "--style=kr" {
+                "void f(void)\n{\n    if (ready) {\n        first();\n    } else CHECKED {\n        second();\n    }\n    done();\n}\n".to_string()
+            } else {
+                source.to_string()
+            },
+        );
+    }
+    let source = "void f(void)\n{\n    if (ready)\n        first();\n    else CHECKED {\n        second();\n    }\n    done();\n}\n";
+    check(source, &["--style=kr"], source);
+}
+
+#[test]
 fn the_paren_closing_a_macro_argument_statement_goes_on_with_the_call_around_it() {
     // A statement's `;` among a macro call's arguments ends the statements
     // in the arguments, not the call its closing paren goes on with.

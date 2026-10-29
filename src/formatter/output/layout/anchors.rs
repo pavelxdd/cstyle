@@ -7658,9 +7658,11 @@ impl FormatEngine<'_> {
                 header = before;
             }
             // A braceless body on its header's line closes a level past it:
-            // `if (x) do {` ends at `do`'s level.
+            // `if (x) do {` ends at `do`'s level. A block a macro call opens
+            // closes at the header the call follows.
             let mut levels = 0;
             while header != line_first
+                && matches!(&tokens[header], Token::Word(word) if is_header(word))
                 && let Some(outer) = self.tree.statements.braceless_header(header)
                 && same_line(outer, header)
             {
