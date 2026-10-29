@@ -7,7 +7,7 @@ use crate::formatter::constructs::constructor_initializers::constructor_initiali
 use crate::formatter::constructs::headers::is_header;
 use crate::formatter::constructs::labels;
 use crate::formatter::constructs::switch_cases;
-use crate::formatter::engine::{FormatEngine, TokenPushContext, closer_width_after_semicolon};
+use crate::formatter::engine::{FormatEngine, TokenPushContext, closers_after_statement};
 use crate::formatter::lexer::{CommentKind, Token};
 use crate::formatter::state::frame::{
     ArgumentFrame, BraceSemanticKind, BracketFrame, BracketRole, CallFrame, ColonRole, CommaRole,
@@ -139,8 +139,18 @@ impl FormatEngine<'_> {
             ']' => self.push_close_bracket(),
             ';' => {
                 let added_brace_follows = self.added_brace_follows(token_index);
-                let following_closer_suffix =
-                    closer_width_after_semicolon(&self.tree.tokens, token_index, self.options).1;
+                let added_closer = self.token_input.closer_added_after == Some(token_index);
+                let (closers_width, following_closer_suffix) = closers_after_statement(
+                    &self.tree.tokens,
+                    token_index,
+                    usize::from(added_closer),
+                    self.options,
+                );
+                let following_closer_width = if added_closer {
+                    closers_width
+                } else {
+                    following_closer_width
+                };
                 self.push_semicolon(
                     next,
                     following_closer_width,

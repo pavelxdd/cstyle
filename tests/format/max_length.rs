@@ -2038,6 +2038,67 @@ fn max_code_length_lisp_reserves_attached_closing_brace_suffix() {
 }
 
 #[test]
+fn max_code_length_lisp_reserves_the_closer_one_line_braces_add_on_the_statement_row() {
+    // The added closer joins the statement's row as a source closer does,
+    // with the closers after it, so the row splits as it does once the
+    // braces stand in the source.
+    let mut options = FormatOptions::default();
+    options.brace_style = BraceStyle::Lisp;
+    options.add_one_line_braces = true;
+    options.max_code_length = Some(60);
+    for (source, expected) in [
+        (
+            fixture!(
+                "void f()",
+                "{",
+                "    if (ready)",
+                "        result = compute(result, \"a value for the result items\");",
+                "}",
+            ),
+            fixture!(
+                "void f() {",
+                "    if (ready) {",
+                "        result = compute(result,",
+                "                         \"a value for the result items\"); } }",
+            ),
+        ),
+        (
+            fixture!(
+                "void f()",
+                "{",
+                "    if (ready)",
+                "        result = compute(result, \"a value for the result entries\");",
+                "    done();",
+                "}",
+            ),
+            fixture!(
+                "void f() {",
+                "    if (ready) {",
+                "        result = compute(result,",
+                "                         \"a value for the result entries\"); }",
+                "    done(); }",
+            ),
+        ),
+        (
+            fixture!(
+                "void f()",
+                "{",
+                "    if (ready)",
+                "        result = compute(result, \"a value for the result item\");",
+                "}",
+            ),
+            fixture!(
+                "void f() {",
+                "    if (ready) {",
+                "        result = compute(result, \"a value for the result item\"); } }",
+            ),
+        ),
+    ] {
+        assert_stable_max_length_format(source, &options, expected);
+    }
+}
+
+#[test]
 fn max_code_length_lisp_splits_attached_lambda_suffix() {
     let mut options = FormatOptions::default();
     options.brace_style = BraceStyle::Lisp;

@@ -20,6 +20,8 @@ pub(crate) struct TokenInputState {
     pub(crate) has_next_meaningful_token: bool,
     pub(crate) next_token_is_line_comment: bool,
     pub(crate) replaying_removed_braces: bool,
+    /// The `;` a closer the layout adds follows on its row.
+    pub(crate) closer_added_after: Option<usize>,
 }
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]

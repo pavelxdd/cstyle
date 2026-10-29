@@ -421,6 +421,10 @@ impl FormatEngine<'_> {
             self.comments.broken_added_block_semicolon = (statement_end == semicolon
                 && self.layout.line_state.is_one_line_block)
                 .then_some(semicolon);
+            // The closer a broken block adds joins the statement's row as a
+            // source closer does.
+            self.token_input.closer_added_after =
+                (!self.layout.line_state.is_one_line_block).then_some(semicolon);
             self.push_replayed_statement(
                 tokens,
                 statement_start,
@@ -429,6 +433,7 @@ impl FormatEngine<'_> {
                 statement_start,
                 None,
             );
+            self.token_input.closer_added_after = None;
             self.comments.broken_added_block_semicolon = None;
             // A comment or a statement on a later line follows the block,
             // not the brace; a closing header still joins it.

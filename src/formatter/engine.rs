@@ -2947,12 +2947,24 @@ pub(crate) fn closer_width_after_semicolon(
     index: usize,
     options: &FormatOptions,
 ) -> (usize, Option<String>) {
+    closers_after_statement(tokens, index, 0, options)
+}
+
+/// The width the closers joining the row of the statement the `;` at
+/// `index` ends take after it, `added` of them braces the layout adds, and
+/// the text joining the row past them.
+pub(crate) fn closers_after_statement(
+    tokens: &[Token],
+    index: usize,
+    added: usize,
+    options: &FormatOptions,
+) -> (usize, Option<String>) {
     let attach_while = options.attach_closing_while;
     if !matches!(tokens.get(index), Some(Token::Symbol(';'))) {
         return (0, None);
     }
     let mut cursor = index + 1;
-    let mut width = 0;
+    let mut width = 2 * added;
     let mut after_last = cursor;
     loop {
         let mut newlines = 0;
