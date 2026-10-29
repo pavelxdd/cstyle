@@ -1679,6 +1679,25 @@ fn max_code_length_sets_selector_rows_split_off_a_receiver_past_its_bracket() {
 }
 
 #[test]
+fn max_code_length_sets_a_selector_row_split_off_nested_messages_where_a_source_row_stands() {
+    // The part after a split takes the column a row the source broke there
+    // takes: past the receiver of the one message the head leaves open, or
+    // past the innermost bracket of several.
+    let mut options = FormatOptions::default();
+    options.max_code_length = Some(60);
+    assert_stable_max_length_format(
+        "void f()\n{\n    result = [[[[[[[item value] next] next] next] next] next] next];\n}\n",
+        &options,
+        "void f()\n{\n    result = [[[[[[[item value] next] next] next] next] next]\n                                next];\n}\n",
+    );
+    assert_stable_max_length_format(
+        "void f()\n{\n    result = [[[[[[[[[item value] next] next] next] next] next] next] next] next];\n}\n",
+        &options,
+        "void f()\n{\n    result = [[[[[[[[[item value] next] next] next] next] next]\n                next] next] next];\n}\n",
+    );
+}
+
+#[test]
 fn max_code_length_horstmann_objc_message_does_not_split_at_bracket() {
     let mut options = FormatOptions::default();
     options.brace_style = BraceStyle::Horstmann;
