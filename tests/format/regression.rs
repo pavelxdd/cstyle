@@ -9412,6 +9412,24 @@ fn a_block_a_macro_opens_after_else_closes_at_the_else() {
 }
 
 #[test]
+fn a_block_a_macro_line_opens_as_a_broken_else_body_closes_at_that_line() {
+    // Broken from its `else`, a line a macro word leads opens its block as
+    // a header's line does: the body a level in, the brace closing at the
+    // line.
+    let args = &["--style=1tbs", "--break-one-line-headers"];
+    for opener in ["CHECKED", "for (;;)"] {
+        let source = format!(
+            "void f(void)\n{{\n    if (ready) {{\n        first();\n    }} else {opener} {{\n        second();\n    }}\n    done();\n}}\n"
+        );
+        let expected = format!(
+            "void f(void)\n{{\n    if (ready) {{\n        first();\n    }} else\n        {opener} {{\n            second();\n        }}\n    done();\n}}\n"
+        );
+        check(&source, args, &expected);
+        check(&expected, args, &expected);
+    }
+}
+
+#[test]
 fn the_paren_closing_a_macro_argument_statement_goes_on_with_the_call_around_it() {
     // A statement's `;` among a macro call's arguments ends the statements
     // in the arguments, not the call its closing paren goes on with.
