@@ -27296,6 +27296,54 @@ fn a_block_run_onto_a_semicolonless_macro_body_stands_at_its_header_statement() 
 }
 
 #[test]
+fn a_constructor_initializer_split_by_the_maximum_length_ignores_the_continuation_indent() {
+    let input = "class Item {\n  Item() : first_(1), second_(kDefault), third_(foo) {\n  }\n};\n";
+    let cases = [
+        ("--indent-continuation=0", "    ", "        "),
+        ("--indent-continuation=2", "    ", "        "),
+        ("--indent-continuation=3", "    ", "        "),
+        ("--indent-after-parens", "    ", "        "),
+        ("--indent=spaces=2", "  ", "    "),
+        ("--indent=tab", "\t", "\t\t"),
+    ];
+    for (option, outer, inner) in cases {
+        let expected = format!(
+            "class Item {{\n{outer}Item() : first_(1), second_(kDefault),\n{inner}third_(foo) {{\n{outer}}}\n}};\n"
+        );
+        check(input, &["--max-code-length=50", option], &expected);
+        check(&expected, &["--max-code-length=50", option], &expected);
+    }
+}
+
+#[test]
+fn a_constructor_with_specifiers_splits_its_initializers_by_the_maximum_length() {
+    for specifier in ["explicit ", "constexpr ", "inline "] {
+        let input = format!(
+            "class Item {{\n  {specifier}Item(uint64_t valueaaaaaaaaaaaaaa) : first_aaaa(value) {{}}\n}};\n"
+        );
+        let expected = format!(
+            "class Item {{\n    {specifier}Item(uint64_t valueaaaaaaaaaaaaaa) : first_aaaa(\n            value) {{}}\n}};\n"
+        );
+        check(&input, &["--max-code-length=60"], &expected);
+        check(&expected, &["--max-code-length=60"], &expected);
+    }
+}
+
+#[test]
+fn a_noexcept_constructor_splits_its_initializers_one_indent_in() {
+    let input = "class Item {\n  Item(uint64_t value) noexcept : first_aaaa(value) {}\n};\n";
+    for (option, row) in [
+        ("--indent-continuation=0", "        value) {}"),
+        ("--indent-continuation=1", "            value) {}"),
+    ] {
+        let expected =
+            format!("class Item {{\n    Item(uint64_t value) noexcept : first_aaaa(\n{row}\n}};\n");
+        check(input, &["--max-code-length=50", option], &expected);
+        check(&expected, &["--max-code-length=50", option], &expected);
+    }
+}
+
+#[test]
 fn a_comment_mentioning_an_empty_new_call_does_not_indent_the_next_line() {
     for comment in ["// new Item(", "/* new Item(", "// a new Item("] {
         let input = format!("{comment}\nint f(void);\n");

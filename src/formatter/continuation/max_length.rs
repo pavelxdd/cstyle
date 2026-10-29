@@ -1361,6 +1361,11 @@ fn continuation_indent_for_split(
     {
         return Some(configured_indent);
     }
+    // Initializers split off the head stand one indent in, whatever the
+    // continuation indent.
+    if !has_open_paren && has_inline_constructor_initializer_colon(head) {
+        return Some(ContinuationIndent::Spaces(base_indent_width + indent_width));
+    }
     if indent_after_parens {
         if has_open_paren
             && let Some(spaces) = line_assignment_value_indent()

@@ -120,13 +120,21 @@ pub(crate) fn has_inline_constructor_initializer_colon(line: &str) -> bool {
         }
         if ch == ':'
             && !saw_question
-            && line[..index].trimmed_end().ends_with(')')
+            && constructor_signature_ends_with_parameter_list(&line[..index])
             && line[index + ch.len_utf8()..].starts_with(' ')
         {
             let before = line[..index].trimmed_start();
-            let open = before.find('(').unwrap_or(usize::MAX);
-            let first_space = before.find(char::is_whitespace).unwrap_or(usize::MAX);
-            return open < first_space;
+            let Some(open) = before.find('(') else {
+                return false;
+            };
+            // Specifiers or a macro may lead the name.
+            return before[..open].split_whitespace().all(|word| {
+                word.chars()
+                    .all(|ch| is_identifier_continue(ch) || matches!(ch, '~' | ':'))
+                    && !word.ends_with(':')
+                    && !language::is_header(word)
+                    && !matches!(word, "return" | "else" | "do" | "goto")
+            });
         }
     }
     false
@@ -158,6 +166,20 @@ fn constructor_signature_ends_with_parameter_list(line: &str) -> bool {
 }
 
 impl FormatEngine<'_> {
+    /// Where an argument split off an initializer's open paren stands, for
+    /// a constructor head at `head_indent`: one indent past the head plus the
+    /// continuation indent, or two indents past it when that exceeds the
+    /// maximum.
+    pub(crate) fn initializer_argument_indent(&self, head_indent: usize) -> usize {
+        let width = self.options.indent_width;
+        let past_head = width + self.options.continuation_indent * width;
+        if past_head > self.options.max_continuation_indent {
+            head_indent + width * 2
+        } else {
+            head_indent + past_head
+        }
+    }
+
     pub(crate) fn constructor_initializer_prefix_level(&self, structural_level: usize) -> usize {
         let width = self.options.indent_width.max(1);
         self.layout
@@ -1042,7 +1064,7 @@ impl FormatEngine<'_> {
                 {
                     Some(natural + width)
                 } else if has_inline_constructor_initializer_colon(code) && code.ends_with('(') {
-                    Some(self.output.lead_width(index, tab_width) + width * 2)
+                    Some(self.initializer_argument_indent(self.output.lead_width(index, tab_width)))
                 } else {
                     None
                 };
