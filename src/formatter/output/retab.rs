@@ -649,6 +649,19 @@ impl FormatEngine<'_> {
         };
         let start = self.statement_start(from);
         let line = self.output.line_with_token(start)?;
+        // A row of a macro block starts a statement at the block's level,
+        // whatever the line opening the block leaves unfinished.
+        if self.output.in_macro_block_body(index) && !self.output.in_macro_block_body(line) {
+            let mut row = from;
+            while let Some(group) = groups.enclosing(row)
+                && groups.get(group).delimiter != Delimiter::Brace
+            {
+                row = groups.get(group).open;
+            }
+            let row_line = self.output.line_with_token(row)?;
+            return (row_line < index)
+                .then(|| self.output.lead_width(row_line, self.options.tab_width));
+        }
         // A case label's rows take levels.
         if line >= index || matches!(&self.tree.tokens[start], Token::Word(word) if word == "case")
         {

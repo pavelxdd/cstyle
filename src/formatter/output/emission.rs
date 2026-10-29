@@ -172,6 +172,11 @@ impl FormatEngine<'_> {
         let line = self.align_else_opening_brace_after_adjustment(line);
         let index = self.output.len();
         self.publish_ready_line(line);
+        if self.layout.line_adjuster.last_line_macro_block_levels() > 0 {
+            for published in index..self.output.len() {
+                self.output.mark_macro_block_body(published);
+            }
+        }
         if self.layout.line_adjuster.last_line_comment_kept_level() {
             self.output.mark_comment_kept_case_level(index);
         }
