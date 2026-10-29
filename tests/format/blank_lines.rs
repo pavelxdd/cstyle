@@ -1991,3 +1991,20 @@ fn break_blocks_parts_a_comment_before_a_case_after_an_else_in_the_switch() {
     assert_eq!(first, expected);
     assert_eq!(format_exact(&first, &options), first);
 }
+
+#[test]
+fn break_blocks_pads_a_block_whatever_parens_its_condition_quotes() {
+    // A paren in a literal of the header's condition is text, so the block
+    // takes the blank lines it takes without it.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--break-blocks".to_owned()]).expect("valid options");
+    for literal in ["'x'", "'('", "\"(\"[0]"] {
+        let source = format!(
+            "void f()\n{{\n    prepare();\n    while (item[1] != {literal}) {{\n        advance();\n    }}\n    finish();\n}}\n"
+        );
+        let expected = format!(
+            "void f()\n{{\n    prepare();\n\n    while (item[1] != {literal}) {{\n        advance();\n    }}\n\n    finish();\n}}\n"
+        );
+        assert_eq!(format_exact(&source, &options), expected, "{literal}");
+    }
+}
