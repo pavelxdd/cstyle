@@ -1628,7 +1628,7 @@ impl FormatEngine<'_> {
     /// Whether output line `index` ends with the `(` of a `new` call no
     /// paren comes before.
     fn opens_empty_new_call(&self, index: usize) -> bool {
-        let trimmed = self.output[index].trimmed_end();
+        let trimmed = self.output.code_before_comment_trimmed(index);
         if !trimmed.ends_with('(')
             || !trimmed.contains(" new ")
             || trimmed.trimmed_start().starts_with("return ")

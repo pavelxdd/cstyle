@@ -27294,3 +27294,11 @@ fn a_block_run_onto_a_semicolonless_macro_body_stands_at_its_header_statement() 
         check(expected, &[style], expected);
     }
 }
+
+#[test]
+fn a_comment_mentioning_an_empty_new_call_does_not_indent_the_next_line() {
+    for comment in ["// new Item(", "/* new Item(", "// a new Item("] {
+        let input = format!("{comment}\nint f(void);\n");
+        check(&input, &[], &input);
+    }
+}
