@@ -212,3 +212,19 @@ fn tab_indentation_indents_macro_block_rows_with_tabs_and_aligns_their_arguments
         assert_eq!(format_exact(expected, &options), expected);
     }
 }
+
+#[test]
+fn rows_of_a_block_comment_in_a_macro_block_keep_their_offset_from_its_opener() {
+    // The block's level moves a comment's rows with its first line.
+    let expected = "BEGIN_MESSAGE_MAP(Item, Base)\n    /* first row\n       second row */\n    ON_COMMAND(ID_FIRST, OnFirst)\nEND_MESSAGE_MAP()\n";
+    let unindented = "BEGIN_MESSAGE_MAP(Item, Base)\n/* first row\n   second row */\nON_COMMAND(ID_FIRST, OnFirst)\nEND_MESSAGE_MAP()\n";
+    for source in [expected, unindented] {
+        assert_eq!(format_exact(source, &FormatOptions::default()), expected);
+    }
+    let mut options = FormatOptions::default();
+    apply_command_line_args(&mut options, &["--indent=tab=4".to_owned()]).expect("valid options");
+    assert_eq!(
+        format_exact(expected, &options),
+        "BEGIN_MESSAGE_MAP(Item, Base)\n\t/* first row\n\t   second row */\n\tON_COMMAND(ID_FIRST, OnFirst)\nEND_MESSAGE_MAP()\n"
+    );
+}

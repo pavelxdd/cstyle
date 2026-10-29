@@ -261,8 +261,10 @@ impl FormatEngine<'_> {
             return line;
         }
         let trimmed = line.trimmed_start();
+        // A block comment's rows move with its first line.
         if trimmed.is_empty()
             || trimmed.starts_with('#')
+            || self.output.pending_line_continues_comment()
             || self
                 .options
                 .macro_blocks
