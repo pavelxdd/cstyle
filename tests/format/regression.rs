@@ -27344,6 +27344,18 @@ fn a_noexcept_constructor_splits_its_initializers_one_indent_in() {
 }
 
 #[test]
+fn logical_and_rows_after_an_assignment_stay_logical_operators_under_pointer_alignment() {
+    let input = "void f()\n{\n    x = a\n        && c && d && e;\n}\n";
+    for align in [
+        "--align-pointer=name",
+        "--align-pointer=type",
+        "--align-pointer=middle",
+    ] {
+        check(input, &[align], input);
+    }
+}
+
+#[test]
 fn a_comment_mentioning_an_empty_new_call_does_not_indent_the_next_line() {
     for comment in ["// new Item(", "/* new Item(", "// a new Item("] {
         let input = format!("{comment}\nint f(void);\n");

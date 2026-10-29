@@ -98,7 +98,22 @@ impl FormatEngine<'_> {
             return self.declares_pack();
         }
         // A parameter list continues no expression of the line before it.
-        if self.tree_declaration_context() != Some(true)
+        let in_declaration = self.tree_declaration_context() == Some(true);
+        if !in_declaration
+            && ["&&", "||"]
+                .iter()
+                .any(|operator| self.current.trimmed_start().starts_with(operator))
+            && matches!(
+                self.layout.previous,
+                PreviousToken::Word
+                    | PreviousToken::Literal
+                    | PreviousToken::CloseParen
+                    | PreviousToken::CloseBracket
+            )
+        {
+            return false;
+        }
+        if !in_declaration
             && self.continues_operator_expression()
             && matches!(
                 self.layout.previous,
