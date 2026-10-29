@@ -269,45 +269,56 @@ impl FormatEngine<'_> {
     }
 
     fn scan_output_constructor_initializer_colon(&self) -> bool {
-        for index in (0..self.output.len()).rev().take(64) {
-            // Comments leading a line take no part in it.
-            let trimmed = after_leading_comments(self.output.code_trimmed(index));
-            if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
-                return false;
-            }
-            if trimmed.ends_with(':') && !trimmed.starts_with_any(b"?:") {
-                return trimmed.contains('(');
-            }
-            if trimmed.starts_with(':') && !trimmed.starts_with("::") {
-                return true;
-            }
-            if trimmed.contains(':')
-                && trimmed.match_indices(')').any(|(close, _)| {
-                    let Some(tail) = trimmed[close + 1..].trimmed_start().strip_prefix(':') else {
-                        return false;
-                    };
-                    if tail.starts_with(':') {
-                        return false;
-                    }
-                    // The `:` of a ternary follows its `?` outside the just-closed
-                    // paren, so a question mark at depth zero marks a ternary colon.
-                    let mut depth = 1usize;
-                    for ch in trimmed[..close].chars().rev() {
-                        match ch {
-                            ')' => depth += 1,
-                            '(' => depth = depth.saturating_sub(1),
-                            '?' if depth == 0 => return false,
-                            ';' | '{' | '}' => break,
-                            _ => {}
-                        }
-                    }
-                    true
-                })
-            {
-                return true;
-            }
+        // The last line settling it decides, however many rows of the list
+        // follow it.
+        self.output
+            .last_line_looked(
+                &self.constructor_colon_look,
+                0,
+                self.output.len(),
+                |index| self.constructor_colon_verdict(index).is_some(),
+            )
+            .and_then(|index| self.constructor_colon_verdict(index))
+            .unwrap_or(false)
+    }
+
+    /// Whether output line `index` opens a constructor initializer list or
+    /// ends the statement before one, or nothing when it does neither.
+    fn constructor_colon_verdict(&self, index: usize) -> Option<bool> {
+        // Comments leading a line take no part in it.
+        let trimmed = after_leading_comments(self.output.code_trimmed(index));
+        if trimmed.ends_with(';') || trimmed.ends_with('{') || trimmed.ends_with('}') {
+            return Some(false);
         }
-        false
+        if trimmed.ends_with(':') && !trimmed.starts_with_any(b"?:") {
+            return Some(trimmed.contains('('));
+        }
+        if trimmed.starts_with(':') && !trimmed.starts_with("::") {
+            return Some(true);
+        }
+        let colon_after_paren = trimmed.contains(':')
+            && trimmed.match_indices(')').any(|(close, _)| {
+                let Some(tail) = trimmed[close + 1..].trimmed_start().strip_prefix(':') else {
+                    return false;
+                };
+                if tail.starts_with(':') {
+                    return false;
+                }
+                // The `:` of a ternary follows its `?` outside the just-closed
+                // paren, so a question mark at depth zero marks a ternary colon.
+                let mut depth = 1usize;
+                for ch in trimmed[..close].chars().rev() {
+                    match ch {
+                        ')' => depth += 1,
+                        '(' => depth = depth.saturating_sub(1),
+                        '?' if depth == 0 => return false,
+                        ';' | '{' | '}' => break,
+                        _ => {}
+                    }
+                }
+                true
+            });
+        colon_after_paren.then_some(true)
     }
 
     pub(crate) fn same_line_constructor_initializer_base_indent_spaces(&self) -> Option<usize> {
@@ -391,39 +402,24 @@ impl FormatEngine<'_> {
         }
     }
 
-    /// Looks back from the last output line for the line that starts a
-    /// constructor initializer list.
     /// The look back for the line that starts a constructor initializer
-    /// list. Lines pushed since the last look back are read first; with no
-    /// answer among them, the last answer holds while its line is within
-    /// reach, and the look back finds nothing once it is not, as the lines
-    /// after it decide nothing.
+    /// list: the last line that decides anything decides it, however many
+    /// rows of the list follow it.
     fn constructor_initializer_scan(&self) -> ConstructorScan {
-        let (len, version) = (self.output.len(), self.output.version());
-        let floor = len.saturating_sub(CONSTRUCTOR_SCAN_REACH);
-        let cached = self
-            .constructor_scan_cache
-            .get()
-            .filter(|cached| cached.version == version && cached.len <= len);
-        let read_from = cached.map_or(floor, |cached| cached.len.max(floor));
-        let mut found = (read_from..len)
-            .rev()
-            .find_map(|index| Some((self.constructor_scan_step(index)?, Some(index))));
-        if found.is_none() {
-            found = Some(match cached {
-                Some(cached) if cached.decided_at.is_some_and(|at| at >= floor) => {
-                    (cached.scan, cached.decided_at)
-                }
-                _ => (ConstructorScan::Exhausted, None),
-            });
+        let key = (self.output.len(), self.output.version());
+        if let Some((cached, scan)) = self.constructor_scan_cache.get()
+            && cached == key
+        {
+            return scan;
         }
-        let (scan, decided_at) = found.expect("an answer");
-        self.constructor_scan_cache.set(Some(ConstructorScanCache {
-            len,
-            version,
-            scan,
-            decided_at,
-        }));
+        let scan = self
+            .output
+            .last_line_looked(&self.constructor_scan_look, 0, self.output.len(), |index| {
+                self.constructor_scan_step(index).is_some()
+            })
+            .and_then(|index| self.constructor_scan_step(index))
+            .unwrap_or(ConstructorScan::Exhausted);
+        self.constructor_scan_cache.set(Some((key, scan)));
         scan
     }
 
@@ -982,7 +978,6 @@ impl FormatEngine<'_> {
         }
         let mut initializer = None;
         let len = self.output.len();
-        let floor = len.saturating_sub(32);
         // A macro's body continues nothing after it.
         let after_macro = len
             .checked_sub(1)
@@ -1013,11 +1008,13 @@ impl FormatEngine<'_> {
                         && has_inline_constructor_initializer_colon(self.output.code(index)))
         };
         // The look back passes the lines that neither stop it nor hold a
-        // colon that may start an initializer.
+        // colon that may start an initializer, however many there are, and
+        // past a colon starting none it reads the recent lines alone.
+        let floor = len.saturating_sub(32);
         let mut end = len;
         while let Some(index) = if end == len {
             self.output
-                .last_line_looked(&self.constructor_context_look, floor, len, |index| {
+                .last_line_looked(&self.constructor_context_look, 0, len, |index| {
                     stops(index) || colon_line(index)
                 })
         } else {
@@ -1073,10 +1070,7 @@ impl FormatEngine<'_> {
             }
         }
         let (member_indent, arg_indent, initializer_line) = initializer?;
-        // Parens the lines from the initializer's on leave open.
-        let open_depth: isize = (initializer_line..self.output.len())
-            .map(|index| paren_depth_delta(self.output.code(index)))
-            .sum();
+        let open_depth = self.parens_open_since(initializer_line);
         if let Some(arg_indent) = arg_indent
             && open_depth > 0
         {
@@ -1086,6 +1080,27 @@ impl FormatEngine<'_> {
             return Some(member_indent);
         }
         None
+    }
+
+    /// Parens the output lines from `first` on leave open, read on from the
+    /// lines the last count read.
+    fn parens_open_since(&self, first: usize) -> isize {
+        let (len, version) = (self.output.len(), self.output.version());
+        let (from, depth) = match self.constructor_open_depth_cache.get() {
+            Some((line, (counted, at), depth))
+                if line == first && at == version && counted <= len =>
+            {
+                (counted, depth)
+            }
+            _ => (first, 0),
+        };
+        let depth = depth
+            + (from..len)
+                .map(|index| paren_depth_delta(self.output.code(index)))
+                .sum::<isize>();
+        self.constructor_open_depth_cache
+            .set(Some((first, (len, version), depth)));
+        depth
     }
 
     pub(crate) fn split_constructor_member_call_indent(&self, current: &str) -> Option<usize> {
@@ -1323,10 +1338,6 @@ pub(crate) fn constructor_initializer_name_indent_from_line(
     Some(leading + name_start)
 }
 
-/// How many output lines the look back for a constructor initializer list
-/// reads.
-const CONSTRUCTOR_SCAN_REACH: usize = 64;
-
 /// How a line reads to the look back for the open paren of a constructor
 /// initializer's argument.
 #[derive(Clone, Copy)]
@@ -1354,16 +1365,6 @@ pub(crate) struct OpenParenArgLines {
     from: usize,
     hard: Option<(usize, bool)>,
     comma: Option<usize>,
-}
-
-/// The last look back for a constructor initializer list: the line count
-/// and version it read, its answer, and the line that decided it.
-#[derive(Clone, Copy)]
-pub(crate) struct ConstructorScanCache {
-    len: usize,
-    version: u64,
-    scan: ConstructorScan,
-    decided_at: Option<usize>,
 }
 
 /// What the look back for a constructor initializer list found.

@@ -198,10 +198,19 @@ pub(crate) struct FormatEngine<'a> {
     /// tab-indented style in spaces.
     pub(crate) output_indent_style: IndentStyle,
     pub(crate) output: buffer::OutputBuffer,
-    /// The last constructor initializer scan.
+    /// The last constructor initializer scan, keyed by the output it read.
     pub(crate) constructor_scan_cache: std::cell::Cell<
-        Option<crate::formatter::constructs::constructor_initializers::ConstructorScanCache>,
+        Option<(
+            OutputKey,
+            crate::formatter::constructs::constructor_initializers::ConstructorScan,
+        )>,
     >,
+    /// The look back for the line that decides the constructor initializer
+    /// scan.
+    pub(crate) constructor_scan_look: crate::formatter::output::buffer::LineLook,
+    /// The parens the output lines from a constructor initializer's on left
+    /// open when last counted: that line, the output counted, and the count.
+    pub(crate) constructor_open_depth_cache: std::cell::Cell<Option<(usize, OutputKey, isize)>>,
     /// The last reads past blanks and newlines after a line and after the
     /// token that follows it: the token each started at and the first
     /// token after them.
@@ -216,6 +225,9 @@ pub(crate) struct FormatEngine<'a> {
     pub(crate) open_paren_scan_cache: std::cell::Cell<Option<(OutputKey, Option<OpenParenLine>)>>,
     /// Whether the output last read holds a constructor initializer colon.
     pub(crate) constructor_colon_cache: std::cell::Cell<Option<(OutputKey, bool)>>,
+    /// The look back for the line that settles whether a constructor
+    /// initializer colon stands open.
+    pub(crate) constructor_colon_look: crate::formatter::output::buffer::LineLook,
     /// Whether the output last read stands inside a macro call's arguments.
     pub(crate) macro_call_context_cache: std::cell::Cell<Option<(OutputKey, bool)>>,
     /// The look back for a line ending a macro call's split opener.
@@ -492,6 +504,8 @@ impl<'a> FormatEngine<'a> {
             output_indent_style: options.indent_style,
             output: buffer::OutputBuffer::default(),
             constructor_scan_cache: std::cell::Cell::new(None),
+            constructor_scan_look: Default::default(),
+            constructor_open_depth_cache: std::cell::Cell::new(None),
             layout_runs: [None; 2],
             open_paren_arg_cache: std::cell::Cell::new(None),
             open_paren_scan_cache: std::cell::Cell::new(None),
@@ -559,6 +573,7 @@ impl<'a> FormatEngine<'a> {
             statement_group_closes: std::cell::OnceCell::new(),
             constructor_initializer_separators: std::cell::OnceCell::new(),
             constructor_colon_cache: std::cell::Cell::new(None),
+            constructor_colon_look: Default::default(),
             layout: LayoutState {
                 indentation: IndentationState::default(),
                 command_state: CommandState::default(),
