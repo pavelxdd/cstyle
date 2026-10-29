@@ -228,3 +228,11 @@ fn rows_of_a_block_comment_in_a_macro_block_keep_their_offset_from_its_opener() 
         "BEGIN_MESSAGE_MAP(Item, Base)\n\t/* first row\n\t   second row */\n\tON_COMMAND(ID_FIRST, OnFirst)\nEND_MESSAGE_MAP()\n"
     );
 }
+
+#[test]
+fn a_split_argument_of_a_macro_block_opener_aligns_under_its_paren() {
+    // The opener's own arguments belong to its call, not to the block it
+    // opens, so they align past its paren as any call's do.
+    let source = "BEGIN_MESSAGE_MAP(Item,\n                  Base)\n    ON_COMMAND(ID_FIRST, OnFirst)\nEND_MESSAGE_MAP()\n";
+    assert_eq!(format_exact(source, &FormatOptions::default()), source);
+}
