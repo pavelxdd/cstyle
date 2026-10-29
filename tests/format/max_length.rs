@@ -2099,6 +2099,38 @@ fn max_code_length_lisp_reserves_the_closer_one_line_braces_add_on_the_statement
 }
 
 #[test]
+fn max_code_length_pico_splits_a_body_added_braces_enclose_as_the_braced_body() {
+    // A body on a line of its own splits in the braces added around it as
+    // in braces of the source, wherever the source set the body.
+    let mut options = FormatOptions::default();
+    let args = [
+        "--style=pico",
+        "--add-braces",
+        "--break-one-line-headers",
+        "--max-code-length=60",
+    ]
+    .map(str::to_owned);
+    apply_command_line_args(&mut options, &args).expect("valid options");
+    let statement = "result = compute(result, \"a value for the result entries and more\", other);";
+    let expected = fixture!(
+        "void f()",
+        "{   if (ready)",
+        "    {   result = compute(result,",
+        "                         \"a value for the result entries and more\", other); }",
+        "    done(); }",
+    );
+    for source in [
+        format!("void f()\n{{\n    if (ready)\n        {statement}\n    done();\n}}\n"),
+        format!("void f()\n{{\n    if (ready) {statement}\n    done();\n}}\n"),
+        format!(
+            "void f()\n{{\n    if (ready)\n    {{\n        {statement}\n    }}\n    done();\n}}\n"
+        ),
+    ] {
+        assert_stable_max_length_format(&source, &options, expected);
+    }
+}
+
+#[test]
 fn max_code_length_lisp_splits_attached_lambda_suffix() {
     let mut options = FormatOptions::default();
     options.brace_style = BraceStyle::Lisp;
