@@ -9374,6 +9374,23 @@ fn pico_one_line_braces_added_before_a_comment_keep_the_unpadded_gap() {
 }
 
 #[test]
+fn pico_one_line_braces_added_around_a_body_fill_by_the_indent_style_whatever_its_source_indent() {
+    // The fill after the added brace is the body's indent, in tabs under tab
+    // indentation, wherever the source set the body.
+    let expected = "void f()\n{\tif (ready)\n\t{\tvalue = 0; } }\n";
+    for indent in ["--indent=tab=4", "--indent=force-tab=4"] {
+        let options = ["--style=pico", indent, "--add-one-line-braces"];
+        for input in [
+            "void f()\n{\nif (ready)\nvalue = 0;\n}\n",
+            "void f()\n{\n    if (ready)\n        value = 0;\n}\n",
+        ] {
+            check(input, &options, expected);
+        }
+        check(expected, &options, expected);
+    }
+}
+
+#[test]
 fn a_label_kept_after_a_case_block_closer_opens_its_own_block() {
     // A label kept after the closer of the case block before it opens the
     // block its line ends with, so the closer after that block stands as

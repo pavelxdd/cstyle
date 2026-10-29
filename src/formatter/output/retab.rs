@@ -184,8 +184,17 @@ impl FormatEngine<'_> {
 
     fn starts_with_block_brace(&self, index: usize) -> bool {
         let groups = &self.tree.groups;
+        let tokens = &self.tree.tokens;
         self.output.line_tokens(index).is_some_and(|span| {
             if self.rewritten_definition_braces.contains(&span.first) {
+                return true;
+            }
+            // A brace before the line's first token is one added around the
+            // statement it leads, a block's.
+            if !(span.first..=span.last)
+                .find(|&token| is_code_token(&tokens[token]))
+                .is_some_and(|token| matches!(tokens[token], Token::Symbol('{')))
+            {
                 return true;
             }
             groups.opened_at(span.first).is_some_and(|group| {
