@@ -27,6 +27,16 @@ impl FormatEngine<'_> {
         output_options.indent_style = self.output_indent_style;
         let tab_width = self.options.tab_width.max(1);
         let indent_width = self.options.indent_width.max(1);
+        // The code line after each line, past directives and blank lines.
+        let mut next_code = vec![None; self.output.len()];
+        let mut next = None;
+        for index in (0..self.output.len()).rev() {
+            next_code[index] = next;
+            let text = self.output.trimmed(index);
+            if !text.is_empty() && !self.output.is_directive_line(index) {
+                next = Some(index);
+            }
+        }
         // Widths come from the untouched spaced lines: once a line holds
         // tabs, its bytes stop being columns.
         let rows: Vec<Option<(usize, usize)>> = (0..self.output.len())
@@ -80,6 +90,11 @@ impl FormatEngine<'_> {
                     }
                 }
                 let width = self.output.lead_width(index, tab_width);
+                // A directive standing where the code row after it stands
+                // writes the column as that row does.
+                let row_at_directive = next_code[index].filter(|&row| {
+                    text.starts_with('#') && self.output.lead_width(row, tab_width) == width
+                });
                 let tab_columns = match self.output_indent_style {
                     // A standalone comment's rows keep the tabs of its first
                     // line and align past them in spaces.
@@ -94,7 +109,7 @@ impl FormatEngine<'_> {
                     _ if indented_conditional => width / indent_width * indent_width,
                     // A filled empty line holds its level's indent.
                     _ if text.is_empty() => width / indent_width * indent_width,
-                    _ => self.tab_columns(index, width),
+                    _ => self.tab_columns(row_at_directive.unwrap_or(index), width),
                 };
                 Some((width, tab_columns))
             })

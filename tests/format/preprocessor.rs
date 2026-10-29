@@ -4682,3 +4682,23 @@ fn conditional_before_the_closer_of_an_attached_compound_literal_stands_at_its_r
         "void f()\n{\n    x = (struct Item) {\n        .value = 1,\n        .other = 2\n        #ifdef FEATURE\n    };\n        #endif\n}\n"
     );
 }
+
+#[test]
+fn a_conditional_at_the_column_of_continuation_rows_takes_their_tabs() {
+    // A directive standing where the rows of the statement it interrupts
+    // stand writes that column as they do: the statement's indent in tabs
+    // and the alignment past it in spaces.
+    let mut options = FormatOptions::default();
+    apply_command_line_args(
+        &mut options,
+        &[
+            "--indent=tab=4".to_owned(),
+            "--indent-preproc-cond".to_owned(),
+        ],
+    )
+    .expect("valid options");
+    let source = "int check(void)\n{\n    return first\n           || second\n#ifdef EXTRA\n           || third\n#endif\n           ;\n}\n";
+    let expected = "int check(void)\n{\n\treturn first\n\t       || second\n\t       #ifdef EXTRA\n\t       || third\n\t       #endif\n\t       ;\n}\n";
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
+}
