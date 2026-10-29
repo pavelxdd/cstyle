@@ -4701,4 +4701,9 @@ fn a_conditional_at_the_column_of_continuation_rows_takes_their_tabs() {
     let expected = "int check(void)\n{\n\treturn first\n\t       || second\n\t       #ifdef EXTRA\n\t       || third\n\t       #endif\n\t       ;\n}\n";
     assert_eq!(format_exact(source, &options), expected);
     assert_eq!(format_exact(expected, &options), expected);
+    // A directive ending the rows takes the tabs of the row before it.
+    let source = "int check(void)\n{\n    return first\n           || second\n#ifdef EXTRA\n           || third;\n#endif\n    ;\n}\n";
+    let expected = "int check(void)\n{\n\treturn first\n\t       || second\n\t       #ifdef EXTRA\n\t       || third;\n\t       #endif\n\t;\n}\n";
+    assert_eq!(format_exact(source, &options), expected);
+    assert_eq!(format_exact(expected, &options), expected);
 }

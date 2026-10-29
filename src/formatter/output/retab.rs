@@ -27,14 +27,25 @@ impl FormatEngine<'_> {
         output_options.indent_style = self.output_indent_style;
         let tab_width = self.options.tab_width.max(1);
         let indent_width = self.options.indent_width.max(1);
-        // The code line after each line, past directives and blank lines.
+        // The code lines before and after each line, past directives and
+        // blank lines.
+        let is_code = |index: usize| {
+            !self.output.trimmed(index).is_empty() && !self.output.is_directive_line(index)
+        };
         let mut next_code = vec![None; self.output.len()];
         let mut next = None;
-        for index in (0..self.output.len()).rev() {
-            next_code[index] = next;
-            let text = self.output.trimmed(index);
-            if !text.is_empty() && !self.output.is_directive_line(index) {
+        for (index, slot) in next_code.iter_mut().enumerate().rev() {
+            *slot = next;
+            if is_code(index) {
                 next = Some(index);
+            }
+        }
+        let mut previous_code = vec![None; self.output.len()];
+        let mut previous = None;
+        for (index, slot) in previous_code.iter_mut().enumerate() {
+            *slot = previous;
+            if is_code(index) {
+                previous = Some(index);
             }
         }
         // Widths come from the untouched spaced lines: once a line holds
@@ -90,11 +101,14 @@ impl FormatEngine<'_> {
                     }
                 }
                 let width = self.output.lead_width(index, tab_width);
-                // A directive standing where the code row after it stands
-                // writes the column as that row does.
-                let row_at_directive = next_code[index].filter(|&row| {
-                    text.starts_with('#') && self.output.lead_width(row, tab_width) == width
-                });
+                // A directive standing where a code row beside it stands,
+                // the one after it first, writes the column as that row does.
+                let row_at_directive = [next_code[index], previous_code[index]]
+                    .into_iter()
+                    .flatten()
+                    .find(|&row| {
+                        text.starts_with('#') && self.output.lead_width(row, tab_width) == width
+                    });
                 let tab_columns = match self.output_indent_style {
                     // A standalone comment's rows keep the tabs of its first
                     // line and align past them in spaces.
