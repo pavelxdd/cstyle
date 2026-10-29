@@ -9391,6 +9391,18 @@ fn pico_one_line_braces_added_around_a_body_fill_by_the_indent_style_whatever_it
 }
 
 #[test]
+fn ratliff_body_rows_after_a_blank_line_before_the_definition_brace_keep_the_body_level() {
+    // A blank line between a definition's head and its brace leaves the
+    // rows of its blocks at the levels they take without it.
+    let expected = "int helper(int value)\n\n    {\n    if (ready)\n        result = 1;\n    else if (value) {\n        int count = 0;\n        result |= next(&count);\n        }\n    done();\n    }\n";
+    let input = "int helper(int value)\n\n{\n    if (ready)\n        result = 1;\n    else if (value) {\n        int count = 0;\n        result |= next(&count);\n    }\n    done();\n}\n";
+    for style in ["--style=ratliff", "--style=banner"] {
+        check(input, &[style], expected);
+        check(expected, &[style], expected);
+    }
+}
+
+#[test]
 fn a_new_call_written_in_a_block_comment_leaves_the_code_after_the_comment_at_its_level() {
     // Text in a comment opens no call, so the declaration after it stands at
     // its block's level.
