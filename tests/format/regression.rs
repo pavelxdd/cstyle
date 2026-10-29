@@ -27356,6 +27356,18 @@ fn logical_and_rows_after_an_assignment_stay_logical_operators_under_pointer_ali
 }
 
 #[test]
+fn one_line_braces_after_a_blank_line_follow_the_style_brace_indent() {
+    let input = "void f()\n{\n    if (a)\n        x();\n    else\n\n        y();\n}\n";
+    let expected =
+        "void f() {\n    if (a)\n        { x(); }\n    else\n\n        { y(); }\n    }\n";
+    check(
+        input,
+        &["--style=banner", "--add-one-line-braces"],
+        expected,
+    );
+}
+
+#[test]
 fn a_comment_mentioning_an_empty_new_call_does_not_indent_the_next_line() {
     for comment in ["// new Item(", "/* new Item(", "// a new Item("] {
         let input = format!("{comment}\nint f(void);\n");

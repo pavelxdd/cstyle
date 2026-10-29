@@ -171,15 +171,10 @@ impl FormatEngine<'_> {
             && !breaks_do_body
         {
             let statement_starts_line = token_begins_line(tokens, statement_start);
-            // A comment between the header and its statement leaves the
-            // brace at the header's level all the same.
-            let follows_comment_line = self.current_is_blank()
-                && tokens[..statement_start]
-                    .iter()
-                    .rev()
-                    .find(|token| !matches!(token, Token::Whitespace(_) | Token::Newline))
-                    .is_some_and(|token| matches!(token, Token::Comment(..)));
-            if statement_starts_line && (!self.current_is_blank() || follows_comment_line) {
+            // A blank or comment row between the header and its statement
+            // leaves the brace at the header's level all the same.
+            let follows_comment_line = self.current_is_blank();
+            if statement_starts_line {
                 // VTK indents the brace within a block other than a function's.
                 let vtk_nested = self.options.brace_style == BraceStyle::Vtk
                     && self
